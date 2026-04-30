@@ -1,0 +1,132 @@
+\chapter{Fundamente teoretice}
+\label{chap:fundamente}
+
+Acest capitol prezintă bazele teoretice pe care se construiește sistemul nostru.  Nu vom repeta manualul --- vom explica doar conceptele care apar direct în cod și în rezultate.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Rețele neuronale --- de la neuron la transformer}
+
+\subsection{Neuronul artificial}
+
+Un neuron artificial calculează o sumă ponderată a intrărilor, la care adaugă un bias, și trece rezultatul printr-o funcție de activare:
+
+\[
+    y = \sigma\!\left(\sum_{i=1}^{n} w_i x_i + b\right)
+\]
+
+Funcțiile de activare pe care le folosim în proiect sunt:
+\begin{itemize}
+    \item \textbf{ReLU}: $\sigma(x) = \max(0, x)$ --- simplă, rapidă, folosită în straturile ascunse.
+    \item \textbf{SiLU} (Swish): $\sigma(x) = x \cdot \text{sigmoid}(x)$ --- mai netedă, folosită în PhysicsSSM.
+    \item \textbf{Sigmoid}: $\sigma(x) = \frac{1}{1+e^{-x}}$ --- produce valori între 0 și 1, folosită ca poartă.
+\end{itemize}
+
+\subsection{Rețele feedforward (MLP)}
+
+Un \textit{Multi-Layer Perceptron} înlănțuiește mai multe straturi de neuroni.  În proiectul nostru, MLP-urile apar peste tot: în proiectorul de mișcare (MotionProjector), în encoderele de fizică, în capetele de clasificare ale T5.
+
+\subsection{Mecanismul de atenție (Transformers)}
+
+Transformerul, introdus de Vaswani et al. (2017), folosește \textit{self-attention} pentru a modela dependențe la orice distanță în secvență:
+
+\[
+    \text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{QK^T}{\sqrt{d_k}}\right) V
+\]
+
+În proiect, folosim un model T5-small pre-antrenat de Google ca parser de text (modulul M1).  T5 este un transformer encoder-decoder care a fost antrenat pe o imensă varietate de sarcini text-to-text.
+
+\textbf{Problema}: atenția are complexitate $O(n^2)$ în lungimea secvenței.  Pentru mișcare (sute de cadre la 20~Hz), asta devine costisitor.  Aici intervin \textit{State Space Models}.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{State Space Models (SSM)}
+
+\subsection{Ce este un SSM?}
+
+Un State Space Model este un sistem dinamic liniar continuu, definit de ecuațiile:
+
+\begin{align}
+    h'(t) &= A \, h(t) + B \, x(t)  \label{eq:ssm_cont_state}\\
+    y(t)  &= C \, h(t) + D \, x(t)  \label{eq:ssm_cont_output}
+\end{align}
+
+unde $h(t) \in \mathbb{R}^N$ este starea ascunsă, $x(t)$ este intrarea, $y(t)$ este ieșirea, iar $A, B, C, D$ sunt matrice învățate.  Intuiția: SSM-ul funcționează ca un filtru care \textit{memorează} informație din trecut printr-o stare internă, fără a avea nevoie de atenție explicită.
+
+\subsection{Discretizarea}
+
+Pentru a procesa secvențe discrete (cadru cu cadru), aplicăm discretizarea \textit{zero-order hold} (ZOH):
+
+\begin{align}
+    \bar{A} &= \exp(\Delta \cdot A) \\
+    \bar{B} &= (\Delta \cdot A)^{-1} (\bar{A} - I) \cdot \Delta B
+\end{align}
+
+Recursurile devin:
+\begin{align}
+    h_k &= \bar{A} \, h_{k-1} + \bar{B} \, x_k \\
+    y_k &= C \, h_k
+\end{align}
+
+Complexitatea este \textbf{$O(n)$} --- liniară în lungimea secvenței.  Asta este de ce am ales SSM în loc de transformer pentru generarea de mișcare.
+
+\subsection{S4 și HiPPO}
+
+Structured State Spaces for Sequences (S4), propus de Gu et al. (2022), inițializează matricea $A$ cu ajutorul teoriei HiPPO (\textit{High-order Polynomial Projection Operator}), care aproximează optim funcțiile continue din trecut folosind un set de polinoame Legendre:
+
+\[
+    A_{nk} = -\begin{cases}
+        (2n+1)^{1/2}(2k+1)^{1/2} & \text{dacă } n > k \\
+        n+1                        & \text{dacă } n = k \\
+        0                          & \text{dacă } n < k
+    \end{cases}
+\]
+
+Această inițializare permite SSM-ului să ``îți amintească'' mii de pași temporali --- esențial pentru mișcări lungi.
+
+\subsection{Mamba --- SSM selectiv}
+
+Mamba (Gu și Dao, 2023) adaugă selectivitate: parametrii $B$, $C$ și $\Delta$ depind de intrare.  Astfel, modelul poate \textit{alege} ce informație să memoreze și ce să uite, similar cu mecanismul de gating din LSTM, dar menținând complexitatea $O(n)$.
+
+În codul nostru, folosim un \texttt{MambaLayer} care implementează acest mecanism în PyTorch.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Simularea fizică}
+
+\subsection{PyBullet și Bullet Physics}
+
+PyBullet este un wrapper Python pentru motorul de fizică Bullet.  Rulează la o frecvență de 240~Hz (240 de pași de simulare pe secundă) și rezolvă:
+
+\begin{itemize}
+    \item Detecția coliziunilor între corpuri rigide
+    \item Răspunsul la contact (forțe normale și de frecare)
+    \item Integrarea Euler semi-implicită a ecuațiilor de mișcare
+\end{itemize}
+
+\subsection{Controlul articulațiilor --- motoare PD}
+
+Humanoidul din simulare are 21 de articulații controlate prin motoare PD (Proportional-Derivative):
+
+\[
+    \tau = k_p (q_{\text{target}} - q) - k_d \dot{q}
+\]
+
+unde $k_p$ (rigiditate) și $k_d$ (amortizare) sunt constante, $q_{\text{target}}$ este unghiul dorit, iar $\tau$ este cuplul aplicat.  Rădăcina (pelvisul) este ``teleportată'' la poziția dorită în fiecare pas --- numim asta \textit{root state injection} (RSI).
+
+\subsection{Detecția de contact}
+
+La fiecare cadru de randare (24~fps din 240~Hz simulare), interogăm PyBullet pentru punctele de contact între picioarele humanoidului și sol / obiectele din scenă.  Aceasta ne permite să:
+\begin{itemize}
+    \item Numărăm contactele cu solul (pași reali)
+    \item Detectăm interacțiunile cu obiectele (lovire minge, atingere mobilier)
+    \item Logăm forțele de contact pentru analiză
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Retrieval-Augmented Generation (RAG)}
+
+Modulul nostru de cunoștințe (Knowledge Retriever) funcționează similar cu RAG: pentru fiecare entitate detectată în text, căutăm în baza de cunoștințe (12 obiecte curate din Visual Genome) cel mai similar obiect folosind:
+
+\begin{enumerate}
+    \item \textbf{Sentence-BERT} (all-MiniLM-L6-v2) --- encodează numele obiectului într-un vector de 384 dimensiuni
+    \item \textbf{FAISS} (IndexFlatIP) --- caută cel mai apropiat vector prin produs scalar (cosine similarity)
+    \item \textbf{Enrichment} --- completează proprietățile fizice: dimensiuni, masă, material, mesh prompt
+\end{enumerate}

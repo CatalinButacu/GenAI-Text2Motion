@@ -1,0 +1,36 @@
+﻿\chapter{Anexa: Structura repository-ului}
+\label{chap:anexa}
+
+\begin{verbatim}
+GenAI-Flickr/
+|-- main.py                      # CLI entry point
+|-- src/
+|   |-- pipeline.py              # Orchestrator 4-stages (understanding->render)
+|   |-- shared/                  # Constante, vocabular, profiler, config
+|   |-- data/                    # Data loaders (AMASS, HumanML3D, augmentari)
+|   +-- modules/
+|       |-- understanding/       # M1: spaCy/T5 parser + FAISS retriever
+|       |-- planner/             # M2: scipy L-BFGS-B layout
+|       |-- motion/              # M4: Mamba SSM + RVQ tokenizer
+|       |   +-- ssm/            #     Mamba/BiMamba layers
+|       +-- render/              # M6: SMPL-X renderer (OpenCV)
+|-- scripts/
+|   |-- training/
+|   |   |-- train_m1_t5.py           # Antrenare T5 parser
+|   |   |-- train_motion_ssm.py      # Antrenare MotionSSM (SSM + RVQ head)
+|   |   +-- train_rvq_tokenizer.py   # Antrenare RVQ tokenizer (pre-step)
+|   |-- evaluation/              # Metrics, ablation, FID, design audit
+|   |-- data/                    # Download HumanML3D / InterX
+|   +-- cloud/                   # AWS / Colab / SageMaker launchers
+|-- tests/
+|   |-- test_pipeline.py         # End-to-end integration
+|   |-- test_modules.py          # Unit tests per modul
+|   |-- test_motion.py, test_planner.py, test_understanding.py
+|   +-- benchmarks/              # benchmark_m2.py, benchmark_m4.py
+|-- checkpoints/                 # Modele antrenate (.pt)
+|-- data/
+|   |-- amass/                   # ~16.884 secvente AMASS (SMPL-X 168-dim)
+|   |-- humanml3d/               # HumanML3D text-motion pairs
+|   +-- inter-x/                 # Inter-X multi-agent motion
++-- doc/paper/                   # Aceasta lucrare (LaTeX)
+\end{verbatim}

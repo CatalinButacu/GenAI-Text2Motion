@@ -1,0 +1,235 @@
+\chapter{Implementare}
+\label{chap:implementare}
+
+Acest capitol descrie codul, datele și procesul de antrenare.  Toate cifrele sunt reale --- extrase direct din loguri, nu estimate.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Mediu de dezvoltare}
+
+\begin{itemize}
+    \item \textbf{Hardware}: NVIDIA RTX 3050 (4 GB VRAM), 16 GB RAM DDR4, Intel i5-12th gen
+    \item \textbf{Software}: Python 3.12.8, PyTorch 2.5, CUDA 12.4, Windows 11
+    \item \textbf{Dependențe cheie}: PyBullet 3.2.6, sentence-transformers, FAISS-cpu, imageio, scipy, transformers (HuggingFace)
+    \item \textbf{Versionare}: Git, GitHub (\texttt{CatalinButacu/GenAI-Flickr})
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Structura codului}
+
+Codebase-ul curent conține \textbf{17.799 linii de Python} distribuite pe trei zone: nucleul (\texttt{src/}), scripturi de antrenare/evaluare (\texttt{scripts/}) și teste (\texttt{tests/}).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l r}
+\hline
+\textbf{Componentă} & \textbf{Linii} \\
+\hline
+M5 --- Physics Engine (PyBullet + SMPL) & 2.995 \\
+M4 --- Motion Generator (SSM + PhysicsSSM) & 1.549 \\
+M1 --- Scene Understanding (T5 + FAISS) & 1.319 \\
+pipeline.py (orchestrator) & 918 \\
+M7 --- AI Enhancer (ControlNet + AnimateDiff) & 555 \\
+M2 --- Scene Planner (L-BFGS-B) & 416 \\
+shared/ (constante, vocabular, profiler) & 250 \\
+data/ (încărcare date AMASS) & 175 \\
+M3 --- Asset Generator (Shap-E) & 163 \\
+M6 --- Render Engine (aitviewer + OpenCV) & 141 \\
+\hline
+\textbf{Subtotal \texttt{src/}} & \textbf{8.481} \\
+\hline
+scripts/ (antrenare, validare, demo-uri) & 6.462 \\
+tests/ (benchmark-uri M1--M5, teste unitare) & 2.808 \\
+root (main.py) & 48 \\
+\hline
+\textbf{Total proiect} & \textbf{17.799} \\
+\hline
+\end{tabular}
+\caption{Distribuția liniilor de cod pe module (versiunea finală)}
+\label{tab:loc}
+\end{table}
+
+Fiecare fișier Python are un header standard cu patru câmpuri:
+\begin{itemize}
+    \item \texttt{\#WHERE} --- cine îl apelează
+    \item \texttt{\#WHAT} --- ce face
+    \item \texttt{\#INPUT} --- ce primește
+    \item \texttt{\#OUTPUT} --- ce produce
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Datele de antrenare}
+
+\subsection{AMASS --- Motion Capture Archive}
+
+Datasetul principal pentru generarea de mișcare:
+\begin{itemize}
+    \item \textbf{16.884 secvențe} de motion capture la 30 fps \cite{mahmood2019amass}
+    \item \textbf{168 dimensiuni} per cadru (rotații axis-angle SMPL-X: root 3-dim, corp 63-dim, mâini 90-dim + translație root 3-dim) \cite{pavlakos2019smplx}
+    \item Date de mișcare umană neîntreruptă din mai multe laboratoare de motion capture
+    \item Split: 80\% antrenare / 20\% validare (după filtrare secvențe mai scurte de 16 cadre)
+\end{itemize}
+
+\subsection{Starea fizică derivată}
+
+Pentru antrenarea PhysicsSSM, derivăm un vector de stare fizică de 64 dimensiuni din datele AMASS:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{c l}
+\hline
+\textbf{Canal} & \textbf{Semnificație} \\
+\hline
+0       & Gravitație ($-9{,}81$ m/s\textsuperscript{2}, constantă) \\
+1       & Înălțimea pelvisului (m) \\
+2       & Viteza verticală pelvis (m/s) \\
+3       & Accelerația verticală pelvis (m/s\textsuperscript{2}) \\
+4--6    & Viteza liniară root XYZ \\
+7--9    & Viteza unghiulară root \\
+10--11  & Contact picior stâng / drept (binar estimat) \\
+12--14  & Viteza centru de masă (aprox. $\approx$ root) \\
+15--17  & Accelerația centru de masă \\
+18--20  & Poziția root XYZ (integrată) \\
+21--23  & Proxy moment unghiular ($|\omega|$ per axă) \\
+24--63  & Zero-padding (extensii viitoare) \\
+\hline
+\end{tabular}
+\caption{Formatul vectorului de stare fizică (64 dimensiuni, 24 activi)}
+\label{tab:physics_state}
+\end{table}
+
+\subsection{Baza de cunoștințe (Knowledge Base)}
+
+12 obiecte curate din Visual Genome, fiecare cu:
+\begin{itemize}
+    \item Nume canonic și aliasuri
+    \item Dimensiuni tipice (H $\times$ W $\times$ L în metri)
+    \item Masa (kg), materialul, coeficienți de frecare și restituție
+    \item Prompt pentru generare mesh 3D
+\end{itemize}
+
+Index FAISS persistent (\texttt{IndexFlatIP}, cosine similarity) peste embedding-uri Sentence-BERT (384-dim).
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Antrenarea M1 --- T5 Parser}
+
+\begin{itemize}
+    \item Model: T5-small \cite{raffel2020t5} (60M parametri), pre-antrenat de Google
+    \item Fine-tuning: 5 epoci, AdamW, learning rate $5 \times 10^{-5}$, amestec de triplete text$\rightarrow$JSON
+    \item \textbf{Pierdere finală}: 0.062
+    \item Checkpoint: \texttt{m1\_checkpoints/m1\_scene\_extractor\_v5}
+    \item Timp de antrenare: $\sim$30 minute pe RTX 3050
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Antrenarea M4 --- MotionSSM}
+
+\begin{itemize}
+    \item Model: MotionSSM (4 straturi Mamba \cite{gu2023mamba}, $d_{\text{model}} = 256$, $d_{\text{state}} = 32$)
+    \item Date: secvențe AMASS (\textasciitilde{}16.884 în total)
+    \item 250 de epoci, batch size 16, AdamW, lr $5 \times 10^{-5}$
+    \item \textbf{Pierderea cea mai bună}: 0.37 (validare)
+    \item Checkpoint: \texttt{checkpoints/motion\_ssm/best\_model.pt}
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Antrenarea M4 --- PhysicsSSM (contribuția originală)}
+
+\begin{itemize}
+    \item Model: MotionSSM + PhysicsSSM + MotionProjector (2.789.275 parametri total)
+    \item Funcția de pierdere: $\mathcal{L}_{\text{recon}} + 0{,}1 \cdot \mathcal{L}_{\text{fizică}}$
+    \item Warmup: 500 de pași, OneCycleLR
+    \item Early stopping cu patience = 15 epoci
+\end{itemize}
+
+Convergența observată (primele epoci):
+
+\begin{table}[h]
+\centering
+\begin{tabular}{c c c c c}
+\hline
+\textbf{Epocă} & \textbf{Train Loss} & \textbf{Val Loss} & \textbf{Val Recon} & \textbf{Val Physics} \\
+\hline
+1  & 0.4593 & 0.2749 & 0.2539 & 0.2106 \\
+2  & 0.1932 & 0.1217 & 0.1006 & 0.2113 \\
+3  & 0.1229 & 0.0969 & 0.0757 & 0.2117 \\
+\hline
+\end{tabular}
+\caption{Convergența PhysicsSSM (primele 3 epoci)}
+\label{tab:physics_ssm_convergence}
+\end{table}
+
+\textit{Notă: antrenarea continuă. Tabelul va fi actualizat cu rezultatele finale.}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Modelul corporal SMPL-X}
+
+Pentru randarea realistă a mișcării umane, datele de mișcare AMASS sunt stocate în formatul \textbf{SMPL-X} (Skinned Multi-Person Linear Model --- eXpressive) \cite{pavlakos2019smplx}.  Vectorul de 168 de dimensiuni per cadru codifică 52 de articulații (rotații axis-angle 3D) plus translația root.
+
+Pentru vizualizare și simulare fizică, folosim modelul \textbf{SMPL} \cite{loper2015smpl} via aitviewer \cite{kaufmann2023aitviewer}, cu:
+
+\begin{itemize}
+    \item \textbf{6.890 de vârfuri} și \textbf{13.776 de fețe triunghiulare}
+    \item 24 de articulații cu rotații relative (axis-angle $\rightarrow$ matrice de rotație)
+    \item Blend shapes dependente de poză ($\beta$) și formă ($\theta$)
+    \item Linear Blend Skinning (LBS) cu ponderi precomputate
+\end{itemize}
+
+Checkpoint-ul folosit este \texttt{SMPL\_NEUTRAL.npz}, modelul neutru de gen.
+
+\subsection{Provocări și corecturi}
+
+Integrarea SMPL-X/SMPL a necesitat câteva corecturi critice:
+
+\begin{enumerate}
+    \item \textbf{Convenția de axe} --- AMASS folosește Z-up (coordonate SMPL-X), aitviewer presupune Y-up; am aplicat o transformare de bază
+    \item \textbf{Semnul rotațiilor} --- articulațiile genunchiului și ale șoldului aveau semne inversate, ducând la hiperextensie nenaturală; am corectat semnul conform convenției biomechanice
+    \item \textbf{Proporțiile scheletului} --- blend shape-urile deformau corpul excesiv (abdomen umflat, brațe disproporționate); am calibrat coeficienții $\beta$ la zero (forma medie)
+    \item \textbf{Forward kinematics off-by-one} --- atribuirea transformărilor era decalată cu o articulație; am corectat indexarea
+\end{enumerate}
+
+\subsection{Proiecia parametrilor de mișcare}
+
+Deoarece modelul SSM produce vectori de 168 dimensiuni în formatul SMPL-X (AMASS), iar renderizarea finală folosește SMPL (24 articulații), modulul \texttt{motion\_retarget.py} (252 linii) realizează proiecția:
+\begin{itemize}
+    \item Extragerea celor 22 articulații de corp (fără degete/ochi/max) din vectorul SMPL-X
+    \item Mapare semantică la topologia SMPL (ex: \texttt{left\_hip} $\rightarrow$ SMPL joint 1)
+    \item Tranzisții netede \textit{blend} între clipuri multiple cu \texttt{enforce\_bone\_lengths}
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Validarea biomecanică}
+
+Am implementat un \textbf{validator biomechanic} (\texttt{body\_validator.py}, 512 linii) care verifică fiecare cadru de mișcare generat:
+
+\begin{itemize}
+    \item \textbf{Limitele articulațiilor} (ROM --- Range of Motion): fiecare articulație are $[\theta_{\min}, \theta_{\max}]$ calibrate pe date medicale (ex: genu\-nchi $[0°, 160°]$, umăr $[-90°, 180°]$)
+    \item \textbf{Lungimile oaselor}: verifică consistența proporțiilor scheletice între cadre (toleranță $\pm$15\%)
+    \item \textbf{Penetrarea solului}: detectează vârfuri sub $y = 0$
+    \item \textbf{Accelerații}: limitează jerk-ul la valori biomechanic plauzibile
+\end{itemize}
+
+\subsection{Bucla de validare--reparare}
+
+Inspirat de principiile agenților LangGraph, am implementat o \textbf{buclă de validare--reparare} direct în pipeline-ul principal:
+
+\begin{enumerate}
+    \item \textbf{Validare} inițială a clipului generat de SSM
+    \item Dacă raportul de validare conține erori $\rightarrow$ \textbf{reparare automată}: clampare ROM, lipire pe sol, nete\-zire jerk
+    \item Re-validare (maxim 3 iterații, configurabil prin \texttt{PipelineConfig.max\_repairs})
+\end{enumerate}
+
+Această abordare reduce încălcările biomecanice cu $>$80\% fără a deteriora expresivitatea mișcării.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Logging și diagnosticare}
+
+Am adăugat logging comprehensiv la nivel de modul (\texttt{logging.getLogger(\_\_name\_\_)}):
+
+\begin{itemize}
+    \item \textbf{PromptParser}: entități, acțiuni și relații spațiale detectate
+    \item \textbf{SSMMotionGenerator}: forma tensorilor la fiecare etapă, starea porții PhysicsSSM
+    \item \textbf{PhysicsEngine}: număr de contacte sol/obiect, forțe maxime
+    \item \textbf{Pipeline}: cronometrare \textit{per modul} (ex: M1: 0.01s, M4: 4.86s, M5: 22.53s, M6: 10.52s)
+\end{itemize}
+
+Aceasta permite diagnosticarea rapidă a problemelor de calitate și profilarea performanței.

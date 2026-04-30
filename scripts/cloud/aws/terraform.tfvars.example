@@ -1,0 +1,19 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored (contains your account-specific bucket/key names).
+
+region        = "eu-west-1"
+key_pair_name = "dissertation-eu-west-1"
+use_spot      = true
+
+# S3 bucket for the preprocessed motion cache and checkpoint upload.
+# Create with: aws s3 mb s3://YOUR-BUCKET-NAME --region eu-west-1
+s3_bucket    = "YOUR-BUCKET-NAME"
+s3_cache_uri = "s3://YOUR-BUCKET-NAME/cache/motion_dataset_<hash>.pkl"
+
+# Public HTTPS URL of this repo (the EC2 instance does git clone --depth=1)
+repo_url     = "https://github.com/YOUR-USER/YOUR-REPO.git"
+
+data_source = "humanml3d"
+epochs_rvq  = 50
+epochs_ssm  = 200
+batch_size  = 64

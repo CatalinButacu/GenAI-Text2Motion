@@ -1,0 +1,20 @@
+{
+  "typeCheckingMode": "basic",
+  "reportMissingTypeStubs": "none",
+  "ignore": [
+    "C:/Users/catalin.butacu/AppData/Local/Programs/Python/Python312/**"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    "examples/",
+    "tmp/",
+    "wandb/",
+    "checkpoints/",
+    "m1_checkpoints/",
+    "scripts/demos/",
+    "scripts/examples/",
+    "scripts/inference/"
+  ]
+}

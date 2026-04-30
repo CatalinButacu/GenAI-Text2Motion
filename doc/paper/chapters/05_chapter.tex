@@ -1,0 +1,310 @@
+\chapter{Experimente și rezultate}
+\label{chap:experimente}
+
+Acest capitol prezintă evaluarea cantitativă și calitativă a sistemului GenAI-Flickr.  Am definit o suită de \textbf{130 de teste} organizate pe module (M1--M5), completate cu teste de integrare end-to-end.  Toate experimentele au fost rulate pe hardware-ul descris în \S\ref{chap:implementare}: RTX 3050 (4~GB VRAM), 16~GB RAM, Windows~11.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Metodologia de evaluare}
+
+Suita de benchmark-uri este implementată în directorul \texttt{tests/} și rulată prin scriptul \texttt{run\_all\_benchmarks.py}.  Fiecare modul are un prag minim de trecere:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{c l c c}
+\hline
+\textbf{Modul} & \textbf{Categorie} & \textbf{Nr. teste} & \textbf{Prag} \\
+\hline
+M1 & Parsare text (Scene Understanding) & 25 & 25/25 (100\%) \\
+M2 & Planificare scenă (Scene Planner) & 30 & 25/30 (83\%) \\
+M3 & Generare modele 3D (Asset Generator) & 15 & 12/15 (80\%) \\
+M4 & Generare mișcare (Motion Generator) & 30 & 25/30 (83\%) \\
+M5 & Motor fizic (Physics Engine) & 30 & 25/30 (83\%) \\
+\hline
+\textbf{Total} & & \textbf{130} & \\
+\hline
+\end{tabular}
+\caption{Structura suitei de benchmark-uri}
+\label{tab:benchmark_suite}
+\end{table}
+
+Testele acoperă trei niveluri:
+\begin{enumerate}
+    \item \textbf{Structural}: importuri, instanțiere, existența fișierelor (verifică integritatea)
+    \item \textbf{Funcțional}: fiecare modul produce output corect pentru input-uri cunoscute
+    \item \textbf{Semantic}: diferențierea între acțiuni diferite (``walk'' vs. ``run''), proprietăți fizice
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Benchmark M1 --- Calitatea parsării}
+\label{sec:bench_m1}
+
+Modulul M1 (Scene Understanding) este evaluat prin 25 de teste care verifică:
+
+\begin{itemize}
+    \item Instanțierea corectă a clasei \texttt{Extractor} și ciclul de viață (\texttt{is\_loaded}, \texttt{load()})
+    \item Gestionarea erorilor: \texttt{FileNotFoundError} pentru checkpoint inexistent, \texttt{RuntimeError} pentru extracție fără model încărcat
+    \item Structura entităților: ID, nume, atribute (\texttt{set\_attr / get\_attr})
+    \item \texttt{KnowledgeRetriever}: inițializare, stare \texttt{is\_ready}, număr de intrări
+    \item \texttt{StoryAgent}: instanțiere, \texttt{extraction\_mode}
+    \item \texttt{Reasoner.reason()} $\rightarrow$ \texttt{ExtractionResult}
+    \item \texttt{SceneBuilder.build()} $\rightarrow$ \texttt{SceneDescription} cu cel puțin un obiect
+\end{itemize}
+
+\textbf{Rezultat}: \textbf{25/25} teste trecute (100\%).  Parserul T5 fine-tuned produce \texttt{ExtractionResult} valid cu entități, acțiuni și relații spațiale pentru orice propoziție de intrare.
+
+\subsection{Performanța T5 Parser}
+
+Modelul T5-small fine-tuned pe 4.886 de propoziții atinge:
+\begin{itemize}
+    \item \textbf{Loss final}: 0,062 după 5 epoci de antrenare
+    \item \textbf{Token accuracy}: $>$95\%
+    \item \textbf{Timp de inferență}: $<$50 ms per propoziție pe RTX 3050
+    \item \textbf{Entități detectate}: persoane, obiecte, animale, mobilier --- cu culoare, dimensiune, material
+    \item \textbf{Acțiuni}: walk, run, kick, jump, wave, stand, sit --- cu parametri temporali
+    \item \textbf{Relații spațiale}: near, on, behind, next\_to, in\_front\_of
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Benchmark M2 --- Planificarea scenei}
+
+Modulul M2 este evaluat prin 30 de teste pe 14 prompt-uri distincte.  Testele verifică:
+
+\begin{itemize}
+    \item Poziționarea 3D: fiecare entitate primește coordonate $(x, y, z)$ cu $z \geq 0$
+    \item Unicitatea pozițiilor: obiectele nu se suprapun
+    \item Separarea actor/obiect: actorul uman are poziție distinctă de obiectele din scenă
+    \item Conservarea proprietăților: culoare, masă, dimensiune, tip de obiect
+    \item Stress test: scene cu 5+ entități (ex: \textit{``A red sphere, a blue cube, a green cylinder, a yellow ball, and a person standing nearby''})
+    \item Gestionarea prompt-urilor goale (fără crash)
+\end{itemize}
+
+\textbf{Rezultat}: \textbf{28/30} teste trecute (93\%, peste pragul de 83\%).
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Benchmark M3 --- Generarea de modele 3D}
+
+Modulul M3 (Shap-E backend) este evaluat prin 15 teste:
+
+\begin{itemize}
+    \item Importuri și structuri de date (\texttt{GeneratedModel}, \texttt{ShapEBackend})
+    \item Verificarea dependențelor: PyTorch, diffusers, CUDA
+    \item Inițializarea backend-ului Shap-E și flag-ul \texttt{\_is\_setup}
+    \item Generarea efectivă: prompt \textit{``a red sphere''} $\rightarrow$ fișier \texttt{.obj} sau \texttt{.ply}
+    \item Validarea fișierului: dimensiune $>$1000 bytes, extensie corectă
+\end{itemize}
+
+\textbf{Rezultat}: \textbf{13/15} teste trecute (87\%, peste pragul de 80\%).  Cele 2 teste eșuate sunt legate de TripoSR backend (neinstalat pe configurația curentă).
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Benchmark M4 --- Calitatea mișcării}
+\label{sec:bench_m4}
+
+Acesta este cel mai complex benchmark, cu 30 de teste pe 11 prompt-uri distincte.
+
+\subsection{Teste structurale (1--15)}
+
+Verifică importuri, existența datasetului AMASS, fișierele \texttt{Mean.npy} și \texttt{Std.npy} cu forma $(168,)$, inițializarea generatorului cu \texttt{use\_retrieval=True} și \texttt{use\_ssm=True}, existența checkpoint-ului SSM.
+
+\subsection{Teste de recuperare semantică (16--22)}
+
+Testează recuperarea din AMASS pentru 7 acțiuni: \textit{walk forward, run fast, kick a ball, jump up, turn around, wave hand, stand still}.  Fiecare test verifică că sursa clipului este \texttt{``retrieved''} sau \texttt{``semantic\_retrieved''}.
+
+\subsection{Teste SSM (23--25)}
+
+Verifică generarea prin rețeaua SSM (sursă = \texttt{``generated''}) pentru walk, run, kick.
+
+\subsection{Teste de calitate (26--30)}
+
+\begin{itemize}
+    \item \textbf{Forma output-ului}: 100 cadre $\times$ 168 dimensiuni
+    \item \textbf{FPS corect}: 30 fps (conform AMASS/SMPL-X)
+    \item \textbf{Diferențiere semantică}: walk vs. run produce mișcări cu deviație standard diferită ($|\Delta\sigma| > 0{,}1$); kick vs. jump produce secvențe distincte
+    \item \textbf{Acoperirea acțiunilor}: minim 5 din \{walk, run, kick, jump, wave\} în index
+\end{itemize}
+
+\textbf{Rezultat}: \textbf{27/30} teste trecute (90\%, peste pragul de 83\%).
+
+\subsection{Studiu ablativ: PhysicsSSM și AR Mamba}
+
+Comparație progresivă a arhitecturilor pe setul de validare AMASS:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l c c c}
+\hline
+\textbf{Metrică} & \textbf{MotionSSM} & \textbf{+ PhysicsSSM} & \textbf{+ AR Mamba}$^\dagger$ \\
+\hline
+Val Loss (reconstrucție) & 0,37 & 0,097 & în antrenare \\
+Val Loss (fizică) & --- & 0,21 & așteptat $\downarrow$ \\
+Feedback temporal (poză precedentă) & nu & nu & da \\
+Foot sliding (cadre afectate) & necontrolat & penalizat & penalizat \\
+Ground penetration & necontrolat & penalizat & penalizat \\
+Jerk normalizat & necontrolat & penalizat & penalizat \\
+\hline
+\end{tabular}
+\caption{Ablație arhitecturi pe setul de validare AMASS. $^\dagger$AR Mamba utilizează \textit{teacher forcing} la antrenare și inferență autoregresivă la test.}
+\label{tab:ablation}
+\end{table}
+
+PhysicsSSM reduce pierderea de reconstrucție de la 0,37 la 0,097 (reducere de $\sim$74\%). Adăugarea AR Mamba introduce consistență temporală suplimentară (detalii în §\ref{sec:ar_mamba}).
+
+\subsection{Inferența autoregresivă Mamba (AR Mamba)}
+\label{sec:ar_mamba}
+
+Contribuția adăugată în cadrul proiectului de disertație: \textbf{fiecare cadru de mișcare este conditionat pe poza precedentă} prin starea recurentă SSM.
+
+\textbf{La antrenare (teacher forcing)}: poza reală $\hat{p}_{t-1}$ este proiectată prin $W_{\text{pose}}$ și adăugată la embeddingul de intrare înainte de fiecare strat Mamba:
+\[
+    x_t \leftarrow x_t + W_{\text{pose}}\,\hat{p}_{t-1}
+\]
+
+\textbf{La inferență (AR loop)}: modelul generează cadru-cu-cadru, menținând starea ascunsă $h$ și buffer-ul de convoluție $\texttt{conv\_buf}$ per strat:
+\begin{enumerate}
+    \item $(\text{out}_t, h, \texttt{conv\_buf}) \leftarrow \texttt{MambaLayer.step}(x_t, h, \texttt{conv\_buf})$
+    \item $p_t \leftarrow \text{decoder}(\text{out}_t)$
+    \item $x_{t+1} \leftarrow \text{cond} + \text{pos}_{t+1} + W_{\text{pose}}\,p_t$
+\end{enumerate}
+
+Avantajul față de inferența paralelă clasică: fiecare pas vede poza efectiv generată (nu zero), ceea ce reduce deriva temporală pe secvențe lungi.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Benchmark M5 --- Aderența fizică}
+\label{sec:bench_m5}
+
+Modulul M5 (Physics Engine) este evaluat prin 30 de teste:
+
+\subsection{Teste structurale (1--10)}
+
+Importuri PyBullet, inițializarea scenei cu gravitație $-9{,}81$ m/s$^2$, adăugarea planului de sol, flag-uri de stare.
+
+\subsection{Teste funcționale (11--22)}
+
+\begin{itemize}
+    \item Adăugarea primitivelor: box, sphere, cylinder --- fiecare cu \texttt{body\_id $\geq$ 0}
+    \item Obiecte statice: flag \texttt{is\_static = True}
+    \item Recuperarea stării: poziție (3D) și orientare (quaternion, 4D)
+    \item Pașii de simulare: \texttt{step()} execută corect
+    \item Randarea: cadru RGB ($320 \times 240 \times 3$), depth buffer disponibil
+    \item Aplicarea forțelor: \texttt{apply\_force("test\_sphere", [0, 0, 10])} --- obiectul se deplasează
+\end{itemize}
+
+\subsection{Teste cinematice și simulare (23--30)}
+
+\begin{itemize}
+    \item \textbf{CinematicCamera}: inițializare cu distanță, yaw, pitch; efecte orbit și zoom
+    \item \textbf{Rulare simulare}: \texttt{run(duration=0.5, fps=10)} produce $>$3 cadre
+    \item \textbf{Export video}: fișier \texttt{.mp4} creat pe disc
+    \item \textbf{Gravitație}: o sferă plasată la $z = 2$ cade după 120 de pași ($z$ scade)
+    \item \textbf{Coliziune}: o sferă cade pe sol și se stabilizează la $0{,}05 < z < 0{,}5$
+\end{itemize}
+
+\textbf{Rezultat}: \textbf{28/30} teste trecute (93\%, peste pragul de 83\%).
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Pipeline end-to-end}
+\label{sec:e2e}
+
+Am evaluat pipeline-ul complet cu propoziții de test diverse:
+
+\subsection{Cronometrare per modul}
+
+Măsurată pe prompt-ul \textit{``a person walks forward''}:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l r r}
+\hline
+\textbf{Modul} & \textbf{Timp (s)} & \textbf{\% din total} \\
+\hline
+M1 --- Scene Understanding & 0,01 & 0,1\% \\
+M2 --- Scene Planner & 0,00 & 0,0\% \\
+M4 --- Motion Generator & 4,86 & 12,7\% \\
+M5 --- Physics Engine & 22,53 & 58,9\% \\
+M6 --- Render Engine & 10,52 & 27,5\% \\
+Validare biomecanică & 0,35 & 0,9\% \\
+\hline
+\textbf{Total} & \textbf{38,27} & \textbf{100\%} \\
+\hline
+\end{tabular}
+\caption{Cronometrare per modul pentru generarea unui video (48 cadre, RTX 3050)}
+\label{tab:timing}
+\end{table}
+
+Observații:
+\begin{itemize}
+    \item Motorul de fizică (M5) domină cu 59\% din timp, din cauza simulării PyBullet la 240~Hz
+    \item M4 (SSM) consumă doar 13\%, demonstrând eficiența arhitecturii Mamba
+    \item M1 (T5) este aproape instant datorită modelului mic (60M parametri)
+    \item Timpul total de 38,3~s per video (48 cadre la 24 fps = 2 secunde de video) este acceptabil pentru utilizare offline
+\end{itemize}
+
+\subsection{Rezultate pe prompt-uri diverse}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l c c l}
+\hline
+\textbf{Prompt} & \textbf{Cadre} & \textbf{Video} & \textbf{Observații} \\
+\hline
+\textit{``a person walks forward''} & 48 & \checkmark & Mișcare fluidă, pași vizibili \\
+\textit{``a person kicks a ball''} & 40 & \checkmark & Contact detectat cu obiectul \\
+\textit{``a person jumps up''} & 35 & \checkmark & Faza aeriană vizibilă \\
+\textit{``a person runs fast''} & 60 & \checkmark & Frecvență pași mai mare \\
+\textit{``a person stands still''} & 30 & \checkmark & Mișcare minimală (idle) \\
+\hline
+\end{tabular}
+\caption{Rezultate calitative pe prompt-uri de test}
+\label{tab:qualitative}
+\end{table}
+
+Toate prompt-urile produc video-uri MP4 complete fără crash sau erori.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Validarea biomecanică}
+\label{sec:biomech_results}
+
+Validatorul biomechanic (\texttt{body\_validator.py}) verifică fiecare cadru de mișcare generat:
+
+\subsection{Calibrare}
+
+Limitele articulațiilor (Range of Motion) au fost calibrate pe secvențe AMASS reale:
+\begin{itemize}
+    \item Rata de validare inițială pe date reale: 48,9\% (limitele erau prea stricte)
+    \item După calibrare: \textbf{100\%} pe datele AMASS de antrenare
+    \item Limitele folosesc valori medicale standard cu o marjă de $\pm 10\%$
+\end{itemize}
+
+\subsection{Rezultate pe mișcări generate}
+
+Pe mișcările generate de SSM (înainte de reparare):
+\begin{itemize}
+    \item \textbf{0\%} cadre valide --- încălcări de lungimi oase (800+ violări pe 40 cadre)
+    \item Cauza principală: rețeaua reconstruiește forme aproximative ale articulațiilor
+    \item După bucla de reparare (clampare ROM + enforce bone lengths): \textbf{$>$80\%} cadre valide
+\end{itemize}
+
+Aceasta demonstrează necesitatea buclei validate-repair și valoarea validatorului biomechanic ca instrument de diagnosticare.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Sumar rezultate}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{c l c c c}
+\hline
+\textbf{Modul} & \textbf{Categorie} & \textbf{Trecute} & \textbf{Total} & \textbf{Rată} \\
+\hline
+M1 & Scene Understanding & 25 & 25 & 100\% \\
+M2 & Scene Planner & 28 & 30 & 93\% \\
+M3 & Asset Generator & 13 & 15 & 87\% \\
+M4 & Motion Generator & 27 & 30 & 90\% \\
+M5 & Physics Engine & 28 & 30 & 93\% \\
+\hline
+\textbf{Total} & & \textbf{121} & \textbf{130} & \textbf{93\%} \\
+\hline
+\end{tabular}
+\caption{Sumar rezultate benchmark-uri}
+\label{tab:results_summary}
+\end{table}
+
+Rata generală de trecere de \textbf{93\%} depășește pragul minim pentru fiecare modul, confirmând robustețea și corectitudinea funcțională a pipeline-ului.

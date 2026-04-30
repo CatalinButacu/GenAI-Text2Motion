@@ -1,0 +1,153 @@
+\chapter{Arhitectura sistemului}
+\label{chap:arhitectura}
+
+Sistemul GenAI-Flickr este un pipeline modular cu 7 componente (M1--M7), fiecare cu un rol precis.  Datele curg de la text la video într-un singur apel: \texttt{Pipeline.run(prompt)}.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{Vedere de ansamblu}
+
+\begin{center}
+\texttt{Text} $\rightarrow$ \fbox{M1} $\rightarrow$ \fbox{M2} $\rightarrow$ \fbox{M3} $\rightarrow$ \fbox{M4} $\rightarrow$ \fbox{M5} $\rightarrow$ \fbox{M6} $\rightarrow$ \fbox{M7} $\rightarrow$ \texttt{MP4}
+\end{center}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{c l l l}
+\hline
+\textbf{Modul} & \textbf{Nume} & \textbf{Rol} & \textbf{Tehnologie} \\
+\hline
+M1 & Scene Understanding & Parsează textul, extrage entități/acțiuni & T5-small fine-tuned \\
+M2 & Scene Planner & Poziționează obiectele în scenă 3D & scipy L-BFGS-B \\
+M3 & Asset Generator & Generează modele 3D din text (opț.) & Shap-E \\
+M4 & Motion Generator & Produce secvențe de mișcare umană & SSM + PhysicsSSM \\
+M5 & Physics Engine & Simulare fizică, contact, coliziuni & PyBullet 240Hz \\
+M6 & Render Engine & Randare SMPL-X, motion blur, DoF, color grading & aitviewer + OpenCV \\
+M7 & AI Enhancer & Îmbunătățire vizuală (opțional) & ControlNet + SD 1.5 \\
+\hline
+\end{tabular}
+\caption{Modulele pipeline-ului GenAI-Flickr}
+\label{tab:modules}
+\end{table}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{M1 --- înțelegerea scenei}
+
+Modulul M1 primește un șir de caractere (ex: \textit{``a person walking in a park near a bench''}) și produce o structură \texttt{SceneDescription} cu:
+
+\begin{itemize}
+    \item \textbf{Entități} --- obiecte cu nume, tip, culoare, dimensiuni
+    \item \textbf{Acțiuni} --- verb + actor + parametri temporali
+    \item \textbf{Relații spațiale} --- ``near'', ``on'', ``behind''
+\end{itemize}
+
+\subsection{Parserul T5}
+
+Am fine-tuned un model T5-small \cite{raffel2020t5} (60M parametri) pe 4.886 de propoziții etichetate, format text-to-JSON.  Rezultatul: \textbf{loss = 0.062} după 5 epoci, cu token accuracy $>$95\%.
+
+\subsection{Knowledge Retriever (FAISS)}
+
+După parsare, fiecare entitate este ``îmbogățită'' cu proprietăți fizice din baza de cunoștințe Visual Genome \cite{krishna2017visualgenome}.  Sentence-BERT \cite{reimers2019sentencebert} encodează numele obiectului, FAISS \cite{johnson2021faiss} găsește cel mai similar obiect din cele 12 curate, și completează masa, materialul, dimensiunile.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{M2 --- planificatorul de scenă}
+
+Planificatorul transformă entitățile extrase de M1 în poziții 3D concrete.  Folosim L-BFGS-B din scipy pentru a rezolva un set de constrângeri:
+
+\begin{itemize}
+    \item Obiectele nu se suprapun (constrângeri de non-penetrare)
+    \item Relațiile spațiale sunt respectate (``near'' $\Rightarrow$ distanță $<$ 2m)
+    \item Obiectele sunt pe sol (coordonata Y la înălțimea corectă)
+\end{itemize}
+
+Rezultatul este un \texttt{PlannedScene} cu coordonate 3D pentru fiecare entitate.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{M4 --- generatorul de mișcare}
+\label{sec:m4}
+
+Acesta este cel mai complex modul și conține \textbf{contribuția noastră originală}: PhysicsSSM.
+
+\subsection{Retrieval din AMASS}
+
+Primul pas: căutăm în arhiva AMASS \cite{mahmood2019amass} (16.884 secvențe de motion capture) clipul cel mai similar cu acțiunea cerută.  Folosim Sentence-BERT pentru a compara semantic parametrii de mișcare cu vectorii de referință din dataset.
+
+\subsection{MotionSSM --- modelarea temporală}
+
+Clipul recuperat este proiectat într-un spațiu de 256 dimensiuni prin \texttt{MotionProjector} (MLP cu SiLU), procesat prin 4 straturi de Mamba \cite{gu2023mamba} (SSM selectiv \cite{gu2022s4}), și proiectat înapoi la 168 dimensiuni (format SMPL-X \cite{pavlakos2019smplx}, rotații axis-angle per articulație + translație root).
+
+\subsection{PhysicsSSM --- contribuția originală}
+
+Inovația noastră este \textbf{PhysicsSSM}: un modul care amestecă ieșirea MotionSSM cu constrângeri fizice printr-o \textit{poartă sigmoid învățată}:
+
+\begin{align}
+    \mathbf{g} &= \sigma\!\left(W_g [\mathbf{s}_{\text{ssm}} \;\|\; \mathbf{e}_{\text{phys}}]\right) \\
+    \mathbf{y} &= \mathbf{g} \odot \mathbf{s}_{\text{ssm}} + (1 - \mathbf{g}) \odot W_c \, \mathbf{e}_{\text{phys}}
+\end{align}
+
+unde:
+\begin{itemize}
+    \item $\mathbf{s}_{\text{ssm}}$ este ieșirea stratului Mamba (context temporal)
+    \item $\mathbf{e}_{\text{phys}}$ este starea fizică encodată: gravitație, înălțimea pelvisului, viteza, contactul cu solul
+    \item $\mathbf{g}$ este poarta --- valori între 0 și 1 care decid cât din SSM vs. cât din fizică să folosim
+    \item $W_g$ și $W_c$ sunt matrice de greutăți învățate
+\end{itemize}
+
+Funcția de pierdere are două componente:
+\[
+    \mathcal{L} = \mathcal{L}_{\text{reconstrucție}} + \lambda \cdot \mathcal{L}_{\text{fizică}}
+\]
+
+$\mathcal{L}_{\text{fizică}}$ penalizează trei tipuri de încălcări:
+\begin{enumerate}
+    \item \textbf{Foot sliding} --- deplasare în timpul contactului cu solul
+    \item \textbf{Ground penetration} --- pelvisul sub nivelul solului
+    \item \textbf{Jerk} --- derivata a treia a mișcării (tremur nennatural)
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{M5 --- motorul de fizică}
+
+\subsection{Scena PyBullet}
+
+Creăm un mediu fizic cu:
+\begin{itemize}
+    \item Plan de sol cu frecare
+    \item Obiecte primitive (cuburi, sfere, cilindri) generate din specificațiile M2
+    \item Gravitație: $g = -9{,}81$ m/s\textsuperscript{2}
+    \item Frecvență: 240 pași/secundă (PyBullet \cite{coumans2021pybullet})
+\end{itemize}
+
+\subsection{Humanoidul}
+
+Un model MJCF cu 21 de articulații, controlat prin motoare PD.  Rădăcina este teleportată în fiecare pas fizic (RSI --- \textit{Root State Injection}), iar articulațiile urmăresc unghiurile țintă cu forță maximă de 200 Nm.
+
+\subsection{Detecția de contact}
+
+La fiecare cadru de randare interogăm \texttt{p.getContactPoints()} pentru picioarele humanoidului.  Contactele sunt clasificate ca ``sol'' sau ``obiect'' și logate:
+
+\begin{verbatim}
+[M5] interactions: 142 ground, 3 object contacts (145 total)
+\end{verbatim}
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{M6 --- randare \& post-procesare video}
+
+Cadrele brute din simulare sunt randate prin SMPL \cite{loper2015smpl} via aitviewer \cite{kaufmann2023aitviewer} (formatul de mișcare AMASS \cite{mahmood2019amass} este convertit la reprezentarea SMPL pentru vizualizare), apoi procesate prin:
+\begin{enumerate}
+    \item \textbf{Motion blur} --- amestecul a 3 cadre consecutive cu ponderi $[0.2, 0.6, 0.2]$
+    \item \textbf{Depth of field} --- blur gaussian aplicat zonelor în afara distanței focale
+    \item \textbf{Color grading} --- ajustare contrast, saturație, tonalitate
+\end{enumerate}
+
+Exportul final: H.264 MP4 la 24 fps.
+
+% ─────────────────────────────────────────────────────────────────────────
+\section{M7 --- îmbunătățire AI (opțional)}
+
+Când este activat, modulul M7 folosește:
+\begin{itemize}
+    \item \textbf{ControlNet OpenPose} \cite{zhang2023controlnet} --- transformă scheletul fizic într-o imagine fotorealistă
+    \item \textbf{AnimateDiff} \cite{guo2023animatediff} --- asigură consistența temporală între cadre
+\end{itemize}
+
+Acest modul este opțional și necesită o placă video cu minim 6 GB VRAM.

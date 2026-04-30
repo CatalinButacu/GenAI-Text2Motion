@@ -1,0 +1,42 @@
+\chapter{Introducere}
+\label{chap:introducere}
+
+\section{De ce acest proiect?}
+
+Imaginează-ți că poți să scrii o propoziție simplă --- \textit{``un om se plimbă prin parc și lovește o minge cu piciorul''} --- iar un calculator transformă această descriere într-un video fizic realist, cu mișcări umane naturale, obiecte care reacționează la forțe și o cameră cinematică care urmărește acțiunea.  Exact asta ne-am propus să construim.
+
+Proiectul se numește \textbf{GenAI-Flickr} și își propune să unească într-un singur sistem trei domenii care, de obicei, sunt tratate separat:
+
+\begin{enumerate}
+    \item \textbf{Procesarea limbajului natural} --- înțelegerea unei propoziții și extragerea personajelor, acțiunilor și obiectelor descrise.
+    \item \textbf{Generarea de mișcare umană} --- producerea unor secvențe de mișcare plauzibile din punct de vedere biomecanic.
+    \item \textbf{Simularea fizică} --- plasarea mișcării într-un motor de fizică (PyBullet) care verifică gravitația, coliziunile și contactul cu solul.
+\end{enumerate}
+
+Rezultatul: un pipeline \textit{end-to-end} care primește text și produce video.
+
+\section{Formularea problemei}
+
+Sistemele existente de generare video (Sora, Stable Video Diffusion) produc imagini impresionante, dar nu respectă fizica reală --- un corp uman poate \textit{pluti}, obiectele pot \textit{trece prin podea}, iar mișcarea nu are continuitate temporală.
+
+Pe de altă parte, simulatoarele de fizică (MuJoCo, PyBullet) sunt extrem de precise, dar nu pot genera mișcare din text --- au nevoie de date de capturare a mișcării sau de politici de reinforcement learning antrenate ore întregi.
+
+\textbf{Întrebarea centrală}: cum putem combina acuratețea unui motor de fizică cu creativitatea unui model generativ, astfel încât o singură propoziție să producă video fizic corect?
+
+\section{Obiectivele lucrării}
+
+\begin{itemize}
+    \item Un parser bazat pe T5 care extrage structura scenei din limbaj natural (M1)
+    \item Un planificator de scenă cu optimizare scipy (M2)
+    \item Un generator de mișcare bazat pe \textit{State Space Models} --- contribuția noastră originală --- care amestecă modelarea temporală SSM cu constrângeri fizice printr-o poartă sigmoid învățată (M4)
+    \item Un motor de fizică PyBullet cu detecție de contact, auto-coliziune și retargetare cinematică (M5)
+    \item Post-procesare video: randare SMPL, motion blur, adâncime de câmp, color grading (M6)
+    \item Un sistem opțional de îmbunătățire AI cu ControlNet și AnimateDiff (M7)
+\end{itemize}
+
+\section{Structura lucrării}
+
+Capitolul~\ref{chap:fundamente} prezintă fundamentele teoretice --- de la rețele neuronale la State Space Models.  Capitolul~\ref{chap:arhitectura} descrie arhitectura sistemului modul cu modul.  Capitolul~\ref{chap:implementare} detaliază implementarea, datele folosite și procesul de antrenare.  Capitolul~\ref{chap:experimente} prezintă experimentele, rezultatele cantitative și analiza calitativă.  Capitolul~\ref{chap:concluzii} concluzionează cu direcții viitoare.
+
+
+

@@ -1,0 +1,101 @@
+\newglossaryentry{computer}
+{
+  name=computer,
+  description={is a programmable machine that receives input,
+               stores and manipulates data, and provides
+               output in a useful format}
+}
+
+\newacronym[longplural={Frames per Second}]{fpsLabel}{FPS}{Frame per Second}
+\newacronym{lvm}{LVM}{Logical Volume Manager}
+
+% ─── GenAI-Flickr Acronyms ──────────────────────────────────────────────
+
+\newacronym{ssm}{SSM}{State Space Model}
+\newacronym{smpl}{SMPL}{Skinned Multi-Person Linear Model}
+\newacronym{rom}{ROM}{Range of Motion}
+\newacronym{rsi}{RSI}{Root State Injection}
+\newacronym{lbs}{LBS}{Linear Blend Skinning}
+\newacronym{fk}{FK}{Forward Kinematics}
+\newacronym{dof}{DoF}{Depth of Field}
+\newacronym{vram}{VRAM}{Video Random Access Memory}
+\newacronym{gpu}{GPU}{Graphics Processing Unit}
+\newacronym{mlp}{MLP}{Multi-Layer Perceptron}
+\newacronym{vae}{VAE}{Variational Autoencoder}
+\newacronym{rl}{RL}{Reinforcement Learning}
+\newacronym{rnn}{RNN}{Recurrent Neural Network}
+\newacronym{sd}{SD}{Stable Diffusion}
+
+% ─── GenAI-Flickr Glossary Terms ────────────────────────────────────────
+
+\newglossaryentry{mamba}
+{
+  name=Mamba,
+  description={un model de spațiu de stări selectiv cu complexitate liniară,
+               propus de Gu și Dao (2023), utilizat în MotionSSM pentru
+               modelarea secvențelor temporale de mișcare}
+}
+
+\newglossaryentry{physicsssm}
+{
+  name=PhysicsSSM,
+  description={contribuția originală a acestei lucrări --- un modul SSM care
+               integrează constrângeri fizice (gravitație, contact, jerk)
+               prin intermediul unei porți sigmoid învățate}
+}
+
+\newglossaryentry{kitml}
+{
+  name=KIT-ML,
+  description={KIT Motion-Language --- un dataset de motion capture cu 4.888
+               de secvențe la 20 fps, fiecare cu descrieri text în engleză,
+               folosit pentru antrenarea și evaluarea mișcării umane}
+}
+
+\newglossaryentry{pybullet}
+{
+  name=PyBullet,
+  description={un motor de simulare fizică open-source pentru robotică,
+               jocuri și machine learning, utilizat în M5 pentru simularea
+               gravitației, coliziunilor și contactelor}
+}
+
+\newglossaryentry{faiss}
+{
+  name=FAISS,
+  description={Facebook AI Similarity Search --- o bibliotecă pentru
+               căutarea eficientă de similaritate în spații de embedding
+               de dimensiune mare, folosită în M1 pentru knowledge retrieval}
+}
+
+\newglossaryentry{sentencebert}
+{
+  name=Sentence-BERT,
+  description={un model de embedding bazat pe BERT care produce
+               reprezentări vectoriale (384-dim) ale propozițiilor,
+               folosit pentru comparația semantică text-mișcare}
+}
+
+\newglossaryentry{shapE}
+{
+  name=Shap-E,
+  description={un model generativ de la OpenAI care produce funcții
+               implicite 3D condiționate de text, folosit în M3 pentru
+               generarea automată de modele 3D}
+}
+
+\newglossaryentry{controlnet}
+{
+  name=ControlNet,
+  description={o arhitectură care adaugă control condiționat
+               (schelet OpenPose, edge maps) la modele de difuzie
+               text-to-image, folosită în M7 pentru randare realistă}
+}
+
+\newglossaryentry{humanml3d}
+{
+  name=HumanML3D,
+  description={un format de reprezentare a mișcării umane cu 251 de
+               dimensiuni per cadru (rotații articulare, poziție root,
+               viteze), standard în cercetarea de motion generation}
+}

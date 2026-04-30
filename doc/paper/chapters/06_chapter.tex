@@ -1,0 +1,46 @@
+\chapter{Concluzii}
+\label{chap:concluzii}
+
+\section{Contribuții}
+
+\begin{enumerate}
+    \item \textbf{PhysicsSSM} --- o arhitectură originală care amestecă modelarea temporală SSM (Mamba) cu constrângeri fizice printr-o poartă sigmoid învățată.  Antrenat pe AMASS \cite{mahmood2019amass} (16.884 secvențe, format SMPL-X 168-dim) cu pierdere de reconstrucție + penalizare fizică ($\lambda = 0{,}1$), modelul reduce pierderea de validare de la 0,37 la 0,097 comparativ cu MotionSSM singur.
+
+    \item \textbf{Pipeline end-to-end text-to-physics-video} --- un sistem modular (M1--M7, 17.799 linii Python) care transformă o propoziție în video fizic verificat în $\sim$38 secunde, fără intervenție umană.  Rata de succes: 93\% pe suita de 130 teste.
+
+    \item \textbf{Integrare SMPL/SMPL-X} --- format de mișcare nativ SMPL-X (168-dim, 52 articulații) din AMASS, cu vizualizare SMPL (6.890 vârfuri, 24 articulații) via aitviewer și modul de proiecție propriu.  Inclus corecturi de convenție de axe (Z-up $\rightarrow$ Y-up) și semne de rotație.
+
+    \item \textbf{Validator biomechanic} --- un modul de validare (512 linii) cu limite articulare calibrate (ROM), verificare lungimi oase, detecție penetrare sol, și limită de jerk.  Calibrat de la 48,9\% la 100\% pe datele reale AMASS.
+
+    \item \textbf{Buclă validare--reparare} --- inspirat de paradigma agenților, o buclă iterativă validate$\rightarrow$repair$\rightarrow$re-validate (maxim 3 iterații) care reduce încălcările biomecanice cu $>$80\%.
+
+    \item \textbf{Detecție de contact în buclă} --- integrarea interogărilor de contact PyBullet în bucla de simulare, cu clasificare sol/obiect și logare a forțelor.
+
+    \item \textbf{Knowledge retrieval cu FAISS} --- îmbogățirea semantică a entităților cu proprietăți fizice din Visual Genome, folosind Sentence-BERT (384-dim) și IndexFlatIP.
+
+    \item \textbf{Inferență autoregresivă Mamba (AR Mamba)} --- extensie a arhitecturii MotionSSM în care fiecare cadru generat conditionează pe poza precedentă prin starea recurentă SSM.  Antrenare cu \textit{teacher forcing} ($p_{\text{prev}} = \hat{p}_{t-1}$) și inferență stateful cadru-cu-cadru cu buffer de convoluție persistent (\texttt{conv\_buf}), eliminând discrepanța train/inferență din implementările paralele clasice.
+\end{enumerate}
+
+\section{Limitări}
+
+\begin{itemize}
+    \item Humanoidul folosește Root State Injection (teleportare), nu forțe aplicate --- mișcarea nu este complet fizică
+    \item Baza de cunoștințe conține doar 12 obiecte curate din Visual Genome
+    \item PhysicsSSM are 2,8M parametri --- un model mai mare ar putea fi mai expresiv, dar RTX 3050 (4~GB) limitează capacitatea
+    \item Modulele M3 (Shap-E) și M7 (ControlNet + AnimateDiff) sunt opționale din cauza limitărilor VRAM
+    \item Validatorul biomechanic detectează 0\% cadre valide pe output-ul SSM brut, necesitând reparare post-hoc --- integrarea validării în antrenare ar putea rezolva acest lucru
+    \item Mișcarea este evaluată doar prin metrici de reconstrucție și teste funcționale, nu prin studii cu utilizatori umani
+\end{itemize}
+
+\section{Direcții viitoare}
+
+\begin{itemize}
+    \item Înlocuirea RSI cu forțe aplicate (physics-driven locomotion) pentru o mișcare complet fizică
+    \item Extinderea bazei de cunoștințe la 1.000+ obiecte din Visual Genome complet
+    \item Antrenarea pe Human3.6M și Inter-X pentru diversitate mai mare de interacțiuni umane
+    \item Integrarea cu modele text-to-3D mai recente (InstantMesh, DreamGaussian)
+    \item Studiu ablativ complet: PhysicsSSM vs. MotionSSM vs. modele de difuzie (MDM)
+    \item Integrarea constrângerilor biomecanice direct în funcția de pierdere a antrenării (diferentiable physics loss)
+    \item Evaluarea cu participanți umani (studiu MOS --- Mean Opinion Score)
+    \item Scalarea la secvențe mai lungi ($>$10 secunde) cu atenție pe consistența temporală
+\end{itemize}

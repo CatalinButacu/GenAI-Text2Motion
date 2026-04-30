@@ -1,0 +1,77 @@
+# Allow-list .gitignore — block everything by default, whitelist what's allowed.
+# Edit this list when you intentionally want a new top-level item tracked.
+
+# ─── Block everything at repo root ────────────────────────────────────────────
+/*
+
+# ─── Allowed top-level directories ────────────────────────────────────────────
+!/.github/
+!/doc/
+!/notebooks/
+!/scripts/
+!/src/
+!/tests/
+
+# ─── Allowed top-level files ──────────────────────────────────────────────────
+!/.gitignore
+!/.gitattributes
+!/.pre-commit-config.yaml
+!/Dockerfile
+!/Makefile
+!/main.py
+!/pyproject.toml
+!/pyrightconfig.json
+!/README.md
+!/requirements.txt
+!/requirements.lock.txt
+!/TRAINING.md
+
+# ─── Inside allowed dirs: still exclude common cruft ──────────────────────────
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ipynb_checkpoints/
+**/*.egg-info/
+**/.coverage
+**/htmlcov/
+**/.DS_Store
+**/Thumbs.db
+**/desktop.ini
+**/*.swp
+**/*.swo
+**/*.bak
+**/*.log
+
+# ─── Generated artifacts within tracked dirs ──────────────────────────────────
+**/*.pt
+**/*.pth
+**/*.ckpt
+**/*.safetensors
+**/*.npy
+**/*.npz
+**/*.mp4
+**/*.avi
+**/*.pkl
+**/*.joblib
+
+# ─── LaTeX build artifacts (within doc/) ──────────────────────────────────────
+**/*.aux
+**/*.bbl
+**/*.bcf
+**/*.blg
+**/*.fls
+**/*.fdb_latexmk
+**/*.out
+**/*.run.xml
+**/*.synctex.gz
+**/*.toc
+
+# ─── Terraform: state, lock, real tfvars (only the .example is tracked) ───────
+**/*.tfstate
+**/*.tfstate.backup
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfvars
+
+# ─── Files with non-ASCII names that break Windows tooling ────────────────────
+doc/paper/pics/chapter02/Arhitectura*
