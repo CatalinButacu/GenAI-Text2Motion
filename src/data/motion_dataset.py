@@ -23,11 +23,15 @@ def encodeMotionSample(
     vocab: dict[str, int],
     stats: MotionStats | None = None,
     text: str | None = None,
+    transStatsBySource: dict[str, MotionStats] | None = None,
 ) -> dict:
     """Encode a single motion sample dict into a model-ready tensor batch.
 
     If ``stats`` is provided, motion is z-score normalised per channel so the
     MSE loss is not dominated by high-variance root translation.
+    If ``transStatsBySource`` is provided, channels 3:6 are normalized using
+    the source-specific (mean, std) instead of the shared stats — fixes the
+    bimodal AMASS-vs-HumanML3D translation distribution.
     If ``text`` is provided, it overrides ``s['text']`` -- used by datasets
     that sample uniformly from a per-clip annotation list on each epoch.
     """
@@ -37,7 +41,9 @@ def encodeMotionSample(
         motion = augPipeline(motion)
 
     if stats is not None:
-        motion = normalize(motion, stats)
+        srcKey = s.get("source", "amass")
+        transStats = transStatsBySource.get(srcKey) if transStatsBySource else None
+        motion = normalize(motion, stats, transStats=transStats)
     T = min(motion.shape[0], maxMotionLength)
     motion = np.pad(motion[:T], ((0, maxMotionLength - T), (0, 0)))
     mask = np.zeros(maxMotionLength, dtype=np.float32)
@@ -67,12 +73,14 @@ class MotionDataset(Dataset):
         stats: MotionStats | None = None,
         mirrorProb: float = 0.5,
         seed: int = 42,
+        transStatsBySource: dict[str, MotionStats] | None = None,
     ):
         self.maxMotionLength = maxMotionLength
         self.maxTextLength = maxTextLength
         self.aug_pipeline = None
         self.mirrorProb = mirrorProb if augment and split == "train" else 0.0
         self.rng = np.random.default_rng(seed + (0 if split == "train" else 1))
+        self.transStatsBySource = transStatsBySource
 
         if augment:
             self.aug_pipeline = AugmentationPipeline(maxLength=maxMotionLength)
@@ -113,4 +121,5 @@ class MotionDataset(Dataset):
             s, self.aug_pipeline,
             self.maxMotionLength, self.maxTextLength, self.vocab,
             stats=self.motion_stats,
+            transStatsBySource=self.transStatsBySource,
         )

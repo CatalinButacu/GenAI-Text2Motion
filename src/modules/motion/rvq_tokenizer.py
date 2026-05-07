@@ -82,6 +82,24 @@ class RVQCodebook(nn.Module):
         self.codebook.copy_(self.embedAvg / smoothed.unsqueeze(1))
 
     @torch.no_grad()
+    def resetDeadCodes(self, flat: torch.Tensor, threshold: float = 1.0,
+                       noiseStd: float = 0.01) -> int:
+        # VQ-VAE-2 dead-code revival: replace entries with cluster_size below
+        # threshold by random latents from the current batch (+ small noise).
+        dead = (self.clusterSize < threshold).nonzero(as_tuple=True)[0]
+
+        if dead.numel() == 0 or flat.numel() == 0:
+            return 0
+        n = dead.numel()
+        sampleIdx = torch.randint(0, flat.shape[0], (n,), device=flat.device)
+        replacements = flat[sampleIdx] + noiseStd * torch.randn_like(flat[sampleIdx])
+        self.codebook[dead] = replacements
+        self.embedAvg[dead] = replacements
+        self.clusterSize[dead] = 1.0
+
+        return int(n)
+
+    @torch.no_grad()
     def decodeIndices(self, indices: torch.Tensor) -> torch.Tensor:
         # indices: (B, T) -> (B, T, D)
         return self.codebook[indices]
@@ -137,6 +155,27 @@ class ResidualVectorQuantizer(nn.Module):
             out = out + cb.decodeIndices(indices[..., k])
 
         return out
+
+    @torch.no_grad()
+    def resetDeadCodesPipeline(self, x: torch.Tensor, threshold: float = 1.0) -> list[int]:
+        # Walk the residual chain just like forward, but reset dead codes per layer
+        # using whichever residual that codebook actually sees.
+        flat = x.reshape(-1, self.latentDim)
+        counts: list[int] = []
+
+        for module in self.codebooks:
+            cb: RVQCodebook = module  # type: ignore[assignment]
+            nReset = cb.resetDeadCodes(flat, threshold)
+            counts.append(nReset)
+            dists = (
+                flat.pow(2).sum(dim=1, keepdim=True)
+                - 2 * flat @ cb.codebook.t()
+                + cb.codebook.pow(2).sum(dim=1)
+            )
+            idx = dists.argmin(dim=1)
+            flat = flat - cb.codebook[idx]
+
+        return counts
 
 
 class MotionRVQTokenizer(nn.Module):
@@ -227,6 +266,19 @@ class MotionRVQTokenizer(nn.Module):
         _, indices, _ = self.rvq(z)
 
         return indices
+
+    @torch.no_grad()
+    def resetDeadCodes(self, motion: torch.Tensor, threshold: float = 1.0) -> list[int]:
+        wasTraining = self.training
+        self.eval()
+        x = motion.transpose(1, 2)
+        z = self.encoder(x).transpose(1, 2)
+        counts = self.rvq.resetDeadCodesPipeline(z, threshold)
+
+        if wasTraining:
+            self.train()
+
+        return counts
 
     def decode(self, indices: torch.Tensor) -> torch.Tensor:
         # indices: (B, T', K) -> motion (B, T, D)

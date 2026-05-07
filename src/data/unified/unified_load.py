@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from src.data.amass import AMASSLoader, ARCTICLoader
+from src.data.amass import AMASSLoader, ARCTICLoader, InterXLoader
 from src.data.augmentation import canonicalizeRoot
 from src.data.humanml3d import HumanML3DLoader, buildNormMap, parseIndexCsv, preloadSmplx
 
@@ -61,9 +61,27 @@ def loadArctic(buf: list, cfg, minFrames: int, resampleFn, qfiltFn, detectFn,
             continue
 
         text = s.text or f"person interacts with object {s.sampleId}"
-        buf.append({"motion": motion, "text": text, "source": "arctic"})
+        buf.append({"motion": motion, "text": text, "source": "arctic", "sample_id": s.sampleId})
         n += 1
     log.info("[UnifiedDataset] ARCTIC: %d / %d", n, len(samples))
+
+
+def loadInterx(buf: list, cfg, minFrames: int, resampleFn, qfiltFn, detectFn,
+               maxLength: int | None = None) -> None:
+    loader = InterXLoader(cfg.dataDir)
+    samples = loader.loadDataset(maxSamples=cfg.maxSamples, minFrames=4)
+    n = 0
+
+    for s in samples:
+        motion = preprocessMotion(s.motion, s.fps, resampleFn, qfiltFn, detectFn, maxLength)
+
+        if motion is None or motion.shape[0] < minFrames:
+            continue
+
+        text = s.text or f"two-person interaction {s.sampleId}"
+        buf.append({"motion": motion, "text": text, "source": "interx", "sample_id": s.sampleId})
+        n += 1
+    log.info("[UnifiedDataset] InterX: %d / %d", n, len(samples))
 
 
 def loadHumanml3d(buf: list, cfg, minFrames: int, resampleFn, qfiltFn, detectFn,

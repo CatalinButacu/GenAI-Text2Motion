@@ -16,6 +16,17 @@ variable "use_spot" {
   default     = true
 }
 
+variable "instance_type" {
+  description = <<-EOT
+    EC2 instance type. Spot prices vary by region:
+      g4dn.xlarge  T4   16GB  ~$0.12-0.28/hr  (cheapest, slowest, available everywhere)
+      g6.xlarge    L4   24GB  ~$0.24-0.39/hr  (best perf/$, NOT in eu-west-1)
+      g5.xlarge    A10G 24GB  ~$0.45-0.74/hr  (fastest, also pricier)
+  EOT
+  type    = string
+  default = "g4dn.xlarge"
+}
+
 variable "s3_bucket" {
   description = "S3 bucket for data cache and checkpoint upload"
   type        = string

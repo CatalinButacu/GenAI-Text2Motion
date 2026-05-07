@@ -40,14 +40,23 @@ def computeMotionStats(samples: list[dict], key: str = "motion") -> MotionStats:
 
 
 def normalize(motion: np.ndarray, stats: MotionStats,
-              clipValue: float | None = 5.0) -> np.ndarray:
+              clipValue: float | None = 5.0,
+              transStats: MotionStats | None = None) -> np.ndarray:
     """Z-score normalise per channel, then clip to ±clipValue sigma.
 
     Clipping caps damage from rare outlier samples that would otherwise dominate
     MSE loss. ±5σ keeps 99.99994% of N(0,1) data unaffected -- only true tail
     samples are bounded.
+
+    transStats: if provided, OVERRIDES translation channels (3:6) with this
+    source-specific normalization, leaving everything else on the shared stats.
+    Used to fix the bimodal translation distribution between AMASS (large
+    natural travel) and HumanML3D (canonicalised short trims).
     """
     z = (motion - stats.mean) / stats.std
+
+    if transStats is not None and motion.shape[1] >= 6:
+        z[:, 3:6] = (motion[:, 3:6] - transStats.mean) / transStats.std
 
     if clipValue is not None:
         z = np.clip(z, -clipValue, clipValue)

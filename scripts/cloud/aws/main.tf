@@ -107,12 +107,11 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 }
 
 # -----------------------------------------------------------------------------
-# EC2 — g4dn.xlarge: T4 GPU 16 GB VRAM, 4 vCPU, 16 GB RAM
-# Spot: ~$0.16/hr | On-demand: ~$0.53/hr
+# EC2 — instance type from var.instance_type (g4dn.xlarge / g6.xlarge / g5.xlarge)
 # -----------------------------------------------------------------------------
 resource "aws_instance" "training_vm" {
   ami                    = data.aws_ami.dlami.id
-  instance_type          = "g4dn.xlarge"
+  instance_type          = var.instance_type
   key_name               = var.key_pair_name
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
   vpc_security_group_ids = [aws_security_group.ssh_only.id]
@@ -169,5 +168,5 @@ output "download_checkpoints" {
 }
 
 output "cost_estimate" {
-  value = var.use_spot ? "~$0.16/hr spot (T4 16GB)" : "~$0.53/hr on-demand (T4 16GB)"
+  value = "instance_type=${var.instance_type}  spot=${var.use_spot}  region=${var.region} — check live pricing in aws ec2 describe-spot-price-history"
 }

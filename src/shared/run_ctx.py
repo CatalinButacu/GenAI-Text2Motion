@@ -110,14 +110,27 @@ def initWandb(
 
 
 def wandbLog(metrics: dict[str, Any], step: int | None = None) -> None:
-    """No-op if wandb is not installed or no active run."""
+    """No-op if wandb is not installed or no active run.
+
+    Wraps wandb.log in a broad except — wandb's offline service uses an inter-
+    process socket that Windows occasionally tears down (WinError 64) under
+    long-running training. Telemetry is best-effort; never let it kill a run.
+    """
     if WANDB_AVAILABLE and wandb.run is not None:  # type: ignore[union-attr]
-        wandb.log(metrics, step=step)  # type: ignore[union-attr]
+
+        try:
+            wandb.log(metrics, step=step)  # type: ignore[union-attr]
+        except Exception as exc:  # noqa: BLE001 — see docstring
+            log.warning("[run_ctx] wandb.log failed (%s): %s", type(exc).__name__, exc)
 
 
 def wandbFinish() -> None:
     if WANDB_AVAILABLE and wandb.run is not None:  # type: ignore[union-attr]
-        wandb.finish()  # type: ignore[union-attr]
+
+        try:
+            wandb.finish()  # type: ignore[union-attr]
+        except Exception as exc:  # noqa: BLE001
+            log.warning("[run_ctx] wandb.finish failed (%s): %s", type(exc).__name__, exc)
 
 
 # ---- data integrity ---------------------------------------------------------

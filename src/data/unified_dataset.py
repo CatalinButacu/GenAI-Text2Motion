@@ -31,21 +31,26 @@ class UnifiedConfig:
         default_factory=lambda: SourceConfig(dataDir="data/AMASS")
     )
     arctic: SourceConfig = field(
-        default_factory=lambda: SourceConfig(dataDir="data/ARCTIC/unpack")
+        default_factory=lambda: SourceConfig(enabled=False, dataDir="data/arctic/unpack")
     )
     # HumanML3D off by default -- requires index.csv + AMASS backing
     humanml3d: SourceConfig = field(
         default_factory=lambda: SourceConfig(enabled=False, dataDir="data/humanml3d")
+    )
+    interx: SourceConfig = field(
+        default_factory=lambda: SourceConfig(enabled=False, dataDir="data/inter-x")
     )
 
 
 class UnifiedMotionDataset(Dataset):
     def __init__(self, split="train", maxMotionLength=200, maxTextLength=64,
                  augment=False, vocab=None, stats: MotionStats | None = None,
-                 config=None, minFrames=30, preloadedBuf=None):
+                 config=None, minFrames=30, preloadedBuf=None,
+                 transStatsBySource: dict[str, MotionStats] | None = None):
         self.maxMotionLength = maxMotionLength
         self.maxTextLength = maxTextLength
         self.aug_pipeline = None
+        self.transStatsBySource = transStatsBySource
 
         if augment:
             self.aug_pipeline = AugmentationPipeline(maxLength=maxMotionLength)
@@ -84,6 +89,7 @@ class UnifiedMotionDataset(Dataset):
         item = encodeMotionSample(
             s, self.aug_pipeline, self.maxMotionLength, self.maxTextLength,
             self.vocab, stats=self.motion_stats,
+            transStatsBySource=self.transStatsBySource,
         )
         item["source"] = s.get("source", "unknown")
 

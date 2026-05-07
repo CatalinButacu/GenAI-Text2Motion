@@ -33,6 +33,7 @@ readTfvar() {
 
 REGION="$(readTfvar region "$REGION_DEFAULT")"
 S3_BUCKET="$(readTfvar s3_bucket "")"
+KEY_PAIR="$(readTfvar key_pair_name "dissertation-${REGION}")"
 
 confirm() {
   local prompt="$1"
@@ -142,33 +143,89 @@ cmdDown() {
   terraform destroy -auto-approve
 }
 
+cmdMonitor() {
+  requireTfState
+  local id; id="$(instanceId)"
+  local pem; pem="$HOME/.ssh/${KEY_PAIR}.pem"
+  local intervalSec="${1:-300}"   # default poll every 5 min
+
+  if [ -z "$id" ]; then
+    echo "no instance in current state" >&2
+    return 1
+  fi
+
+  echo "Monitor: instance=$id  region=$REGION  poll=${intervalSec}s"
+  echo "Press Ctrl+C to stop monitoring (training keeps running)."
+  echo
+
+  while true; do
+    local ts; ts="$(date '+%H:%M:%S')"
+    local state; state="$(aws ec2 describe-instances --instance-ids "$id" --region "$REGION" \
+      --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null || echo unknown)"
+
+    if [ "$state" = "terminated" ] || [ "$state" = "shutting-down" ] || [ "$state" = "stopped" ]; then
+      echo "[$ts] state=$state — instance is gone. Run './run.sh wait' to sync + cleanup."
+      return 0
+    fi
+
+    local pubip; pubip="$(aws ec2 describe-instances --instance-ids "$id" --region "$REGION" \
+      --query 'Reservations[0].Instances[0].PublicIpAddress' --output text 2>/dev/null || echo "")"
+
+    if [ -z "$pubip" ] || [ "$pubip" = "None" ]; then
+      echo "[$ts] state=$state  ip=pending"
+      sleep "$intervalSec"
+      continue
+    fi
+
+    # Pull last meaningful line from the training log + latest motion_ssm log
+    local userlog ssmlog
+    userlog="$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+                   -i "$pem" "ubuntu@$pubip" \
+                   "tail -1 /var/log/user-data.log 2>/dev/null" 2>/dev/null || echo "ssh-fail")"
+    ssmlog="$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+                  -i "$pem" "ubuntu@$pubip" \
+                  "ls -1t /home/ubuntu/repo/checkpoints/motion_ssm/*/training.log 2>/dev/null | head -1 | xargs -r tail -1" \
+                  2>/dev/null || echo "")"
+    echo "[$ts] state=$state  ip=$pubip"
+    echo "       boot:  ${userlog:0:120}"
+
+    if [ -n "$ssmlog" ]; then
+      echo "       train: ${ssmlog:0:120}"
+    fi
+    sleep "$intervalSec"
+  done
+}
+
 cmdHelp() {
   cat <<'EOF'
 AWS GPU training wrapper
 
 Subcommands:
-  up      Provision EC2 spot instance and start training (asks confirmation).
-  status  Show current instance state.
-  logs    SSH and tail /var/log/user-data.log on the instance.
-  wait    Block until self-terminate, then sync checkpoints + destroy.
-  sync    Download checkpoints from S3 to ./checkpoints (idempotent).
-  down    Emergency: force-destroy everything (asks confirmation).
-  help    This message.
+  up         Provision EC2 spot instance and start training (asks confirmation).
+  status     Show current instance state.
+  logs       SSH and tail /var/log/user-data.log on the instance.
+  monitor    Poll every 5 min: instance state + last boot/training log line.
+             Returns when instance terminates. Pass seconds to override interval.
+  wait       Block until self-terminate, then sync checkpoints + destroy.
+  sync       Download checkpoints from S3 to ./checkpoints (idempotent).
+  down       Emergency: force-destroy everything (asks confirmation).
+  help       This message.
 
 Typical run:
   ./run.sh up
-  ./run.sh logs        # watch ~3-6 hours of training
+  ./run.sh monitor     # one-line-per-5-min status until done
   ./run.sh wait        # auto-sync checkpoints + destroy when done
 EOF
 }
 
 case "${1:-help}" in
-  up)     cmdUp ;;
-  status) cmdStatus ;;
-  logs)   cmdLogs ;;
-  wait)   cmdWait ;;
-  sync)   cmdSync ;;
-  down)   cmdDown ;;
+  up)      cmdUp ;;
+  status)  cmdStatus ;;
+  logs)    cmdLogs ;;
+  monitor) shift; cmdMonitor "$@" ;;
+  wait)    cmdWait ;;
+  sync)    cmdSync ;;
+  down)    cmdDown ;;
   help|-h|--help) cmdHelp ;;
   *) echo "unknown subcommand: $1" >&2; cmdHelp; exit 1 ;;
 esac

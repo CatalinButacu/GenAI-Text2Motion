@@ -64,11 +64,14 @@ mkdir -p "$REPO_DIR/data/AMASS"     # trainer expects the directory to exist
 mkdir -p "$REPO_DIR/data/humanml3d"
 
 echo "--- Downloading data cache from S3: $(date) ---"
-aws s3 cp "$S3_CACHE_URI" "$CACHE_DIR/" --recursive 2>/dev/null || \
-  aws s3 cp "$S3_CACHE_URI" "$CACHE_DIR/$(basename $S3_CACHE_URI)"
+# Pull every joblib in the cache/ prefix (unified_buf_<hash>.joblib) — one of these
+# matches the trainer's expected hash for the configured sources.
+aws s3 sync "$S3_CACHE_URI" "$CACHE_DIR/" --exclude "*" --include "*.joblib"
 
-# Also sync humanml3d texts + splits if stored under s3://<bucket>/data/humanml3d/
+# Sync HumanML3D texts/splits/index.csv (~52 MB) — needed by trainer's dataset code
 aws s3 sync "s3://$S3_BUCKET/data/humanml3d" "$REPO_DIR/data/humanml3d" || true
+# Sync z-norm + per-source translation stats
+aws s3 sync "s3://$S3_BUCKET/data/stats" "$REPO_DIR/data/stats" || true
 
 echo "Cache ready: $(du -sh $CACHE_DIR 2>/dev/null | cut -f1)"
 chown -R ubuntu:ubuntu "$REPO_DIR"
@@ -126,6 +129,7 @@ sudo -u ubuntu bash -c "
   cd $REPO_DIR
   python scripts/training/train_motion_ssm.py \
     --data-source          $DATA_SOURCE \
+    --sources              humanml3d \
     --use-sbert \
     --bidirectional \
     --use-film \

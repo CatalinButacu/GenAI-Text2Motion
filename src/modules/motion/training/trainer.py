@@ -73,19 +73,19 @@ class SSMTrainer(BaseSSMTrainer):
             self.lockSeed(config.seed)
         self.device = torch.device(config.device if torch.cuda.is_available() else "cpu")
 
-        self.train_ds, self.val_ds, self.test_ds, train_sampler = datasetFactory(
+        self.trainDs, self.valDs, self.testDs, trainSampler = datasetFactory(
             config, config.maxSamples
         )
-        config.vocabSize = len(self.train_ds.vocab)
+        config.vocabSize = len(self.trainDs.vocab)
         log.info(
             "[%s] train=%d val=%d test=%d vocab=%d",
             dataSource,
-            len(self.train_ds),
-            len(self.val_ds),
-            len(self.test_ds),
+            len(self.trainDs),
+            len(self.valDs),
+            len(self.testDs),
             config.vocabSize,
         )
-        self.finalizeInit(config, trainSampler=train_sampler)
+        self.finalizeInit(config, trainSampler=trainSampler)
 
     def saveCheckpoint(self, epoch: int, valLoss: float, isBest: bool) -> None:
         ssmKeys = {
@@ -106,8 +106,8 @@ class SSMTrainer(BaseSSMTrainer):
             "scheduler_state_dict": self.scheduler.state_dict(),
             "valLoss": valLoss,
             "config": self.config,
-            "vocab": self.train_ds.vocab,
-            "motion_stats": self.train_ds.motion_stats,
+            "vocab": self.trainDs.vocab,
+            "motion_stats": self.trainDs.motion_stats,
             "data_source": self.dataSource,
         }
         path = os.path.join(self.config.checkpointDir, f"checkpoint_epoch{epoch}.pt")
@@ -160,7 +160,7 @@ def humanml3dFactory(config: TrainingConfig, maxSamples):
 
 
 def unifiedFactory(config: TrainingConfig, maxSamples):
-    sources = getattr(config, "unified_sources", ["amass", "arctic"])
+    sources = getattr(config, "unifiedSources", ["amass", "arctic"])
 
     def makeSrc(enabled: bool, dataDir: str, amassDir: str = "data/AMASS") -> SourceConfig:
         sc = SourceConfig(enabled=enabled, dataDir=dataDir, amassDir=amassDir)
