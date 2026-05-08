@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import zipfile
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from .smplx_pack import SMPLXSample, packSmplxPose
 log = logging.getLogger(__name__)
 
 INTERX_FPS = 30.0
+ACTION_CODE_RE = re.compile(r"A(\d{3})")
 
 
 def loadActionMap(repoDatasetsDir: Path) -> dict[str, str]:
@@ -25,15 +27,14 @@ def loadActionMap(repoDatasetsDir: Path) -> dict[str, str]:
 
 
 def parseSeqAction(seqId: str, actionMap: dict[str, str]) -> str:
-    # seqId pattern: G???T???A???R???
-    for token in seqId.split("T")[-1].split("R"):
-        for prefix in ("A",):
-            if token.startswith(prefix) and len(token) >= 4:
-                code = "A" + token[1:4]
+    # seqId pattern: G???T???A???R??? — extract the A-prefixed 3-digit action code
+    m = ACTION_CODE_RE.search(seqId)
 
-                return actionMap.get(code, code)
+    if m is None:
+        return "interaction"
+    code = f"A{m.group(1)}"
 
-    return "interaction"
+    return actionMap.get(code, code)
 
 
 def loadTexts(textsDir: Path, seqId: str) -> list[str]:
