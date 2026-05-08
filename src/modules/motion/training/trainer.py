@@ -32,7 +32,7 @@ def buildUnifiedBuf(cfg, minFrames: int = 30) -> list[dict]:
         f"{name}:{getattr(getattr(cfg, name, None), 'enabled', False)}"
         f":{getattr(getattr(cfg, name, None), 'dataDir', '')}"
         f":{getattr(getattr(cfg, name, None), 'maxSamples', None)}"
-        for name in ("amass", "arctic", "humanml3d")
+        for name in ("amass", "arctic", "humanml3d", "interx")
     )
     ck = hashlib.md5(f"{sourcesKey}:{minFrames}".encode()).hexdigest()[:12]
     cachePath = Path("data/.cache") / f"unified_buf_{ck}.joblib"
@@ -169,15 +169,19 @@ def unifiedFactory(config: TrainingConfig, maxSamples):
         return sc
 
     cfg = UnifiedConfig(
-        amass=makeSrc("amass" in sources, getattr(config, "data_dir", "data/AMASS")),
+        amass=makeSrc("amass" in sources, getattr(config, "dataDir", "data/AMASS")),
         arctic=makeSrc(
             "arctic" in sources,
-            getattr(config, "arctic_data_dir", "data/ARCTIC/unpack"),
+            getattr(config, "arcticDataDir", "data/arctic/unpack"),
         ),
         humanml3d=makeSrc(
             "humanml3d" in sources,
-            getattr(config, "humanml3d_dir", "data/humanml3d"),
-            amassDir=getattr(config, "amass_dir", "data/AMASS"),
+            getattr(config, "humanml3dDir", "data/humanml3d"),
+            amassDir=getattr(config, "amassDir", "data/AMASS"),
+        ),
+        interx=makeSrc(
+            "interx" in sources,
+            getattr(config, "interxDir", "data/inter-x"),
         ),
     )
     sharedBuf = buildUnifiedBuf(cfg)
