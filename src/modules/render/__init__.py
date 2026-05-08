@@ -29,6 +29,7 @@ def invoke(motionClips: dict, outputPath: str, config: RenderConfig | None = Non
             gender=cfg.gender,
             width=cfg.width,
             height=cfg.height,
+            inputCoordSystem=cfg.inputCoordSystem,
         )
 
     log.info("[M6] video saved -> %s (%d fps)", outputPath, cfg.fps)

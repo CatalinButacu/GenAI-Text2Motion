@@ -12,9 +12,20 @@ from aitviewer.renderables.plane import ChessboardPlane
 from aitviewer.renderables.smpl import SMPLSequence
 from scipy.spatial.transform import Rotation
 
-# Z-up (SMPL-X world) -> Y-up (aitviewer world) coordinate transform
+# SMPL-X parameters from HumanML3D are already Y-up (matches aitviewer).
+# AMASS-native data needs Z-up→Y-up. The active rotation is selected per-render
+# via RenderConfig.inputCoordSystem; pickRotation() returns the right one.
 R_ZUP_TO_YUP = Rotation.from_euler("xy", [-90, 180], degrees=True)
-R_MAT = R_ZUP_TO_YUP.as_matrix().astype(np.float32)
+R_IDENTITY = Rotation.identity()
+
+
+def pickRotation(inputCoordSystem: str) -> Rotation:
+    if inputCoordSystem == "zup":
+        return R_ZUP_TO_YUP
+
+    if inputCoordSystem == "yup":
+        return R_IDENTITY
+    raise ValueError(f"unknown inputCoordSystem: {inputCoordSystem!r}")
 
 log = logging.getLogger(__name__)
 
@@ -48,11 +59,14 @@ def resetScene(renderer: HeadlessRenderer) -> None:
             renderer.scene.remove(node)  # type: ignore[union-attr]
 
 
-def toYupCoords(smplxParams: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Convert root orientation and translation from Z-up (SMPL-X) to Y-up (aitviewer)."""
-    trans = (smplxParams[:, 3:6] @ R_MAT.T).astype(np.float32)
+def toYupCoords(smplxParams: np.ndarray,
+                inputCoordSystem: str = "yup") -> tuple[np.ndarray, np.ndarray]:
+    """Convert root orientation and translation to Y-up (aitviewer's world frame)."""
+    rot = pickRotation(inputCoordSystem)
+    rotMat = rot.as_matrix().astype(np.float32)
+    trans = (smplxParams[:, 3:6] @ rotMat.T).astype(np.float32)
     rootOrient = (
-        (R_ZUP_TO_YUP * Rotation.from_rotvec(smplxParams[:, 0:3])).as_rotvec().astype(np.float32)
+        (rot * Rotation.from_rotvec(smplxParams[:, 0:3])).as_rotvec().astype(np.float32)
     )
 
     return rootOrient, trans
@@ -63,9 +77,10 @@ def smplxParams2Sequence(
     betas: np.ndarray | None = None,
     gender: str = "neutral",
     color: tuple = (0.72, 0.60, 0.52, 1.0),
+    inputCoordSystem: str = "yup",
 ) -> SMPLSequence:
     """Build an aitviewer SMPLSequence from a raw SMPL-X parameter array (T x 168)."""
-    rootOrient, trans = toYupCoords(smplxParams)
+    rootOrient, trans = toYupCoords(smplxParams, inputCoordSystem)
     body = smplxParams[:, 6:69]
     lhand = smplxParams[:, 69:114]
     rhand = smplxParams[:, 114:159]
@@ -118,12 +133,14 @@ def renderSmplx2Video(
     gender: str = "neutral",
     width: int = 1280,
     height: int = 720,
+    inputCoordSystem: str = "yup",
 ) -> None:
     """Render a Tx168 SMPL-X parameter sequence to an MP4 via aitviewer headless rendering."""
     out = Path(outputPath)
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    seq = smplxParams2Sequence(smplxParams, betas=betas, gender=gender)
+    seq = smplxParams2Sequence(smplxParams, betas=betas, gender=gender,
+                               inputCoordSystem=inputCoordSystem)
     log.info("[M6] SMPLSequence: %d frames, gender=%s", len(smplxParams), gender)
 
     renderer = getRenderer(width=width, height=height)
