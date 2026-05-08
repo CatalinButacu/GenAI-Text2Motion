@@ -180,8 +180,11 @@ def extractMotionMetrics(result: dict) -> dict:
     clips = result.get("motion_clips", [])
     if not clips:
         return {}
+    # motion.invoke returns dict[str, MotionClip] (actor_name -> clip).
+    # Accept both shapes for backwards compatibility with older callers.
+    clipList = list(clips.values()) if isinstance(clips, dict) else list(clips)
 
-    allParams = [c.smplxParams for c in clips if c.smplxParams is not None]
+    allParams = [c.smplxParams for c in clipList if c.smplxParams is not None]
     if not allParams:
         return {}
 
