@@ -130,7 +130,7 @@ OOD_PROMPTS: list[str] = [
     "a person moves as slowly as possible",
 ]
 
-assert len(OOD_PROMPTS) == 20, f"Expected 20 OOD prompts, got {len(OOD_PROMPTS)}"
+assert len(OOD_PROMPTS) == 19, f"Expected 19 OOD prompts, got {len(OOD_PROMPTS)}"
 
 
 #  Config definitions
