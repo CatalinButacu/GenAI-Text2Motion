@@ -138,14 +138,15 @@ assert len(OOD_PROMPTS) == 20, f"Expected 20 OOD prompts, got {len(OOD_PROMPTS)}
 ALL_CONFIGS = ["full", "no_m2"]
 
 
-def pipelineConfigFor(configName: str, outputDir: str, duration: float = 3.0, fps: int = 24):
+def pipelineConfigFor(configName: str, outputDir: str, duration: float = 3.0,
+                      fps: int = 24, device: str = "cpu"):
     """Build PipelineConfig for a given ablation config name."""
     if configName not in ALL_CONFIGS:
         raise ValueError(f"Unknown config: {configName!r}")
     cfg = PipelineConfig(
         fps=fps,
         duration=float(duration),
-        device="cpu",
+        device=device,
         outputDir=outputDir,
     )
     cfg.planner.randomLayout = configName == "no_m2"
@@ -205,13 +206,15 @@ def extractMotionMetrics(result: dict) -> dict:
 
 
 def runSingle(
-    prompt: str, configName: str, outputDir: str, duration: float, fps: int
+    prompt: str, configName: str, outputDir: str, duration: float, fps: int,
+    device: str = "cpu",
 ) -> RunResult:
     """Run pipeline for one prompt/config combination."""
     run = RunResult(prompt=prompt, config=configName, success=False)
     t0 = time.perf_counter()
     try:
-        cfg = pipelineConfigFor(configName, outputDir=outputDir, duration=duration, fps=fps)
+        cfg = pipelineConfigFor(configName, outputDir=outputDir, duration=duration,
+                                fps=fps, device=device)
         safeName = prompt[:40].replace(" ", "_").replace("/", "-")
         outputName = f"{configName}__{safeName}"
 
@@ -349,6 +352,8 @@ def main():
         help="Clip duration per run (shorter = faster evaluation)",
     )
     p.add_argument("--fps", type=int, default=24)
+    p.add_argument("--device", default="cpu", choices=["cuda", "cpu"],
+                   help="Device for motion generation (M4). Render still uses GPU via aitviewer.")
     p.add_argument("--resume", action="store_true", help="Skip runs that already have output files")
     p.add_argument(
         "--ood",
@@ -384,7 +389,8 @@ def main():
         for i, prompt in enumerate(prompts):
             done += 1
             log.info("[%d/%d] config=%s  prompt=%r", done, total, config_name, prompt[:50])
-            run = runSingle(prompt, config_name, configDir, args.duration, args.fps)
+            run = runSingle(prompt, config_name, configDir, args.duration, args.fps,
+                            device=args.device)
             configResults.append(run)
             allResults.append(run)
 
