@@ -79,7 +79,11 @@ def loadInterx(buf: list, cfg, minFrames: int, resampleFn, qfiltFn, detectFn,
             continue
 
         text = s.text or f"two-person interaction {s.sampleId}"
-        buf.append({"motion": motion, "text": text, "source": "interx", "sample_id": s.sampleId})
+        # interaction_id groups P1+P2 of the same Inter-X sequence into one split bucket
+        # (sampleId = "interx/<seqId>/P{1|2}") -- prevents two-agent test-set leakage.
+        seqId = s.sampleId.split("/")[1] if "/" in s.sampleId else s.sampleId
+        buf.append({"motion": motion, "text": text, "source": "interx",
+                    "sample_id": s.sampleId, "interaction_id": f"interx:{seqId}"})
         n += 1
     log.info("[UnifiedDataset] InterX: %d / %d", n, len(samples))
 
