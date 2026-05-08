@@ -203,11 +203,20 @@ def main():
     parser.add_argument(
         "--sources",
         nargs="+",
-        choices=["amass", "arctic", "humanml3d"],
+        choices=["amass", "arctic", "humanml3d", "interx"],
         default=None,
         help="Data sources for unified training. Defaults to [amass, arctic]. "
-             "Example: --sources amass humanml3d",
+             "Example: --sources amass humanml3d interx",
     )
+    parser.add_argument("--arctic-dir", type=str, default="data/arctic/unpack",
+                        dest="arcticDir",
+                        help="ARCTIC dataset root (used when --sources includes arctic)")
+    parser.add_argument("--humanml3d-dir", type=str, default="data/humanml3d",
+                        dest="humanml3dDir",
+                        help="HumanML3D root (used when --sources includes humanml3d)")
+    parser.add_argument("--interx-dir", type=str, default="data/inter-x",
+                        dest="interxDir",
+                        help="Inter-X root (used when --sources includes interx)")
     args = parser.parse_args()
 
     # Resolve defaults
@@ -268,6 +277,11 @@ def main():
     )
     if args.sources is not None and args.dataSource == "unified":
         config.unifiedSources = args.sources
+    # Pass per-source data dirs through so unifiedFactory can find them
+    config.arcticDataDir = args.arcticDir
+    config.humanml3dDir = args.humanml3dDir
+    config.interxDir = args.interxDir
+    config.amassDir = args.dataDir if args.dataSource != "humanml3d" else "data/AMASS"
     log.info(
         "arch: use_sbert=%s  bidirectional=%s  use_film=%s  grad_ckpt=%s  "
         "d_model=%d  n_layers=%d  max_motion_length=%d  rvq_ckpt=%s",
