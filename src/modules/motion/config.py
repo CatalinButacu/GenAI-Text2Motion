@@ -56,13 +56,14 @@ class ModelConfig:
 class DataConfig:
     dataDir: str = "data/AMASS"
     amassDir: str = "data/AMASS"  # AMASS backing store used by HumanML3D loader
-    arcticDataDir: str = "data/ARCTIC/unpack"
+    arcticDataDir: str = "data/arctic/unpack"
     humanml3dDir: str = "data/humanml3d"
+    interxDir: str = "data/inter-x"
     maxSamples: int | None = None
     numWorkers: int = field(
         default_factory=lambda: 0 if __import__("sys").platform == "win32" else 4
     )
-    # Sources to use in unified training mode; subset of {"amass", "arctic", "humanml3d"}
+    # Sources to use in unified training mode; subset of {"amass","arctic","humanml3d","interx"}
     unifiedSources: list = field(default_factory=lambda: ["amass", "arctic"])
 
 
