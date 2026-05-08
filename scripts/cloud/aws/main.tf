@@ -21,14 +21,16 @@ provider "aws" {
 }
 
 # -----------------------------------------------------------------------------
-# AMI — AWS Deep Learning AMI (Ubuntu 22.04, PyTorch + CUDA pre-installed)
+# AMI — AWS Deep Learning AMI (Ubuntu 22.04 + PyTorch + conda pre-installed)
+# Important: must be the FULL DLAMI ("PyTorch X.X"), NOT the "Base OSS" one
+# (Base = drivers only, no conda → startup.sh can't find /opt/conda)
 # -----------------------------------------------------------------------------
 data "aws_ami" "dlami" {
   most_recent = true
   owners      = ["amazon"]
   filter {
     name   = "name"
-    values = ["Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 22.04)*"]
+    values = ["Deep Learning OSS Nvidia Driver AMI GPU PyTorch*Ubuntu 22.04*"]
   }
   filter {
     name   = "architecture"

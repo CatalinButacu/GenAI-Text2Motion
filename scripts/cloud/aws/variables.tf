@@ -43,13 +43,13 @@ variable "repo_url" {
 }
 
 variable "data_source" {
-  description = "Training data source: amass | humanml3d"
+  description = "Training data source: amass | humanml3d | unified | mega"
   type        = string
-  default     = "humanml3d"
+  default     = "unified"
 
   validation {
-    condition     = contains(["amass", "humanml3d"], var.data_source)
-    error_message = "data_source must be amass or humanml3d."
+    condition     = contains(["amass", "humanml3d", "unified", "mega"], var.data_source)
+    error_message = "data_source must be amass | humanml3d | unified | mega."
   }
 }
 
