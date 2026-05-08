@@ -240,7 +240,7 @@ sudo -u ubuntu bash -c "
     --n-layers                 6 \
     --max-motion-length        200 \
     --batch-size               $BATCH_SIZE \
-    --lr                       3e-4 \
+    --lr                       1e-4 \
     --epochs                   $EPOCHS_SSM \
     --num-workers              4 \
     --checkpoint-dir           checkpoints/motion_ssm \
