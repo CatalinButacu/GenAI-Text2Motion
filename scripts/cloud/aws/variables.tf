@@ -76,3 +76,14 @@ variable "allowed_ssh_cidr" {
   type        = string
   default     = "0.0.0.0/0"
 }
+
+variable "wandb_api_key" {
+  description = <<-EOT
+    Optional W&B API key for live online loss curves at https://wandb.ai.
+    Get yours at https://wandb.ai/authorize. Leave empty to keep offline mode
+    (logs to disk only). Marked sensitive so terraform never prints it.
+  EOT
+  type      = string
+  sensitive = true
+  default   = ""
+}

@@ -54,6 +54,28 @@ EPOCHS_SSM="${epochs_ssm}"            # how long to train SSM (typically 200)
 BATCH_SIZE="${batch_size}"            # depends on GPU VRAM; 64 for T4 16GB
 
 # -----------------------------------------------------------------------------
+# W&B mode selection.
+# Wrapped in { set +x; ...; set -x; } so the api key never lands in
+# /var/log/user-data.log via the script's xtrace. We then forward the env
+# var to the unprivileged training shell via sudo --preserve-env.
+# -----------------------------------------------------------------------------
+{ set +x
+  WANDB_API_KEY_TF="${wandb_api_key}"
+  if [ -n "$WANDB_API_KEY_TF" ]; then
+    export WANDB_API_KEY="$WANDB_API_KEY_TF"
+    export WANDB_SILENT=true
+    SUDO_KEEP_WANDB="--preserve-env=WANDB_API_KEY,WANDB_SILENT"
+    echo "=== W&B online mode (api key length=$${#WANDB_API_KEY_TF}) ==="
+  else
+    export WANDB_MODE=offline
+    export WANDB_SILENT=true
+    SUDO_KEEP_WANDB="--preserve-env=WANDB_MODE,WANDB_SILENT"
+    echo "=== W&B offline mode (no api key set in terraform.tfvars) ==="
+  fi
+  set -x
+}
+
+# -----------------------------------------------------------------------------
 # Trap-on-exit safety net (the single most important reliability line in this
 # script). Fires on ANY exit reason: success, error, signal, OOM kill. We:
 #   1. Push whatever checkpoints exist to S3 so partial training is recoverable.
@@ -191,9 +213,8 @@ else
   echo "=== No RVQ checkpoint in S3 — training one (~1 hour on T4) ==="
   # `sudo -u ubuntu` switches to the ubuntu user (so wandb/cache files are
   # owned by ubuntu, not root). The whole training is in a single quoted block.
-  sudo -u ubuntu bash -c "
+  sudo -u ubuntu $SUDO_KEEP_WANDB bash -c "
     source /opt/pytorch/bin/activate
-    export WANDB_MODE=offline WANDB_SILENT=true
     cd $REPO_DIR
     python scripts/training/train_rvq_tokenizer.py \
       --epochs       $EPOCHS_RVQ \
@@ -260,9 +281,8 @@ chown -R ubuntu:ubuntu "$REPO_DIR/checkpoints"
 #   --bidirectional     fwd+bwd Mamba scan (Motion Mamba ECCV 2024 style)
 #   --use-film          inject text at every layer (FiLM)
 #   --gradient-checkpointing  trade compute for VRAM (lets us use bigger batches)
-sudo -u ubuntu bash -c "
+sudo -u ubuntu $SUDO_KEEP_WANDB bash -c "
   source /opt/pytorch/bin/activate
-  export WANDB_MODE=offline WANDB_SILENT=true
   cd $REPO_DIR
   python scripts/training/train_motion_ssm.py \
     --data-source              $DATA_SOURCE \

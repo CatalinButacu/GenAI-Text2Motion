@@ -135,14 +135,15 @@ resource "aws_instance" "training_vm" {
   }
 
   user_data = templatefile("${path.module}/startup.sh", {
-    s3_bucket    = var.s3_bucket
-    s3_cache_uri = var.s3_cache_uri
-    region       = var.region
-    repo_url     = var.repo_url
-    data_source  = var.data_source
-    epochs_rvq   = var.epochs_rvq
-    epochs_ssm   = var.epochs_ssm
-    batch_size   = var.batch_size
+    s3_bucket     = var.s3_bucket
+    s3_cache_uri  = var.s3_cache_uri
+    region        = var.region
+    repo_url      = var.repo_url
+    data_source   = var.data_source
+    epochs_rvq    = var.epochs_rvq
+    epochs_ssm    = var.epochs_ssm
+    batch_size    = var.batch_size
+    wandb_api_key = var.wandb_api_key
   })
 
   tags = {

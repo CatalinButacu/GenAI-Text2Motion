@@ -17,3 +17,7 @@ data_source = "humanml3d"
 epochs_rvq  = 50
 epochs_ssm  = 200
 batch_size  = 64
+
+# Optional: live W&B online dashboard at https://wandb.ai.
+# Get a key from https://wandb.ai/authorize. Leave empty for offline mode.
+wandb_api_key = ""
