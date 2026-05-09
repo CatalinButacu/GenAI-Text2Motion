@@ -219,6 +219,13 @@ else
   RESUME_FLAG=""
 fi
 
+# The mkdir/sync above ran as root, so $SSM_CKPT_BASE and any resumed run dir
+# under it are now root-owned. The trainer below runs as ubuntu via sudo -u
+# and creates a fresh timestamped run dir via makeRunDir. That mkdir fails
+# with PermissionError unless we hand ownership back. Run AFTER the resume
+# sync so it covers everything root just touched.
+chown -R ubuntu:ubuntu "$REPO_DIR/checkpoints"
+
 # Architecture flags chosen based on what we smoke-tested locally:
 #   --use-sbert         use SentenceTransformer for text (frozen)
 #   --bidirectional     fwd+bwd Mamba scan (Motion Mamba ECCV 2024 style)
