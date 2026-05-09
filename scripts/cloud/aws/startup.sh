@@ -236,7 +236,13 @@ if [ -n "$LATEST_S3_RUN" ]; then
   mkdir -p "$SSM_CKPT_BASE/$LATEST_S3_RUN"
   aws s3 sync "s3://$S3_BUCKET/checkpoints/motion_ssm/$LATEST_S3_RUN" \
               "$SSM_CKPT_BASE/$LATEST_S3_RUN"
-  RESUME_FLAG="--resume latest"
+  # Point at the prior run's best_model.pt explicitly. `--resume latest`
+  # only searches the trainer's own (freshly-created) run dir via
+  # resolveCkptPath, which is empty here, so it would silently start from
+  # random weights. Pass the explicit path so resolveCkptPath's
+  # os.path.exists branch picks it up. Path is relative to cwd
+  # (/home/ubuntu/repo where the python invocation runs).
+  RESUME_FLAG="--resume checkpoints/motion_ssm/$LATEST_S3_RUN/best_model.pt"
 else
   echo "Fresh SSM training (no prior run in S3)"
   RESUME_FLAG=""
