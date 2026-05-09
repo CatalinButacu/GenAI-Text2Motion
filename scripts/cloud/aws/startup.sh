@@ -1,35 +1,8 @@
 #!/bin/bash
-# =============================================================================
-# startup.sh — runs ONCE on the EC2 instance the moment it boots
-# =============================================================================
-#
-# AWS calls this "user data". It's plain bash, executed as root by cloud-init
-# right after first boot. AWS picks it up because main.tf line 113 has:
-#     user_data = templatefile("$${path.module}/startup.sh", { ... })
-# and Terraform substitutes $${variables} below before sending it to AWS.
-#
-# Where to find the live output once the EC2 is running:
-#     ssh ubuntu@<ip> "sudo tail -f /var/log/user-data.log"
-#
-# This file does 8 things in order:
-#   1. Activate the EC2's pre-installed PyTorch environment
-#   2. pip install our extra Python deps (sentence-transformers, etc.)
-#   3. git clone our code from GitHub
-#   4. aws s3 sync our cached training data (so we don't redownload AMASS)
-#   5. Reuse our existing RVQ checkpoint from S3 (or train one if missing)
-#   6. Train the MotionSSM model on the GPU (the actual long step, ~6 hours)
-#   7. aws s3 sync the trained checkpoints back to S3
-#   8. aws ec2 terminate-instances on ourselves -> EC2 dies, billing stops
-#
-# Important: the EC2 self-terminates at the end. That's why this works as
-# "fire and forget" — you launch it, walk away, and ~6 hours later your
-# checkpoint is in S3 and the instance is gone.
-# =============================================================================
-
-# `set -e`: exit immediately if any command fails (catches bugs early)
-# `set -u`: error on unset variables (catches typos)
-# `set -x`: print every command before running (helpful in /var/log/user-data.log)
-# `set -o pipefail`: in a pipe, fail if ANY command fails, not just the last
+# startup.sh — EC2 cloud-init entry. See CLOUD-GUIDE.md for the long-form docs.
+# Steps: activate venv, install deps, clone repo, sync cache, RVQ ckpt,
+# train MotionSSM, upload checkpoints, self-terminate. Self-terminate also
+# fires from the cleanupOnExit trap on any error.
 set -euxo pipefail
 
 # Redirect everything to /var/log/user-data.log so SSH-tail can read it later
