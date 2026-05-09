@@ -54,6 +54,29 @@ EPOCHS_SSM="${epochs_ssm}"            # how long to train SSM (typically 200)
 BATCH_SIZE="${batch_size}"            # depends on GPU VRAM; 64 for T4 16GB
 
 # -----------------------------------------------------------------------------
+# Trap-on-exit safety net (the single most important reliability line in this
+# script). Fires on ANY exit reason: success, error, signal, OOM kill. We:
+#   1. Push whatever checkpoints exist to S3 so partial training is recoverable.
+#   2. Terminate the EC2 self so a crashed/hung run doesn't burn $13/day idle.
+# `|| true` on each step so cleanup never aborts before reaching terminate.
+# -----------------------------------------------------------------------------
+cleanupOnExit() {
+  rc=$?
+  set +e
+  echo "=== cleanupOnExit fired (rc=$rc) at $(date) ==="
+  if [ -d "$REPO_DIR/checkpoints" ]; then
+    aws s3 sync "$REPO_DIR/checkpoints" "s3://$S3_BUCKET/checkpoints" \
+      --storage-class STANDARD_IA 2>&1 | tail -10 || true
+  fi
+  IID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null || echo "")
+  if [ -n "$IID" ]; then
+    echo "Self-terminating $IID in $REGION"
+    aws ec2 terminate-instances --instance-ids "$IID" --region "$REGION" 2>&1 | tail -3 || true
+  fi
+}
+trap cleanupOnExit EXIT
+
+# -----------------------------------------------------------------------------
 # Step 1: activate the Python environment that has PyTorch installed
 # -----------------------------------------------------------------------------
 # AWS Deep Learning AMIs (DLAMI) ship PyTorch in a venv at /opt/pytorch/.
