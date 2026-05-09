@@ -182,7 +182,8 @@ class BaseSSMTrainer:
         path = resolveCkptPath(resumeFrom, self.config.checkpointDir)
 
         if path:
-            restoreCheckpoint(self, path)
+            warmStart = getattr(self.config, "warmStart", False)
+            restoreCheckpoint(self, path, warmStart=warmStart)
 
     def saveCheckpoint(self, epoch: int, valLoss: float, isBest: bool) -> None:
         raise NotImplementedError

@@ -128,23 +128,27 @@ def cleanupCkpts(ckDir: str, keepLast: int = 5) -> None:
             log.warning("[BaseTrainer] could not remove %s: %s", stale, e)
 
 
-def restoreCheckpoint(trainer, path: str) -> None:
-    log.info("[BaseTrainer] resuming from %s", path)
+def restoreCheckpoint(trainer, path: str, warmStart: bool = False) -> None:
+    mode = "warm-start" if warmStart else "full resume"
+    log.info("[BaseTrainer] resuming from %s (%s)", path, mode)
     ck = torch.load(path, map_location=trainer.device, weights_only=False)
     loadCompatible(trainer.model, ck["model_state_dict"], "model")
 
-    for key, obj in (
-        ("optimizer_state_dict", trainer.optimizer),
-        ("scheduler_state_dict", trainer.scheduler),
-    ):
-        if key in ck:
-            try:
-                obj.load_state_dict(ck[key])
-            except (ValueError, RuntimeError, KeyError):
-                log.warning("[BaseTrainer] could not restore %s", key)
-    trainer.step = ck.get("global_step", 0)
+    if not warmStart:
+        for key, obj in (
+            ("optimizer_state_dict", trainer.optimizer),
+            ("scheduler_state_dict", trainer.scheduler),
+        ):
+            if key in ck:
+                try:
+                    obj.load_state_dict(ck[key])
+                except (ValueError, RuntimeError, KeyError):
+                    log.warning("[BaseTrainer] could not restore %s", key)
+        trainer.step = ck.get("global_step", 0)
+        trainer.startEpoch = ck.get("epoch", 0) + 1
+    # bestLoss is inherited in both modes so warm-start runs only save a "best"
+    # checkpoint when they actually beat the prior baseline.
     trainer.bestLoss = ck.get("valLoss", ck.get("val_loss", float("inf")))
-    trainer.startEpoch = ck.get("epoch", 0) + 1
 
     if "vocab" in ck and hasattr(trainer, "train_ds"):
         trainer.train_ds.vocab = ck["vocab"]

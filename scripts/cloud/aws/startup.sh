@@ -263,7 +263,12 @@ if [ -n "$LATEST_S3_RUN" ]; then
   # random weights. Pass the explicit path so resolveCkptPath's
   # os.path.exists branch picks it up. Path is relative to cwd
   # (/home/ubuntu/repo where the python invocation runs).
-  RESUME_FLAG="--resume checkpoints/motion_ssm/$LATEST_S3_RUN/best_model.pt"
+  #
+  # --warm-start: load model weights only. Without it, the resumed checkpoint's
+  # optimizer + OneCycleLR state override our --lr CLI flag (the scheduler keeps
+  # the prior peak max_lr internally), so changing LR for a continuation run is
+  # otherwise impossible. With warm start, --lr 1e-4 actually takes effect.
+  RESUME_FLAG="--resume checkpoints/motion_ssm/$LATEST_S3_RUN/best_model.pt --warm-start"
 else
   echo "Fresh SSM training (no prior run in S3)"
   RESUME_FLAG=""

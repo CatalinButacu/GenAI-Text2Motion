@@ -137,6 +137,11 @@ def main():
     )
     parser.add_argument("--checkpoint-dir", type=str, default=None, dest="checkpointDir")
     parser.add_argument("--resume", type=str, default=None, help="Checkpoint path or 'latest'")
+    parser.add_argument(
+        "--warm-start", action="store_true", dest="warmStart",
+        help="With --resume: load model weights only, skip optimizer/scheduler/epoch state. "
+             "Use to change LR or other hyperparams while keeping pretrained weights.",
+    )
     parser.add_argument("--d-model", type=int, default=SSM_D_MODEL, dest="dModel")
     parser.add_argument("--d-state", type=int, default=SSM_D_STATE, dest="dState")
     parser.add_argument("--n-layers", type=int, default=SSM_N_LAYERS, dest="nLayers")
@@ -274,6 +279,7 @@ def main():
         maxMotionLength=args.maxMotionLength,
         maxSamples=args.maxSamples,
         rvqCheckpointPath=args.rvqCheckpoint,
+        warmStart=args.warmStart,
     )
     if args.sources is not None and args.dataSource == "unified":
         config.unifiedSources = args.sources

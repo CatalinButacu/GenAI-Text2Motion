@@ -81,6 +81,11 @@ class TrainingConfig(ModelConfig, DataConfig):
     saveEvery: int = 10
     device: str = field(default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu")
     resumeFrom: str | None = None
+    # Warm start: when resuming, load only model weights (not optimizer / scheduler /
+    # epoch counter / step counter). Use this to change LR or other hyperparams while
+    # keeping the pretrained weights as initialisation. bestLoss is still inherited so
+    # the early-stop "improvement" bar is the prior best.
+    warmStart: bool = False
     seed: int | None = 42
     earlyStopPatience: int = 30
     keepLastCheckpoints: int = 5
