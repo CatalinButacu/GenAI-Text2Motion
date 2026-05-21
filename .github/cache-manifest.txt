@@ -1,0 +1,10 @@
+# GitHub Actions cache key manifest.
+# Bump anything below to force a cache miss on the next CI run. This is the
+# explicit way to roll forward to a new model version or fix a poisoned cache.
+#
+# Keep one line per model + version. The whole file's hash is what GitHub
+# Actions uses as the cache key.
+
+spacy-model: en_core_web_sm@3.7
+sentence-transformers: sentence-transformers/all-MiniLM-L6-v2
+huggingface-cache-version: 1
