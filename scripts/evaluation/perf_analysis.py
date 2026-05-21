@@ -4,13 +4,10 @@ import io
 #  Patch sys.path so we can import from project root
 import os
 import pathlib
-import sys
 import types
 from dataclasses import dataclass
 
 ROOT = pathlib.Path(__file__).parents[1]
-sys.path.insert(0, str(ROOT))
-
 #  Lazy: avoid triggering GPU imports
 os.environ["CUDA_VISIBLE_DEVICES"] = ""  # no GPU needed for analysis
 
@@ -19,7 +16,6 @@ from src.modules.understanding import SpacyParser
 from src.pipeline import Pipeline
 
 #  Helpers
-
 
 @dataclass
 class FuncStats:
@@ -41,7 +37,6 @@ class FuncStats:
             "LOAD_GLOBAL": self.nLoadGlobal,
         }
         return max(counts, key=counts.__getitem__)
-
 
 def analyseFunction(func: types.FunctionType) -> FuncStats:
     """Disassemble *func* and count key instruction types."""
@@ -71,7 +66,6 @@ def analyseFunction(func: types.FunctionType) -> FuncStats:
         nLoadGlobal=counters["LOAD_GLOBAL"],
     )
 
-
 def printBytecode(func: types.FunctionType, highlightHot: bool = True) -> None:
     """Print annotated bytecode for a function."""
     print(f"\n{'='*70}")
@@ -88,7 +82,6 @@ def printBytecode(func: types.FunctionType, highlightHot: bool = True) -> None:
     else:
         print(text)
 
-
 def printStats(funcs: list) -> None:
     """Print a summary table of function stats."""
     print(f"\n{'='*70}")
@@ -103,7 +96,6 @@ def printStats(funcs: list) -> None:
             f"{stat.nLoadAttr:>5} {stat.nCall:>5} "
             f"{stat.nForIter:>5} {stat.nLoadGlobal:>7}"
         )
-
 
 def printRecommendations(stats: list) -> None:
     """Print concrete optimization advice based on bytecode analysis."""
@@ -143,9 +135,7 @@ def printRecommendations(stats: list) -> None:
         else:
             print(f"\n  [{stat.name}]  OK No major hotspots detected.")
 
-
 #  Import target modules (without GPU)
-
 
 def main():
     print("Importing modules for analysis...")
@@ -183,7 +173,6 @@ def main():
     print("  - LOAD_ATTR in loops: hoist obj.attr to local before loop")
     print("  - LOAD_GLOBAL repeated: alias module at function top (np = numpy)")
     print("  - Repeated CALL in loop: use list comprehension or np.vectorize")
-
 
 if __name__ == "__main__":
     main()

@@ -11,11 +11,7 @@ Runs both via pytest and directly:
 
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.modules.understanding.models import (
     ParsedAction,
@@ -49,7 +45,6 @@ class TestModels(unittest.TestCase):
         with self.assertRaises(AttributeError):
             e.nonexistent = 1  # type: ignore[attr-defined]
 
-
 class TestParsingUtils(unittest.TestCase):
     def test_split_single_clause(self):
         clauses = splitIntoClauses("a person walks")
@@ -68,7 +63,6 @@ class TestParsingUtils(unittest.TestCase):
         self.assertIn("in front of", SPATIAL_RELATIONS)
         self.assertEqual(SPATIAL_RELATIONS["in front of"], "IN_FRONT_OF")
         self.assertEqual(SPATIAL_RELATIONS["behind"], "BEHIND")
-
 
 class TestSpacyParser(unittest.TestCase):
     @classmethod
@@ -159,7 +153,6 @@ class TestSpacyParser(unittest.TestCase):
         scene = self.parse("a person falls")
         actionTypes = [a.actionType for a in scene.actions]
         self.assertIn("fall", actionTypes)
-
 
 if __name__ == "__main__":
     unittest.main()

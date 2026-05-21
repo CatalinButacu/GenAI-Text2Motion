@@ -22,15 +22,12 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 from src.data.augmentation import detectTpose, qualityFilter, resampleToFps
 from src.data.dataset_cache import INGEST_MAX_LENGTH, loadOrBuildCache
 from src.data.unified import buildSourcesBuffer
 from src.data.unified_dataset import SourceConfig, UnifiedConfig
 
 log = logging.getLogger(__name__)
-
 
 def computeTranslationStats(samples: list[dict]) -> tuple[np.ndarray, np.ndarray]:
     """Return (mean, std) over channels 3:6 across all frames in samples."""
@@ -42,7 +39,6 @@ def computeTranslationStats(samples: list[dict]) -> tuple[np.ndarray, np.ndarray
     std = np.where(std < 1e-6, 1.0, std)
 
     return mean.astype(np.float32), std.astype(np.float32)
-
 
 def computeForSource(label: str, cfg: UnifiedConfig) -> tuple[np.ndarray, np.ndarray]:
     samples = buildSourcesBuffer(cfg, 30, resampleToFps, qualityFilter, detectTpose,
@@ -57,7 +53,6 @@ def computeForSource(label: str, cfg: UnifiedConfig) -> tuple[np.ndarray, np.nda
              label, float(np.abs(mean).mean()), float(np.abs(std).mean()), len(samples))
 
     return mean, std
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -123,7 +118,6 @@ def main() -> int:
     log.info("[trans-stats] wrote %s with keys=%s", args.output, list(out.keys()))
 
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

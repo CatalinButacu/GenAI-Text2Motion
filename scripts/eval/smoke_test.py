@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import subprocess
 import sys
 import time
@@ -30,8 +29,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.modules.motion.ssm_model import SSMMotionModel
 
@@ -50,7 +47,6 @@ SMOKE_PROMPTS = [
     "a person sits down slowly",
 ]
 
-
 def run(cmd: list[str], label: str) -> int:
     log.info("[smoke] %s: %s", label, " ".join(cmd))
     t0 = time.time()
@@ -61,7 +57,6 @@ def run(cmd: list[str], label: str) -> int:
     else:
         log.info("[smoke] %s done in %.1fs", label, elapsed)
     return result.returncode
-
 
 def trainRVQ(args) -> int:
     cmd = [
@@ -76,7 +71,6 @@ def trainRVQ(args) -> int:
         "--seed", "42",
     ]
     return run(cmd, "RVQ tokenizer")
-
 
 def trainSSM(args) -> int:
     rvqPath = str(Path(args.outDir) / "rvq" / "best_model.pt")
@@ -98,7 +92,6 @@ def trainSSM(args) -> int:
         "--seed", "42",
     ]
     return run(cmd, "MotionSSM")
-
 
 def generateSamples(args) -> None:
     rvqPath = str(Path(args.outDir) / "rvq" / "best_model.pt")
@@ -135,7 +128,6 @@ def generateSamples(args) -> None:
 
     print("=" * 60 + "\n")
     log.info("[smoke] clips saved to %s", clipsDir)
-
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Local smoke test for the full training pipeline")
@@ -186,7 +178,6 @@ def main() -> int:
     log.info("[smoke] Next step: launch full cloud training "
              "with larger --epochs and --max-samples.")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

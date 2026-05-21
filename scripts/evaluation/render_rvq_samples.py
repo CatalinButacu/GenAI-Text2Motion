@@ -27,8 +27,6 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 from scripts.evaluation.eval_rvq import (
     actionLabel,
     amassSubset,
@@ -44,7 +42,6 @@ from src.modules.render.smplx_render import (
 )
 
 log = logging.getLogger(__name__)
-
 
 def perClipMse(model, dataset, device, batchSize: int) -> tuple[np.ndarray, list[int]]:
     """MSE per clip (mask-aware) + frame counts. Used to rank clips."""
@@ -70,7 +67,6 @@ def perClipMse(model, dataset, device, batchSize: int) -> tuple[np.ndarray, list
 
     return np.array(mses), lengths
 
-
 def pickIndices(mses: np.ndarray, picks: list[str], nPer: int) -> dict[str, list[int]]:
     sortedIdx = np.argsort(mses)
     n = len(mses)
@@ -89,7 +85,6 @@ def pickIndices(mses: np.ndarray, picks: list[str], nPer: int) -> dict[str, list
         out["worst"] = sortedIdx[-nPer:][::-1].tolist()
 
     return out
-
 
 def renderSmplxToGif(smplxParams: np.ndarray, outputPath: str, fps: int = 30,
                      width: int = 720, height: int = 480) -> None:
@@ -123,7 +118,6 @@ def renderSmplxToGif(smplxParams: np.ndarray, outputPath: str, fps: int = 30,
     finally:
         shutil.rmtree(frameDir, ignore_errors=True)
 
-
 def renderClip(model, dataset, idx: int, stats: MotionStats, device,
                fps: int, outOrig: str, outRecon: str) -> int:
     item = dataset[idx]
@@ -145,7 +139,6 @@ def renderClip(model, dataset, idx: int, stats: MotionStats, device,
 
     return realLen
 
-
 def safeId(s: str) -> str:
     bad = '/\\:*?"<>|'
 
@@ -153,7 +146,6 @@ def safeId(s: str) -> str:
         s = s.replace(ch, "_")
 
     return s[:60]
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -246,7 +238,6 @@ def main() -> int:
     log.info("[render] DONE — see %s/report_render.md", args.outputDir)
 
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

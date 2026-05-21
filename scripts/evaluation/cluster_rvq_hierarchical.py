@@ -29,10 +29,7 @@ from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.manifold import TSNE
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 from scripts.evaluation.eval_rvq import (
-    ACTION_PATTERNS,
     actionLabel,
     amassSubset,
     buildTestDataset,
@@ -51,12 +48,10 @@ ENGLISH_STOP = {
     "human", "subject", "actor", "user", "people",
 }
 
-
 def computeLinkage(latents: np.ndarray) -> np.ndarray:
     log.info("[hcluster] running ward linkage on %d x %d latents", *latents.shape)
 
     return linkage(latents, method="ward")
-
 
 def plotDendrogram(Z: np.ndarray, outDir: str, title: str) -> None:
     fig, ax = plt.subplots(figsize=(13, 5))
@@ -69,7 +64,6 @@ def plotDendrogram(Z: np.ndarray, outDir: str, title: str) -> None:
     fig.savefig(os.path.join(outDir, "05_dendrogram.png"), dpi=110)
     plt.close(fig)
 
-
 def runTsne(latents: np.ndarray) -> np.ndarray:
     nClips = latents.shape[0]
     perplexity = min(30, max(5, nClips // 4 - 1))
@@ -78,7 +72,6 @@ def runTsne(latents: np.ndarray) -> np.ndarray:
                 random_state=42, max_iter=500)
 
     return tsne.fit_transform(latents)
-
 
 def topWordsPerCluster(texts: list[str], clusterIds: np.ndarray,
                        k: int, topN: int = 5) -> dict[int, list[str]]:
@@ -102,7 +95,6 @@ def topWordsPerCluster(texts: list[str], clusterIds: np.ndarray,
 
     return out
 
-
 def actionDistribution(texts: list[str], clusterIds: np.ndarray, k: int) -> dict:
     """For each cluster, report how its clips break down across the action keywords."""
     out: dict[int, dict[str, int]] = {}
@@ -118,7 +110,6 @@ def actionDistribution(texts: list[str], clusterIds: np.ndarray, k: int) -> dict
 
     return out
 
-
 def amassDistribution(samples: list, clusterIds: np.ndarray, k: int) -> dict:
     out: dict[int, dict[str, int]] = {}
 
@@ -133,7 +124,6 @@ def amassDistribution(samples: list, clusterIds: np.ndarray, k: int) -> dict:
         out[c] = dict(sorted(counts.items(), key=lambda x: -x[1]))
 
     return out
-
 
 def plotKGrid(coords: np.ndarray, clusterMap: dict[int, np.ndarray], outDir: str,
               title: str) -> None:
@@ -158,7 +148,6 @@ def plotKGrid(coords: np.ndarray, clusterMap: dict[int, np.ndarray], outDir: str
     fig.tight_layout()
     fig.savefig(os.path.join(outDir, "06_hierarchical_kgrid.png"), dpi=110)
     plt.close(fig)
-
 
 def writeReport(outDir: str, title: str, n: int, clusterMap: dict[int, np.ndarray],
                 wordsByK: dict, actionDistByK: dict, amassDistByK: dict | None) -> None:
@@ -191,7 +180,6 @@ def writeReport(outDir: str, title: str, n: int, clusterMap: dict[int, np.ndarra
 
     with open(os.path.join(outDir, "report_clusters.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -252,7 +240,6 @@ def main() -> int:
     log.info("[hcluster] DONE — see %s/report_clusters.md", args.outputDir)
 
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

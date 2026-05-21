@@ -11,8 +11,6 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 
 def run_benchmark(name: str, script: str) -> tuple:
     """Run a single benchmark and return (passed, time)."""
@@ -30,7 +28,6 @@ def run_benchmark(name: str, script: str) -> tuple:
 
     passed = result.returncode == 0
     return passed, elapsed
-
 
 def main():
     print("\n" + "=" * 70)
@@ -78,7 +75,6 @@ def main():
     else:
         print(f"\n {n - total_passed} BENCHMARK(S) FAILED")
         return 1
-
 
 if __name__ == "__main__":
     exit(main())

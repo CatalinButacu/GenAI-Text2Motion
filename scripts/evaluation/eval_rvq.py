@@ -37,13 +37,9 @@ import torch
 from sklearn.manifold import TSNE
 from torch.utils.data import DataLoader, Dataset
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-from src.data.augmentation import detectTpose, qualityFilter, resampleToFps
-from src.data.dataset_cache import INGEST_MAX_LENGTH, loadOrBuildCache
 from src.data.motion_dataset import MotionDataset
 from src.data.motion_normalize import MotionStats
-from src.data.unified import buildOrLoadUnifiedBuffer, buildSourcesBuffer
+from src.data.unified import buildOrLoadUnifiedBuffer
 from src.data.unified_dataset import SourceConfig, UnifiedConfig, UnifiedMotionDataset
 from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
 from src.shared.constants import MOTION_DIM
@@ -76,7 +72,6 @@ ACTION_PATTERNS = [
     ("climb", re.compile(r"\b(climb|climbs|climbing)\b", re.I)),
 ]
 
-
 def actionLabel(text: str) -> str:
     for label, pat in ACTION_PATTERNS:
         if pat.search(text):
@@ -84,10 +79,8 @@ def actionLabel(text: str) -> str:
 
     return "other"
 
-
 def amassSubset(sampleId: str) -> str:
     return sampleId.split("/")[0] if "/" in sampleId else "unknown"
-
 
 def loadCheckpoint(ckPath: str, device: torch.device) -> tuple[MotionRVQTokenizer, dict]:
     log.info("[eval] loading %s", ckPath)
@@ -105,7 +98,6 @@ def loadCheckpoint(ckPath: str, device: torch.device) -> tuple[MotionRVQTokenize
     log.info("[eval] checkpoint epoch=%d  val_loss=%.4f", ck["epoch"], ck.get("val_loss", -1))
 
     return model, cfg
-
 
 def buildTestDataset(cfg: dict, statsPath: str | None) -> tuple[Dataset, str]:
     """Mirror the dataset construction used at train time, test split only."""
@@ -142,9 +134,7 @@ def buildTestDataset(cfg: dict, statsPath: str | None) -> tuple[Dataset, str]:
 
     return ds, src
 
-
 # buildOrLoadUnifiedBuffer is now imported from src.data.unified at the top of this file.
-
 
 @torch.no_grad()
 def evaluateBatch(model: MotionRVQTokenizer, motion: torch.Tensor, mask: torch.Tensor):
@@ -161,7 +151,6 @@ def evaluateBatch(model: MotionRVQTokenizer, motion: torch.Tensor, mask: torch.T
     latentMean = z.mean(dim=1)  # (B, latent_dim)
 
     return recon, indices, latentMean
-
 
 def reconstructionQuality(model: MotionRVQTokenizer, dataset, device: torch.device,
                            batchSize: int, maxBatches: int | None) -> dict:
@@ -207,7 +196,6 @@ def reconstructionQuality(model: MotionRVQTokenizer, dataset, device: torch.devi
         "per_clip_mse": mseArr.tolist(),
     }
 
-
 def codebookStats(model: MotionRVQTokenizer) -> dict:
     util = model.codebookUtilization()
 
@@ -215,7 +203,6 @@ def codebookStats(model: MotionRVQTokenizer) -> dict:
         "active_pct": [u["active_fraction"] * 100 for u in util],
         "entropy_pct": [u["entropy"] / max(u["max_entropy"], 1e-8) * 100 for u in util],
     }
-
 
 def collectLatents(model: MotionRVQTokenizer, dataset, device: torch.device,
                     batchSize: int, maxClips: int | None) -> tuple[np.ndarray, list, list]:
@@ -246,7 +233,6 @@ def collectLatents(model: MotionRVQTokenizer, dataset, device: torch.device,
     limit = maxClips or n
     return np.concatenate(latents, axis=0)[:limit], texts[:limit], sources[:limit]
 
-
 def plotMseHist(perClipMse: list[float], outDir: str, title: str) -> None:
     arr = np.array(perClipMse)
     med = float(np.median(arr))
@@ -264,7 +250,6 @@ def plotMseHist(perClipMse: list[float], outDir: str, title: str) -> None:
     fig.savefig(os.path.join(outDir, "01_recon_mse_hist.png"), dpi=110)
     plt.close(fig)
 
-
 def plotBlockMse(blockMse: dict, outDir: str, title: str) -> None:
     names = list(blockMse.keys())
     vals = [blockMse[n] for n in names]
@@ -278,7 +263,6 @@ def plotBlockMse(blockMse: dict, outDir: str, title: str) -> None:
     fig.tight_layout()
     fig.savefig(os.path.join(outDir, "02_block_mse.png"), dpi=110)
     plt.close(fig)
-
 
 def plotCodebookUsage(cbStats: dict, outDir: str, title: str) -> None:
     nLayers = len(cbStats["active_pct"])
@@ -297,7 +281,6 @@ def plotCodebookUsage(cbStats: dict, outDir: str, title: str) -> None:
     fig.tight_layout()
     fig.savefig(os.path.join(outDir, "03_codebook_usage.png"), dpi=110)
     plt.close(fig)
-
 
 def plotTsneClusters(latents: np.ndarray, labels: list, outDir: str, title: str,
                       labelKind: str) -> dict:
@@ -329,7 +312,6 @@ def plotTsneClusters(latents: np.ndarray, labels: list, outDir: str, title: str,
     plt.close(fig)
 
     return counts
-
 
 def writeReport(outDir: str, ckPath: str, cfg: dict, recon: dict, cbStats: dict,
                 clusterCounts: dict, labelKind: str) -> None:
@@ -379,7 +361,6 @@ def writeReport(outDir: str, ckPath: str, cfg: dict, recon: dict, cbStats: dict,
             "recon": {k: v for k, v in recon.items() if k != "per_clip_mse"},
             "codebook": cbStats, "cluster_counts": clusterCounts,
         }, indent=2))
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -450,7 +431,6 @@ def main() -> int:
     log.info("[eval] DONE — see %s/report.md", args.outputDir)
 
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
