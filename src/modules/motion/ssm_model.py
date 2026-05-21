@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from src.modules.motion.config import TrainingConfig
 from src.modules.motion.nn_models import TextToMotionSSM
 from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
+from src.modules.motion.training.trainer_utils import load_compatible
 from src.shared.tokenizer import tokenize
 from src.utils.mem_profile import profile_memory
 
@@ -132,10 +133,37 @@ def sample_ar_k(
     return torch.stack(all_tokens, dim=-1)  # (B, T', K)
 
 
+def snake_to_camel(name: str) -> str:
+    """snake_case -> snakeCase (for legacy checkpoint compat)."""
+    parts = name.split("_")
+    return parts[0] + "".join(p.title() for p in parts[1:])
+
+
 def coerce_config(raw) -> TrainingConfig:
-    if isinstance(raw, TrainingConfig):
+    """Restore a TrainingConfig from a checkpoint's saved config.
+
+    Always rebuilds from __dict__ because pre-2026-05-22 pickled
+    TrainingConfig instances pass the isinstance check (same class name,
+    same module path) but carry camelCase attributes that don't match
+    the post-migration snake_case dataclass fields. Looking up each
+    snake_case field's camelCase equivalent recovers the saved values.
+    """
+    raw_dict = vars(raw) if hasattr(raw, "__dict__") else dict(raw)
+
+    if not raw_dict and isinstance(raw, TrainingConfig):
+        # Edge case: a freshly-constructed TrainingConfig with no overrides
+        # and no __dict__ entries (defaults only). Return as-is.
         return raw
-    field_vals = {f.name: getattr(raw, f.name) for f in dc_fields(raw)}
+    field_vals: dict = {}
+
+    for f in dc_fields(TrainingConfig):
+        if f.name in raw_dict:
+            field_vals[f.name] = raw_dict[f.name]
+            continue
+        legacy = snake_to_camel(f.name)
+
+        if legacy in raw_dict:
+            field_vals[f.name] = raw_dict[legacy]
     return TrainingConfig(**field_vals)
 
 
@@ -166,7 +194,13 @@ class SSMMotionModel:
         self.vocab: dict = ck["vocab"]
         cfg = coerce_config(ck["config"])
         self.model = TextToMotionSSM(cfg).to(self.device)
-        self.model.load_state_dict(ck["model_state_dict"])
+        # Use load_compatible (strict=False) so:
+        #   - SBERT/CLIP text-encoder weights that differ in key paths between
+        #     sentence-transformers versions ("model." vs "auto_model.") are
+        #     skipped; the encoder loads its own pretrained backbone via
+        #     SentenceTransformer(name) at construction.
+        #   - Old checkpoints saved before a layer was added still load partial.
+        load_compatible(self.model, ck["model_state_dict"], "ssm_model")
         self.model.eval()
 
         rvq_ck = torch.load(rvq_checkpoint_path, map_location=self.device, weights_only=False)
@@ -177,7 +211,12 @@ class SSMMotionModel:
             codebook_size=cfg.rvq_codebook_size,
             down_t=cfg.rvq_down_t,
         ).to(self.device)
-        self.tokenizer.load_state_dict(rvq_ck["model_state_dict"])
+        # Same backward-compat reasoning as the SSM load above: pre-migration
+        # checkpoints have `clusterSize`/`embedAvg` buffer names; the renamed
+        # `cluster_size`/`embed_avg` are training-only EMA stats not needed
+        # at inference. The `codebook` tensors (the actual quantizer weights)
+        # share a name and load correctly.
+        load_compatible(self.tokenizer, rvq_ck["model_state_dict"], "rvq_tokenizer")
         self.tokenizer.eval()
 
         log.info(
