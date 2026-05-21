@@ -271,6 +271,16 @@ def computePrecisionR(
         (top1, top2, top3) accuracy fractions.
     """
 
+    nUnique = len({s.text for s in samples})
+
+    if nUnique < poolSize:
+        log.warning(
+            "[R-Precision] eval set has only %d unique texts but poolSize=%d. "
+            "Distractor sampling will draw duplicates of the GT text and "
+            "the resulting R-Precision values are NOT comparable to T2M-protocol "
+            "numbers. Use a larger eval set (>=%d unique prompts) or lower poolSize.",
+            nUnique, poolSize, poolSize,
+        )
     rng = random.Random(rngSeed)
     allTexts = [s.text for s in samples]
 

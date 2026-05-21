@@ -64,5 +64,13 @@ def normalize(motion: np.ndarray, stats: MotionStats,
     return z.astype(np.float32)
 
 
-def denormalize(motion: np.ndarray, stats: MotionStats) -> np.ndarray:
-    return (motion * stats.std + stats.mean).astype(np.float32)
+def denormalize(motion: np.ndarray, stats: MotionStats,
+                transStats: MotionStats | None = None) -> np.ndarray:
+    """Inverse of normalize(). When transStats is provided, channels 3:6 are
+    de-normalized using that override (mirrors the normalize() path)."""
+    out = (motion * stats.std + stats.mean).astype(np.float32)
+
+    if transStats is not None and motion.shape[1] >= 6:
+        out[:, 3:6] = (motion[:, 3:6] * transStats.std + transStats.mean).astype(np.float32)
+
+    return out

@@ -154,6 +154,9 @@ def main() -> int:
     parser.add_argument("--reset-dead-threshold", type=float, default=1.0,
                         dest="resetDeadThreshold",
                         help="Cluster_size threshold below which a code is considered dead.")
+    parser.add_argument("--weight-decay", type=float, default=0.01,
+                        dest="weightDecay",
+                        help="AdamW weight decay (L2 reg).")
     # Resume / data source / wandb
     parser.add_argument("--resume", type=str, default=None,
                         help=("Path to checkpoint .pt to resume training from "
@@ -316,7 +319,7 @@ def main() -> int:
     ).to(device)
     log.info("[rvq] params: %d", sum(p.numel() for p in model.parameters()))
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weightDecay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
     bestVal = float("inf")

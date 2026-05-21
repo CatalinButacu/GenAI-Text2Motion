@@ -18,3 +18,6 @@ class PlannerConfig:
         default_factory=lambda: {"kick": 0.8, "pick_up": 0.5}
     )
     randomRange: float = 2.0
+    # Random-layout seed. None = nondeterministic (different on every run).
+    # Set to an int for reproducible ablations.
+    randomSeed: int | None = None

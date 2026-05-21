@@ -102,6 +102,15 @@ class RVQCodebook(nn.Module):
     @torch.no_grad()
     def decodeIndices(self, indices: torch.Tensor) -> torch.Tensor:
         # indices: (B, T) -> (B, T, D)
+        # Guard against out-of-range indices from a misconfigured sampler --
+        # silently wrapping into the wrong codebook entry is the bug class
+        # this assertion catches.
+        if indices.numel() > 0:
+            mx = int(indices.max().item())
+            mn = int(indices.min().item())
+            assert 0 <= mn and mx < self.numEntries, (
+                f"codebook index out of range: [{mn}, {mx}] vs [0, {self.numEntries})"
+            )
         return self.codebook[indices]
 
 

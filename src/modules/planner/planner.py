@@ -20,7 +20,7 @@ def resolvePos(raw, entity, config: PlannerConfig) -> Position3D:
     if isinstance(raw, tuple):
         return Position3D(*raw)
 
-    y = -config.actorDist if getattr(entity, "is_actor", False) else 0.0
+    y = -config.actorDist if getattr(entity, "isActor", False) else 0.0
 
     return Position3D(0.0, y, config.groundHeight)
 
@@ -102,11 +102,11 @@ class ScenePlanner:
 
     def planParsed(self, parsedScene) -> PlannedScene:
         rawDuration = getattr(parsedScene, "duration", self.config.baseDuration)
-        durationExplicit = getattr(parsedScene, "duration_explicit", False)
+        durationExplicit = getattr(parsedScene, "durationExplicit", False)
         duration = self.computeDuration(rawDuration, durationExplicit)
 
         if self.config.randomLayout:
-            r, rng = self.config.randomRange, random.Random(0)
+            r, rng = self.config.randomRange, random.Random(self.config.randomSeed)
             posMap = {
                 e.name: Position3D(
                     rng.uniform(-r, r), rng.uniform(-r, r), self.config.groundHeight
@@ -122,7 +122,7 @@ class ScenePlanner:
                 actions=parsedScene.actions,
             )
 
-        relations = getattr(parsedScene, "spatial_relations", [])
+        relations = getattr(parsedScene, "spatialRelations", [])
         hasTriples = bool(relations) and getattr(relations[0], "subject", None) is not None
 
         if hasTriples:
@@ -161,12 +161,12 @@ class ScenePlanner:
         for e in entities:
             raw = posMap.get(e.name) if hasattr(e, "name") else None
             pos = resolvePos(raw, e, self.config)
-            od = OBJECTS.get(getattr(e, "object_type", "object"))
-            isActor = getattr(e, "is_actor", False)
+            od = OBJECTS.get(getattr(e, "objectType", "object"))
+            isActor = getattr(e, "isActor", False)
             planned.append(
                 PlannedEntity(
                     name=e.name,
-                    objectType=getattr(e, "object_type", "object"),
+                    objectType=getattr(e, "objectType", "object"),
                     position=pos,
                     skin=getattr(e, "skin", None),
                     isActor=isActor,

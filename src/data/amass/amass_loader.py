@@ -1,3 +1,17 @@
+"""AMASS .npz loader.
+
+Coordinate-system contract: this loader does NOT apply a Z-up -> Y-up
+rotation. It expects the input .npz files to already be in the Y-up
+convention used throughout the pipeline (matches HumanML3D and aitviewer).
+
+If you point this loader at raw AMASS-native .npz (Z-up), the entire
+pipeline silently produces sideways motion. Either:
+  - preprocess your AMASS dump to Y-up upstream (preferred), or
+  - set RenderConfig.inputCoordSystem='zup' so the renderer rotates
+    on the way out (works for visualization, not for training -- the
+    SSM learns the wrong manifold).
+"""
+
 from __future__ import annotations
 
 import logging

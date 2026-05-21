@@ -143,13 +143,18 @@ python scripts/data/prebuild_unified_cache.py
 Expected layout after preparation:
 ```
 data/
-├── AMASS/                  # raw .npz from amass-data.is.tue.mpg.de
+├── AMASS/                  # .npz from amass-data.is.tue.mpg.de, preprocessed to Y-up
 ├── humanml3d/              # text + index files
 ├── inter-x/                # optional multi-person dataset
 ├── stats/                  # precomputed normalization .npz
 ├── vocabulary/             # actions.yaml, objects.yaml (tracked in git)
 └── .cache/                 # joblib dataset caches (gitignored)
 ```
+
+> **Coordinate system note.** The pipeline expects Y-up motion everywhere
+> (matches HumanML3D and aitviewer). Raw AMASS is Z-up — preprocess
+> upstream before placing files under `data/AMASS/`. See the docstring at
+> `src/data/amass/amass_loader.py` for the full contract.
 
 ## Training
 

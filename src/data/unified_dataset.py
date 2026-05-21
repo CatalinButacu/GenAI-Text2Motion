@@ -72,10 +72,20 @@ class UnifiedMotionDataset(Dataset):
         else:
             self.vocab = buildVocab([s["text"] for s in self.samples])
 
-        # Compute normalization stats from this split so motion is z-score normalised
+        # Compute normalization stats from this split so motion is z-score normalised.
+        # WARNING: for val/test you should pass stats= from the train split so all
+        # splits see the same normalization. Computing per-split stats produces
+        # silent train/eval distribution drift -- the recurring bug from
+        # project_cloud_lessons_2026_05_13.md.
         if stats is not None:
             self.motion_stats: MotionStats = stats
         else:
+            if split != "train":
+                log.warning(
+                    "[UnifiedDataset] split=%r built with no stats= argument; "
+                    "computing per-split stats. Pass stats= from the train split "
+                    "to avoid train/eval normalization drift.", split,
+                )
             self.motion_stats = computeMotionStats(self.samples)
 
         log.info("[UnifiedDataset] %s: %d samples, vocab=%d",

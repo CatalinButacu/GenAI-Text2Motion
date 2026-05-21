@@ -145,8 +145,8 @@ def restoreCheckpoint(trainer, path: str, warmStart: bool = False) -> None:
     # checkpoint when they actually beat the prior baseline.
     trainer.bestLoss = ck.get("valLoss", ck.get("val_loss", float("inf")))
 
-    if "vocab" in ck and hasattr(trainer, "train_ds"):
-        trainer.train_ds.vocab = ck["vocab"]
+    if "vocab" in ck and hasattr(trainer, "trainDs"):
+        trainer.trainDs.vocab = ck["vocab"]
 
 
 def createOptimizerAndScheduler(
@@ -201,7 +201,18 @@ def tokenCeLoss(
 
 
 def buildLatentMask(frameMask: torch.Tensor, downT: int) -> torch.Tensor:
-    """Downsample a per-frame mask (B, T) by striding to a per-latent mask (B, T')."""
+    """Downsample a per-frame mask (B, T) by striding to a per-latent mask (B, T').
+
+    Caller is responsible for ensuring T % downT == 0 (typically by setting
+    maxMotionLength as a multiple of downT). We assert it here so a future
+    config change that breaks the invariant fails loud at training time
+    instead of producing silently misaligned loss masks.
+    """
+    T = frameMask.shape[1]
+    assert T % downT == 0, (
+        f"frame mask length {T} not divisible by rvqDownT={downT}; "
+        f"set maxMotionLength to a multiple of {downT}"
+    )
     return frameMask[:, ::downT]
 
 

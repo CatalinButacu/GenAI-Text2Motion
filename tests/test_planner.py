@@ -116,5 +116,56 @@ class TestConstraintLayout(unittest.TestCase):
         self.assertEqual(constraints[0].ctype, "NEAR")
 
 
+class TestPlannerExercisesConstraintSolver(unittest.TestCase):
+    """Regression guard for the 2026-05 audit: planner.py used to read
+    `getattr(scene, "spatial_relations", [])` (snake_case) against a
+    camelCase attribute, so the constraint solver branch silently never
+    ran. This test exercises the constraint branch end-to-end and
+    asserts the resulting positions reflect the spatial relation."""
+
+    def test_spatial_relation_routes_through_constraint_solver(self):
+        ball = _entity("ball", "sphere")
+        cube = _entity("cube", "cube")
+        relation = SpatialRelation(
+            subject="ball", predicate="on top of", relation="ON", object="cube",
+        )
+        scene = _scene(ball, cube, spatial=[relation])
+        planner = ScenePlanner(PlannerConfig(randomLayout=False))
+        planned = planner.plan(scene)
+
+        positions = {p.name: p.position for p in planned.entities}
+        self.assertIn("ball", positions)
+        self.assertIn("cube", positions)
+        # ON-relation puts the ball above the cube — z of ball must exceed z of cube.
+        self.assertGreater(
+            positions["ball"].z, positions["cube"].z,
+            f"ON constraint not honored: ball.z={positions['ball'].z}, "
+            f"cube.z={positions['cube'].z}",
+        )
+
+    def test_duration_explicit_camelcase_attribute_honored(self):
+        """Regression guard: durationExplicit (camelCase) was read as
+        duration_explicit (snake_case) — jitter was always applied."""
+        actor = _entity("person", "humanoid", isActor=True)
+        scene = ParsedScene(
+            entities=[actor], duration=4.0, durationExplicit=True,
+        )
+        planner = ScenePlanner(PlannerConfig(durationJitter=1.0, randomLayout=False))
+        planned = planner.plan(scene)
+        # With durationExplicit=True, jitter must NOT be applied; duration stays 4.0.
+        self.assertEqual(planned.duration, 4.0)
+
+    def test_is_actor_camelcase_attribute_honored(self):
+        """Regression guard: isActor (camelCase) was read as is_actor
+        (snake_case) so resolvePos's actor offset never fired."""
+        actor = _entity("person", "humanoid", isActor=True)
+        scene = _scene(actor)
+        planner = ScenePlanner(PlannerConfig(randomLayout=False))
+        planned = planner.plan(scene)
+        # Single-actor placement: row layout puts actor at default Y of 0,
+        # but the planned entity's isActor flag must propagate through.
+        self.assertTrue(planned.entities[0].isActor)
+
+
 if __name__ == "__main__":
     unittest.main()

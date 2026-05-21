@@ -25,6 +25,7 @@ from src.modules.motion.training.trainer_utils import (
     findLatestCkpt,
     loadCompatible,
     resolveCkptPath,
+    restoreCheckpoint,
     saveCkpt,
 )
 
@@ -112,6 +113,85 @@ class TestLoadCompatible(unittest.TestCase):
             torch.equal(targetVal, droppedValue),
             "target unexpectedly received the dropped key's value",
         )
+
+
+class FakeDataset:
+    """Minimal stand-in for a MotionDataset — only `vocab` matters here."""
+    def __init__(self, vocab: dict) -> None:
+        self.vocab = vocab
+
+
+class FakeTrainer:
+    """Minimal stand-in exposing the attributes restoreCheckpoint touches."""
+
+    def __init__(self, model, vocab: dict) -> None:
+        self.model = model
+        self.device = torch.device("cpu")
+        self.trainDs = FakeDataset(vocab=vocab)
+        self.optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1)
+        self.step = 0
+        self.startEpoch = 0
+        self.bestLoss = float("inf")
+
+
+class TestRestoreCheckpointVocab(unittest.TestCase):
+    """Regression guard for the 2026-05 audit: restoreCheckpoint used to
+    check `hasattr(trainer, "train_ds")` (snake_case) against a camelCase
+    `trainDs` attribute, so vocab was silently never restored on warm-start.
+    """
+
+    def test_vocab_is_restored_from_checkpoint_on_warm_start(self):
+        torch.manual_seed(0)
+        model = makeTinyModel()
+
+        savedVocab = {"<PAD>": 0, "<UNK>": 1, "<BOS>": 2, "<EOS>": 3, "walk": 4, "run": 5}
+        trainer = FakeTrainer(model, vocab={"<PAD>": 0, "<UNK>": 1, "<BOS>": 2, "<EOS>": 3})
+
+        with tempfile.TemporaryDirectory() as td:
+            ckpt = Path(td) / "ck.pt"
+            saveCkpt(str(ckpt), {
+                "model_state_dict": model.state_dict(),
+                "vocab": savedVocab,
+                "valLoss": 0.42,
+            })
+            restoreCheckpoint(trainer, str(ckpt), warmStart=True)
+
+        self.assertEqual(trainer.trainDs.vocab, savedVocab,
+                         "vocab from checkpoint was not restored onto trainer.trainDs")
+        self.assertEqual(trainer.bestLoss, 0.42)
+
+    def test_vocab_is_restored_on_full_resume(self):
+        model = makeTinyModel()
+        savedVocab = {"<PAD>": 0, "<UNK>": 1, "<BOS>": 2, "<EOS>": 3, "jump": 4}
+        trainer = FakeTrainer(model, vocab={"<PAD>": 0})
+
+        with tempfile.TemporaryDirectory() as td:
+            ckpt = Path(td) / "ck.pt"
+            saveCkpt(str(ckpt), {
+                "model_state_dict": model.state_dict(),
+                "vocab": savedVocab,
+                "valLoss": 0.5,
+                "epoch": 7,
+                "global_step": 1234,
+            })
+            restoreCheckpoint(trainer, str(ckpt), warmStart=False)
+
+        self.assertEqual(trainer.trainDs.vocab, savedVocab)
+        self.assertEqual(trainer.startEpoch, 8)
+        self.assertEqual(trainer.step, 1234)
+
+    def test_no_vocab_key_leaves_trainer_vocab_untouched(self):
+        model = makeTinyModel()
+        original = {"<PAD>": 0, "existing": 99}
+        trainer = FakeTrainer(model, vocab=original)
+
+        with tempfile.TemporaryDirectory() as td:
+            ckpt = Path(td) / "ck.pt"
+            saveCkpt(str(ckpt), {"model_state_dict": model.state_dict()})  # no "vocab" key
+            restoreCheckpoint(trainer, str(ckpt), warmStart=True)
+
+        self.assertEqual(trainer.trainDs.vocab, original)
 
 
 class TestCheckpointPathHelpers(unittest.TestCase):

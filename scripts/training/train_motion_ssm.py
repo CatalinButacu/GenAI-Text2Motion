@@ -214,6 +214,10 @@ def main():
     parser.add_argument("--interx-dir", type=str, default="data/inter-x",
                         dest="interxDir",
                         help="Inter-X root (used when --sources includes interx)")
+    parser.add_argument("--amass-dir", type=str, default="data/AMASS",
+                        dest="amassDir",
+                        help="AMASS backing store path (used as the motion source "
+                             "for HumanML3D, and for unified mode amass)")
     args = parser.parse_args()
 
     # Resolve defaults
@@ -279,7 +283,9 @@ def main():
     config.arcticDataDir = args.arcticDir
     config.humanml3dDir = args.humanml3dDir
     config.interxDir = args.interxDir
-    config.amassDir = args.dataDir if args.dataSource != "humanml3d" else "data/AMASS"
+    # In humanml3d mode the AMASS backing store is separate from --data-dir
+    # (which points at HumanML3D texts/indices). Use --amass-dir for that.
+    config.amassDir = args.amassDir if args.dataSource == "humanml3d" else args.dataDir
     log.info(
         "arch: use_sbert=%s  bidirectional=%s  use_film=%s  grad_ckpt=%s  "
         "d_model=%d  n_layers=%d  max_motion_length=%d  rvq_ckpt=%s",
