@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from src.utils.mem_profile import tracemallocSnapshot
+from src.utils.mem_profile import tracemalloc_snapshot
 
 from .config import PlannerConfig
 from .models import PlannedEntity, PlannedScene, Position3D
@@ -20,7 +20,7 @@ def invoke(parsed, config: PlannerConfig | None = None) -> PlannedScene:
     if PLANNER is None:
         PLANNER = ScenePlanner(config)
 
-    with tracemallocSnapshot("M2 plan"):
+    with tracemalloc_snapshot("M2 plan"):
         planned = PLANNER.plan(parsed)
 
     log.info("[M2] %d entities positioned", len(planned.entities))

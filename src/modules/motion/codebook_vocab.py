@@ -34,20 +34,20 @@ NOISE_LABELS = {"", "noise", "skip", "drop"}
 
 
 class CodebookVocab:
-    def __init__(self, labelsCsv: str | Path):
-        self.labelsCsv = Path(labelsCsv)
-        self.labelToEntries: dict[str, list[tuple[int, int]]] = {}
-        self.entryToLabel: dict[tuple[int, int], str] = {}
-        self.loadLabels()
+    def __init__(self, labels_csv: str | Path):
+        self.labels_csv = Path(labels_csv)
+        self.label_to_entries: dict[str, list[tuple[int, int]]] = {}
+        self.entry_to_label: dict[tuple[int, int], str] = {}
+        self.load_labels()
         self.encoder = None
-        self.labelEmbeds: np.ndarray | None = None
-        self.labelList: list[str] = []
+        self.label_embeds: np.ndarray | None = None
+        self.label_list: list[str] = []
 
-    def loadLabels(self) -> None:
-        if not self.labelsCsv.exists():
-            raise FileNotFoundError(f"labels csv not found: {self.labelsCsv}")
+    def load_labels(self) -> None:
+        if not self.labels_csv.exists():
+            raise FileNotFoundError(f"labels csv not found: {self.labels_csv}")
 
-        with open(self.labelsCsv, encoding="utf-8") as f:
+        with open(self.labels_csv, encoding="utf-8") as f:
             reader = csv.DictReader(f)
 
             for row in reader:
@@ -58,25 +58,25 @@ class CodebookVocab:
                 cb = int(row["codebook_idx"])
                 entry = int(row["entry_idx"])
                 key = (cb, entry)
-                self.entryToLabel[key] = label
-                self.labelToEntries.setdefault(label, []).append(key)
+                self.entry_to_label[key] = label
+                self.label_to_entries.setdefault(label, []).append(key)
         log.info("[vocab] loaded %d labeled entries  %d unique labels",
-                 len(self.entryToLabel), len(self.labelToEntries))
+                 len(self.entry_to_label), len(self.label_to_entries))
 
     def labels(self) -> list[str]:
-        return sorted(self.labelToEntries.keys())
+        return sorted(self.label_to_entries.keys())
 
-    def labelFor(self, codebook: int, entry: int) -> str:
-        return self.entryToLabel.get((codebook, entry), "unknown")
+    def label_for(self, codebook: int, entry: int) -> str:
+        return self.entry_to_label.get((codebook, entry), "unknown")
 
-    def decodeIndexSequence(self, codebookIdx: int,
+    def decode_index_sequence(self, codebook_idx: int,
                             indices: list[int] | np.ndarray) -> list[str]:
         # Returns per-step label, deduplicating consecutive repeats
         out: list[str] = []
         prev: str | None = None
 
         for e in indices:
-            label = self.entryToLabel.get((codebookIdx, int(e)), "unknown")
+            label = self.entry_to_label.get((codebook_idx, int(e)), "unknown")
 
             if label != prev:
                 out.append(label)
@@ -84,32 +84,32 @@ class CodebookVocab:
 
         return out
 
-    def loadEncoder(self) -> None:
-        # Lazy SBERT load — only fired the first time decomposeText is called
+    def load_encoder(self) -> None:
+        # Lazy SBERT load — only fired the first time decompose_text is called
         self.encoder = SentenceTransformer("all-MiniLM-L6-v2")
-        self.labelList = self.labels()
+        self.label_list = self.labels()
         # Use a short sentence form for SBERT so the embedding focuses on action verb
-        prompts = [f"a person {lab.replace('_', ' ')}" for lab in self.labelList]
-        self.labelEmbeds = self.encoder.encode(prompts, normalize_embeddings=True)
+        prompts = [f"a person {lab.replace('_', ' ')}" for lab in self.label_list]
+        self.label_embeds = self.encoder.encode(prompts, normalize_embeddings=True)
         log.info("[vocab] SBERT-encoded %d labels for compound decomposition",
-                 len(self.labelList))
+                 len(self.label_list))
 
-    def decomposeText(self, text: str) -> list[tuple[str, float]]:
+    def decompose_text(self, text: str) -> list[tuple[str, float]]:
         # Returns [(label, score), ...] one per atomic segment of the prompt
         if self.encoder is None:
-            self.loadEncoder()
-        assert self.encoder is not None and self.labelEmbeds is not None
+            self.load_encoder()
+        assert self.encoder is not None and self.label_embeds is not None
 
         segments = [s.strip() for s in CONNECTIVES.split(text) if s.strip()]
 
         if not segments:
             return []
-        segEmbeds = self.encoder.encode(segments, normalize_embeddings=True)
-        sims = segEmbeds @ self.labelEmbeds.T  # (n_seg, n_label)
-        bestIdx = sims.argmax(axis=1)
+        seg_embeds = self.encoder.encode(segments, normalize_embeddings=True)
+        sims = seg_embeds @ self.label_embeds.T  # (n_seg, n_label)
+        best_idx = sims.argmax(axis=1)
         out: list[tuple[str, float]] = []
 
-        for i, label_idx in enumerate(bestIdx):
-            out.append((self.labelList[int(label_idx)], float(sims[i, label_idx])))
+        for i, label_idx in enumerate(best_idx):
+            out.append((self.label_list[int(label_idx)], float(sims[i, label_idx])))
 
         return out

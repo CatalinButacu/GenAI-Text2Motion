@@ -6,13 +6,13 @@ import random
 from src.shared.vocabulary import OBJECTS
 
 from .config import PlannerConfig
-from .constraint_layout import solveLayout
+from .constraint_layout import solve_layout
 from .models import PlannedEntity, PlannedScene, Position3D  # noqa: F401 --re-export
 
 log = logging.getLogger(__name__)
 
 
-def resolvePos(raw, entity, config: PlannerConfig) -> Position3D:
+def resolve_pos(raw, entity, config: PlannerConfig) -> Position3D:
     """Resolve a raw position value to a Position3D, applying per-entity defaults."""
     if isinstance(raw, Position3D):
         return raw
@@ -20,50 +20,50 @@ def resolvePos(raw, entity, config: PlannerConfig) -> Position3D:
     if isinstance(raw, tuple):
         return Position3D(*raw)
 
-    y = -config.actorDist if getattr(entity, "isActor", False) else 0.0
+    y = -config.actor_dist if getattr(entity, "is_actor", False) else 0.0
 
-    return Position3D(0.0, y, config.groundHeight)
+    return Position3D(0.0, y, config.ground_height)
 
 
-def placeObjects(objects: list, actions: list, config: PlannerConfig) -> dict[str, Position3D]:
+def place_objects(objects: list, actions: list, config: PlannerConfig) -> dict[str, Position3D]:
     pos: dict[str, Position3D] = {}
 
     for i, obj in enumerate(objects):
-        z = objectZ(obj.name, actions, config)
-        pos[obj.name] = Position3D(i * config.objSpace, 0.0, z)
-    twoObjFall(objects, actions, pos, config)
+        z = object_z(obj.name, actions, config)
+        pos[obj.name] = Position3D(i * config.obj_space, 0.0, z)
+    two_obj_fall(objects, actions, pos, config)
 
     return pos
 
 
-def objectZ(name: str, actions: list, config: PlannerConfig) -> float:
+def object_z(name: str, actions: list, config: PlannerConfig) -> float:
     for a in actions:
-        if a.actionType == "fall":
-            return config.fallHeight if a.actor == name else config.groundHeight
+        if a.action_type == "fall":
+            return config.fall_height if a.actor == name else config.ground_height
 
-    return config.groundHeight
+    return config.ground_height
 
 
-def twoObjFall(
+def two_obj_fall(
     objects: list, actions: list, pos: dict[str, Position3D], config: PlannerConfig
 ) -> None:
     if len(objects) != 2:
         return
 
     for a in actions:
-        if a.actionType != "fall" or not a.target:
+        if a.action_type != "fall" or not a.target:
             continue
 
         falling = next((o.name for o in objects if o.name != a.target), None)
 
         if falling:
-            pos[a.target] = Position3D(0.0, 0.0, config.groundHeight)
-            pos[falling] = Position3D(0.0, 0.0, config.fallHeight)
+            pos[a.target] = Position3D(0.0, 0.0, config.ground_height)
+            pos[falling] = Position3D(0.0, 0.0, config.fall_height)
         break
 
 
-def placeActors(
-    actors: list, actions: list, objPos: dict[str, Position3D], config: PlannerConfig
+def place_actors(
+    actors: list, actions: list, obj_pos: dict[str, Position3D], config: PlannerConfig
 ) -> dict[str, Position3D]:
     pos: dict[str, Position3D] = {}
 
@@ -72,15 +72,15 @@ def placeActors(
 
         for a in actions:
             if a.actor == actor.name and a.target:
-                target, act_type = a.target, a.actionType
+                target, act_type = a.target, a.action_type
                 break
 
-        if target and target in objPos:
-            tp = objPos[target]
-            d = config.closeActionDist.get(act_type or "", config.actorDist)
+        if target and target in obj_pos:
+            tp = obj_pos[target]
+            d = config.close_action_dist.get(act_type or "", config.actor_dist)
             pos[actor.name] = Position3D(tp.x, tp.y - d, 0.0)
         else:
-            pos[actor.name] = Position3D(0.0, -config.actorDist, 0.0)
+            pos[actor.name] = Position3D(0.0, -config.actor_dist, 0.0)
 
     return pos
 
@@ -89,69 +89,69 @@ class ScenePlanner:
     def __init__(self, config: PlannerConfig | None = None) -> None:
         self.config = config or PlannerConfig()
 
-    def plan(self, parsedScene) -> PlannedScene:
-        return self.planParsed(parsedScene)
+    def plan(self, parsed_scene) -> PlannedScene:
+        return self.plan_parsed(parsed_scene)
 
-    def computeDuration(self, raw: float, explicit: bool) -> float:
-        if self.config.durationJitter > 0 and not explicit:
+    def compute_duration(self, raw: float, explicit: bool) -> float:
+        if self.config.duration_jitter > 0 and not explicit:
             return max(
-                1.0, raw + random.uniform(-self.config.durationJitter, self.config.durationJitter)
+                1.0, raw + random.uniform(-self.config.duration_jitter, self.config.duration_jitter)
             )
 
         return raw
 
-    def planParsed(self, parsedScene) -> PlannedScene:
-        rawDuration = getattr(parsedScene, "duration", self.config.baseDuration)
-        durationExplicit = getattr(parsedScene, "durationExplicit", False)
-        duration = self.computeDuration(rawDuration, durationExplicit)
+    def plan_parsed(self, parsed_scene) -> PlannedScene:
+        raw_duration = getattr(parsed_scene, "duration", self.config.base_duration)
+        duration_explicit = getattr(parsed_scene, "duration_explicit", False)
+        duration = self.compute_duration(raw_duration, duration_explicit)
 
-        if self.config.randomLayout:
-            r, rng = self.config.randomRange, random.Random(self.config.randomSeed)
-            posMap = {
+        if self.config.random_layout:
+            r, rng = self.config.random_range, random.Random(self.config.random_seed)
+            pos_map = {
                 e.name: Position3D(
-                    rng.uniform(-r, r), rng.uniform(-r, r), self.config.groundHeight
+                    rng.uniform(-r, r), rng.uniform(-r, r), self.config.ground_height
                 )
-                for e in parsedScene.entities
+                for e in parsed_scene.entities
             }
 
-            return self.buildPlanned(
-                parsedScene.entities,
-                posMap,
+            return self.build_planned(
+                parsed_scene.entities,
+                pos_map,
                 "random",
                 duration,
-                actions=parsedScene.actions,
+                actions=parsed_scene.actions,
             )
 
-        relations = getattr(parsedScene, "spatialRelations", [])
-        hasTriples = bool(relations) and getattr(relations[0], "subject", None) is not None
+        relations = getattr(parsed_scene, "spatial_relations", [])
+        has_triples = bool(relations) and getattr(relations[0], "subject", None) is not None
 
-        if hasTriples:
-            if solved := trySolve([e.name for e in parsedScene.entities], relations):
-                return self.buildPlanned(
-                    parsedScene.entities,
+        if has_triples:
+            if solved := try_solve([e.name for e in parsed_scene.entities], relations):
+                return self.build_planned(
+                    parsed_scene.entities,
                     solved,
                     "constraint",
                     duration,
-                    actions=parsedScene.actions,
+                    actions=parsed_scene.actions,
                 )
 
-        actors = [e for e in parsedScene.entities if e.isActor]
-        objects = [e for e in parsedScene.entities if not e.isActor]
-        objPos = placeObjects(objects, parsedScene.actions, self.config)
-        actPos = placeActors(actors, parsedScene.actions, objPos, self.config)
+        actors = [e for e in parsed_scene.entities if e.is_actor]
+        objects = [e for e in parsed_scene.entities if not e.is_actor]
+        obj_pos = place_objects(objects, parsed_scene.actions, self.config)
+        act_pos = place_actors(actors, parsed_scene.actions, obj_pos, self.config)
 
-        return self.buildPlanned(
-            parsedScene.entities,
-            {**objPos, **actPos},
+        return self.build_planned(
+            parsed_scene.entities,
+            {**obj_pos, **act_pos},
             "row",
             duration,
-            actions=parsedScene.actions,
+            actions=parsed_scene.actions,
         )
 
-    def buildPlanned(
+    def build_planned(
         self,
         entities,
-        posMap: dict,
+        pos_map: dict,
         mode: str,
         duration: float = 5.0,
         actions: list | None = None,
@@ -159,19 +159,19 @@ class ScenePlanner:
         planned: list[PlannedEntity] = []
 
         for e in entities:
-            raw = posMap.get(e.name) if hasattr(e, "name") else None
-            pos = resolvePos(raw, e, self.config)
-            od = OBJECTS.get(getattr(e, "objectType", "object"))
-            isActor = getattr(e, "isActor", False)
+            raw = pos_map.get(e.name) if hasattr(e, "name") else None
+            pos = resolve_pos(raw, e, self.config)
+            od = OBJECTS.get(getattr(e, "object_type", "object"))
+            is_actor = getattr(e, "is_actor", False)
             planned.append(
                 PlannedEntity(
                     name=e.name,
-                    objectType=getattr(e, "objectType", "object"),
+                    object_type=getattr(e, "object_type", "object"),
                     position=pos,
                     skin=getattr(e, "skin", None),
-                    isActor=isActor,
-                    size=od.defaultSize if od else self.config.defaultSize,
-                    mass=od.defaultMass if od else self.config.defaultMass,
+                    is_actor=is_actor,
+                    size=od.default_size if od else self.config.default_size,
+                    mass=od.default_mass if od else self.config.default_mass,
                 )
             )
         log.info("ScenePlanner (%s): %d entities", mode, len(planned))
@@ -179,11 +179,11 @@ class ScenePlanner:
         return PlannedScene(entities=planned, duration=duration, actions=actions or [])
 
 
-def trySolve(entityNames: list[str], relations: list) -> dict[str, tuple]:
+def try_solve(entity_names: list[str], relations: list) -> dict[str, tuple]:
     """Run the L-BFGS-B layout solver. Returns an empty dict when there is nothing
     to solve (no entities or no relations); raises if the solver itself fails.
     """
-    if not entityNames or not relations:
+    if not entity_names or not relations:
         return {}
 
-    return solveLayout(entityNames, relations)
+    return solve_layout(entity_names, relations)

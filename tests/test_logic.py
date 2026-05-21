@@ -22,9 +22,9 @@ class TestExtractDuration(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.understanding.actions import extractDuration
+        from src.modules.understanding.actions import extract_duration
 
-        cls.fn = staticmethod(extractDuration)
+        cls.fn = staticmethod(extract_duration)
 
     def test_seconds_with_for(self):
         self.assertEqual(self.fn("walk for 3s"), 3.0)
@@ -64,9 +64,9 @@ class TestExtractModifier(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.understanding.actions import extractModifier
+        from src.modules.understanding.actions import extract_modifier
 
-        cls.fn = staticmethod(extractModifier)
+        cls.fn = staticmethod(extract_modifier)
 
     def test_single_modifier(self):
         self.assertEqual(self.fn("the person walks quickly"), "quickly")
@@ -95,14 +95,14 @@ class TestComputeSceneDuration(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.understanding.actions import computeSceneDuration
+        from src.modules.understanding.actions import compute_scene_duration
         from src.modules.understanding.models import ParsedAction
 
-        cls.fn = staticmethod(computeSceneDuration)
+        cls.fn = staticmethod(compute_scene_duration)
         cls.PA = ParsedAction
 
     def _action(self, order: int, duration):
-        return self.PA(actionType="walk", actor="p", order=order, duration=duration)
+        return self.PA(action_type="walk", actor="p", order=order, duration=duration)
 
     def test_all_none_returns_default(self):
         actions = [self._action(0, None), self._action(1, None)]
@@ -160,9 +160,9 @@ class TestSplitIntoClauses(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.understanding.parsing_utils import splitIntoClauses
+        from src.modules.understanding.parsing_utils import split_into_clauses
 
-        cls.fn = staticmethod(splitIntoClauses)
+        cls.fn = staticmethod(split_into_clauses)
 
     def test_no_marker_single_clause(self):
         clauses = self.fn("a person walks")
@@ -203,19 +203,19 @@ class TestSplitIntoClauses(unittest.TestCase):
 
 
 def _make_clip(
-    nFrames: int, action: str = "walk", fps: int = 30, nJoints: int = 22, rawJoints: bool = True
+    n_frames: int, action: str = "walk", fps: int = 30, n_joints: int = 22, raw_joints: bool = True
 ):
     """Create a minimal MotionClip with synthetic numpy data."""
     from src.modules.motion.models import MotionClip, MotionSource
 
-    smplx = np.zeros((nFrames, 168), dtype=np.float32)
-    joints = np.zeros((nFrames, nJoints, 3), dtype=np.float32) if rawJoints else None
+    smplx = np.zeros((n_frames, 168), dtype=np.float32)
+    joints = np.zeros((n_frames, n_joints, 3), dtype=np.float32) if raw_joints else None
     return MotionClip(
         action=action,
-        smplxParams=smplx,
+        smplx_params=smplx,
         fps=fps,
         source=MotionSource.SSM,
-        rawJoints=joints,
+        raw_joints=joints,
     )
 
 
@@ -224,9 +224,9 @@ class TestLastPoseOf(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.motion.clip_ops import lastPoseOf
+        from src.modules.motion.clip_ops import last_pose_of
 
-        cls.fn = staticmethod(lastPoseOf)
+        cls.fn = staticmethod(last_pose_of)
 
     def test_none_clip_returns_none(self):
         self.assertIsNone(self.fn(None))
@@ -234,7 +234,7 @@ class TestLastPoseOf(unittest.TestCase):
     def test_none_params_returns_none(self):
         from src.modules.motion.models import MotionClip
 
-        clip = MotionClip(action="walk", smplxParams=np.zeros((0, 168)))
+        clip = MotionClip(action="walk", smplx_params=np.zeros((0, 168)))
         self.assertIsNone(self.fn(clip))
 
     def test_empty_params_returns_none(self):
@@ -243,7 +243,7 @@ class TestLastPoseOf(unittest.TestCase):
 
     def test_valid_clip_returns_last_frame(self):
         clip = _make_clip(5)
-        clip.smplxParams[4, 0] = 99.0  # mark last frame
+        clip.smplx_params[4, 0] = 99.0  # mark last frame
         result = self.fn(clip)
         assert result is not None
         self.assertEqual(result[0], 99.0)
@@ -261,54 +261,54 @@ class TestBlendClips(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.motion.clip_ops import blendClips
+        from src.modules.motion.clip_ops import blend_clips
 
-        cls.fn = staticmethod(blendClips)
+        cls.fn = staticmethod(blend_clips)
 
     def test_two_clips_concatenated_without_blend(self):
         c1 = _make_clip(10)
         c2 = _make_clip(8)
-        result = self.fn([c1, c2], blendFrames=0)
-        self.assertEqual(result.numFrames, 18)
+        result = self.fn([c1, c2], blend_frames=0)
+        self.assertEqual(result.num_frames, 18)
 
     def test_blend_shortens_total_by_blend_frames(self):
         # blend_frames=4 -> 4 frames overlap -> total = 10+8-4 = 14
         c1 = _make_clip(10)
         c2 = _make_clip(8)
-        result = self.fn([c1, c2], blendFrames=4)
-        self.assertEqual(result.numFrames, 14)
+        result = self.fn([c1, c2], blend_frames=4)
+        self.assertEqual(result.num_frames, 14)
 
     def test_action_label_joined(self):
         c1 = _make_clip(5, action="walk")
         c2 = _make_clip(5, action="run")
-        result = self.fn([c1, c2], blendFrames=0)
+        result = self.fn([c1, c2], blend_frames=0)
         self.assertEqual(result.action, "walk then run")
 
     def test_fps_preserved_from_first_clip(self):
         c1 = _make_clip(10, fps=30)
         c2 = _make_clip(10, fps=30)
-        result = self.fn([c1, c2], blendFrames=0)
+        result = self.fn([c1, c2], blend_frames=0)
         self.assertEqual(result.fps, 30)
 
     def test_raw_joints_concatenated_when_all_present(self):
-        c1 = _make_clip(5, rawJoints=True)
-        c2 = _make_clip(7, rawJoints=True)
-        result = self.fn([c1, c2], blendFrames=0)
-        assert result.rawJoints is not None
-        self.assertEqual(result.rawJoints.shape[0], 12)
+        c1 = _make_clip(5, raw_joints=True)
+        c2 = _make_clip(7, raw_joints=True)
+        result = self.fn([c1, c2], blend_frames=0)
+        assert result.raw_joints is not None
+        self.assertEqual(result.raw_joints.shape[0], 12)
 
     def test_raw_joints_dropped_when_any_missing(self):
-        c1 = _make_clip(5, rawJoints=True)
-        c2 = _make_clip(5, rawJoints=False)
-        result = self.fn([c1, c2], blendFrames=0)
-        self.assertIsNone(result.rawJoints)
+        c1 = _make_clip(5, raw_joints=True)
+        c2 = _make_clip(5, raw_joints=False)
+        result = self.fn([c1, c2], blend_frames=0)
+        self.assertIsNone(result.raw_joints)
 
     def test_source_is_sequenced(self):
         from src.modules.motion.models import MotionSource
 
         c1 = _make_clip(5)
         c2 = _make_clip(5)
-        result = self.fn([c1, c2], blendFrames=0)
+        result = self.fn([c1, c2], blend_frames=0)
         self.assertEqual(result.source, MotionSource.SEQUENCED)
 
 
@@ -317,19 +317,19 @@ class TestSequenceClips(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.motion.clip_ops import sequenceClips
+        from src.modules.motion.clip_ops import sequence_clips
 
-        cls.fn = staticmethod(sequenceClips)
+        cls.fn = staticmethod(sequence_clips)
 
     def test_single_clip_per_actor_passthrough(self):
         c1 = _make_clip(10)
-        result = self.fn([("alice", c1)], blendFrames=0)
+        result = self.fn([("alice", c1)], blend_frames=0)
         self.assertIs(result["alice"], c1)
 
     def test_multiple_actors_split_correctly(self):
         c1 = _make_clip(10)
         c2 = _make_clip(8)
-        result = self.fn([("alice", c1), ("bob", c2)], blendFrames=0)
+        result = self.fn([("alice", c1), ("bob", c2)], blend_frames=0)
         self.assertIn("alice", result)
         self.assertIn("bob", result)
         self.assertIs(result["alice"], c1)
@@ -338,11 +338,11 @@ class TestSequenceClips(unittest.TestCase):
     def test_same_actor_multiple_clips_blended(self):
         c1 = _make_clip(10)
         c2 = _make_clip(8)
-        result = self.fn([("alice", c1), ("alice", c2)], blendFrames=0)
-        self.assertEqual(result["alice"].numFrames, 18)
+        result = self.fn([("alice", c1), ("alice", c2)], blend_frames=0)
+        self.assertEqual(result["alice"].num_frames, 18)
 
     def test_empty_returns_empty_dict(self):
-        result = self.fn([], blendFrames=0)
+        result = self.fn([], blend_frames=0)
         self.assertEqual(result, {})
 
 
@@ -351,13 +351,13 @@ class TestCrossfadeArrays(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.motion.clip_ops import crossfadeArrays
+        from src.modules.motion.clip_ops import crossfade_arrays
 
-        cls.fn = staticmethod(crossfadeArrays)
+        cls.fn = staticmethod(crossfade_arrays)
 
-    def _run(self, nExisting, nNew, blend):
-        f_existing = np.ones((nExisting, 168), dtype=np.float32)
-        f_new = np.ones((nNew, 168), dtype=np.float32) * 2.0
+    def _run(self, n_existing, n_new, blend):
+        f_existing = np.ones((n_existing, 168), dtype=np.float32)
+        f_new = np.ones((n_new, 168), dtype=np.float32) * 2.0
         parts = [f_existing]
         jparts = []
         self.fn(parts, jparts, f_new, None, blend)
@@ -389,22 +389,22 @@ class TestBackfillActorTargets(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.understanding.actions import backfillActorTargets
+        from src.modules.understanding.actions import backfill_actor_targets
         from src.modules.understanding.models import ParsedAction, ParsedEntity
 
-        cls.fn = staticmethod(backfillActorTargets)
+        cls.fn = staticmethod(backfill_actor_targets)
         cls.PA = ParsedAction
         cls.PE = ParsedEntity
 
     def test_fills_empty_actor(self):
-        actor = self.PE(name="alice", objectType="humanoid", isActor=True)
-        a = self.PA(actionType="walk", actor="")
+        actor = self.PE(name="alice", object_type="humanoid", is_actor=True)
+        a = self.PA(action_type="walk", actor="")
         self.fn([a], [actor])
         self.assertEqual(a.actor, "alice")
 
     def test_preserves_existing_actor(self):
-        actor = self.PE(name="alice", objectType="humanoid", isActor=True)
-        a = self.PA(actionType="walk", actor="bob")
+        actor = self.PE(name="alice", object_type="humanoid", is_actor=True)
+        a = self.PA(action_type="walk", actor="bob")
         self.fn([a], [actor])
         self.assertEqual(a.actor, "bob")
 
@@ -412,17 +412,17 @@ class TestBackfillActorTargets(unittest.TestCase):
         from src.shared.vocabulary import ACTIONS
 
         # Find an action that requires_target
-        target_action = next((name for name, d in ACTIONS.items() if d.requiresTarget), None)
+        target_action = next((name for name, d in ACTIONS.items() if d.requires_target), None)
         if target_action is None:
             self.skipTest("no requires_target action found in vocabulary")
-        actor = self.PE(name="person", objectType="humanoid", isActor=True)
-        obj = self.PE(name="cube", objectType="sphere", isActor=False)
-        a = self.PA(actionType=target_action, actor="person", target="")
+        actor = self.PE(name="person", object_type="humanoid", is_actor=True)
+        obj = self.PE(name="cube", object_type="sphere", is_actor=False)
+        a = self.PA(action_type=target_action, actor="person", target="")
         self.fn([a], [actor, obj])
         self.assertEqual(a.target, "cube")
 
     def test_no_actors_leaves_actor_empty(self):
-        a = self.PA(actionType="walk", actor="")
+        a = self.PA(action_type="walk", actor="")
         self.fn([a], [])
         self.assertEqual(a.actor, "")
 
@@ -432,24 +432,24 @@ class TestPropagateRename(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.understanding.actions import propagateRename
+        from src.modules.understanding.actions import propagate_rename
         from src.modules.understanding.models import ParsedAction
 
-        cls.fn = staticmethod(propagateRename)
+        cls.fn = staticmethod(propagate_rename)
         cls.PA = ParsedAction
 
     def test_renames_actor(self):
-        a = self.PA(actionType="walk", actor="humanoid")
+        a = self.PA(action_type="walk", actor="humanoid")
         self.fn([a], "humanoid", "humanoid_1")
         self.assertEqual(a.actor, "humanoid_1")
 
     def test_renames_target(self):
-        a = self.PA(actionType="kick", actor="person", target="ball")
+        a = self.PA(action_type="kick", actor="person", target="ball")
         self.fn([a], "ball", "ball_1")
         self.assertEqual(a.target, "ball_1")
 
     def test_no_match_leaves_unchanged(self):
-        a = self.PA(actionType="walk", actor="alice", target="")
+        a = self.PA(action_type="walk", actor="alice", target="")
         self.fn([a], "bob", "bob_1")
         self.assertEqual(a.actor, "alice")
 
@@ -467,34 +467,34 @@ class TestComputeActionFrames(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.motion.clip_ops import computeActionFrames
+        from src.modules.motion.clip_ops import compute_action_frames
         from src.modules.motion.config import MotionConfig
         from src.modules.understanding.models import ParsedAction
 
-        cls.fn = staticmethod(computeActionFrames)
-        cls.cfg = MotionConfig(minActionFrames=20)
+        cls.fn = staticmethod(compute_action_frames)
+        cls.cfg = MotionConfig(min_action_frames=20)
         cls.PA = ParsedAction
 
     def test_explicit_duration_converted_to_frames(self):
         from src.shared.constants import MOTION_FPS
 
-        a = self.PA(actionType="walk", duration=2.0)
-        frames = self.fn(a, totalFrames=100, nActions=5, config=self.cfg)
+        a = self.PA(action_type="walk", duration=2.0)
+        frames = self.fn(a, total_frames=100, n_actions=5, config=self.cfg)
         self.assertEqual(frames, max(int(2.0 * MOTION_FPS), 20))
 
     def test_implicit_duration_uses_budget(self):
-        a = self.PA(actionType="walk", duration=None)
-        frames = self.fn(a, totalFrames=100, nActions=5, config=self.cfg)
+        a = self.PA(action_type="walk", duration=None)
+        frames = self.fn(a, total_frames=100, n_actions=5, config=self.cfg)
         self.assertEqual(frames, 20)
 
     def test_budget_too_small_returns_min_frames(self):
-        a = self.PA(actionType="walk", duration=None)
-        frames = self.fn(a, totalFrames=10, nActions=5, config=self.cfg)
+        a = self.PA(action_type="walk", duration=None)
+        frames = self.fn(a, total_frames=10, n_actions=5, config=self.cfg)
         self.assertEqual(frames, 20)  # 10//5=2, clamped to min=20
 
     def test_explicit_duration_too_short_returns_min_frames(self):
-        a = self.PA(actionType="walk", duration=0.1)
-        frames = self.fn(a, totalFrames=100, nActions=1, config=self.cfg)
+        a = self.PA(action_type="walk", duration=0.1)
+        frames = self.fn(a, total_frames=100, n_actions=1, config=self.cfg)
         self.assertEqual(frames, 20)  # int(0.1*30)=3, clamped to 20
 
 
@@ -508,40 +508,40 @@ class TestBuildActionQuery(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.motion.clip_ops import buildActionQuery
+        from src.modules.motion.clip_ops import build_action_query
 
-        cls.fn = staticmethod(buildActionQuery)
+        cls.fn = staticmethod(build_action_query)
 
-    def _action(self, rawText="", actionType="walk", modifier=""):
+    def _action(self, raw_text="", action_type="walk", modifier=""):
         from src.modules.understanding.models import ParsedAction
 
-        return ParsedAction(actionType=actionType, rawText=rawText, modifier=modifier)
+        return ParsedAction(action_type=action_type, raw_text=raw_text, modifier=modifier)
 
-    def _act_def(self, motionClip=None):
-        return types.SimpleNamespace(motionClip=motionClip)
+    def _act_def(self, motion_clip=None):
+        return types.SimpleNamespace(motion_clip=motion_clip)
 
     def test_raw_text_takes_priority(self):
-        a = self._action(rawText="a person walks fast")
-        result = self.fn(a, self._act_def(motionClip="walking"))
+        a = self._action(raw_text="a person walks fast")
+        result = self.fn(a, self._act_def(motion_clip="walking"))
         self.assertEqual(result, "a person walks fast")
 
     def test_motion_clip_fallback_when_no_raw_text(self):
-        a = self._action(rawText="")
-        result = self.fn(a, self._act_def(motionClip="brisk walk"))
+        a = self._action(raw_text="")
+        result = self.fn(a, self._act_def(motion_clip="brisk walk"))
         self.assertEqual(result, "brisk walk")
 
     def test_action_type_final_fallback(self):
-        a = self._action(rawText="", actionType="jump_rope")
+        a = self._action(raw_text="", action_type="jump_rope")
         result = self.fn(a, None)
         self.assertEqual(result, "jump rope")
 
     def test_modifier_prepended(self):
-        a = self._action(rawText="walk", modifier="quickly")
+        a = self._action(raw_text="walk", modifier="quickly")
         result = self.fn(a, None)
         self.assertEqual(result, "quickly walk")
 
     def test_no_modifier_no_prepend(self):
-        a = self._action(rawText="walk", modifier="")
+        a = self._action(raw_text="walk", modifier="")
         result = self.fn(a, None)
         self.assertEqual(result, "walk")
 
@@ -585,7 +585,7 @@ class TestConfigConsistency(unittest.TestCase):
         from src.shared.config import PipelineConfig
 
         cfg = PipelineConfig(duration=7.5)
-        self.assertEqual(cfg.planner.baseDuration, 7.5)
+        self.assertEqual(cfg.planner.base_duration, 7.5)
 
     def test_pipeline_custom_fps_does_not_affect_motion_fps(self):
         """MOTION_FPS is a constant; PipelineConfig.fps is for output video only."""
@@ -595,19 +595,19 @@ class TestConfigConsistency(unittest.TestCase):
         cfg = PipelineConfig(fps=24)
         # Motion clips are always generated at MOTION_FPS regardless of output fps
         self.assertEqual(MOTION_FPS, 30)
-        self.assertNotEqual(cfg.fps, cfg.motion.minActionFrames)  # unrelated fields
+        self.assertNotEqual(cfg.fps, cfg.motion.min_action_frames)  # unrelated fields
 
     def test_planner_config_has_base_duration(self):
         from src.modules.planner.config import PlannerConfig
 
         cfg = PlannerConfig()
-        self.assertIsInstance(cfg.baseDuration, float)
+        self.assertIsInstance(cfg.base_duration, float)
 
     def test_planner_config_has_duration_jitter(self):
         from src.modules.planner.config import PlannerConfig
 
         cfg = PlannerConfig()
-        self.assertIsInstance(cfg.durationJitter, float)
+        self.assertIsInstance(cfg.duration_jitter, float)
 
 
 # ---------------------------------------------------------------------------
@@ -627,30 +627,30 @@ class TestPlannerDurationJitter(unittest.TestCase):
         cls.ScenePlanner = ScenePlanner
 
     def test_no_jitter_returns_raw(self):
-        cfg = self.PlannerConfig(baseDuration=5.0, durationJitter=0.0)
+        cfg = self.PlannerConfig(base_duration=5.0, duration_jitter=0.0)
         planner = self.ScenePlanner(cfg)
-        self.assertEqual(planner.computeDuration(5.0, explicit=False), 5.0)
+        self.assertEqual(planner.compute_duration(5.0, explicit=False), 5.0)
 
     def test_explicit_duration_never_jittered(self):
-        cfg = self.PlannerConfig(baseDuration=5.0, durationJitter=2.0)
+        cfg = self.PlannerConfig(base_duration=5.0, duration_jitter=2.0)
         planner = self.ScenePlanner(cfg)
         for _ in range(20):
-            self.assertEqual(planner.computeDuration(3.0, explicit=True), 3.0)
+            self.assertEqual(planner.compute_duration(3.0, explicit=True), 3.0)
 
     def test_jitter_stays_within_bounds(self):
-        cfg = self.PlannerConfig(baseDuration=5.0, durationJitter=1.0)
+        cfg = self.PlannerConfig(base_duration=5.0, duration_jitter=1.0)
         planner = self.ScenePlanner(cfg)
         for _ in range(50):
-            d = planner.computeDuration(5.0, explicit=False)
+            d = planner.compute_duration(5.0, explicit=False)
             self.assertGreaterEqual(d, 1.0)  # clamped to 1.0 minimum
             self.assertLessEqual(d, 6.0)
 
     def test_jitter_duration_always_positive(self):
         # Even with large jitter the result is clamped to 1.0
-        cfg = self.PlannerConfig(baseDuration=0.5, durationJitter=10.0)
+        cfg = self.PlannerConfig(base_duration=0.5, duration_jitter=10.0)
         planner = self.ScenePlanner(cfg)
         for _ in range(30):
-            d = planner.computeDuration(0.5, explicit=False)
+            d = planner.compute_duration(0.5, explicit=False)
             self.assertGreaterEqual(d, 1.0)
 
 
@@ -668,7 +668,7 @@ class TestMotionClipModel(unittest.TestCase):
 
     def test_num_frames_matches_array_length(self):
         clip = _make_clip(45)
-        self.assertEqual(clip.numFrames, 45)
+        self.assertEqual(clip.num_frames, 45)
 
     def test_duration_with_non_standard_fps(self):
         clip = _make_clip(50, fps=25)
@@ -685,9 +685,9 @@ class TestBuildActionLemmaMap(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from src.modules.understanding.actions import buildActionLemmaMap
+        from src.modules.understanding.actions import build_action_lemma_map
 
-        cls.lemma_map = buildActionLemmaMap()
+        cls.lemma_map = build_action_lemma_map()
 
     def test_returns_dict(self):
         self.assertIsInstance(self.lemma_map, dict)

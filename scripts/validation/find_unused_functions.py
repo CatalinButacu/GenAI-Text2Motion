@@ -36,7 +36,7 @@ ALWAYS_USED_EXACT = {
 }
 
 
-def collectPyFiles() -> list[Path]:
+def collect_py_files() -> list[Path]:
     files: list[Path] = []
 
     for top in TOP_LEVEL_FILES:
@@ -66,8 +66,8 @@ def collectPyFiles() -> list[Path]:
 class DefVisitor(ast.NodeVisitor):
     """Collect every function/method defined in a file with its qualname and decorators."""
 
-    def __init__(self, filePath: Path) -> None:
-        self.filePath = filePath
+    def __init__(self, file_path: Path) -> None:
+        self.file_path = file_path
         self.scopes: list[str] = []
         self.defs: list[dict] = []
 
@@ -77,21 +77,21 @@ class DefVisitor(ast.NodeVisitor):
         self.scopes.pop()
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        self.recordDef(node)
+        self.record_def(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        self.recordDef(node)
+        self.record_def(node)
 
-    def recordDef(self, node) -> None:
+    def record_def(self, node) -> None:
         qualname = ".".join(self.scopes + [node.name])
         decorators = [ast.unparse(d) for d in node.decorator_list]
-        isMethod = bool(self.scopes)
+        is_method = bool(self.scopes)
         self.defs.append({
             "name": node.name,
             "qualname": qualname,
             "lineno": node.lineno,
-            "file": str(self.filePath.relative_to(PROJECT_ROOT)).replace("\\", "/"),
-            "isMethod": isMethod,
+            "file": str(self.file_path.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+            "is_method": is_method,
             "decorators": decorators,
             "isPrivate": node.name.startswith("_") and not node.name.startswith("__"),
             "isDunder": node.name.startswith("__") and node.name.endswith("__"),
@@ -103,8 +103,8 @@ class DefVisitor(ast.NodeVisitor):
         self.scopes.pop()
 
 
-def collectAllDefs(files: list[Path]) -> list[dict]:
-    allDefs: list[dict] = []
+def collect_all_defs(files: list[Path]) -> list[dict]:
+    all_defs: list[dict] = []
 
     for f in files:
         try:
@@ -118,49 +118,49 @@ def collectAllDefs(files: list[Path]) -> list[dict]:
 
         v = DefVisitor(f)
         v.visit(tree)
-        allDefs.extend(v.defs)
+        all_defs.extend(v.defs)
 
-    return allDefs
+    return all_defs
 
 
-def buildSourceCorpus(files: list[Path]) -> dict[Path, str]:
+def build_source_corpus(files: list[Path]) -> dict[Path, str]:
     return {f: f.read_text(encoding="utf-8", errors="ignore") for f in files}
 
 
-def countReferences(name: str, corpus: dict[Path, str], defFile: Path) -> tuple[int, list[str]]:
+def count_references(name: str, corpus: dict[Path, str], def_file: Path) -> tuple[int, list[str]]:
     """Count occurrences of bare identifier `name` outside the file where it is defined.
     Also returns occurrences inside the same file but on lines other than the def line.
     """
     pattern = re.compile(rf"\b{re.escape(name)}\b")
-    externalHits = 0
-    sampleFiles: list[str] = []
+    external_hits = 0
+    sample_files: list[str] = []
 
     for path, text in corpus.items():
-        if path == defFile:
+        if path == def_file:
             continue
 
         hits = pattern.findall(text)
         if hits:
-            externalHits += len(hits)
-            if len(sampleFiles) < 3:
-                sampleFiles.append(str(path.relative_to(PROJECT_ROOT)).replace("\\", "/"))
+            external_hits += len(hits)
+            if len(sample_files) < 3:
+                sample_files.append(str(path.relative_to(PROJECT_ROOT)).replace("\\", "/"))
 
-    return externalHits, sampleFiles
+    return external_hits, sample_files
 
 
-def countSelfFileNonDef(name: str, source: str, defLine: int) -> int:
+def count_self_file_non_def(name: str, source: str, def_line: int) -> int:
     pattern = re.compile(rf"\b{re.escape(name)}\b")
     total = 0
 
     for i, line in enumerate(source.splitlines(), start=1):
-        if i == defLine:
+        if i == def_line:
             continue
         total += len(pattern.findall(line))
 
     return total
 
 
-def isAlwaysUsed(d: dict) -> bool:
+def is_always_used(d: dict) -> bool:
     name = d["name"]
     if d["isDunder"]:
         return True
@@ -169,15 +169,15 @@ def isAlwaysUsed(d: dict) -> bool:
     for pref in ALWAYS_USED_PREFIXES:
         if name.startswith(pref):
             return True
-    decoStr = " ".join(d["decorators"])
+    deco_str = " ".join(d["decorators"])
     # pytest fixtures / parametrize / hypothesis / property decorators
-    if any(tag in decoStr for tag in ("fixture", "parametrize", "given(", "property",
+    if any(tag in deco_str for tag in ("fixture", "parametrize", "given(", "property",
                                        "abstractmethod", "register", "click.command",
                                        "click.group", "app.command", "app.callback",
                                        "staticmethod", "classmethod")):
         # property/staticmethod/classmethod don't really mark "framework-used"; only
         # treat pytest/registration ones as always-used.
-        if any(tag in decoStr for tag in ("fixture", "parametrize", "given(",
+        if any(tag in deco_str for tag in ("fixture", "parametrize", "given(",
                                           "register", "click.command", "click.group",
                                           "app.command", "app.callback")):
             return True
@@ -185,38 +185,38 @@ def isAlwaysUsed(d: dict) -> bool:
 
 
 def main() -> None:
-    files = collectPyFiles()
+    files = collect_py_files()
     print(f"Scanning {len(files)} Python files...")
 
-    defs = collectAllDefs(files)
-    corpus = buildSourceCorpus(files)
+    defs = collect_all_defs(files)
+    corpus = build_source_corpus(files)
     print(f"Collected {len(defs)} function/method definitions.")
 
     # Group definitions by name to handle duplicates (e.g., overrides)
-    byName: dict[str, list[dict]] = defaultdict(list)
+    by_name: dict[str, list[dict]] = defaultdict(list)
     for d in defs:
-        byName[d["name"]].append(d)
+        by_name[d["name"]].append(d)
 
     results: list[dict] = []
 
     for d in defs:
         name = d["name"]
-        defFile = PROJECT_ROOT / d["file"]
+        def_file = PROJECT_ROOT / d["file"]
 
-        externalHits, sampleFiles = countReferences(name, corpus, defFile)
-        selfHits = countSelfFileNonDef(name, corpus[defFile], d["lineno"])
+        external_hits, sample_files = count_references(name, corpus, def_file)
+        self_hits = count_self_file_non_def(name, corpus[def_file], d["lineno"])
         # If multiple defs share the name, the "external" hits may simply be the other defs.
-        sameNameDefs = len(byName[name]) - 1
+        same_name_defs = len(by_name[name]) - 1
 
-        d["externalHits"] = externalHits
-        d["selfHits"] = selfHits
-        d["sameNameDefs"] = sameNameDefs
-        d["sampleFiles"] = sampleFiles
-        d["alwaysUsed"] = isAlwaysUsed(d)
+        d["external_hits"] = external_hits
+        d["self_hits"] = self_hits
+        d["same_name_defs"] = same_name_defs
+        d["sample_files"] = sample_files
+        d["alwaysUsed"] = is_always_used(d)
 
         # Heuristic: unused if no external hits AND no self-file non-def hits
         # (allow same-name overloads to confuse this; we surface that flag separately)
-        d["unused"] = (externalHits == 0 and selfHits == 0 and not d["alwaysUsed"])
+        d["unused"] = (external_hits == 0 and self_hits == 0 and not d["alwaysUsed"])
 
         results.append(d)
 
@@ -226,21 +226,21 @@ def main() -> None:
     # Sort: methods of a class first by file/qualname; standalone functions separately
     unused.sort(key=lambda d: (d["file"], d["lineno"]))
 
-    outPath = PROJECT_ROOT / "scripts" / "validation" / "unused_functions.json"
-    outPath.write_text(json.dumps({
+    out_path = PROJECT_ROOT / "scripts" / "validation" / "unused_functions.json"
+    out_path.write_text(json.dumps({
         "totalDefs": len(defs),
         "unusedCount": len(unused),
         "unused": unused,
         "all": results,
     }, indent=2), encoding="utf-8")
-    print(f"Wrote {outPath}")
+    print(f"Wrote {out_path}")
 
     # Also print a compact markdown table to stdout
     print("\n## Unused function candidates\n")
     print("| File | Line | Qualname | Kind | Decorators |")
     print("|------|------|----------|------|------------|")
     for d in unused:
-        kind = "method" if d["isMethod"] else "function"
+        kind = "method" if d["is_method"] else "function"
         if d["isPrivate"]:
             kind = "private " + kind
         deco = ",".join(d["decorators"]) if d["decorators"] else ""

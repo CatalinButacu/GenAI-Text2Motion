@@ -15,13 +15,13 @@ PROFILE_MEM = os.environ.get("PROFILE_MEMORY", "0").strip().lower() in TRUTHY
 
 
 @contextlib.contextmanager
-def tracemallocSnapshot(label: str, topN: int = 10) -> Generator[None, None, None]:
+def tracemalloc_snapshot(label: str, top_n: int = 10) -> Generator[None, None, None]:
     """CM logs elapsed time; also logs memory delta when PROFILE_MEMORY=1."""
-    tStart = time.perf_counter()
+    t_start = time.perf_counter()
 
     if not PROFILE_MEM:
         yield
-        log.info("[perf] %s: %.3fs", label, time.perf_counter() - tStart)
+        log.info("[perf] %s: %.3fs", label, time.perf_counter() - t_start)
 
         return
 
@@ -30,23 +30,23 @@ def tracemallocSnapshot(label: str, topN: int = 10) -> Generator[None, None, Non
     if not already:
         tracemalloc.start(25)
 
-    snapBefore = tracemalloc.take_snapshot()
-    memBefore = sum(s.size for s in snapBefore.statistics("lineno"))
+    snap_before = tracemalloc.take_snapshot()
+    mem_before = sum(s.size for s in snap_before.statistics("lineno"))
 
     try:
         yield
     finally:
-        elapsed = time.perf_counter() - tStart
-        snapAfter = tracemalloc.take_snapshot()
-        logDelta(label, snapBefore, snapAfter, memBefore, elapsed, topN)
+        elapsed = time.perf_counter() - t_start
+        snap_after = tracemalloc.take_snapshot()
+        log_delta(label, snap_before, snap_after, mem_before, elapsed, top_n)
 
         if not already:
             tracemalloc.stop()
 
 
-def logDelta(label, snapBefore, snapAfter, memBefore, elapsed: float, topN: int) -> None:
-    memAfter = sum(s.size for s in snapAfter.statistics("lineno"))
-    diff = memAfter - memBefore
+def log_delta(label, snap_before, snap_after, mem_before, elapsed: float, top_n: int) -> None:
+    mem_after = sum(s.size for s in snap_after.statistics("lineno"))
+    diff = mem_after - mem_before
     sign = "+" if diff >= 0 else ""
     log.info(
         "[perf] %s: %.3fs  |  [mem] %s%d KB  (%.2f MB -> %.2f MB)",
@@ -54,11 +54,11 @@ def logDelta(label, snapBefore, snapAfter, memBefore, elapsed: float, topN: int)
         elapsed,
         sign,
         diff // 1024,
-        memBefore / 1024 / 1024,
-        memAfter / 1024 / 1024,
+        mem_before / 1024 / 1024,
+        mem_after / 1024 / 1024,
     )
 
-    for rank, stat in enumerate(snapAfter.compare_to(snapBefore, "lineno")[:topN], 1):
+    for rank, stat in enumerate(snap_after.compare_to(snap_before, "lineno")[:top_n], 1):
         if stat.size_diff == 0:
             continue
 
@@ -72,11 +72,11 @@ def logDelta(label, snapBefore, snapAfter, memBefore, elapsed: float, topN: int)
         )
 
 
-def profileMemory(fn):
+def profile_memory(fn):
     """Decorator: wraps a method with tracemalloc_snapshot when PROFILE_MEMORY=1."""
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        with tracemallocSnapshot(fn.__qualname__):
+        with tracemalloc_snapshot(fn.__qualname__):
             return fn(*args, **kwargs)
 
     return wrapper if PROFILE_MEM else fn

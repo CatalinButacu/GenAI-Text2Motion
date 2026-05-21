@@ -7,12 +7,17 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from src.data.augmentation import AugmentationPipeline, detectTpose, qualityFilter, resampleToFps
-from src.data.motion_normalize import MotionStats, computeMotionStats, normalize
-from src.shared.tokenizer import buildVocab
+from src.data.augmentation import (
+    AugmentationPipeline,
+    detect_tpose,
+    quality_filter,
+    resample_to_fps,
+)
+from src.data.motion_normalize import MotionStats, compute_motion_stats, normalize
+from src.shared.tokenizer import build_vocab
 
-from .motion_dataset import encodeMotionSample
-from .unified import buildSourcesBuffer, splitSamples
+from .motion_dataset import encode_motion_sample
+from .unified import build_sources_buffer, split_samples
 
 log = logging.getLogger(__name__)
 
@@ -20,57 +25,59 @@ log = logging.getLogger(__name__)
 @dataclass
 class SourceConfig:
     enabled: bool = True
-    maxSamples: int | None = None
-    dataDir: str = ""       # path to dataset root; required by source loaders
-    amassDir: str = "data/AMASS"  # AMASS backing store (HumanML3D needs this)
+    max_samples: int | None = None
+    data_dir: str = ""       # path to dataset root; required by source loaders
+    amass_dir: str = "data/AMASS"  # AMASS backing store (HumanML3D needs this)
 
 
 @dataclass
 class UnifiedConfig:
     amass: SourceConfig = field(
-        default_factory=lambda: SourceConfig(dataDir="data/AMASS")
+        default_factory=lambda: SourceConfig(data_dir="data/AMASS")
     )
     arctic: SourceConfig = field(
-        default_factory=lambda: SourceConfig(enabled=False, dataDir="data/arctic/unpack")
+        default_factory=lambda: SourceConfig(enabled=False, data_dir="data/arctic/unpack")
     )
     # HumanML3D off by default -- requires index.csv + AMASS backing
     humanml3d: SourceConfig = field(
-        default_factory=lambda: SourceConfig(enabled=False, dataDir="data/humanml3d")
+        default_factory=lambda: SourceConfig(enabled=False, data_dir="data/humanml3d")
     )
     interx: SourceConfig = field(
-        default_factory=lambda: SourceConfig(enabled=False, dataDir="data/inter-x")
+        default_factory=lambda: SourceConfig(enabled=False, data_dir="data/inter-x")
     )
 
 
 class UnifiedMotionDataset(Dataset):
-    def __init__(self, split="train", maxMotionLength=200, maxTextLength=64,
+    def __init__(self, split="train", max_motion_length=200, max_text_length=64,
                  augment=False, vocab=None, stats: MotionStats | None = None,
-                 config=None, minFrames=30, preloadedBuf=None,
-                 transStatsBySource: dict[str, MotionStats] | None = None):
-        self.maxMotionLength = maxMotionLength
-        self.maxTextLength = maxTextLength
+                 config=None, min_frames=30, preloaded_buf=None,
+                 trans_stats_by_source: dict[str, MotionStats] | None = None):
+        self.max_motion_length = max_motion_length
+        self.max_text_length = max_text_length
         self.aug_pipeline = None
-        self.transStatsBySource = transStatsBySource
+        self.trans_stats_by_source = trans_stats_by_source
 
         if augment:
-            self.aug_pipeline = AugmentationPipeline(maxLength=maxMotionLength)
+            self.aug_pipeline = AugmentationPipeline(max_length=max_motion_length)
 
-        if preloadedBuf is not None:
-            buf = preloadedBuf
+        if preloaded_buf is not None:
+            buf = preloaded_buf
         else:
             cfg = config or UnifiedConfig()
-            buf = buildSourcesBuffer(cfg, minFrames, resampleToFps, qualityFilter, detectTpose)
+            buf = build_sources_buffer(
+                cfg, min_frames, resample_to_fps, quality_filter, detect_tpose,
+            )
         counts: dict[str, int] = {}
 
         for s in buf:
             counts[s.get("source", "?")] = counts.get(s.get("source", "?"), 0) + 1
         log.info("[UnifiedDataset] total: %d  %s", len(buf), counts)
-        self.samples = splitSamples(buf, split)
+        self.samples = split_samples(buf, split)
 
         if vocab is not None:
             self.vocab = vocab
         else:
-            self.vocab = buildVocab([s["text"] for s in self.samples])
+            self.vocab = build_vocab([s["text"] for s in self.samples])
 
         # Compute normalization stats from this split so motion is z-score normalised.
         # WARNING: for val/test you should pass stats= from the train split so all
@@ -86,7 +93,7 @@ class UnifiedMotionDataset(Dataset):
                     "computing per-split stats. Pass stats= from the train split "
                     "to avoid train/eval normalization drift.", split,
                 )
-            self.motion_stats = computeMotionStats(self.samples)
+            self.motion_stats = compute_motion_stats(self.samples)
 
         log.info("[UnifiedDataset] %s: %d samples, vocab=%d",
                  split, len(self.samples), len(self.vocab))
@@ -96,17 +103,17 @@ class UnifiedMotionDataset(Dataset):
 
     def __getitem__(self, idx):
         s = self.samples[idx]
-        item = encodeMotionSample(
-            s, self.aug_pipeline, self.maxMotionLength, self.maxTextLength,
+        item = encode_motion_sample(
+            s, self.aug_pipeline, self.max_motion_length, self.max_text_length,
             self.vocab, stats=self.motion_stats,
-            transStatsBySource=self.transStatsBySource,
+            trans_stats_by_source=self.trans_stats_by_source,
         )
         item["source"] = s.get("source", "unknown")
 
         return item
 
     @property
-    def sourceCounts(self) -> dict[str, int]:
+    def source_counts(self) -> dict[str, int]:
         counts: dict[str, int] = {}
 
         for s in self.samples:

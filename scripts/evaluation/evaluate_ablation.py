@@ -26,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
-from scripts.evaluation.compute_metrics import computeClipMetrics, summarise
+from scripts.evaluation.compute_metrics import compute_clip_metrics, summarise
 from src.pipeline import Pipeline
 from src.shared.config import PipelineConfig
 
@@ -133,18 +133,18 @@ assert len(OOD_PROMPTS) == 19, f"Expected 19 OOD prompts, got {len(OOD_PROMPTS)}
 
 ALL_CONFIGS = ["full", "no_m2"]
 
-def pipelineConfigFor(configName: str, outputDir: str, duration: float = 3.0,
+def pipeline_config_for(config_name: str, output_dir: str, duration: float = 3.0,
                       fps: int = 24, device: str = "cpu"):
     """Build PipelineConfig for a given ablation config name."""
-    if configName not in ALL_CONFIGS:
-        raise ValueError(f"Unknown config: {configName!r}")
+    if config_name not in ALL_CONFIGS:
+        raise ValueError(f"Unknown config: {config_name!r}")
     cfg = PipelineConfig(
         fps=fps,
         duration=float(duration),
         device=device,
-        outputDir=outputDir,
+        output_dir=output_dir,
     )
-    cfg.planner.randomLayout = configName == "no_m2"
+    cfg.planner.random_layout = config_name == "no_m2"
 
     return cfg
 
@@ -156,87 +156,87 @@ class RunResult:
     config: str
     success: bool
     error: str = ""
-    latencyS: float = 0.0
+    latency_s: float = 0.0
     # Motion metrics (from MotionClip.smplx_params if available)
-    nClips: int = 0
-    totalFrames: int = 0
-    footSlidingMs: float = float("nan")
-    groundPenCm: float = float("nan")
+    n_clips: int = 0
+    total_frames: int = 0
+    foot_sliding_ms: float = float("nan")
+    ground_pen_cm: float = float("nan")
     validity: bool = False
     # Entity / action parsing metrics
-    nEntities: int = 0
-    nActions: int = 0
+    n_entities: int = 0
+    n_actions: int = 0
 
-def extractMotionMetrics(result: dict) -> dict:
+def extract_motion_metrics(result: dict) -> dict:
     """Pull motion quality metrics from a pipeline result dict."""
     clips = result.get("motion_clips", [])
     if not clips:
         return {}
     # motion.invoke returns dict[str, MotionClip] (actor_name -> clip).
     # Accept both shapes for backwards compatibility with older callers.
-    clipList = list(clips.values()) if isinstance(clips, dict) else list(clips)
+    clip_list = list(clips.values()) if isinstance(clips, dict) else list(clips)
 
-    allParams = [c.smplxParams for c in clipList if c.smplxParams is not None]
-    if not allParams:
+    all_params = [c.smplx_params for c in clip_list if c.smplx_params is not None]
+    if not all_params:
         return {}
 
-    clipMetrics = []
-    for i, params in enumerate(allParams):
+    clip_metrics = []
+    for i, params in enumerate(all_params):
         try:
-            clipMetrics.append(computeClipMetrics(f"clip_{i}", params))
+            clip_metrics.append(compute_clip_metrics(f"clip_{i}", params))
         except Exception as e:
             log.debug("metrics failed for clip %d: %s", i, e)
 
-    if not clipMetrics:
+    if not clip_metrics:
         return {}
 
-    summary = summarise(clipMetrics, label="")
+    summary = summarise(clip_metrics, label="")
     return {
         "n_clips": len(clips),
-        "total_frames": sum(len(p) for p in allParams),
+        "total_frames": sum(len(p) for p in all_params),
         "foot_sliding_ms": summary["foot_sliding_mean_ms"],
         "ground_pen_cm": summary["ground_penetration_mean_cm"],
         "validity": summary["validity_rate"] > 0.5,
     }
 
-def runSingle(
-    prompt: str, configName: str, outputDir: str, duration: float, fps: int,
+def run_single(
+    prompt: str, config_name: str, output_dir: str, duration: float, fps: int,
     device: str = "cpu",
 ) -> RunResult:
     """Run pipeline for one prompt/config combination."""
-    run = RunResult(prompt=prompt, config=configName, success=False)
+    run = RunResult(prompt=prompt, config=config_name, success=False)
     t0 = time.perf_counter()
     try:
-        cfg = pipelineConfigFor(configName, outputDir=outputDir, duration=duration,
+        cfg = pipeline_config_for(config_name, output_dir=output_dir, duration=duration,
                                 fps=fps, device=device)
-        safeName = prompt[:40].replace(" ", "_").replace("/", "-")
-        outputName = f"{configName}__{safeName}"
+        safe_name = prompt[:40].replace(" ", "_").replace("/", "-")
+        output_name = f"{config_name}__{safe_name}"
 
         pipeline = Pipeline(cfg)
-        result = pipeline.run(prompt, outputName=outputName)
+        result = pipeline.run(prompt, output_name=output_name)
 
         run.success = True
-        run.latencyS = time.perf_counter() - t0
+        run.latency_s = time.perf_counter() - t0
 
         # Parsing metrics
         parsed = result.get("parsed_scene")
         if parsed:
-            run.nEntities = len(getattr(parsed, "entities", []))
-            run.nActions = len(getattr(parsed, "actions", []))
+            run.n_entities = len(getattr(parsed, "entities", []))
+            run.n_actions = len(getattr(parsed, "actions", []))
 
         # Motion quality metrics
-        m = extractMotionMetrics(result)
+        m = extract_motion_metrics(result)
         if m:
-            run.nClips = m.get("n_clips", 0)
-            run.totalFrames = m.get("total_frames", 0)
-            run.footSlidingMs = m.get("foot_sliding_ms", float("nan"))
-            run.groundPenCm = m.get("ground_pen_cm", float("nan"))
+            run.n_clips = m.get("n_clips", 0)
+            run.total_frames = m.get("total_frames", 0)
+            run.foot_sliding_ms = m.get("foot_sliding_ms", float("nan"))
+            run.ground_pen_cm = m.get("ground_pen_cm", float("nan"))
             run.validity = m.get("validity", False)
 
     except Exception:
-        run.latencyS = time.perf_counter() - t0
+        run.latency_s = time.perf_counter() - t0
         run.error = traceback.format_exc(limit=5)
-        log.warning("[%s] FAILED: %r - %s", configName, prompt[:40], run.error.splitlines()[-1])
+        log.warning("[%s] FAILED: %r - %s", config_name, prompt[:40], run.error.splitlines()[-1])
 
     return run
 
@@ -248,22 +248,22 @@ def aggregate(results: list[RunResult]) -> dict:
     n = len(results)
     ns = len(successful)
 
-    def meanStd(vals):
+    def mean_std(vals):
         arr = np.array([v for v in vals if np.isfinite(v)])
         if len(arr) == 0:
             return float("nan"), float("nan")
         return float(arr.mean()), float(arr.std())
 
-    foot_mean, foot_std = meanStd([r.footSlidingMs for r in successful])
-    gp_mean, gp_std = meanStd([r.groundPenCm for r in successful])
-    latency_mean, _ = meanStd([r.latencyS for r in successful])
-    validityRate = float(sum(r.validity for r in successful) / max(ns, 1))
+    foot_mean, foot_std = mean_std([r.foot_sliding_ms for r in successful])
+    gp_mean, gp_std = mean_std([r.ground_pen_cm for r in successful])
+    latency_mean, _ = mean_std([r.latency_s for r in successful])
+    validity_rate = float(sum(r.validity for r in successful) / max(ns, 1))
 
     return {
         "n_total": n,
         "n_success": ns,
         "success_rate": ns / max(n, 1),
-        "validity_rate": validityRate,
+        "validity_rate": validity_rate,
         "foot_sliding_mean_ms": foot_mean,
         "foot_sliding_std_ms": foot_std,
         "ground_pen_mean_cm": gp_mean,
@@ -273,22 +273,22 @@ def aggregate(results: list[RunResult]) -> dict:
 
 #  Save helpers
 
-def saveCsv(allResults: list[RunResult], path: str) -> None:
+def save_csv(all_results: list[RunResult], path: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(asdict(allResults[0]).keys()))
+        writer = csv.DictWriter(f, fieldnames=list(asdict(all_results[0]).keys()))
         writer.writeheader()
-        for r in allResults:
+        for r in all_results:
             writer.writerow(asdict(r))
     log.info("CSV saved to %s", path)
 
-def saveSummary(summaryByConfig: dict, path: str) -> None:
+def save_summary(summary_by_config: dict, path: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
-        json.dump(summaryByConfig, f, indent=2)
+        json.dump(summary_by_config, f, indent=2)
     log.info("Summary JSON saved to %s", path)
 
-def printTable(summaryByConfig: dict) -> None:
+def print_table(summary_by_config: dict) -> None:
     header = (
         f"{'Config':<20} {'Success':>8} {'Valid%':>8} {'FtSlide':>10} "
         f"{'GndPen':>10} {'Latency':>10}"
@@ -296,7 +296,7 @@ def printTable(summaryByConfig: dict) -> None:
     print(f"\n{'' * len(header)}")
     print(header)
     print(f"{'' * len(header)}")
-    for cfg, s in summaryByConfig.items():
+    for cfg, s in summary_by_config.items():
         foot = (
             f"{s['foot_sliding_mean_ms']:.4f}" if np.isfinite(s["foot_sliding_mean_ms"]) else "N/A"
         )
@@ -323,7 +323,7 @@ def main():
     )
     p.add_argument(
         "--n-prompts", type=int, default=50, help="Number of prompts to evaluate (default: all 50)"
-    , dest="nPrompts")
+    , dest="n_prompts")
     p.add_argument(
         "--configs",
         nargs="+",
@@ -353,7 +353,7 @@ def main():
         prompts = OOD_PROMPTS
         log.info("OOD mode: using %d out-of-distribution prompts", len(prompts))
     else:
-        prompts = EVAL_PROMPTS[: args.nPrompts]
+        prompts = EVAL_PROMPTS[: args.n_prompts]
     Path(args.output).mkdir(parents=True, exist_ok=True)
 
     log.info(
@@ -363,34 +363,34 @@ def main():
         len(prompts) * len(args.configs),
     )
 
-    allResults: list[RunResult] = []
+    all_results: list[RunResult] = []
     done = 0
     total = len(prompts) * len(args.configs)
 
     for config_name in args.configs:
-        configDir = os.path.join(args.output, config_name)
-        Path(configDir).mkdir(parents=True, exist_ok=True)
-        configResults: list[RunResult] = []
+        config_dir = os.path.join(args.output, config_name)
+        Path(config_dir).mkdir(parents=True, exist_ok=True)
+        config_results: list[RunResult] = []
 
         for i, prompt in enumerate(prompts):
             done += 1
             log.info("[%d/%d] config=%s  prompt=%r", done, total, config_name, prompt[:50])
-            run = runSingle(prompt, config_name, configDir, args.duration, args.fps,
+            run = run_single(prompt, config_name, config_dir, args.duration, args.fps,
                             device=args.device)
-            configResults.append(run)
-            allResults.append(run)
+            config_results.append(run)
+            all_results.append(run)
 
             # Save incremental CSV after each run (safe against crashes)
-            saveCsv(allResults, os.path.join(args.output, "ablation_results.csv"))
+            save_csv(all_results, os.path.join(args.output, "ablation_results.csv"))
 
     # Summary per config
     summary: dict[str, dict] = {}
     for config_name in args.configs:
-        configRuns = [r for r in allResults if r.config == config_name]
-        summary[config_name] = aggregate(configRuns)
+        config_runs = [r for r in all_results if r.config == config_name]
+        summary[config_name] = aggregate(config_runs)
 
-    saveSummary(summary, os.path.join(args.output, "ablation_summary.json"))
-    printTable(summary)
+    save_summary(summary, os.path.join(args.output, "ablation_summary.json"))
+    print_table(summary)
 
     log.info("Ablation complete. Results in %s", args.output)
 

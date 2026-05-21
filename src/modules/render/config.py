@@ -13,4 +13,4 @@ class RenderConfig:
     # Coordinate system of incoming SMPL-X params. HumanML3D motion is already
     # Y-up (matches aitviewer); raw AMASS / AMASS-trained model output is Z-up
     # and needs the canonical -90deg X / 180deg Y rotation to stand upright.
-    inputCoordSystem: Literal["yup", "zup"] = "yup"
+    input_coord_system: Literal["yup", "zup"] = "yup"

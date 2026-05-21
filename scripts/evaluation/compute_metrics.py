@@ -99,24 +99,24 @@ class ClipMetrics(NamedTuple):
         for FID computation.
     """
 
-    clipId: str
-    nFrames: int
-    footSlidingMs: float
-    groundPenetration: float
+    clip_id: str
+    n_frames: int
+    foot_sliding_ms: float
+    ground_penetration: float
     validity: bool
-    jointAngleMean: np.ndarray
-    jointAngleCovDiag: np.ndarray
+    joint_angle_mean: np.ndarray
+    joint_angle_cov_diag: np.ndarray
 
 #  Per-clip metrics
 
-def contactMask(params: np.ndarray) -> np.ndarray:
+def contact_mask(params: np.ndarray) -> np.ndarray:
     """Heuristic contact mask: foot is in contact when pelvis height is low
     and ankle joint angular velocity is below FOOT_VEL_THRESH.
 
     Returns bool array (T,).
     """
     trans = params[:, TRANS_SLICE]  # (T, 3)
-    pelvisH = trans[:, PELVIS_HEIGHT_IDX]  # Z-up height (AMASS / SMPL-X)
+    pelvis_h = trans[:, PELVIS_HEIGHT_IDX]  # Z-up height (AMASS / SMPL-X)
 
     body = params[:, BODY_SLICE]  # (T, 63)
     lfoot = body[:, LFOOT_START : LFOOT_START + 3]
@@ -125,15 +125,15 @@ def contactMask(params: np.ndarray) -> np.ndarray:
     if len(params) > 1:
         lvel = np.linalg.norm(np.diff(lfoot, axis=0), axis=1)
         rvel = np.linalg.norm(np.diff(rfoot, axis=0), axis=1)
-        footVel = np.minimum(lvel, rvel)
-        footSlow = np.concatenate([[footVel[0]], footVel]) < FOOT_VEL_THRESH
+        foot_vel = np.minimum(lvel, rvel)
+        foot_slow = np.concatenate([[foot_vel[0]], foot_vel]) < FOOT_VEL_THRESH
     else:
-        footSlow = np.ones(len(params), dtype=bool)
+        foot_slow = np.ones(len(params), dtype=bool)
 
-    lowPelvis = pelvisH < PELVIS_CONTACT_HEIGHT
-    return footSlow & lowPelvis
+    low_pelvis = pelvis_h < PELVIS_CONTACT_HEIGHT
+    return foot_slow & low_pelvis
 
-def footSliding(params: np.ndarray) -> float:
+def foot_sliding(params: np.ndarray) -> float:
     """Mean ankle angular velocity (rad/s) of the slower foot during contact frames.
 
     Uses the ankle joint rotation velocity (not root translation) so the metric
@@ -146,7 +146,7 @@ def footSliding(params: np.ndarray) -> float:
     """
     if len(params) < 2:
         return float("nan")
-    contact = contactMask(params)
+    contact = contact_mask(params)
     if not contact.any():
         return float("nan")
 
@@ -155,44 +155,44 @@ def footSliding(params: np.ndarray) -> float:
     rfoot = body[:, RFOOT_START : RFOOT_START + 3]
     lvel = np.linalg.norm(np.diff(lfoot, axis=0), axis=1) * MOTION_FPS  # rad/s
     rvel = np.linalg.norm(np.diff(rfoot, axis=0), axis=1) * MOTION_FPS  # rad/s
-    footVel = np.minimum(lvel, rvel)  # slower foot = most likely planted
-    contactVel = contact[1:]
-    if not contactVel.any():
+    foot_vel = np.minimum(lvel, rvel)  # slower foot = most likely planted
+    contact_vel = contact[1:]
+    if not contact_vel.any():
         return float("nan")
-    return float(footVel[contactVel].mean())
+    return float(foot_vel[contact_vel].mean())
 
-def groundPenetrationCm(params: np.ndarray) -> float:
+def ground_penetration_cm(params: np.ndarray) -> float:
     """Mean pelvis depth below ground (cm) across all frames."""
     trans = params[:, TRANS_SLICE]
-    pelvisH = trans[:, PELVIS_HEIGHT_IDX]  # m, Z-up
-    below = np.maximum(-pelvisH, 0.0)  # depth below z=0
+    pelvis_h = trans[:, PELVIS_HEIGHT_IDX]  # m, Z-up
+    below = np.maximum(-pelvis_h, 0.0)  # depth below z=0
     return float(below.mean() * 100.0)  # -> cm
 
-def isValid(params: np.ndarray) -> bool:
+def is_valid(params: np.ndarray) -> bool:
     """Clip is valid: no NaN/Inf, joint angles within [-pi, pi]."""
     if not np.isfinite(params).all():
         return False
     body = params[:, BODY_SLICE]
     return bool(np.abs(body).max() < np.pi)
 
-def computeClipMetrics(clipId: str, params: np.ndarray) -> ClipMetrics:
+def compute_clip_metrics(clip_id: str, params: np.ndarray) -> ClipMetrics:
     """Compute all per-clip metrics for one (T, 168) array."""
     assert (
         params.ndim == 2 and params.shape[1] == MOTION_DIM
     ), f"Expected (T, {MOTION_DIM}), got {params.shape}"
     return ClipMetrics(
-        clipId=clipId,
-        nFrames=len(params),
-        footSlidingMs=footSliding(params),
-        groundPenetration=groundPenetrationCm(params),
-        validity=isValid(params),
-        jointAngleMean=params.mean(axis=0),
-        jointAngleCovDiag=params.var(axis=0),
+        clip_id=clip_id,
+        n_frames=len(params),
+        foot_sliding_ms=foot_sliding(params),
+        ground_penetration=ground_penetration_cm(params),
+        validity=is_valid(params),
+        joint_angle_mean=params.mean(axis=0),
+        joint_angle_cov_diag=params.var(axis=0),
     )
 
 #  Frechet Inception Distance (joint-angle space)
 
-def gaussianFID(
+def gaussian_fid(
     mu1: np.ndarray, sigma1: np.ndarray, mu2: np.ndarray, sigma2: np.ndarray
 ) -> float:
     """Scalar FID between two diagonal Gaussians.
@@ -205,7 +205,7 @@ def gaussianFID(
     covmean = np.sqrt(np.maximum(sigma1 * sigma2, 0.0))
     return float(np.dot(diff, diff) + (sigma1 + sigma2 - 2 * covmean).sum())
 
-def jointAngleFID(genClips: list[ClipMetrics], refClips: list[ClipMetrics]) -> float:
+def joint_angle_fid(gen_clips: list[ClipMetrics], ref_clips: list[ClipMetrics]) -> float:
     """FID between generated and reference joint-angle distributions."""
 
     def pool(clips):
@@ -219,50 +219,50 @@ def jointAngleFID(genClips: list[ClipMetrics], refClips: list[ClipMetrics]) -> f
         The first term is the mean within-clip variance; the second is the
         between-clip spread of the clip means.
         """
-        means = np.stack([c.jointAngleMean for c in clips])
-        vars_ = np.stack([c.jointAngleCovDiag for c in clips])
+        means = np.stack([c.joint_angle_mean for c in clips])
+        vars_ = np.stack([c.joint_angle_cov_diag for c in clips])
         mu = means.mean(axis=0)
         var = vars_.mean(axis=0) + ((means - mu) ** 2).mean(axis=0)
         return mu, var
 
-    mu_g, var_g = pool(genClips)
-    mu_r, var_r = pool(refClips)
-    return gaussianFID(mu_g, var_g, mu_r, var_r)
+    mu_g, var_g = pool(gen_clips)
+    mu_r, var_r = pool(ref_clips)
+    return gaussian_fid(mu_g, var_g, mu_r, var_r)
 
 #  Load clips from directory
 
-def loadClips(clipDir: str) -> list[ClipMetrics]:
+def load_clips(clip_dir: str) -> list[ClipMetrics]:
     """Load all *.npy files from a directory as ClipMetrics."""
-    p = Path(clipDir)
-    npyFiles = sorted(p.glob("*.npy"))
-    if not npyFiles:
-        raise FileNotFoundError(f"No *.npy clips found in {clipDir!r}")
+    p = Path(clip_dir)
+    npy_files = sorted(p.glob("*.npy"))
+    if not npy_files:
+        raise FileNotFoundError(f"No *.npy clips found in {clip_dir!r}")
     metrics = []
-    for f in npyFiles:
+    for f in npy_files:
         arr = np.load(str(f))
         if arr.ndim == 1:
             arr = arr.reshape(1, -1)
         if arr.shape[-1] != MOTION_DIM:
             log.warning("Skipping %s - expected dim %d, got %d", f.name, MOTION_DIM, arr.shape[-1])
             continue
-        metrics.append(computeClipMetrics(f.stem, arr))
+        metrics.append(compute_clip_metrics(f.stem, arr))
         log.debug("Loaded %s: %d frames", f.stem, len(arr))
-    log.info("Loaded %d clips from %s", len(metrics), clipDir)
+    log.info("Loaded %d clips from %s", len(metrics), clip_dir)
     return metrics
 
 #  Summary statistics
 
 def summarise(metrics: list[ClipMetrics], label: str) -> dict:
     """Aggregate per-clip metrics into mean +/- std summary dict."""
-    foot = np.array([m.footSlidingMs for m in metrics])
+    foot = np.array([m.foot_sliding_ms for m in metrics])
     foot = foot[np.isfinite(foot)]
-    gp = np.array([m.groundPenetration for m in metrics])
-    validRate = float(sum(m.validity for m in metrics) / max(len(metrics), 1))
+    gp = np.array([m.ground_penetration for m in metrics])
+    valid_rate = float(sum(m.validity for m in metrics) / max(len(metrics), 1))
 
     return {
         "label": label,
         "n_clips": len(metrics),
-        "validity_rate": validRate,
+        "validity_rate": valid_rate,
         "foot_sliding_mean_ms": float(foot.mean()) if len(foot) else float("nan"),
         "foot_sliding_std_ms": float(foot.std()) if len(foot) else float("nan"),
         "ground_penetration_mean_cm": float(gp.mean()),
@@ -271,13 +271,13 @@ def summarise(metrics: list[ClipMetrics], label: str) -> dict:
 
 #  Main
 
-def run(clipsDir: str, referenceDir: str | None, output: str, label: str) -> dict:
-    genMetrics = loadClips(clipsDir)
-    summary = summarise(genMetrics, label)
+def run(clips_dir: str, reference_dir: str | None, output: str, label: str) -> dict:
+    gen_metrics = load_clips(clips_dir)
+    summary = summarise(gen_metrics, label)
 
-    if referenceDir and Path(referenceDir).exists():
-        refMetrics = loadClips(referenceDir)
-        fid = jointAngleFID(genMetrics, refMetrics)
+    if reference_dir and Path(reference_dir).exists():
+        ref_metrics = load_clips(reference_dir)
+        fid = joint_angle_fid(gen_metrics, ref_metrics)
         summary["joint_angle_fid"] = fid
         log.info("Joint angle FID vs reference: %.4f", fid)
     else:
@@ -312,14 +312,14 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     p = argparse.ArgumentParser(description="Compute thesis evaluation metrics")
     p.add_argument("--clips-dir", required=True,
-                   help="Dir of generated *.npy clips", dest="clipsDir")
+                   help="Dir of generated *.npy clips", dest="clips_dir")
     p.add_argument("--reference-dir", default=None,
                    help="Dir of AMASS reference *.npy clips",
-                   dest="referenceDir")
+                   dest="reference_dir")
     p.add_argument("--output", default="results/metrics.json")
     p.add_argument("--label", default="generated", help="Label for this config")
     args = p.parse_args()
-    run(args.clipsDir, args.referenceDir, args.output, args.label)
+    run(args.clips_dir, args.reference_dir, args.output, args.label)
 
 if __name__ == "__main__":
     main()

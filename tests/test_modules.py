@@ -18,7 +18,7 @@ import pytest
 
 # Add project root to path
 from src.modules.motion import MotionGenerator, SSMMotionModel
-from src.modules.motion.ssm import getSsmInfo
+from src.modules.motion.ssm import get_ssm_info
 from src.modules.planner import ScenePlanner
 from src.modules.understanding import SpacyParser
 from src.pipeline import Pipeline, PipelineConfig
@@ -26,7 +26,7 @@ from src.shared.vocabulary import (
     ACTIONS,
     OBJECTS,
     ActionCategory,
-    getActionByKeyword,
+    get_action_by_keyword,
 )
 
 
@@ -51,12 +51,12 @@ class TestSharedVocabulary(unittest.TestCase):
 
     def test_action_lookup(self):
         """Action lookup by keyword works."""
-        action = getActionByKeyword("walks")
+        action = get_action_by_keyword("walks")
         self.assertIsNotNone(action)
         assert action is not None  # narrow for type checker
         self.assertEqual(action.name, "walk")  # pyright: ignore[reportAttributeAccessIssue]
 
-        action = getActionByKeyword("kicks")
+        action = get_action_by_keyword("kicks")
         self.assertIsNotNone(action)
         assert action is not None  # narrow for type checker
         self.assertEqual(action.name, "kick")  # pyright: ignore[reportAttributeAccessIssue]
@@ -70,7 +70,7 @@ class TestSharedVocabulary(unittest.TestCase):
         fall = ACTIONS.get("fall")
         self.assertIsNotNone(fall)
         assert fall is not None
-        self.assertFalse(fall.requiresTarget)  # pyright: ignore[reportAttributeAccessIssue]
+        self.assertFalse(fall.requires_target)  # pyright: ignore[reportAttributeAccessIssue]
 
 class TestSpacyParser(unittest.TestCase):
     """Tests for Module 1: SpacyParser."""
@@ -84,20 +84,20 @@ class TestSpacyParser(unittest.TestCase):
 
         self.assertEqual(len(result.entities), 1)
         # Parser may normalize 'ball' to 'sphere' based on vocabulary
-        self.assertIn(result.entities[0].objectType, ["ball", "sphere"])
+        self.assertIn(result.entities[0].object_type, ["ball", "sphere"])
 
     def test_action_parse(self):
         """Parse prompt with action."""
         result = self.parser.parse("A person walks forward")
 
         self.assertGreater(len(result.actions), 0)
-        self.assertEqual(result.actions[0].actionType, "walk")
+        self.assertEqual(result.actions[0].action_type, "walk")
 
     def test_fall_action(self):
         """Parse physics action (fall)."""
         result = self.parser.parse("A ball falls on a cube")
 
-        actions = [a.actionType for a in result.actions]
+        actions = [a.action_type for a in result.actions]
         self.assertIn("fall", actions)
 
     def test_multiple_entities(self):
@@ -113,32 +113,32 @@ class TestParsedEntity(unittest.TestCase):
         """All optional fields default to None/False."""
         from src.modules.understanding.models import ParsedEntity
 
-        e = ParsedEntity(name="sphere", objectType="sphere")
-        self.assertFalse(e.isActor)
+        e = ParsedEntity(name="sphere", object_type="sphere")
+        self.assertFalse(e.is_actor)
         self.assertIsNone(e.skin)
 
     def test_actor_flag(self):
         """is_actor flag is preserved."""
         from src.modules.understanding.models import ParsedEntity
 
-        e = ParsedEntity(name="person", objectType="humanoid", isActor=True)
-        self.assertTrue(e.isActor)
+        e = ParsedEntity(name="person", object_type="humanoid", is_actor=True)
+        self.assertTrue(e.is_actor)
 
     def test_skin_assigned(self):
         """skin field accepts descriptive strings for objects and actors."""
         from src.modules.understanding.models import ParsedEntity
 
-        e = ParsedEntity(name="red_sphere", objectType="sphere", skin="rubber")
+        e = ParsedEntity(name="red_sphere", object_type="sphere", skin="rubber")
         self.assertEqual(e.skin, "rubber")
 
-        actor = ParsedEntity(name="person", objectType="humanoid", isActor=True, skin="dark skin")
+        actor = ParsedEntity(name="person", object_type="humanoid", is_actor=True, skin="dark skin")
         self.assertEqual(actor.skin, "dark skin")
 
     def test_slots_no_arbitrary_attributes(self):
         """slots=True prevents setting undeclared attributes."""
         from src.modules.understanding.models import ParsedEntity
 
-        e = ParsedEntity(name="sphere", objectType="sphere")
+        e = ParsedEntity(name="sphere", object_type="sphere")
         with self.assertRaises(AttributeError):
             e.nonexistent = "x"  # type: ignore[attr-defined]
 
@@ -153,7 +153,7 @@ class TestParsedEntity(unittest.TestCase):
         """SpacyParser sets is_actor=True for humanoid entities."""
         parser = SpacyParser()
         scene = parser.parse("a person walks")
-        actors = [e for e in scene.entities if e.isActor]
+        actors = [e for e in scene.entities if e.is_actor]
         self.assertGreater(len(actors), 0)
 
 class TestSpatialRelation(unittest.TestCase):
@@ -183,15 +183,15 @@ class TestSpatialRelation(unittest.TestCase):
 
         parser = SpacyParser()
         scene = parser.parse("a ball on top of a cube")
-        self.assertGreater(len(scene.spatialRelations), 0)
-        for sr in scene.spatialRelations:
+        self.assertGreater(len(scene.spatial_relations), 0)
+        for sr in scene.spatial_relations:
             self.assertIsInstance(sr, SpatialRelation)
 
     def test_parser_resolves_entities(self):
         """subject and object are resolved to entity names, not empty strings."""
         parser = SpacyParser()
         scene = parser.parse("a ball on top of a cube")
-        resolved = [sr for sr in scene.spatialRelations if sr.subject and sr.object]
+        resolved = [sr for sr in scene.spatial_relations if sr.subject and sr.object]
         self.assertGreater(len(resolved), 0)
 
     def test_canonical_relation_set(self):
@@ -201,18 +201,18 @@ class TestSpatialRelation(unittest.TestCase):
         parser = SpacyParser()
         scene = parser.parse("a ball next to a cube")
         canonical_values = set(SPATIAL_RELATIONS.values())
-        for sr in scene.spatialRelations:
+        for sr in scene.spatial_relations:
             self.assertIn(sr.relation, canonical_values)
 
     def test_constraint_solver_uses_spatial_relation(self):
         """SpatialRelation objects feed directly into the constraint layout solver."""
-        from src.modules.planner.constraint_layout import solveLayout
+        from src.modules.planner.constraint_layout import solve_layout
         from src.modules.understanding.models import SpatialRelation
 
         relations = [
             SpatialRelation(subject="ball", predicate="on top of", relation="ON", object="cube")
         ]
-        positions = solveLayout(["ball", "cube"], relations)
+        positions = solve_layout(["ball", "cube"], relations)
         self.assertIn("ball", positions)
         self.assertIn("cube", positions)
         # ON constraint: ball should be above cube
@@ -259,7 +259,7 @@ class TestMotionGenerator(unittest.TestCase):
         """MotionGenerator fails fast at construction when the SSM checkpoint is missing."""
         from src.modules.motion.config import MotionConfig
 
-        cfg = MotionConfig(checkpointPath="checkpoints/nonexistent.pt")
+        cfg = MotionConfig(checkpoint_path="checkpoints/nonexistent.pt")
         with self.assertRaises(FileNotFoundError):
             MotionGenerator(cfg)
 
@@ -271,10 +271,10 @@ class TestMotionGenerator(unittest.TestCase):
 
         clip = MotionClip(
             action="walk",
-            smplxParams=np.zeros((30, 168), dtype=np.float32),
+            smplx_params=np.zeros((30, 168), dtype=np.float32),
             source=MotionSource.RETRIEVAL,
         )
-        self.assertEqual(clip.numFrames, 30)
+        self.assertEqual(clip.num_frames, 30)
         self.assertIsNotNone(clip.source)
         self.assertEqual(clip.source, MotionSource.RETRIEVAL)
 
@@ -291,22 +291,22 @@ class TestSSMMotionGenerator(unittest.TestCase):
         if not (os.path.exists(ckpt) and os.path.exists(rvq_ckpt)):
             self.skipTest(f"checkpoints missing (need {ckpt} and {rvq_ckpt})")
 
-        model = SSMMotionModel(checkpointPath=ckpt)
-        clip = model.generateFromTextTokens("walk", numFrames=30)
+        model = SSMMotionModel(checkpoint_path=ckpt)
+        clip = model.generate_from_text_tokens("walk", num_frames=30)
         self.assertIsNotNone(clip)
-        self.assertGreater(clip.numFrames, 0)
+        self.assertGreater(clip.num_frames, 0)
 
     def test_ssm_missing_checkpoint_raises(self):
         """SSM raises FileNotFoundError when the checkpoint is missing -- no silent fallback."""
         with self.assertRaises(FileNotFoundError):
-            SSMMotionModel(checkpointPath="nonexistent/path.pt")
+            SSMMotionModel(checkpoint_path="nonexistent/path.pt")
 
 class TestSSMCore(unittest.TestCase):
     """Tests for SSM module core components."""
 
     def test_ssm_info(self):
         """SSM info returns expected structure."""
-        info = getSsmInfo()
+        info = get_ssm_info()
 
         self.assertIn("torch_available", info)
         self.assertIn("layers", info)
@@ -322,7 +322,7 @@ class TestBiMambaLayer(unittest.TestCase):
 
         from src.modules.motion.ssm import BiMambaLayer, SSMConfig
 
-        cfg = SSMConfig(dModel=32, dState=8)
+        cfg = SSMConfig(d_model=32, d_state=8)
         layer = BiMambaLayer(cfg)
         layer.eval()
 
@@ -338,7 +338,7 @@ class TestBiMambaLayer(unittest.TestCase):
 
         from src.modules.motion.ssm import BiMambaLayer, SSMConfig
 
-        cfg = SSMConfig(dModel=16, dState=4)
+        cfg = SSMConfig(d_model=16, d_state=4)
         layer = BiMambaLayer(cfg)
         layer.eval()
 
@@ -360,7 +360,7 @@ class TestSBERTTextEncoder(unittest.TestCase):
 
         from src.modules.motion.nn_models import SBERTTextEncoder
 
-        enc = SBERTTextEncoder(dModel=64)
+        enc = SBERTTextEncoder(d_model=64)
         # The projection linear layer should be (384, 64)
         proj_linear = enc.proj[0]  # first element in Sequential
         self.assertEqual(proj_linear.in_features, SBERTTextEncoder.SBERT_DIM)
@@ -370,7 +370,7 @@ class TestSBERTTextEncoder(unittest.TestCase):
         """forward() raises a RuntimeError with a clear message when SBERT unavailable."""
         from src.modules.motion.nn_models import SBERTTextEncoder
 
-        enc = SBERTTextEncoder(dModel=64)
+        enc = SBERTTextEncoder(d_model=64)
         if enc.available:
             self.skipTest("sentence-transformers is installed --skipping unavailability test")
 
@@ -403,7 +403,7 @@ class TestFIDEvaluator(unittest.TestCase):
 
         from scripts.evaluation.motion_encoder import T2MMotionEncoder
 
-        enc = T2MMotionEncoder(inputDim=168)
+        enc = T2MMotionEncoder(input_dim=168)
         enc.eval()
 
         x = torch.randn(4, 50, 168)
@@ -424,7 +424,7 @@ class TestFIDEvaluator(unittest.TestCase):
 
         from scripts.evaluation.motion_encoder import T2MMotionEncoder
 
-        enc = T2MMotionEncoder(inputDim=168).eval()
+        enc = T2MMotionEncoder(input_dim=168).eval()
         x = torch.randn(3, 60, 168)
         lengths = torch.tensor([20, 40, 60])
         with torch.no_grad():
@@ -434,45 +434,45 @@ class TestFIDEvaluator(unittest.TestCase):
 
     def test_extract_features_shape(self):
         """extract_features() handles variable-length clips and returns (N, 512)."""
-        from scripts.evaluation.motion_encoder import extractFeatures, loadEncoder
+        from scripts.evaluation.motion_encoder import extract_features, load_encoder
 
-        enc = loadEncoder(inputDim=168, device="cpu")
+        enc = load_encoder(input_dim=168, device="cpu")
         rng = np.random.default_rng(42)
         motions = [rng.standard_normal((t, 168)).astype("float32") for t in [30, 60, 90, 45]]
-        feats = extractFeatures(enc, motions, device="cpu")
+        feats = extract_features(enc, motions, device="cpu")
         self.assertEqual(feats.shape, (4, 512))
 
     def test_fid_identical_distributions(self):
         """FID between identical distributions should be ~0."""
-        from scripts.evaluation.compute_fid import computeFID
+        from scripts.evaluation.compute_fid import compute_fid
 
         # Same feature matrix -> FID should be 0
         rng = np.random.default_rng(0)
         feats = rng.standard_normal((600, 512)).astype("float32")
         feats /= np.linalg.norm(feats, axis=1, keepdims=True)
-        fid = computeFID(feats, feats.copy())
+        fid = compute_fid(feats, feats.copy())
         self.assertAlmostEqual(
             fid, 0.0, places=3, msg=f"FID on identical distributions = {fid}, expected ~0"
         )
 
     def test_fid_different_distributions(self):
         """FID between very different distributions should be large."""
-        from scripts.evaluation.compute_fid import computeFID
+        from scripts.evaluation.compute_fid import compute_fid
 
         rng = np.random.default_rng(1)
         feats_a = rng.standard_normal((600, 512)).astype("float32")
         feats_b = rng.standard_normal((600, 512)).astype("float32") + 10.0  # large shift
 
-        fid = computeFID(feats_a, feats_b)
+        fid = compute_fid(feats_a, feats_b)
         self.assertGreater(fid, 10.0, msg=f"FID on shifted dists = {fid}, expected > 10")
 
     def test_diversity_non_negative(self):
         """Diversity metric is always >= 0."""
-        from scripts.evaluation.compute_fid import computeDiversity
+        from scripts.evaluation.compute_fid import compute_diversity
 
         rng = np.random.default_rng(2)
         feats = rng.standard_normal((50, 512)).astype("float32")
-        d = computeDiversity(feats, nPairs=20)
+        d = compute_diversity(feats, n_pairs=20)
         self.assertGreaterEqual(d, 0.0)
 
 class TestPipelineIntegration(unittest.TestCase):
@@ -497,7 +497,7 @@ class TestPipelineIntegration(unittest.TestCase):
         config = PipelineConfig(duration=1.0, fps=12)
 
         pipeline = Pipeline(config)
-        result = pipeline.run("A ball falls", outputName="test_integration")
+        result = pipeline.run("A ball falls", output_name="test_integration")
 
         self.assertIsInstance(result, dict)
 

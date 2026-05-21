@@ -59,17 +59,17 @@ import torch
 from scipy.linalg import sqrtm
 
 from scripts.evaluation.motion_encoder import (
-    encodeTextsT2M,
-    extractFeatures,
-    loadEncoder,
-    loadTextEncoder,
+    encode_texts_t2m,
+    extract_features,
+    load_encoder,
+    load_text_encoder,
 )
 from src.data.humanml3d_loader import HumanML3DMotionDataset
 from src.data.motion_normalize import MotionStats, normalize
 from src.modules.motion.config import TrainingConfig
 from src.modules.motion.nn_models import TextToMotionSSM
 from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
-from src.modules.motion.ssm_model import sampleIndices
+from src.modules.motion.ssm_model import sample_indices
 from src.shared.constants import MOTION_DIM
 from src.shared.tokenizer import tokenize as tok
 
@@ -92,50 +92,50 @@ MIN_FULL_FID: int = 512  # minimum samples for full (non-diagonal) FID
 @dataclass
 class EvalSample:
     text: str  # text prompt
-    gtMotion: np.ndarray  # (T, 168) ground-truth motion
-    genMotion: np.ndarray  # (T, 168) generated motion
-    clipId: str
+    gt_motion: np.ndarray  # (T, 168) ground-truth motion
+    gen_motion: np.ndarray  # (T, 168) generated motion
+    clip_id: str
 
 @dataclass
 class EvalResults:
-    nSamples: int
+    n_samples: int
     fid: float  # Frechet Inception Distance (lower = better)
-    rPrecTop1: float  # R-Precision Top-1 (higher = better)
-    rPrecTop2: float
-    rPrecTop3: float
+    r_prec_top1: float  # R-Precision Top-1 (higher = better)
+    r_prec_top2: float
+    r_prec_top3: float
     diversity: float  # average pairwise L2 distance in feature space
     multimodality: float  # average feature distance across 10 gens of same prompt
-    usingPretrainedEncoder: bool
+    using_pretrained_encoder: bool
 
-    def toDict(self) -> dict:
+    def to_dict(self) -> dict:
         return {
-            "n_samples": self.nSamples,
+            "n_samples": self.n_samples,
             "fid": self.fid,
             "r_precision": {
-                "top1": self.rPrecTop1,
-                "top2": self.rPrecTop2,
-                "top3": self.rPrecTop3,
+                "top1": self.r_prec_top1,
+                "top2": self.r_prec_top2,
+                "top3": self.r_prec_top3,
             },
             "diversity": self.diversity,
             "multimodality": self.multimodality,
-            "using_pretrained_encoder": self.usingPretrainedEncoder,
+            "using_pretrained_encoder": self.using_pretrained_encoder,
         }
 
-    def printTable(self) -> None:
-        encNote = (
+    def print_table(self) -> None:
+        enc_note = (
             "(pretrained)"
-            if self.usingPretrainedEncoder
+            if self.using_pretrained_encoder
             else "(random --NOT comparable to literature)"
         )
         print()
         print(f"{'=' * 60}")
-        print(f"  T2M EVALUATION RESULTS  {encNote}")
+        print(f"  T2M EVALUATION RESULTS  {enc_note}")
         print(f"{'=' * 60}")
-        print(f"  Samples evaluated : {self.nSamples}")
+        print(f"  Samples evaluated : {self.n_samples}")
         print(f"  FID               : {self.fid:.4f}   [target: <=1.0]")
-        print(f"  R-Precision Top-1 : {self.rPrecTop1:.4f}   [target: >=0.50]")
-        print(f"  R-Precision Top-2 : {self.rPrecTop2:.4f}")
-        print(f"  R-Precision Top-3 : {self.rPrecTop3:.4f}   [target: >=0.70]")
+        print(f"  R-Precision Top-1 : {self.r_prec_top1:.4f}   [target: >=0.50]")
+        print(f"  R-Precision Top-2 : {self.r_prec_top2:.4f}")
+        print(f"  R-Precision Top-3 : {self.r_prec_top3:.4f}   [target: >=0.70]")
         print(f"  Diversity         : {self.diversity:.4f}   [higher = more varied]")
         print(f"  Multimodality     : {self.multimodality:.4f}   [higher = richer variety]")
         print(f"{'=' * 60}")
@@ -143,7 +143,7 @@ class EvalResults:
 
 #  FID computation
 
-def frechetDistance(
+def frechet_distance(
     mu1: np.ndarray, sigma1: np.ndarray, mu2: np.ndarray, sigma2: np.ndarray
 ) -> float:
     """Full matrix Frechet distance between two Gaussians.
@@ -155,65 +155,65 @@ def frechetDistance(
     """
 
     diff = mu1 - mu2
-    meanTerm = float(diff @ diff)
+    mean_term = float(diff @ diff)
 
     result = sqrtm(sigma1 @ sigma2)
     # scipy < 1.16 with disp=False returns (matrix, errest); newer just returns matrix
     covmean = result[0] if isinstance(result, tuple) else result
     if np.iscomplexobj(covmean):
         # Numerical error: imaginary parts should be negligible
-        imagNorm = np.abs(covmean.imag).max()
-        if imagNorm > 1e-3:
+        imag_norm = np.abs(covmean.imag).max()
+        if imag_norm > 1e-3:
             log.warning(
-                "[FID] sqrtm imaginary part large (%.2e) - using diagonal fallback", imagNorm
+                "[FID] sqrtm imaginary part large (%.2e) - using diagonal fallback", imag_norm
             )
-            return diagonalFID(mu1, np.diag(sigma1), mu2, np.diag(sigma2))
+            return diagonal_fid(mu1, np.diag(sigma1), mu2, np.diag(sigma2))
         covmean = covmean.real
 
-    traceTerm = float(np.trace(sigma1 + sigma2 - 2 * covmean))
-    return meanTerm + traceTerm
+    trace_term = float(np.trace(sigma1 + sigma2 - 2 * covmean))
+    return mean_term + trace_term
 
-def diagonalFID(mu1: np.ndarray, var1: np.ndarray, mu2: np.ndarray, var2: np.ndarray) -> float:
+def diagonal_fid(mu1: np.ndarray, var1: np.ndarray, mu2: np.ndarray, var2: np.ndarray) -> float:
     """Diagonal-covariance FID (used when N < _MIN_FULL_FID)."""
     diff = mu1 - mu2
     covmean = np.sqrt(np.maximum(var1 * var2, 0.0))
     return float(diff @ diff + (var1 + var2 - 2 * covmean).sum())
 
-def computeFID(genFeats: np.ndarray, realFeats: np.ndarray) -> float:
+def compute_fid(gen_feats: np.ndarray, real_feats: np.ndarray) -> float:
     """Compute FID between generated and real motion feature distributions.
 
     Selects full vs diagonal covariance based on sample count.
 
     Args:
-        genFeats:  (N_gen, 512) generated motion embeddings
-        realFeats: (N_real, 512) real motion embeddings
+        gen_feats:  (N_gen, 512) generated motion embeddings
+        real_feats: (N_real, 512) real motion embeddings
 
     Returns:
         FID scalar (lower is better).
     """
-    muG = genFeats.mean(axis=0)
-    muR = realFeats.mean(axis=0)
+    mu_g = gen_feats.mean(axis=0)
+    mu_r = real_feats.mean(axis=0)
 
     # Full covariance requires N > D (512 here)
-    if min(len(genFeats), len(realFeats)) >= MIN_FULL_FID:
-        sigmaG = np.cov(genFeats, rowvar=False)
-        sigmaR = np.cov(realFeats, rowvar=False)
+    if min(len(gen_feats), len(real_feats)) >= MIN_FULL_FID:
+        sigma_g = np.cov(gen_feats, rowvar=False)
+        sigma_r = np.cov(real_feats, rowvar=False)
         try:
-            return frechetDistance(muG, sigmaG, muR, sigmaR)
+            return frechet_distance(mu_g, sigma_g, mu_r, sigma_r)
         except Exception as exc:
             log.warning("[FID] full covariance failed (%s), using diagonal", exc)
 
     log.info(
         "[FID] using diagonal approximation (N=%d/%d < %d)",
-        len(genFeats),
-        len(realFeats),
+        len(gen_feats),
+        len(real_feats),
         MIN_FULL_FID,
     )
-    return diagonalFID(muG, genFeats.var(axis=0), muR, realFeats.var(axis=0))
+    return diagonal_fid(mu_g, gen_feats.var(axis=0), mu_r, real_feats.var(axis=0))
 
 #  R-Precision
 
-def computeTextFeatures(
+def compute_text_features(
     texts: list[str],
     device: str = "cpu",
 ) -> np.ndarray:
@@ -240,55 +240,55 @@ def computeTextFeatures(
             feats.append(rng2.standard_normal(384).astype(np.float32))
         return np.stack(feats)
 
-def computePrecisionR(
+def compute_precision_r(
     samples: list[EvalSample],
     encoder: object,  # T2MMotionEncoder
     device: str = "cpu",
-    poolSize: int = RPREC_POOL_SIZE,
-    rngSeed: int = 42,
-    textEncoder=None,  # T2MTextEncoder from motion_encoder --None falls back to SBERT
+    pool_size: int = RPREC_POOL_SIZE,
+    rng_seed: int = 42,
+    text_encoder=None,  # T2MTextEncoder from motion_encoder --None falls back to SBERT
 ) -> tuple[float, float, float]:
     """Compute R-Precision@(1,2,3) following T2M evaluation protocol.
 
-    For valid R-Precision, ``textEncoder`` must be the T2M text encoder from
+    For valid R-Precision, ``text_encoder`` must be the T2M text encoder from
     finest.tar --the same checkpoint that produced ``encoder`` (motion encoder).
     Both were trained jointly to produce features in a shared 512-dim space.
     Comparing features from the SAME joint space gives meaningful cosine
     similarities and therefore valid R-Precision values.
 
-    When ``textEncoder`` is None, SBERT text features are used as a fallback.
+    When ``text_encoder`` is None, SBERT text features are used as a fallback.
     SBERT and T2M motion features occupy different, unaligned embedding spaces,
     so cosine similarities are meaningless and R-Precision values must NOT be
     reported as valid evaluation results.
 
     For each test sample:
       1. Take the generated motion and the correct text.
-      2. Sample (poolSize - 1) distractor texts from the rest of the test set.
-      3. Rank all poolSize texts by cosine similarity to the generated motion embedding.
+      2. Sample (pool_size - 1) distractor texts from the rest of the test set.
+      3. Rank all pool_size texts by cosine similarity to the generated motion embedding.
       4. Score: 1 if correct text appears in Top-K.
 
     Returns:
         (top1, top2, top3) accuracy fractions.
     """
 
-    nUnique = len({s.text for s in samples})
+    n_unique = len({s.text for s in samples})
 
-    if nUnique < poolSize:
+    if n_unique < pool_size:
         log.warning(
-            "[R-Precision] eval set has only %d unique texts but poolSize=%d. "
+            "[R-Precision] eval set has only %d unique texts but pool_size=%d. "
             "Distractor sampling will draw duplicates of the GT text and "
             "the resulting R-Precision values are NOT comparable to T2M-protocol "
-            "numbers. Use a larger eval set (>=%d unique prompts) or lower poolSize.",
-            nUnique, poolSize, poolSize,
+            "numbers. Use a larger eval set (>=%d unique prompts) or lower pool_size.",
+            n_unique, pool_size, pool_size,
         )
-    rng = random.Random(rngSeed)
-    allTexts = [s.text for s in samples]
+    rng = random.Random(rng_seed)
+    all_texts = [s.text for s in samples]
 
     #  Text features  must come from the T2M joint space for valid R-Precision
-    if textEncoder is not None:
-        textFeats = encodeTextsT2M(
-            textEncoder,
-            allTexts,
+    if text_encoder is not None:
+        text_feats = encode_texts_t2m(
+            text_encoder,
+            all_texts,
             device=device,  # type: ignore[arg-type]
         )
         # encode_texts_t2m already returns L2-normalised (512,) vectors --same dim as motion
@@ -300,52 +300,52 @@ def computePrecisionR(
             "  are NOT valid and must NOT be reported as evaluation results.\n"
             "  Ensure finest.tar is at data/t2m/text_mot_match/model/finest.tar"
         )
-        textFeats = computeTextFeatures(allTexts, device=device)
-        textFeats = textFeats / (np.linalg.norm(textFeats, axis=1, keepdims=True) + 1e-8)
+        text_feats = compute_text_features(all_texts, device=device)
+        text_feats = text_feats / (np.linalg.norm(text_feats, axis=1, keepdims=True) + 1e-8)
 
     #  Motion features
-    genMotions = [s.genMotion for s in samples]
-    motionFeats = extractFeatures(encoder, genMotions, device=device)  # type: ignore[arg-type]
+    gen_motions = [s.gen_motion for s in samples]
+    motion_feats = extract_features(encoder, gen_motions, device=device)  # type: ignore[arg-type]
     # motion_feats already L2-normalised by the encoder
 
     #  Align feature dimensions (text 512 = motion 512 for T2M; SBERT=384->pad)
-    dTxt = textFeats.shape[1]
-    if dTxt >= FEAT_DIM:
-        textFeatsAligned = textFeats[:, :FEAT_DIM]
+    d_txt = text_feats.shape[1]
+    if d_txt >= FEAT_DIM:
+        text_feats_aligned = text_feats[:, :FEAT_DIM]
     else:
-        textFeatsAligned = np.pad(textFeats, ((0, 0), (0, FEAT_DIM - dTxt)))
+        text_feats_aligned = np.pad(text_feats, ((0, 0), (0, FEAT_DIM - d_txt)))
 
-    top1Hits = top2Hits = top3Hits = 0
+    top1_hits = top2_hits = top3_hits = 0
     N = len(samples)
 
     for i in range(N):
         # Distractor indices (anything except ourselves)
-        otherIds = list(range(N))
-        otherIds.remove(i)
-        distractorIds = rng.sample(otherIds, min(poolSize - 1, len(otherIds)))
-        poolIds = [i] + distractorIds  # GT text always at index 0 in pool
+        other_ids = list(range(N))
+        other_ids.remove(i)
+        distractor_ids = rng.sample(other_ids, min(pool_size - 1, len(other_ids)))
+        pool_ids = [i] + distractor_ids  # GT text always at index 0 in pool
 
-        poolTxt = textFeatsAligned[poolIds]  # (poolSize, 512)
-        motVec = motionFeats[i : i + 1]  # (1, 512)
+        pool_txt = text_feats_aligned[pool_ids]  # (pool_size, 512)
+        mot_vec = motion_feats[i : i + 1]  # (1, 512)
 
-        sims = (poolTxt @ motVec.T).squeeze(1).astype(np.float64)  # (poolSize,)
+        sims = (pool_txt @ mot_vec.T).squeeze(1).astype(np.float64)  # (pool_size,)
         ranked = np.argsort(-sims)  # descending similarity
 
         # GT index within pool is 0
-        gtRank = int(np.nonzero(ranked == 0)[0][0]) + 1  # 1-indexed rank
+        gt_rank = int(np.nonzero(ranked == 0)[0][0]) + 1  # 1-indexed rank
 
-        if gtRank <= 1:
-            top1Hits += 1
-        if gtRank <= 2:
-            top2Hits += 1
-        if gtRank <= 3:
-            top3Hits += 1
+        if gt_rank <= 1:
+            top1_hits += 1
+        if gt_rank <= 2:
+            top2_hits += 1
+        if gt_rank <= 3:
+            top3_hits += 1
 
-    return top1Hits / N, top2Hits / N, top3Hits / N
+    return top1_hits / N, top2_hits / N, top3_hits / N
 
 #  Diversity and Multimodality
 
-def computeDiversity(feats: np.ndarray, nPairs: int = 300, seed: int = 42) -> float:
+def compute_diversity(feats: np.ndarray, n_pairs: int = 300, seed: int = 42) -> float:
     """Average pairwise L2 distance between motion features (random sample of pairs).
 
     T2M paper 5: diversity = average over 300 random pairs.
@@ -355,13 +355,13 @@ def computeDiversity(feats: np.ndarray, nPairs: int = 300, seed: int = 42) -> fl
     N = len(feats)
     if N < 2:
         return 0.0
-    pairs = rng.choice(N, size=(min(nPairs, N * (N - 1) // 2), 2), replace=False)
+    pairs = rng.choice(N, size=(min(n_pairs, N * (N - 1) // 2), 2), replace=False)
     dists = [float(np.linalg.norm(feats[a] - feats[b])) for a, b in pairs]
     return float(np.mean(dists))
 
-def computeMultimodality(
-    promptToFeats: dict[str, list[np.ndarray]],
-    nPairs: int = 10,
+def compute_multimodality(
+    prompt_to_feats: dict[str, list[np.ndarray]],
+    n_pairs: int = 10,
     seed: int = 42,
 ) -> float:
     """Average L2 distance between feature pairs generated from the same prompt.
@@ -372,39 +372,39 @@ def computeMultimodality(
     T2M paper 5: "sample 10 pairs of motions for 30 unique prompts".
     """
     rng = np.random.default_rng(seed=seed)
-    perPromptDists = []
-    for text, feat_list in promptToFeats.items():
+    per_prompt_dists = []
+    for text, feat_list in prompt_to_feats.items():
         if len(feat_list) < 2:
             continue
-        for _ in range(nPairs):
+        for _ in range(n_pairs):
             a, b = rng.choice(len(feat_list), size=2, replace=False)
-            perPromptDists.append(float(np.linalg.norm(feat_list[a] - feat_list[b])))
-    if not perPromptDists:
+            per_prompt_dists.append(float(np.linalg.norm(feat_list[a] - feat_list[b])))
+    if not per_prompt_dists:
         log.warning(
             "[Multimodality] No prompt has multiple generations - returning 0.0. "
             "Use --multi-gen N>1 to generate N motions per prompt."
         )
         return 0.0
-    return float(np.mean(perPromptDists))
+    return float(np.mean(per_prompt_dists))
 
 #  Data loading
 
-def loadTestSamples(
-    dataDir: str,
+def load_test_samples(
+    data_dir: str,
     split: str = "test",
-    maxSamples: int | None = None,
+    max_samples: int | None = None,
 ) -> list[dict]:
     """Load (text, motion) pairs from HumanML3D test split.
 
     Returns list of dicts with keys: 'text', 'motion' (T, 168), 'clip_id'.
     """
 
-    log.info("[Eval] loading HumanML3D %s split from %s ...", split, dataDir)
+    log.info("[Eval] loading HumanML3D %s split from %s ...", split, data_dir)
     try:
         ds = HumanML3DMotionDataset(
-            dataDir=dataDir,
+            data_dir=data_dir,
             split=split,
-            maxMotionLength=200,
+            max_motion_length=200,
             preload=True,
             augment=False,
         )
@@ -414,19 +414,19 @@ def loadTestSamples(
 
     samples = []
     indices = list(range(len(ds)))
-    if maxSamples:
+    if max_samples:
         rng = random.Random(42)
         rng.shuffle(indices)
-        indices = indices[:maxSamples]
+        indices = indices[:max_samples]
 
     for i in indices:
         item = ds.samples[i]
-        motionKey = item["clip_id"]
+        motion_key = item["clip_id"]
         if ds.cache is not None:
-            motion = ds.cache[motionKey].copy()
+            motion = ds.cache[motion_key].copy()
         else:
-            dsItem = ds[i]
-            motion = dsItem["motion"][: dsItem["length"]].numpy()
+            ds_item = ds[i]
+            motion = ds_item["motion"][: ds_item["length"]].numpy()
         samples.append(
             {
                 "text": item["text"],
@@ -440,36 +440,36 @@ def loadTestSamples(
 
 #  Generator
 
-def loadFrozenTokenizer(
+def load_frozen_tokenizer(
     cfg: TrainingConfig, device: str
 ) -> MotionRVQTokenizer:
     """Load the same RVQ tokenizer the SSM was trained against, in eval mode."""
 
-    path = cfg.rvqCheckpointPath
+    path = cfg.rvq_checkpoint_path
     if not Path(path).exists():
         raise FileNotFoundError(
             f"[Eval] RVQ tokenizer not found at {path!r}. "
             "Train it first with scripts/training/train_rvq_tokenizer.py."
         )
     tokenizer = MotionRVQTokenizer(
-        motionDim=cfg.motionDim,
-        latentDim=cfg.rvqLatentDim,
-        nCodebooks=cfg.rvqNCodebooks,
-        codebookSize=cfg.rvqCodebookSize,
-        downT=cfg.rvqDownT,
+        motion_dim=cfg.motion_dim,
+        latent_dim=cfg.rvq_latent_dim,
+        n_codebooks=cfg.rvq_n_codebooks,
+        codebook_size=cfg.rvq_codebook_size,
+        down_t=cfg.rvq_down_t,
     ).to(device)
-    rvqCk = torch.load(path, map_location=device, weights_only=False)
-    tokenizer.load_state_dict(rvqCk["model_state_dict"])
+    rvq_ck = torch.load(path, map_location=device, weights_only=False)
+    tokenizer.load_state_dict(rvq_ck["model_state_dict"])
     tokenizer.eval()
     log.info("[Eval] frozen RVQ tokenizer loaded from %s", path)
     return tokenizer
 
-def generateMotions(
+def generate_motions(
     checkpoint: str,
     samples: list[dict],
     device: str,
-    useSBERT: bool = False,
-    multiGen: int = 1,
+    use_sbert: bool = False,
+    multi_gen: int = 1,
 ) -> tuple[list[EvalSample], MotionStats | None]:
     """Generate motions for all test samples using a trained checkpoint.
 
@@ -477,42 +477,42 @@ def generateMotions(
         checkpoint: Path to .pt checkpoint (TextToMotionSSM format).
         samples:    list of {'text', 'motion', 'clip_id'} dicts.
         device:     Torch device string.
-        useSBERT:   Use SBERT encoder (must match training config).
-        multiGen:   Number of generations per prompt (for multimodality).
+        use_sbert:   Use SBERT encoder (must match training config).
+        multi_gen:   Number of generations per prompt (for multimodality).
 
     Returns:
-        (evalSamples, motionStats) where evalSamples is one EvalSample per
-        (input * multiGen) and motionStats is the train-time normalisation
-        the model was trained against (None if missing). Both gtMotion and
-        genMotion are returned in NORMALISED space so FID is consistent.
+        (eval_samples, motion_stats) where eval_samples is one EvalSample per
+        (input * multi_gen) and motion_stats is the train-time normalisation
+        the model was trained against (None if missing). Both gt_motion and
+        gen_motion are returned in NORMALISED space so FID is consistent.
     """
 
     log.info("[Eval] loading generator checkpoint: %s", checkpoint)
     ck = torch.load(checkpoint, map_location=device, weights_only=False)
     cfg: TrainingConfig = ck.get("config", TrainingConfig())
     # Always respect the CLI override for encoder type
-    cfg.useSBERT = useSBERT
+    cfg.use_sbert = use_sbert
     cfg.device = device
 
     # Restore vocab from checkpoint (if SBERT not used)
-    if not useSBERT and "vocab" in ck:
-        cfg.vocabSize = len(ck["vocab"])
+    if not use_sbert and "vocab" in ck:
+        cfg.vocab_size = len(ck["vocab"])
 
     model = TextToMotionSSM(cfg).to(device)
 
     # Load full model weights
-    stateKey = "model_state_dict" if "model_state_dict" in ck else "motion_ssm_state_dict"
-    modelSd = model.state_dict()
+    state_key = "model_state_dict" if "model_state_dict" in ck else "motion_ssm_state_dict"
+    model_sd = model.state_dict()
     compat = {
-        k: v for k, v in ck[stateKey].items() if k in modelSd and v.shape == modelSd[k].shape
+        k: v for k, v in ck[state_key].items() if k in model_sd and v.shape == model_sd[k].shape
     }
     model.load_state_dict(compat, strict=False)
-    log.info("[Eval] loaded %d/%d model weights", len(compat), len(ck[stateKey]))
+    log.info("[Eval] loaded %d/%d model weights", len(compat), len(ck[state_key]))
     model.eval()
 
-    tokenizer = loadFrozenTokenizer(cfg, device)
-    motionStats: MotionStats | None = ck.get("motion_stats")
-    if motionStats is None:
+    tokenizer = load_frozen_tokenizer(cfg, device)
+    motion_stats: MotionStats | None = ck.get("motion_stats")
+    if motion_stats is None:
         log.warning(
             "[Eval] checkpoint has no 'motion_stats' - cannot align GT and generated "
             "scales. FID may be dominated by normalisation offset, not motion quality."
@@ -521,41 +521,41 @@ def generateMotions(
     # Restore vocab for tokenization
     vocab = ck.get("vocab", None)
 
-    evalSamples: list[EvalSample] = []
+    eval_samples: list[EvalSample] = []
     t0 = time.time()
 
     with torch.no_grad():
         for idx, s in enumerate(samples):
             text = s["text"]
-            gtMotion = s["motion"]  # un-normalised (T, 168)
-            numFrames = min(gtMotion.shape[0], cfg.maxMotionLength)
-            gtNorm = (
-                normalize(gtMotion[:numFrames], motionStats)
-                if motionStats is not None
-                else gtMotion[:numFrames]
+            gt_motion = s["motion"]  # un-normalised (T, 168)
+            num_frames = min(gt_motion.shape[0], cfg.max_motion_length)
+            gt_norm = (
+                normalize(gt_motion[:num_frames], motion_stats)
+                if motion_stats is not None
+                else gt_motion[:num_frames]
             )
 
-            for gen in range(multiGen):
+            for gen in range(multi_gen):
                 # Encode text
-                if useSBERT:
+                if use_sbert:
                     inputs = [text]
                 else:
 
                     vocab = vocab or {}
-                    ids = tok(text, vocab, maxLen=cfg.maxTextLength)
+                    ids = tok(text, vocab, max_len=cfg.max_text_length)
                     inputs = torch.tensor([ids], dtype=torch.long, device=device)
 
-                logits, _ = model(inputs, numFrames)  # (1, T', K, V)
-                indices = sampleIndices(logits)  # (1, T', K) — argmax for deterministic eval
+                logits, _ = model(inputs, num_frames)  # (1, T', K, V)
+                indices = sample_indices(logits)  # (1, T', K) — argmax for deterministic eval
                 motion = tokenizer.decode(indices)  # (1, T, 168) in normalised space
-                genMotion = motion[0, :numFrames].cpu().numpy()
+                gen_motion = motion[0, :num_frames].cpu().numpy()
 
-                evalSamples.append(
+                eval_samples.append(
                     EvalSample(
                         text=text,
-                        gtMotion=gtNorm,
-                        genMotion=genMotion,
-                        clipId=s["clip_id"],
+                        gt_motion=gt_norm,
+                        gen_motion=gen_motion,
+                        clip_id=s["clip_id"],
                     )
                 )
 
@@ -563,98 +563,98 @@ def generateMotions(
                 elapsed = time.time() - t0
                 log.info("[Eval] generated %d/%d (%.1fs)", idx + 1, len(samples), elapsed)
 
-    log.info("[Eval] generation complete: %d samples in %.1fs", len(evalSamples), time.time() - t0)
-    return evalSamples, motionStats
+    log.info("[Eval] generation complete: %d samples in %.1fs", len(eval_samples), time.time() - t0)
+    return eval_samples, motion_stats
 
 #  Main computation
 
-def runEvaluation(
+def run_evaluation(
     checkpoint: str,
-    dataDir: str,
+    data_dir: str,
     split: str = "test",
-    maxSamples: int | None = None,
+    max_samples: int | None = None,
     device: str = "cpu",
-    useSBERT: bool = False,
-    multiGen: int = 1,
-    encoderWeights: str | None = None,
+    use_sbert: bool = False,
+    multi_gen: int = 1,
+    encoder_weights: str | None = None,
     output: str = "results/fid_report.json",
-    refCheckpoint: str | None = None,
+    ref_checkpoint: str | None = None,
 ) -> EvalResults:
     """Full evaluation pipeline: generate -> encode -> FID, R-Prec, Diversity."""
 
     # 1. Load test data
-    samples = loadTestSamples(dataDir, split=split, maxSamples=maxSamples)
+    samples = load_test_samples(data_dir, split=split, max_samples=max_samples)
 
     # 2. Generate motions
-    evalSamples, _motionStats = generateMotions(
-        checkpoint, samples, device, useSBERT, multiGen,
+    eval_samples, _motionStats = generate_motions(
+        checkpoint, samples, device, use_sbert, multi_gen,
     )
 
     # 3. Load motion encoder
-    enc = loadEncoder(inputDim=MOTION_DIM, weightsPath=encoderWeights, device=device)
+    enc = load_encoder(input_dim=MOTION_DIM, weights_path=encoder_weights, device=device)
     pretrained = getattr(enc, "_loaded_pretrained", False)
 
     # 3b. Load T2M text encoder from the same finest.tar for valid R-Precision
 
-    txtEnc = loadTextEncoder(weightsPath=encoderWeights, device=device)
+    txt_enc = load_text_encoder(weights_path=encoder_weights, device=device)
 
     # 4. Extract features for generated and real motions
-    log.info("[Eval] extracting features for %d generated motions ...", len(evalSamples))
-    genFeats = extractFeatures(enc, [s.genMotion for s in evalSamples], device=device)
-    realFeats = extractFeatures(enc, [s.gtMotion for s in evalSamples], device=device)
+    log.info("[Eval] extracting features for %d generated motions ...", len(eval_samples))
+    gen_feats = extract_features(enc, [s.gen_motion for s in eval_samples], device=device)
+    real_feats = extract_features(enc, [s.gt_motion for s in eval_samples], device=device)
 
     # 5. FID
-    fid = computeFID(genFeats, realFeats)
+    fid = compute_fid(gen_feats, real_feats)
     log.info("[Eval] FID = %.4f", fid)
 
     # 6. R-Precision (one per prompt, first gen only)
     # Use unique samples (first generation per clip)
     seen: set[str] = set()
-    uniqueSamples: list[EvalSample] = []
-    for s in evalSamples:
-        if s.clipId not in seen:
-            seen.add(s.clipId)
-            uniqueSamples.append(s)
+    unique_samples: list[EvalSample] = []
+    for s in eval_samples:
+        if s.clip_id not in seen:
+            seen.add(s.clip_id)
+            unique_samples.append(s)
 
-    top1, top2, top3 = computePrecisionR(
-        uniqueSamples,
+    top1, top2, top3 = compute_precision_r(
+        unique_samples,
         enc,
         device=device,
-        textEncoder=txtEnc,
+        text_encoder=txt_enc,
     )
     log.info("[Eval] R-Precision Top-1=%.4f Top-2=%.4f Top-3=%.4f", top1, top2, top3)
 
     # 7. Diversity (all generated motions)
-    diversity = computeDiversity(genFeats)
+    diversity = compute_diversity(gen_feats)
     log.info("[Eval] Diversity = %.4f", diversity)
 
     # 8. Multimodality (multiple gens per prompt)
-    promptToFeats: dict[str, list[np.ndarray]] = {}
-    for s, f in zip(evalSamples, genFeats):
-        promptToFeats.setdefault(s.text, []).append(f)
-    multimodality = computeMultimodality(promptToFeats)
+    prompt_to_feats: dict[str, list[np.ndarray]] = {}
+    for s, f in zip(eval_samples, gen_feats):
+        prompt_to_feats.setdefault(s.text, []).append(f)
+    multimodality = compute_multimodality(prompt_to_feats)
     log.info("[Eval] Multimodality = %.4f", multimodality)
 
     results = EvalResults(
-        nSamples=len(uniqueSamples),
+        n_samples=len(unique_samples),
         fid=fid,
-        rPrecTop1=top1,
-        rPrecTop2=top2,
-        rPrecTop3=top3,
+        r_prec_top1=top1,
+        r_prec_top2=top2,
+        r_prec_top3=top3,
         diversity=diversity,
         multimodality=multimodality,
-        usingPretrainedEncoder=pretrained,
+        using_pretrained_encoder=pretrained,
     )
 
     # 9. Optional reference comparison
-    report = {"generated": results.toDict()}
-    if refCheckpoint and Path(refCheckpoint).exists():
-        log.info("[Eval] evaluating reference checkpoint: %s", refCheckpoint)
-        refEval, _ = generateMotions(refCheckpoint, samples, device, useSBERT, multiGen=1)
-        refFeats = extractFeatures(enc, [s.genMotion for s in refEval], device=device)
-        refFid = computeFID(refFeats, realFeats)
-        log.info("[Eval] Reference FID = %.4f", refFid)
-        report["reference"] = {"fid": refFid, "checkpoint": refCheckpoint}
+    report = {"generated": results.to_dict()}
+    if ref_checkpoint and Path(ref_checkpoint).exists():
+        log.info("[Eval] evaluating reference checkpoint: %s", ref_checkpoint)
+        ref_eval, _ = generate_motions(ref_checkpoint, samples, device, use_sbert, multi_gen=1)
+        ref_feats = extract_features(enc, [s.gen_motion for s in ref_eval], device=device)
+        ref_fid = compute_fid(ref_feats, real_feats)
+        log.info("[Eval] Reference FID = %.4f", ref_fid)
+        report["reference"] = {"fid": ref_fid, "checkpoint": ref_checkpoint}
 
     # 10. Save report
     Path(output).parent.mkdir(parents=True, exist_ok=True)
@@ -682,7 +682,7 @@ def main() -> None:
         "--checkpoint", required=True, help="Path to trained TextToMotionSSM .pt checkpoint"
     )
     p.add_argument("--data-dir", default="data/humanml3d",
-                   help="HumanML3D data directory", dest="dataDir")
+                   help="HumanML3D data directory", dest="data_dir")
     p.add_argument(
         "--split",
         default="test",
@@ -694,39 +694,39 @@ def main() -> None:
         type=int,
         default=None,
         help="Limit evaluation to N random samples (default: all)",
-    dest="maxSamples")
+    dest="max_samples")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument(
         "--use-sbert", action="store_true", help="Use SBERT encoder (must match training config)"
-    , dest="useSBERT")
+    , dest="use_sbert")
     p.add_argument(
         "--multi-gen",
         type=int,
         default=1,
         help="Number of generations per prompt (used for multimodality)",
-    dest="multiGen")
+    dest="multi_gen")
     p.add_argument(
         "--encoder-weights", default=None, help="Path to T2M motion encoder .pt weights (optional)"
-    , dest="encoderWeights")
+    , dest="encoder_weights")
     p.add_argument("--ref-checkpoint", default=None,
                    help="Baseline checkpoint to compare against",
-                   dest="refCheckpoint")
+                   dest="ref_checkpoint")
     p.add_argument("--output", default="results/fid_report.json", help="Output JSON path")
     args = p.parse_args()
 
-    results = runEvaluation(
+    results = run_evaluation(
         checkpoint=args.checkpoint,
-        dataDir=args.dataDir,
+        data_dir=args.data_dir,
         split=args.split,
-        maxSamples=args.maxSamples,
+        max_samples=args.max_samples,
         device=args.device,
-        useSBERT=args.useSBERT,
-        multiGen=args.multiGen,
-        encoderWeights=args.encoderWeights,
+        use_sbert=args.use_sbert,
+        multi_gen=args.multi_gen,
+        encoder_weights=args.encoder_weights,
         output=args.output,
-        refCheckpoint=args.refCheckpoint,
+        ref_checkpoint=args.ref_checkpoint,
     )
-    results.printTable()
+    results.print_table()
 
 if __name__ == "__main__":
     main()

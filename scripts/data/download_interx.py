@@ -44,10 +44,10 @@ EXPECTED_SIZES: dict[str, int] = {
 }
 
 
-def downloadFolderRobust(
+def download_folder_robust(
     dest: str,
-    maxRetries: int = 3,
-    retryDelay: float = 10.0,
+    max_retries: int = 3,
+    retry_delay: float = 10.0,
 ) -> tuple[list[str], list[str]]:
     """Download all files from the Inter-X Google Drive folder.
 
@@ -59,13 +59,13 @@ def downloadFolderRobust(
     os.makedirs(dest, exist_ok=True)
     print(f"Downloading Inter-X dataset to {dest}/")
     print(f"Source: {FOLDER_URL}")
-    print(f"Retries per file: {maxRetries}")
-    print(f"Retry delay: {retryDelay}s (x attempt)")
+    print(f"Retries per file: {max_retries}")
+    print(f"Retry delay: {retry_delay}s (x attempt)")
     print()
 
     # Use gdown to enumerate and download folder contents
-    for attempt in range(1, maxRetries + 1):
-        print(f"Download attempt {attempt}/{maxRetries}...")
+    for attempt in range(1, max_retries + 1):
+        print(f"Download attempt {attempt}/{max_retries}...")
         try:
             gdown.download_folder(
                 url=FOLDER_URL,
@@ -77,8 +77,8 @@ def downloadFolderRobust(
             break
         except Exception as e:
             print(f"Attempt {attempt} error: {e}")
-            if attempt < maxRetries:
-                wait = retryDelay * attempt
+            if attempt < max_retries:
+                wait = retry_delay * attempt
                 print(f"  Waiting {wait:.0f}s before retry...")
                 time.sleep(wait)
             else:
@@ -118,30 +118,30 @@ def downloadFolderRobust(
     return succeeded, failed
 
 
-def extractZips(dest: str) -> None:
+def extract_zips(dest: str) -> None:
     """Extract any .zip files in the destination folder."""
     for name in sorted(os.listdir(dest)):
         if not name.endswith(".zip"):
             continue
-        zipPath = os.path.join(dest, name)
-        extractDir = os.path.join(dest, name[:-4])
+        zip_path = os.path.join(dest, name)
+        extract_dir = os.path.join(dest, name[:-4])
 
-        if os.path.isdir(extractDir) and os.listdir(extractDir):
-            print(f"  {name} already extracted -> {extractDir}/")
+        if os.path.isdir(extract_dir) and os.listdir(extract_dir):
+            print(f"  {name} already extracted -> {extract_dir}/")
             continue
 
         print(f"  Extracting {name}...")
         try:
-            with zipfile.ZipFile(zipPath, "r") as zf:
+            with zipfile.ZipFile(zip_path, "r") as zf:
                 # Validate zip integrity first
                 bad = zf.testzip()
                 if bad is not None:
                     print(f"  X Corrupt zip entry: {bad}")
-                    print(f"    Delete {zipPath} and re-download.")
+                    print(f"    Delete {zip_path} and re-download.")
                     continue
-                zf.extractall(extractDir)
-            nEntries = sum(1 for _ in os.scandir(extractDir))
-            print(f"  OK Extracted {nEntries} entries -> {extractDir}/")
+                zf.extractall(extract_dir)
+            n_entries = sum(1 for _ in os.scandir(extract_dir))
+            print(f"  OK Extracted {n_entries} entries -> {extract_dir}/")
         except zipfile.BadZipFile:
             print(f"  X {name} is corrupt (BadZipFile). Delete and re-download.")
         except Exception as e:
@@ -154,24 +154,24 @@ def report(dest: str) -> None:
     print(f"Inter-X dataset in {dest}/")
     print(f"{'='*60}")
 
-    totalSize = 0
+    total_size = 0
     for name in sorted(os.listdir(dest)):
         full = os.path.join(dest, name)
         if os.path.isfile(full):
             sz = os.path.getsize(full)
-            totalSize += sz
+            total_size += sz
             print(f"  FILE  {name}: {sz / 1024 / 1024:.1f} MB")
         else:
             n = sum(1 for _ in os.scandir(full) if True)
-            dirSz = sum(
+            dir_sz = sum(
                 os.path.getsize(os.path.join(dp, f))
                 for dp, _, fns in os.walk(full)
                 for f in fns
             )
-            totalSize += dirSz
-            print(f"  DIR   {name}/ ({n} entries, {dirSz / 1024 / 1024:.1f} MB)")
+            total_size += dir_sz
+            print(f"  DIR   {name}/ ({n} entries, {dir_sz / 1024 / 1024:.1f} MB)")
 
-    print(f"\n  Total: {totalSize / 1024 / 1024 / 1024:.2f} GB")
+    print(f"\n  Total: {total_size / 1024 / 1024 / 1024:.2f} GB")
 
 
 def main() -> None:
@@ -189,7 +189,7 @@ def main() -> None:
     parser.add_argument(
         "--retry-delay", type=float, default=10.0,
         help="Base retry delay in seconds (default: 10, multiplied by attempt)",
-    dest="retryDelay")
+    dest="retry_delay")
     parser.add_argument(
         "--no-extract", action="store_true",
         help="Skip zip extraction after download",
@@ -198,15 +198,15 @@ def main() -> None:
 
     t0 = time.time()
 
-    succeeded, failed = downloadFolderRobust(
+    succeeded, failed = download_folder_robust(
         args.dest,
-        maxRetries=args.retries,
-        retryDelay=args.retry_delay,
+        max_retries=args.retries,
+        retry_delay=args.retry_delay,
     )
 
     if not args.no_extract:
         print("\nExtracting zip files...")
-        extractZips(args.dest)
+        extract_zips(args.dest)
 
     report(args.dest)
 

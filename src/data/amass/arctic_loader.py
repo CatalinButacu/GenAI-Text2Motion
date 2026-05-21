@@ -9,17 +9,17 @@ import numpy as np
 
 from src.shared.constants import MOTION_FPS
 
-from .smplx_pack import SMPLXSample, packSmplxPose
+from .smplx_pack import SMPLXSample, pack_smplx_pose
 
 log = logging.getLogger(__name__)
 
 
 class ARCTICLoader:
-    def __init__(self, dataDir: str = "data/ARCTIC/unpack"):
-        self.dataDir = Path(dataDir)
-        self.raw_seqs = self.dataDir / "raw_seqs"
+    def __init__(self, data_dir: str = "data/ARCTIC/unpack"):
+        self.data_dir = Path(data_dir)
+        self.raw_seqs = self.data_dir / "raw_seqs"
 
-    def discoverSequences(self) -> list[tuple[str, str, str]]:
+    def discover_sequences(self) -> list[tuple[str, str, str]]:
         seqs = []
 
         if not self.raw_seqs.exists():
@@ -41,24 +41,24 @@ class ARCTICLoader:
 
         return seqs
 
-    def loadSequence(self, subject: str, seqName: str) -> SMPLXSample | None:
-        base = self.raw_seqs / subject / seqName
-        smplxPath = Path(f"{base}.smplx.npy")
+    def load_sequence(self, subject: str, seq_name: str) -> SMPLXSample | None:
+        base = self.raw_seqs / subject / seq_name
+        smplx_path = Path(f"{base}.smplx.npy")
 
-        if not smplxPath.exists():
+        if not smplx_path.exists():
             return None
 
         try:
-            body = np.load(smplxPath, allow_pickle=True).item()
+            body = np.load(smplx_path, allow_pickle=True).item()
         except (OSError, ValueError, zipfile.BadZipFile) as e:
-            log.warning("Failed to load %s: %s", smplxPath, e)
+            log.warning("Failed to load %s: %s", smplx_path, e)
 
             return None
 
         T = body["body_pose"].shape[0]
         lhand = body["left_hand_pose"].astype(np.float32)
         rhand = body["right_hand_pose"].astype(np.float32)
-        motion = packSmplxPose(
+        motion = pack_smplx_pose(
             body["global_orient"].astype(np.float32),
             body["transl"].astype(np.float32),
             body["body_pose"].astype(np.float32),
@@ -69,34 +69,36 @@ class ARCTICLoader:
                 axis=1,
             ),
         )
-        objPath = Path(f"{base}.object.npy")
-        objMotion = None
+        obj_path = Path(f"{base}.object.npy")
+        obj_motion = None
 
-        if objPath.exists():
-            objData = np.load(objPath, allow_pickle=True)
-            objMotion = (
-                (objData.item() if objData.dtype == object else objData).astype(np.float32)
-                if isinstance(objData, np.ndarray)
+        if obj_path.exists():
+            obj_data = np.load(obj_path, allow_pickle=True)
+            obj_motion = (
+                (obj_data.item() if obj_data.dtype == object else obj_data).astype(np.float32)
+                if isinstance(obj_data, np.ndarray)
                 else None
             )
-        objName = seqName.split("_")[0] if "_" in seqName else seqName
+        obj_name = seq_name.split("_")[0] if "_" in seq_name else seq_name
 
         return SMPLXSample(
-            sampleId=f"arctic/{subject}/{seqName}",
+            sample_id=f"arctic/{subject}/{seq_name}",
             motion=motion, betas=np.zeros(16, dtype=np.float32),
             fps=30.0, duration=T / 30.0,
-            text=f"person interacts with {objName}: {seqName.replace('_', ' ')}",
-            source="arctic", objectMotion=objMotion,
+            text=f"person interacts with {obj_name}: {seq_name.replace('_', ' ')}",
+            source="arctic", object_motion=obj_motion,
         )
 
-    def loadDataset(self, maxSamples: int | None = None, minFrames: int = 30) -> list[SMPLXSample]:
-        seqs = self.discoverSequences()
+    def load_dataset(
+        self, max_samples: int | None = None, min_frames: int = 30,
+    ) -> list[SMPLXSample]:
+        seqs = self.discover_sequences()
 
-        if maxSamples:
-            seqs = seqs[:maxSamples]
+        if max_samples:
+            seqs = seqs[:max_samples]
         samples = [
             s for subj, sn, _ in seqs
-            if (s := self.loadSequence(subj, sn)) and s.motion.shape[0] >= minFrames
+            if (s := self.load_sequence(subj, sn)) and s.motion.shape[0] >= min_frames
         ]
         log.info("ARCTICLoader: loaded %d / %d sequences", len(samples), len(seqs))
 

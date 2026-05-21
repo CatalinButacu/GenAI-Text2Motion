@@ -27,7 +27,7 @@ def _mock_planned() -> PlannedScene:
 
 
 def _mock_clips() -> dict[str, MotionClip]:
-    return {"person": MotionClip(action="walk", smplxParams=np.zeros((120, 168)))}
+    return {"person": MotionClip(action="walk", smplx_params=np.zeros((120, 168)))}
 
 
 class TestPipelineStageOrder(unittest.TestCase):
@@ -37,30 +37,30 @@ class TestPipelineStageOrder(unittest.TestCase):
     @patch("src.pipeline.motion")
     @patch("src.pipeline.planner")
     @patch("src.pipeline.understanding")
-    def test_stage_order(self, mockM1, mockM2, mockM4, mockRender):
+    def test_stage_order(self, mock_m1, mock_m2, mock_m4, mock_render):
         parsed = _mock_parsed()
         planned = _mock_planned()
         clips = _mock_clips()
 
-        mockM1.invoke.return_value = parsed
-        mockM2.invoke.return_value = planned
-        mockM4.invoke.return_value = clips
-        mockRender.invoke.return_value = "outputs/videos/output.mp4"
+        mock_m1.invoke.return_value = parsed
+        mock_m2.invoke.return_value = planned
+        mock_m4.invoke.return_value = clips
+        mock_render.invoke.return_value = "outputs/videos/output.mp4"
 
         pipeline = Pipeline(PipelineConfig())
-        result = pipeline.run("a person walks", outputName="output")
+        result = pipeline.run("a person walks", output_name="output")
 
         # Each stage was called exactly once
-        mockM1.invoke.assert_called_once()
-        mockM2.invoke.assert_called_once()
-        mockM4.invoke.assert_called_once()
-        mockRender.invoke.assert_called_once()
+        mock_m1.invoke.assert_called_once()
+        mock_m2.invoke.assert_called_once()
+        mock_m4.invoke.assert_called_once()
+        mock_render.invoke.assert_called_once()
 
         # M2 receives M1 output
-        self.assertIs(mockM2.invoke.call_args[0][0], parsed)
+        self.assertIs(mock_m2.invoke.call_args[0][0], parsed)
 
         # M4 receives M2 planned scene (not raw ParsedScene)
-        self.assertIs(mockM4.invoke.call_args[0][0], planned)
+        self.assertIs(mock_m4.invoke.call_args[0][0], planned)
 
         # Result dict contains expected keys
         self.assertEqual(result["parsed_scene"], parsed)
@@ -71,21 +71,21 @@ class TestPipelineStageOrder(unittest.TestCase):
     @patch("src.pipeline.motion")
     @patch("src.pipeline.planner")
     @patch("src.pipeline.understanding")
-    def test_empty_prompt_returns_error(self, mockM1, mockM2, mockM4, mockRender):
+    def test_empty_prompt_returns_error(self, mock_m1, mock_m2, mock_m4, mock_render):
         pipeline = Pipeline(PipelineConfig())
         result = pipeline.run("")
         self.assertIn("error", result)
-        mockM1.invoke.assert_not_called()
+        mock_m1.invoke.assert_not_called()
 
     @patch("src.pipeline.render")
     @patch("src.pipeline.motion")
     @patch("src.pipeline.planner")
     @patch("src.pipeline.understanding")
-    def test_result_contains_elapsed(self, mockM1, mockM2, mockM4, mockRender):
-        mockM1.invoke.return_value = _mock_parsed()
-        mockM2.invoke.return_value = _mock_planned()
-        mockM4.invoke.return_value = _mock_clips()
-        mockRender.invoke.return_value = "out.mp4"
+    def test_result_contains_elapsed(self, mock_m1, mock_m2, mock_m4, mock_render):
+        mock_m1.invoke.return_value = _mock_parsed()
+        mock_m2.invoke.return_value = _mock_planned()
+        mock_m4.invoke.return_value = _mock_clips()
+        mock_render.invoke.return_value = "out.mp4"
 
         result = Pipeline(PipelineConfig()).run("a person walks")
         self.assertIn("elapsed_seconds", result)
@@ -94,13 +94,13 @@ class TestPipelineStageOrder(unittest.TestCase):
 
 class TestPipelineConfig(unittest.TestCase):
     def test_video_path_format(self):
-        cfg = PipelineConfig(outputDir="outputs")
-        path = cfg.videoPath("my_test")
+        cfg = PipelineConfig(output_dir="outputs")
+        path = cfg.video_path("my_test")
         self.assertIn("my_test.mp4", path)
 
     def test_duration_propagated_to_planner(self):
         cfg = PipelineConfig(duration=8.0)
-        self.assertAlmostEqual(cfg.planner.baseDuration, 8.0)
+        self.assertAlmostEqual(cfg.planner.base_duration, 8.0)
 
 
 if __name__ == "__main__":

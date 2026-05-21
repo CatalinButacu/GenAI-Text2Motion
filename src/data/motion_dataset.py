@@ -6,30 +6,30 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from src.data.augmentation import AugmentationPipeline, mirrorFlip, mirrorFlipText
+from src.data.augmentation import AugmentationPipeline, mirror_flip, mirror_flip_text
 from src.data.motion_normalize import MotionStats, normalize
-from src.shared.tokenizer import buildVocab, tokenize
+from src.shared.tokenizer import build_vocab, tokenize
 
-from .dataset_cache import INGEST_MAX_LENGTH, loadOrBuildCache
+from .dataset_cache import INGEST_MAX_LENGTH, load_or_build_cache
 
 log = logging.getLogger(__name__)
 
 
-def encodeMotionSample(
+def encode_motion_sample(
     s: dict,
-    augPipeline: AugmentationPipeline | None,
-    maxMotionLength: int,
-    maxTextLength: int,
+    aug_pipeline: AugmentationPipeline | None,
+    max_motion_length: int,
+    max_text_length: int,
     vocab: dict[str, int],
     stats: MotionStats | None = None,
     text: str | None = None,
-    transStatsBySource: dict[str, MotionStats] | None = None,
+    trans_stats_by_source: dict[str, MotionStats] | None = None,
 ) -> dict:
     """Encode a single motion sample dict into a model-ready tensor batch.
 
     If ``stats`` is provided, motion is z-score normalised per channel so the
     MSE loss is not dominated by high-variance root translation.
-    If ``transStatsBySource`` is provided, channels 3:6 are normalized using
+    If ``trans_stats_by_source`` is provided, channels 3:6 are normalized using
     the source-specific (mean, std) instead of the shared stats — fixes the
     bimodal AMASS-vs-HumanML3D translation distribution.
     If ``text`` is provided, it overrides ``s['text']`` -- used by datasets
@@ -37,22 +37,22 @@ def encodeMotionSample(
     """
     motion = s["motion"].copy()
 
-    if augPipeline is not None:
-        motion = augPipeline(motion)
+    if aug_pipeline is not None:
+        motion = aug_pipeline(motion)
 
     if stats is not None:
-        srcKey = s.get("source", "amass")
-        transStats = transStatsBySource.get(srcKey) if transStatsBySource else None
-        motion = normalize(motion, stats, transStats=transStats)
-    T = min(motion.shape[0], maxMotionLength)
-    motion = np.pad(motion[:T], ((0, maxMotionLength - T), (0, 0)))
-    mask = np.zeros(maxMotionLength, dtype=np.float32)
+        src_key = s.get("source", "amass")
+        trans_stats = trans_stats_by_source.get(src_key) if trans_stats_by_source else None
+        motion = normalize(motion, stats, trans_stats=trans_stats)
+    T = min(motion.shape[0], max_motion_length)
+    motion = np.pad(motion[:T], ((0, max_motion_length - T), (0, 0)))
+    mask = np.zeros(max_motion_length, dtype=np.float32)
     mask[:T] = 1.0
     text = text if text is not None else s["text"]
-    tokenIds = tokenize(text, vocab, maxLen=maxTextLength)
+    token_ids = tokenize(text, vocab, max_len=max_text_length)
 
     return {
-        "token_ids": torch.tensor(tokenIds, dtype=torch.long),
+        "token_ids": torch.tensor(token_ids, dtype=torch.long),
         "texts": text,
         "motion": torch.tensor(motion, dtype=torch.float32),
         "motion_mask": torch.tensor(mask, dtype=torch.float32),
@@ -63,50 +63,50 @@ def encodeMotionSample(
 class MotionDataset(Dataset):
     def __init__(
         self,
-        dataDir: str = "data/AMASS",
+        data_dir: str = "data/AMASS",
         split: str = "train",
-        maxMotionLength: int = 200,
-        maxTextLength: int = 64,
+        max_motion_length: int = 200,
+        max_text_length: int = 64,
         augment: bool = False,
         vocab: dict[str, int] | None = None,
-        maxSamples: int | None = None,
+        max_samples: int | None = None,
         stats: MotionStats | None = None,
-        mirrorProb: float = 0.5,
+        mirror_prob: float = 0.5,
         seed: int = 42,
-        transStatsBySource: dict[str, MotionStats] | None = None,
+        trans_stats_by_source: dict[str, MotionStats] | None = None,
     ):
-        self.maxMotionLength = maxMotionLength
-        self.maxTextLength = maxTextLength
+        self.max_motion_length = max_motion_length
+        self.max_text_length = max_text_length
         self.aug_pipeline = None
-        self.mirrorProb = mirrorProb if augment and split == "train" else 0.0
+        self.mirror_prob = mirror_prob if augment and split == "train" else 0.0
         self.rng = np.random.default_rng(seed + (0 if split == "train" else 1))
-        self.transStatsBySource = transStatsBySource
+        self.trans_stats_by_source = trans_stats_by_source
 
         if augment:
-            self.aug_pipeline = AugmentationPipeline(maxLength=maxMotionLength)
+            self.aug_pipeline = AugmentationPipeline(max_length=max_motion_length)
 
-        self.samples, cache_stats = loadOrBuildCache(dataDir, INGEST_MAX_LENGTH, maxSamples)
+        self.samples, cache_stats = load_or_build_cache(data_dir, INGEST_MAX_LENGTH, max_samples)
         self.motion_stats = stats if stats is not None else cache_stats
 
-        rngSplit = np.random.default_rng(seed)
-        rngSplit.shuffle(self.samples)  # type: ignore[arg-type]
+        rng_split = np.random.default_rng(seed)
+        rng_split.shuffle(self.samples)  # type: ignore[arg-type]
         n = len(self.samples)
-        tEnd = int(n * 0.8)   # 80 % train
-        vEnd = int(n * 0.9)   # 10 % val, 10 % test
+        t_end = int(n * 0.8)   # 80 % train
+        v_end = int(n * 0.9)   # 10 % val, 10 % test
         if split == "train":
-            self.samples = self.samples[:tEnd]
+            self.samples = self.samples[:t_end]
         elif split == "val":
-            self.samples = self.samples[tEnd:vEnd]
+            self.samples = self.samples[t_end:v_end]
         else:  # test -- held-out, never used for model selection
-            self.samples = self.samples[vEnd:]
+            self.samples = self.samples[v_end:]
 
         if vocab is not None:
             self.vocab = vocab
         else:
-            self.vocab = buildVocab([s["text"] for s in self.samples])
+            self.vocab = build_vocab([s["text"] for s in self.samples])
 
         log.info("[MotionDataset] %s: %d samples, vocab=%d, augment=%s, mirror_p=%.2f",
-                 split, len(self.samples), len(self.vocab), augment, self.mirrorProb)
+                 split, len(self.samples), len(self.vocab), augment, self.mirror_prob)
 
     def __len__(self):
         return len(self.samples)
@@ -114,12 +114,12 @@ class MotionDataset(Dataset):
     def __getitem__(self, idx):
         s = self.samples[idx]
 
-        if self.mirrorProb > 0.0 and self.rng.random() < self.mirrorProb:
-            s = {**s, "motion": mirrorFlip(s["motion"]), "text": mirrorFlipText(s["text"])}
+        if self.mirror_prob > 0.0 and self.rng.random() < self.mirror_prob:
+            s = {**s, "motion": mirror_flip(s["motion"]), "text": mirror_flip_text(s["text"])}
 
-        return encodeMotionSample(
+        return encode_motion_sample(
             s, self.aug_pipeline,
-            self.maxMotionLength, self.maxTextLength, self.vocab,
+            self.max_motion_length, self.max_text_length, self.vocab,
             stats=self.motion_stats,
-            transStatsBySource=self.transStatsBySource,
+            trans_stats_by_source=self.trans_stats_by_source,
         )

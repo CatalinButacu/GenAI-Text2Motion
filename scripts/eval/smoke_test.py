@@ -58,33 +58,33 @@ def run(cmd: list[str], label: str) -> int:
         log.info("[smoke] %s done in %.1fs", label, elapsed)
     return result.returncode
 
-def trainRVQ(args) -> int:
+def train_rvq(args) -> int:
     cmd = [
         sys.executable, "scripts/training/train_rvq_tokenizer.py",
-        "--data-dir", args.dataDir,
+        "--data-dir", args.data_dir,
         "--epochs", str(args.epochs),
-        "--batch-size", str(args.batchSize),
-        "--max-motion-length", str(args.maxMotionLength),
-        "--max-samples", str(args.maxSamples),
-        "--checkpoint-dir", str(Path(args.outDir) / "rvq"),
+        "--batch-size", str(args.batch_size),
+        "--max-motion-length", str(args.max_motion_length),
+        "--max-samples", str(args.max_samples),
+        "--checkpoint-dir", str(Path(args.out_dir) / "rvq"),
         "--device", args.device,
         "--seed", "42",
     ]
     return run(cmd, "RVQ tokenizer")
 
-def trainSSM(args) -> int:
-    rvqPath = str(Path(args.outDir) / "rvq" / "best_model.pt")
-    ssmCkptDir = str(Path(args.outDir) / "ssm")
+def train_ssm(args) -> int:
+    rvq_path = str(Path(args.out_dir) / "rvq" / "best_model.pt")
+    ssm_ckpt_dir = str(Path(args.out_dir) / "ssm")
     cmd = [
         sys.executable, "scripts/training/train_motion_ssm.py",
         "--data-source", "amass",
-        "--data-dir", args.dataDir,
+        "--data-dir", args.data_dir,
         "--epochs", str(args.epochs),
-        "--batch-size", str(args.batchSize),
-        "--max-motion-length", str(args.maxMotionLength),
-        "--max-samples", str(args.maxSamples),
-        "--checkpoint-dir", ssmCkptDir,
-        "--rvq-checkpoint", rvqPath,
+        "--batch-size", str(args.batch_size),
+        "--max-motion-length", str(args.max_motion_length),
+        "--max-samples", str(args.max_samples),
+        "--checkpoint-dir", ssm_ckpt_dir,
+        "--rvq-checkpoint", rvq_path,
         "--device", args.device,
         "--use-sbert",
         "--bidirectional",
@@ -93,19 +93,19 @@ def trainSSM(args) -> int:
     ]
     return run(cmd, "MotionSSM")
 
-def generateSamples(args) -> None:
-    rvqPath = str(Path(args.outDir) / "rvq" / "best_model.pt")
+def generate_samples(args) -> None:
+    rvq_path = str(Path(args.out_dir) / "rvq" / "best_model.pt")
     # Find the best_model.pt inside the run subdirectory
-    ssmBase = Path(args.outDir) / "ssm"
-    candidates = sorted(ssmBase.rglob("best_model.pt"))
+    ssm_base = Path(args.out_dir) / "ssm"
+    candidates = sorted(ssm_base.rglob("best_model.pt"))
     if not candidates:
         log.warning("[smoke] no SSM checkpoint found -- skipping generation")
         return
-    ssmPath = str(candidates[-1])
+    ssm_path = str(candidates[-1])
 
-    log.info("[smoke] loading model: rvq=%s  ssm=%s", rvqPath, ssmPath)
+    log.info("[smoke] loading model: rvq=%s  ssm=%s", rvq_path, ssm_path)
     try:
-        model = SSMMotionModel(ssmPath, rvqPath)
+        model = SSMMotionModel(ssm_path, rvq_path)
     except Exception as e:
         log.error("[smoke] could not load model: %s", e)
         return
@@ -113,68 +113,68 @@ def generateSamples(args) -> None:
     print("\n" + "=" * 60)
     print("  GENERATED MOTION QUALITY (smoke prompts)")
     print("=" * 60)
-    clipsDir = Path(args.outDir) / "clips"
-    clipsDir.mkdir(parents=True, exist_ok=True)
+    clips_dir = Path(args.out_dir) / "clips"
+    clips_dir.mkdir(parents=True, exist_ok=True)
 
     for prompt in SMOKE_PROMPTS:
-        clip = model.generateFromTextTokens(prompt, numFrames=60)
-        m = clip.smplxParams
+        clip = model.generate_from_text_tokens(prompt, num_frames=60)
+        m = clip.smplx_params
         smoothness = float(np.abs(np.diff(m, axis=0)).mean())
         validity = np.isfinite(m).all() and float(np.abs(m[:, 6:69]).max()) < np.pi
         print(f"  [{prompt[:40]:<40}]  "
               f"frames={m.shape[0]}  std={m.std():.3f}  "
               f"smooth={smoothness:.4f}  valid={validity}")
-        np.save(clipsDir / f"{prompt[:30].replace(' ', '_')}.npy", m)
+        np.save(clips_dir / f"{prompt[:30].replace(' ', '_')}.npy", m)
 
     print("=" * 60 + "\n")
-    log.info("[smoke] clips saved to %s", clipsDir)
+    log.info("[smoke] clips saved to %s", clips_dir)
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Local smoke test for the full training pipeline")
-    p.add_argument("--data-dir", default="data/AMASS", dest="dataDir")
+    p.add_argument("--data-dir", default="data/AMASS", dest="data_dir")
     p.add_argument("--max-samples", type=int, default=300,
-                   help="Clips to use (300 is enough to verify the pipeline)", dest="maxSamples")
+                   help="Clips to use (300 is enough to verify the pipeline)", dest="max_samples")
     p.add_argument("--epochs", type=int, default=5,
                    help="Epochs per stage (5 is enough to see loss decreasing)")
-    p.add_argument("--batch-size", type=int, default=16, dest="batchSize")
+    p.add_argument("--batch-size", type=int, default=16, dest="batch_size")
     p.add_argument("--max-motion-length", type=int, default=64,
-                   help="Shorter sequences = faster smoke test", dest="maxMotionLength")
+                   help="Shorter sequences = faster smoke test", dest="max_motion_length")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--out-dir", default="outputs/smoke_test",
-                   help="Where to save checkpoints and generated clips", dest="outDir")
+                   help="Where to save checkpoints and generated clips", dest="out_dir")
     p.add_argument("--skip-ssm", action="store_true",
-                   help="Only train tokenizer (faster sanity check)", dest="skipSsm")
+                   help="Only train tokenizer (faster sanity check)", dest="skip_ssm")
     args = p.parse_args()
 
     log.info("[smoke] starting  device=%s  max_samples=%d  epochs=%d",
-             args.device, args.maxSamples, args.epochs)
-    tTotal = time.time()
+             args.device, args.max_samples, args.epochs)
+    t_total = time.time()
 
     # Stage 1 — RVQ tokenizer
-    rc = trainRVQ(args)
+    rc = train_rvq(args)
     if rc != 0:
         log.error("[smoke] RVQ training failed. Fix the error above then re-run.")
         return 1
 
-    rvqBest = Path(args.outDir) / "rvq" / "best_model.pt"
-    if not rvqBest.exists():
-        log.error("[smoke] RVQ best_model.pt not found at %s", rvqBest)
+    rvq_best = Path(args.out_dir) / "rvq" / "best_model.pt"
+    if not rvq_best.exists():
+        log.error("[smoke] RVQ best_model.pt not found at %s", rvq_best)
         return 1
 
-    if args.skipSsm:
-        log.info("[smoke] --skip-ssm set, stopping after RVQ. Total: %.1fs", time.time() - tTotal)
+    if args.skip_ssm:
+        log.info("[smoke] --skip-ssm set, stopping after RVQ. Total: %.1fs", time.time() - t_total)
         return 0
 
     # Stage 2 — MotionSSM
-    rc = trainSSM(args)
+    rc = train_ssm(args)
     if rc != 0:
         log.error("[smoke] SSM training failed. Fix the error above then re-run.")
         return 1
 
     # Stage 3 — generation quality
-    generateSamples(args)
+    generate_samples(args)
 
-    log.info("[smoke] ALL PASSED in %.1fs", time.time() - tTotal)
+    log.info("[smoke] ALL PASSED in %.1fs", time.time() - t_total)
     log.info("[smoke] Next step: launch full cloud training "
              "with larger --epochs and --max-samples.")
     return 0

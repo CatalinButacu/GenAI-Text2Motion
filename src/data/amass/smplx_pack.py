@@ -7,7 +7,7 @@ import numpy as np
 
 @dataclass
 class SMPLXSample:
-    sampleId: str
+    sample_id: str
     motion: np.ndarray  # (T, 168)
     betas: np.ndarray  # (16,)
     fps: float
@@ -15,21 +15,21 @@ class SMPLXSample:
     gender: str = "neutral"
     text: str = ""
     source: str = "amass"
-    objectMotion: np.ndarray | None = None  # (T, 7) for ARCTIC
+    object_motion: np.ndarray | None = None  # (T, 7) for ARCTIC
 
 
-def packSmplxPose(
-    rootOrient: np.ndarray,
+def pack_smplx_pose(
+    root_orient: np.ndarray,
     trans: np.ndarray,
-    poseBody: np.ndarray,
-    poseHand: np.ndarray,
-    poseJaw: np.ndarray,
-    poseEye: np.ndarray,
+    pose_body: np.ndarray,
+    pose_hand: np.ndarray,
+    pose_jaw: np.ndarray,
+    pose_eye: np.ndarray,
 ) -> np.ndarray:
-    T = rootOrient.shape[0]
-    assert poseHand.shape == (T, 90), f"poseHand: expected ({T},90), got {poseHand.shape}"
+    T = root_orient.shape[0]
+    assert pose_hand.shape == (T, 90), f"pose_hand: expected ({T},90), got {pose_hand.shape}"
     result = np.concatenate(
-        [rootOrient, trans, poseBody, poseHand, poseJaw, poseEye], axis=1,
+        [root_orient, trans, pose_body, pose_hand, pose_jaw, pose_eye], axis=1,
     ).astype(np.float32)
     assert result.shape[1] == 168, f"packed pose: expected 168 dims, got {result.shape[1]}"
 

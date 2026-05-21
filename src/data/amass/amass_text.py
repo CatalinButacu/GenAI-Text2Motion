@@ -5,7 +5,7 @@ import re
 SKIP_ACTIONS = {"male", "female", "female1", "male1", "subj calibration"}
 
 
-def normalizeParent(parts: list[str]) -> str:
+def normalize_parent(parts: list[str]) -> str:
     """Return a cleaned subject-context string from the parent directory, or ''."""
     if len(parts) < 2:
         return ""
@@ -20,8 +20,8 @@ def normalizeParent(parts: list[str]) -> str:
     return parent
 
 
-def textFromFilename(relPath: str) -> str:
-    parts = relPath.replace("\\", "/").split("/")
+def text_from_filename(rel_path: str) -> str:
+    parts = rel_path.replace("\\", "/").split("/")
     fname = parts[-1]
     fname = re.sub(r"_stage[iv]+$", "", fname, flags=re.IGNORECASE)
     fname = re.sub(r"_c3d$", "", fname, flags=re.IGNORECASE)
@@ -35,11 +35,11 @@ def textFromFilename(relPath: str) -> str:
     action = re.sub(r"\s+", " ", action.replace("_", " ").replace("-", " ")).strip().lower()
 
     if not action or re.match(r"^[\d\s]+$", action) or action in SKIP_ACTIONS:
-        parent = normalizeParent(parts)
+        parent = normalize_parent(parts)
 
         return f"person {parent}" if parent and not re.match(r"^[\d\s]*$", parent) else ""
 
-    parent = normalizeParent(parts)
+    parent = normalize_parent(parts)
     context = (
         f"person {parent}: "
         if parent and parent != action and not re.match(r"^(s?\d+|\d+)$", parent)

@@ -31,7 +31,7 @@ class M2Benchmark:
 
         return self.planner.plan(parsed)
 
-    def runAll(self):
+    def run_all(self):
         print("=" * 70)
         print("M2 SCENE PLANNER - BENCHMARK SUITE")
         print("=" * 70)
@@ -41,86 +41,86 @@ class M2Benchmark:
         print("-" * 50)
 
         s = self.plan(A_BALL)
-        hasPos = all(e.position is not None for e in s.entities)
-        self.test("1. Position assigned", hasPos)
+        has_pos = all(e.position is not None for e in s.entities)
+        self.test("1. Position assigned", has_pos)
 
         s = self.plan(A_BALL)
-        ball = [e for e in s.entities if "sphere" in e.objectType]
+        ball = [e for e in s.entities if "sphere" in e.object_type]
         above = bool(ball) and ball[0].position.z >= 0
         self.test("2. Above ground (z>=0)", above)
 
         s = self.plan("A ball and a cube")
-        positions = [str(e.position.toList()) for e in s.entities]
+        positions = [str(e.position.to_list()) for e in s.entities]
         unique = len(set(positions)) == len(positions)
         self.test("3. Unique positions", unique)
 
         s = self.plan("A ball, a cube, and a cylinder")
-        spread = len(s.entities) >= 3 and len({str(e.position.toList()) for e in s.entities}) >= 3
+        spread = len(s.entities) >= 3 and len({str(e.position.to_list()) for e in s.entities}) >= 3
         self.test("4. Three objects spread", spread, f"entities={len(s.entities)}")
 
         s = self.plan("A person kicks a ball")
-        actor = [e for e in s.entities if e.isActor]
-        obj = [e for e in s.entities if not e.isActor]
-        diffPos = bool(actor and obj) and actor[0].position.toList() != obj[0].position.toList()
-        self.test("5. Actor vs object positions", diffPos)
+        actor = [e for e in s.entities if e.is_actor]
+        obj = [e for e in s.entities if not e.is_actor]
+        diff_pos = bool(actor and obj) and actor[0].position.to_list() != obj[0].position.to_list()
+        self.test("5. Actor vs object positions", diff_pos)
 
         s = self.plan("A person stands")
-        person = [e for e in s.entities if e.isActor]
+        person = [e for e in s.entities if e.is_actor]
         tall = bool(person) and person[0].position.z >= -2
         self.test("6. Humanoid reasonable z", tall)
 
         s = self.plan(A_BALL)
-        ball = [e for e in s.entities if "sphere" in e.objectType]
+        ball = [e for e in s.entities if "sphere" in e.object_type]
         close = bool(ball) and abs(ball[0].position.x) < 5 and abs(ball[0].position.y) < 5
         self.test("7. Object in scene bounds", close)
 
         p1 = Position3D(1.0, 2.0, 3.0)
         p2 = Position3D(4.0, 5.0, 6.0)
         p3 = p1 + p2
-        self.test("8. Position3D add", p3.toList() == [5.0, 7.0, 9.0])
+        self.test("8. Position3D add", p3.to_list() == [5.0, 7.0, 9.0])
 
         p = Position3D(1.5, 2.5, 3.5)
-        self.test("9. Position3D toList", p.toList() == [1.5, 2.5, 3.5])
+        self.test("9. Position3D to_list", p.to_list() == [1.5, 2.5, 3.5])
 
         p = Position3D()
-        self.test("10. Position3D default", p.toList() == [0.0, 0.0, 0.0])
+        self.test("10. Position3D default", p.to_list() == [0.0, 0.0, 0.0])
 
         # === PROPERTY PRESERVATION (11-18) ===
         print("\n[11-18] PROPERTY PRESERVATION")
         print("-" * 50)
 
         s = self.plan(A_BALL)
-        ball = [e for e in s.entities if "sphere" in e.objectType]
-        hasMass = bool(ball) and ball[0].mass > 0
-        self.test("11. Mass assigned", hasMass, f"mass={ball[0].mass if ball else 0}")
+        ball = [e for e in s.entities if "sphere" in e.object_type]
+        has_mass = bool(ball) and ball[0].mass > 0
+        self.test("11. Mass assigned", has_mass, f"mass={ball[0].mass if ball else 0}")
 
         s = self.plan("A cube")
-        cube = [e for e in s.entities if "cube" in e.objectType]
-        hasSize = bool(cube) and cube[0].size is not None
-        self.test("12. Size assigned", hasSize)
+        cube = [e for e in s.entities if "cube" in e.object_type]
+        has_size = bool(cube) and cube[0].size is not None
+        self.test("12. Size assigned", has_size)
 
         s = self.plan("A cylinder")
-        hasCyl = any("cylinder" in e.objectType for e in s.entities)
-        self.test("13. Object type preserved", hasCyl)
+        has_cyl = any("cylinder" in e.object_type for e in s.entities)
+        self.test("13. Object type preserved", has_cyl)
 
         s = self.plan("A person walks")
-        hasActor = any(e.isActor for e in s.entities)
-        self.test("14. Actor flag preserved", hasActor)
+        has_actor = any(e.is_actor for e in s.entities)
+        self.test("14. Actor flag preserved", has_actor)
 
         s = self.plan("A ball and another ball")
         names = [e.name for e in s.entities]
-        uniqueNames = len(set(names)) == len(names)
-        self.test("15. Unique names", uniqueNames)
+        unique_names = len(set(names)) == len(names)
+        self.test("15. Unique names", unique_names)
 
         s = self.plan("A cube")
-        cube = [e for e in s.entities if "cube" in e.objectType]
-        hasRot = bool(cube) and cube[0].rotation is not None
-        self.test("16. Rotation assigned", hasRot)
+        cube = [e for e in s.entities if "cube" in e.object_type]
+        has_rot = bool(cube) and cube[0].rotation is not None
+        self.test("16. Rotation assigned", has_rot)
 
         s = self.plan(A_BALL)
         e = s.entities[0]
-        hasAll = hasattr(e, "name") and hasattr(e, "position") and hasattr(e, "mass")
-        self.test("17. PlannedEntity attributes", hasAll)
+        has_all = hasattr(e, "name") and hasattr(e, "position") and hasattr(e, "mass")
+        self.test("17. PlannedEntity attributes", has_all)
 
         s = self.plan(A_BALL)
         self.test("18. Entities list populated", len(s.entities) > 0)
@@ -146,10 +146,10 @@ class M2Benchmark:
         print("-" * 50)
 
         s = self.plan("A person kicks a ball")
-        hasBoth = any(e.isActor for e in s.entities) and any(
-            "sphere" in e.objectType for e in s.entities
+        has_both = any(e.is_actor for e in s.entities) and any(
+            "sphere" in e.object_type for e in s.entities
         )
-        self.test("23. Person + object scene", hasBoth)
+        self.test("23. Person + object scene", has_both)
 
         s = self.plan("A person walks to a ball and kicks it")
         self.test("24. Action sequence scene", len(s.entities) >= 2)
@@ -170,7 +170,7 @@ class M2Benchmark:
         self.test("28. Stress test 5+ entities", len(s.entities) >= 4, f"found={len(s.entities)}")
 
         s = self.plan("A person and another person")
-        actors = [e for e in s.entities if e.isActor]
+        actors = [e for e in s.entities if e.is_actor]
         self.test("29. Multi-actor scene", len(actors) >= 2, f"actors={len(actors)}")
 
         s = self.plan("A person stands still")
@@ -185,5 +185,5 @@ class M2Benchmark:
 
 if __name__ == "__main__":
     benchmark = M2Benchmark()
-    success = benchmark.runAll()
+    success = benchmark.run_all()
     exit(0 if success else 1)

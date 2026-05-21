@@ -26,7 +26,7 @@ SKIP = {
 SYSPATH_RE = re.compile(r"^sys\.path\.(insert|append)\(.*\)\s*\n", re.MULTILINE)
 
 
-def stripFile(path: Path) -> bool:
+def strip_file(path: Path) -> bool:
     """Return True if the file was modified."""
     rel = path.relative_to(ROOT).as_posix()
 
@@ -52,7 +52,7 @@ def main() -> None:
         if any(p in pyFile.parts for p in (".venv", "__pycache__", ".git")):
             continue
 
-        if stripFile(pyFile):
+        if strip_file(pyFile):
             touched.append(pyFile.relative_to(ROOT).as_posix())
 
     print(f"Modified {len(touched)} files:")

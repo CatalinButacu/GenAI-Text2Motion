@@ -16,16 +16,16 @@ class MotionSource(Enum):
 @dataclass(slots=True)
 class MotionClip:
     action: str
-    smplxParams: np.ndarray
+    smplx_params: np.ndarray
     fps: int = MOTION_FPS
     source: MotionSource = MotionSource.SSM
-    rawJoints: "np.ndarray | None" = None  # shape (T, 22, 3) Z-up metres
+    raw_joints: "np.ndarray | None" = None  # shape (T, 22, 3) Z-up metres
     betas: "np.ndarray | None" = None  # SMPL-X shape coefficients (16,)
 
     @property
     def duration(self) -> float:
-        return len(self.smplxParams) / self.fps
+        return len(self.smplx_params) / self.fps
 
     @property
-    def numFrames(self) -> int:
-        return len(self.smplxParams)
+    def num_frames(self) -> int:
+        return len(self.smplx_params)

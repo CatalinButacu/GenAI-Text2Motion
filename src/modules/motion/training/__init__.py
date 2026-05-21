@@ -1,21 +1,21 @@
 from .base_trainer import BaseSSMTrainer
 from .trainer import (
     SSMTrainer,
-    amassFactory,
-    humanml3dFactory,
-    trainAmass,
-    trainHumanml3d,
-    trainUnified,
-    unifiedFactory,
+    amass_factory,
+    humanml3d_factory,
+    train_amass,
+    train_humanml3d,
+    train_unified,
+    unified_factory,
 )
 
 __all__ = [
     "BaseSSMTrainer",
     "SSMTrainer",
-    "amassFactory",
-    "humanml3dFactory",
-    "unifiedFactory",
-    "trainAmass",
-    "trainHumanml3d",
-    "trainUnified",
+    "amass_factory",
+    "humanml3d_factory",
+    "unified_factory",
+    "train_amass",
+    "train_humanml3d",
+    "train_unified",
 ]

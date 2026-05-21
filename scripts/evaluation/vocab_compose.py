@@ -5,7 +5,7 @@ decomposes a compound text prompt (e.g. "walk forward then sit down") into
 a sequence of atomic action labels.
 
 The same CodebookVocab class is what the SSM stage will call at inference:
-    vocab.decomposeText("...")  -> [("walk_forward", 0.81), ("sit_down", 0.74)]
+    vocab.decompose_text("...")  -> [("walk_forward", 0.81), ("sit_down", 0.74)]
 
 Usage:
     python scripts/evaluation/vocab_compose.py --labels <path>/labels.csv
@@ -47,7 +47,7 @@ def main() -> int:
     prompts = [args.text] if args.text else DEMO_PROMPTS
 
     for prompt in prompts:
-        decomposition = vocab.decomposeText(prompt)
+        decomposition = vocab.decompose_text(prompt)
         log.info("[compose] %r", prompt)
 
         for label, score in decomposition:

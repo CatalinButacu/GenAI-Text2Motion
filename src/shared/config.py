@@ -11,11 +11,11 @@ from src.modules.understanding.config import ParserConfig
 
 @dataclass
 class PipelineConfig:
-    outputDir: str = "outputs"
+    output_dir: str = "outputs"
     duration: float = 5.0
     fps: int = 30
     device: str = "cuda"
-    promptMaxChars: int = 2000
+    prompt_max_chars: int = 2000
 
     understanding: ParserConfig = field(default_factory=ParserConfig)
     planner: PlannerConfig = field(default_factory=PlannerConfig)
@@ -23,8 +23,8 @@ class PipelineConfig:
     render: RenderConfig = field(default_factory=RenderConfig)
 
     def __post_init__(self) -> None:
-        self.planner.baseDuration = self.duration
+        self.planner.base_duration = self.duration
         self.render.fps = self.fps
 
-    def videoPath(self, outputName: str) -> str:
-        return os.path.join(self.outputDir, "videos", f"{outputName}.mp4")
+    def video_path(self, output_name: str) -> str:
+        return os.path.join(self.output_dir, "videos", f"{output_name}.mp4")

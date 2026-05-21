@@ -4,9 +4,14 @@
 Rules enforced
 --------------
   Rule 1 — No underscore-prefixed names (non-dunder functions/variables).
-  Rule 2 — camelCase for functions and local variables (no snake_case).
+  Rule 2 — snake_case for functions and local variables (PEP 8). camelCase
+           remaining is migration debt -- ratchet down toward zero.
   Rule 4 — All imports at top of file (no inline imports).
   Rule 6 — No excessive try/except that swallows exceptions silently.
+
+Note: as of the 2026-05-22 snake_case migration the project follows PEP 8
+naming. Rule 2's polarity is inverted vs the pre-migration era; camelCase
+violations are tracked by a frozen baseline that should only decrease.
 
 Usage
 -----
@@ -40,6 +45,7 @@ EXCLUDE_DIRS: set[str] = {"arctic-master", "__pycache__", ".git", "vendor"}
 EXCLUDE_FILES: set[str] = set()
 
 SNAKE_RE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)+$")
+CAMEL_RE = re.compile(r"^[a-z][a-z0-9]*([A-Z][a-z0-9]*)+$")
 DUNDER_RE = re.compile(r"^__\w+__$")
 UPPER_CONST_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
@@ -62,7 +68,7 @@ class StyleReport:
     def add(self, rule: int, filepath: Path, line: int, msg: str) -> None:
         self.violations.append(Violation(rule, str(filepath.relative_to(ROOT)), line, msg))
 
-    def byRule(self) -> dict[int, list[Violation]]:
+    def by_rule(self) -> dict[int, list[Violation]]:
         groups: dict[int, list[Violation]] = {}
         for v in self.violations:
             groups.setdefault(v.rule, []).append(v)
@@ -73,12 +79,12 @@ class StyleReport:
         return len(self.violations)
 
 
-def isPrivateName(name: str) -> bool:
+def is_private_name(name: str) -> bool:
     """True if name starts with _ but is not a dunder."""
     return name.startswith("_") and not DUNDER_RE.match(name)
 
 
-def isSnakeName(name: str) -> bool:
+def is_snake_name(name: str) -> bool:
     """True if name looks like snake_case (not camelCase, not UPPER_CONST, not dunder)."""
     if DUNDER_RE.match(name):
         return False
@@ -87,47 +93,66 @@ def isSnakeName(name: str) -> bool:
     return bool(SNAKE_RE.match(name))
 
 
-def checkRule1(tree: ast.AST, filepath: Path, report: StyleReport) -> None:
+def is_camel_name(name: str) -> bool:
+    """True if name looks like camelCase: lowercase first + at least one uppercase.
+
+    PascalCase class names (`SomeClass`) and ALL_CAPS constants (`MOTION_FPS`)
+    return False.
+    """
+    if DUNDER_RE.match(name):
+        return False
+    if UPPER_CONST_RE.match(name):
+        return False
+    return bool(CAMEL_RE.match(name))
+
+
+def check_rule1(tree: ast.AST, filepath: Path, report: StyleReport) -> None:
     """Rule 1: No underscore-prefixed function or variable names (non-dunder)."""
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if isPrivateName(node.name):
+            if is_private_name(node.name):
                 report.add(1, filepath, node.lineno,
                             f"function `{node.name}` starts with `_` (rename to camelCase)")
 
         elif isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and isPrivateName(target.id):
+                if isinstance(target, ast.Name) and is_private_name(target.id):
                     report.add(1, filepath, node.lineno,
                                 f"variable `{target.id}` starts with `_`")
 
         elif isinstance(node, (ast.AnnAssign,)):
-            if isinstance(node.target, ast.Name) and isPrivateName(node.target.id):
+            if isinstance(node.target, ast.Name) and is_private_name(node.target.id):
                 report.add(1, filepath, node.lineno,
                             f"variable `{node.target.id}` starts with `_`")
 
 
-def checkRule2(tree: ast.AST, filepath: Path, report: StyleReport) -> None:
-    """Rule 2: camelCase for function definitions and local variable assignments."""
+def check_rule2(tree: ast.AST, filepath: Path, report: StyleReport) -> None:
+    """Rule 2: snake_case for function definitions and local variable assignments.
+
+    POLARITY INVERTED on 2026-05-22 after the project-wide snake_case migration.
+    Pre-migration: flagged snake_case names. Post-migration: flags camelCase
+    names. The frozen baseline in tests/test_style_rules.py counts remaining
+    camelCase debt; it should only ever decrease.
+    """
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if not DUNDER_RE.match(node.name) and isSnakeName(node.name):
+            if not DUNDER_RE.match(node.name) and is_camel_name(node.name):
                 report.add(2, filepath, node.lineno,
-                            f"function `{node.name}` is snake_case (use camelCase)")
+                            f"function `{node.name}` is camelCase (use snake_case)")
 
         elif isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and isSnakeName(target.id):
+                if isinstance(target, ast.Name) and is_camel_name(target.id):
                     report.add(2, filepath, node.lineno,
-                                f"variable `{target.id}` is snake_case (use camelCase)")
+                                f"variable `{target.id}` is camelCase (use snake_case)")
 
         elif isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name) and isSnakeName(node.target.id):
+            if isinstance(node.target, ast.Name) and is_camel_name(node.target.id):
                 report.add(2, filepath, node.lineno,
-                            f"variable `{node.target.id}` is snake_case (use camelCase)")
+                            f"variable `{node.target.id}` is camelCase (use snake_case)")
 
 
-def checkRule4(tree: ast.AST, filepath: Path, report: StyleReport) -> None:
+def check_rule4(tree: ast.AST, filepath: Path, report: StyleReport) -> None:
     """Rule 4: No imports inside functions, classes, or conditional blocks."""
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -144,7 +169,7 @@ def checkRule4(tree: ast.AST, filepath: Path, report: StyleReport) -> None:
                             f"inline import inside `{node.name}`: {src}")
 
 
-def checkRule6(tree: ast.AST, filepath: Path, report: StyleReport) -> None:
+def check_rule6(tree: ast.AST, filepath: Path, report: StyleReport) -> None:
     """Rule 6: No try/except that silently swallows exceptions (bare pass handlers)."""
     for node in ast.walk(tree):
         if not isinstance(node, ast.Try):
@@ -152,22 +177,22 @@ def checkRule6(tree: ast.AST, filepath: Path, report: StyleReport) -> None:
 
         for handler in node.handlers:
             body = handler.body
-            isSilent = (
+            is_silent = (
                 len(body) == 1
                 and isinstance(body[0], ast.Pass)
             )
-            isBroad = (
+            is_broad = (
                 handler.type is None
                 or (isinstance(handler.type, ast.Name) and handler.type.id == "Exception")
                 or (isinstance(handler.type, ast.Attribute) and handler.type.attr == "Exception")
             )
 
-            if isSilent and isBroad:
+            if is_silent and is_broad:
                 report.add(6, filepath, handler.lineno,
                             "broad `except` with only `pass` — swallows all exceptions silently")
 
 
-def checkFile(filepath: Path, report: StyleReport) -> None:
+def check_file(filepath: Path, report: StyleReport) -> None:
     try:
         source = filepath.read_text(encoding="utf-8", errors="ignore")
         tree = ast.parse(source, filename=str(filepath))
@@ -175,13 +200,13 @@ def checkFile(filepath: Path, report: StyleReport) -> None:
         report.add(0, filepath, e.lineno or 0, f"SyntaxError: {e.msg}")
         return
 
-    checkRule1(tree, filepath, report)
-    checkRule2(tree, filepath, report)
-    checkRule4(tree, filepath, report)
-    checkRule6(tree, filepath, report)
+    check_rule1(tree, filepath, report)
+    check_rule2(tree, filepath, report)
+    check_rule4(tree, filepath, report)
+    check_rule6(tree, filepath, report)
 
 
-def collectFiles(targets: list[Path]) -> list[Path]:
+def collect_files(targets: list[Path]) -> list[Path]:
     files: list[Path] = []
 
     for target in targets:
@@ -198,14 +223,14 @@ def collectFiles(targets: list[Path]) -> list[Path]:
     return files
 
 
-def run(targets: list[Path] | None = None, asJson: bool = False) -> StyleReport:
+def run(targets: list[Path] | None = None, as_json: bool = False) -> StyleReport:
     report = StyleReport()
-    files = collectFiles(targets or SCAN_TARGETS)
+    files = collect_files(targets or SCAN_TARGETS)
 
     for filepath in files:
-        checkFile(filepath, report)
+        check_file(filepath, report)
 
-    if asJson:
+    if as_json:
         data = [
             {"rule": v.rule, "file": v.filepath, "line": v.line, "message": v.message}
             for v in report.violations
@@ -213,8 +238,8 @@ def run(targets: list[Path] | None = None, asJson: bool = False) -> StyleReport:
         print(json.dumps(data, indent=2))
         return report
 
-    groups = report.byRule()
-    ruleNames = {
+    groups = report.by_rule()
+    rule_names = {
         1: "No underscore-prefixed names",
         2: "camelCase for functions and variables",
         4: "All imports at top of file",
@@ -227,9 +252,9 @@ def run(targets: list[Path] | None = None, asJson: bool = False) -> StyleReport:
 
     print(f"\nStyle violations found: {report.count} total\n")
 
-    for ruleNum in sorted(groups):
-        vs = groups[ruleNum]
-        print(f"Rule {ruleNum} — {ruleNames.get(ruleNum, '?')} ({len(vs)} violations)")
+    for rule_num in sorted(groups):
+        vs = groups[rule_num]
+        print(f"Rule {rule_num} — {rule_names.get(rule_num, '?')} ({len(vs)} violations)")
         for v in vs:
             print(f"  {v.filepath}:{v.line}  {v.message}")
         print()
@@ -238,12 +263,12 @@ def run(targets: list[Path] | None = None, asJson: bool = False) -> StyleReport:
 
 
 if __name__ == "__main__":
-    asJson = "--json" in sys.argv
-    isStrict = "--strict" in sys.argv
+    as_json = "--json" in sys.argv
+    is_strict = "--strict" in sys.argv
 
-    report = run(asJson=asJson)
+    report = run(as_json=as_json)
 
     if report.count > 0:
-        if not asJson:
+        if not as_json:
             print(f"Total: {report.count} violation(s). Fix before committing.")
         sys.exit(1)

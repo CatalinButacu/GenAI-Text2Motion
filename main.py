@@ -12,20 +12,20 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
-def parseArgs() -> argparse.Namespace:
+def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Physics-Constrained Video Generation")
-    defaultDevice = "cuda" if torch.cuda.is_available() else "cpu"
+    default_device = "cuda" if torch.cuda.is_available() else "cpu"
 
     p.add_argument("prompt", nargs="?", default="a person walks forward")
 
-    p.add_argument("--name", dest="outputName", default="output")
-    p.add_argument("--output-dir", dest="outputDir", default="outputs")
+    p.add_argument("--name", dest="output_name", default="output")
+    p.add_argument("--output-dir", dest="output_dir", default="outputs")
 
     p.add_argument("--duration", type=float, default=PipelineConfig.duration)
     p.add_argument("--fps", type=int, default=PipelineConfig.fps)
 
-    p.add_argument("--device", default=defaultDevice, choices=["cuda", "cpu"])
-    p.add_argument("--no-layout-opt", dest="useRandomLayout", action="store_true")
+    p.add_argument("--device", default=default_device, choices=["cuda", "cpu"])
+    p.add_argument("--no-layout-opt", dest="use_random_layout", action="store_true")
 
     p.add_argument("--temperature", type=float, default=1.0,
                    help="Motion sampling : "
@@ -34,7 +34,7 @@ def parseArgs() -> argparse.Namespace:
                    "<1.0 is more conservative.",
     )
     p.add_argument(
-        "--top-p", type=float, default=1.0, dest="topP",
+        "--top-p", type=float, default=1.0, dest="top_p",
         help="Nucleus sampling threshold (0.0-1.0) :"
              "1.0=off. "
              "0.9 keeps top tokens whose cumulative probability sums to 0.9.",
@@ -43,19 +43,19 @@ def parseArgs() -> argparse.Namespace:
     return p.parse_args()
 
 def main() -> None:
-    args = parseArgs()
+    args = parse_args()
 
     config = PipelineConfig(
-        outputDir=args.outputDir,
+        output_dir=args.output_dir,
         duration=args.duration,
         fps=args.fps,
         device=args.device,
     )
-    config.planner.randomLayout = args.useRandomLayout
+    config.planner.random_layout = args.use_random_layout
     config.motion.temperature = args.temperature
-    config.motion.topP = args.topP
+    config.motion.top_p = args.top_p
 
-    result = Pipeline(config).run(args.prompt, outputName=args.outputName)
+    result = Pipeline(config).run(args.prompt, output_name=args.output_name)
 
     video = result.get("video_path", "")
     parsed = result.get("parsed_scene")
@@ -63,7 +63,7 @@ def main() -> None:
 
     if parsed:
         print(f"entities: {[e.name for e in parsed.entities]}")
-        print(f"actions : {[a.actionType for a in parsed.actions]}")
+        print(f"actions : {[a.action_type for a in parsed.actions]}")
 
 if __name__ == "__main__":
     main()

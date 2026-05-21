@@ -14,18 +14,18 @@ from scipy.spatial.transform import Rotation
 
 # SMPL-X parameters from HumanML3D are already Y-up (matches aitviewer).
 # AMASS-native data needs Z-up→Y-up. The active rotation is selected per-render
-# via RenderConfig.inputCoordSystem; pickRotation() returns the right one.
+# via RenderConfig.input_coord_system; pick_rotation() returns the right one.
 R_ZUP_TO_YUP = Rotation.from_euler("xy", [-90, 180], degrees=True)
 R_IDENTITY = Rotation.identity()
 
 
-def pickRotation(inputCoordSystem: str) -> Rotation:
-    if inputCoordSystem == "zup":
+def pick_rotation(input_coord_system: str) -> Rotation:
+    if input_coord_system == "zup":
         return R_ZUP_TO_YUP
 
-    if inputCoordSystem == "yup":
+    if input_coord_system == "yup":
         return R_IDENTITY
-    raise ValueError(f"unknown inputCoordSystem: {inputCoordSystem!r}")
+    raise ValueError(f"unknown input_coord_system: {input_coord_system!r}")
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ RENDERER: HeadlessRenderer | None = None
 RENDERER_KEY: tuple[int, int] | None = None
 
 
-def getRenderer(width: int, height: int) -> HeadlessRenderer:
+def get_renderer(width: int, height: int) -> HeadlessRenderer:
     """Cache the HeadlessRenderer -- rebuilding one per call reboots the OpenGL context."""
     global RENDERER, RENDERER_KEY
     key = (width, height)
@@ -49,7 +49,7 @@ def getRenderer(width: int, height: int) -> HeadlessRenderer:
     return RENDERER
 
 
-def resetScene(renderer: HeadlessRenderer) -> None:
+def reset_scene(renderer: HeadlessRenderer) -> None:
     """Clear SMPLSequence + floor nodes so successive renders don't stack meshes."""
     if renderer.scene is None:
         return
@@ -59,43 +59,43 @@ def resetScene(renderer: HeadlessRenderer) -> None:
             renderer.scene.remove(node)  # type: ignore[union-attr]
 
 
-def toYupCoords(smplxParams: np.ndarray,
-                inputCoordSystem: str = "yup") -> tuple[np.ndarray, np.ndarray]:
+def to_yup_coords(smplx_params: np.ndarray,
+                input_coord_system: str = "yup") -> tuple[np.ndarray, np.ndarray]:
     """Convert root orientation and translation to Y-up (aitviewer's world frame)."""
-    rot = pickRotation(inputCoordSystem)
-    rotMat = rot.as_matrix().astype(np.float32)
-    trans = (smplxParams[:, 3:6] @ rotMat.T).astype(np.float32)
-    rootOrient = (
-        (rot * Rotation.from_rotvec(smplxParams[:, 0:3])).as_rotvec().astype(np.float32)
+    rot = pick_rotation(input_coord_system)
+    rot_mat = rot.as_matrix().astype(np.float32)
+    trans = (smplx_params[:, 3:6] @ rot_mat.T).astype(np.float32)
+    root_orient = (
+        (rot * Rotation.from_rotvec(smplx_params[:, 0:3])).as_rotvec().astype(np.float32)
     )
 
-    return rootOrient, trans
+    return root_orient, trans
 
 
-def smplxParams2Sequence(
-    smplxParams: np.ndarray,
+def smplx_params2_sequence(
+    smplx_params: np.ndarray,
     betas: np.ndarray | None = None,
     gender: str = "neutral",
     color: tuple = (0.72, 0.60, 0.52, 1.0),
-    inputCoordSystem: str = "yup",
+    input_coord_system: str = "yup",
 ) -> SMPLSequence:
     """Build an aitviewer SMPLSequence from a raw SMPL-X parameter array (T x 168)."""
-    rootOrient, trans = toYupCoords(smplxParams, inputCoordSystem)
-    body = smplxParams[:, 6:69]
-    lhand = smplxParams[:, 69:114]
-    rhand = smplxParams[:, 114:159]
+    root_orient, trans = to_yup_coords(smplx_params, input_coord_system)
+    body = smplx_params[:, 6:69]
+    lhand = smplx_params[:, 69:114]
+    rhand = smplx_params[:, 114:159]
 
     betas = (
         np.zeros(10, dtype=np.float32)
         if betas is None
         else np.asarray(betas, dtype=np.float32)[:10]
     )
-    smplLayer = SMPLLayer(model_type="smplx", gender=gender, num_betas=len(betas), device=C.device)
+    smpl_layer = SMPLLayer(model_type="smplx", gender=gender, num_betas=len(betas), device=C.device)
 
     return SMPLSequence(
         poses_body=body,
-        smpl_layer=smplLayer,
-        poses_root=rootOrient,
+        smpl_layer=smpl_layer,
+        poses_root=root_orient,
         betas=betas,
         trans=trans,
         poses_left_hand=lhand,
@@ -105,7 +105,7 @@ def smplxParams2Sequence(
     )
 
 
-def configureRenderer(renderer: HeadlessRenderer, seq: SMPLSequence, fps: int) -> None:
+def configure_renderer(renderer: HeadlessRenderer, seq: SMPLSequence, fps: int) -> None:
     """Set scene properties, swap the default floor, place the camera, and add the sequence."""
     renderer.scene.fps = fps  # type: ignore[union-attr]
     renderer.playback_fps = fps
@@ -125,27 +125,27 @@ def configureRenderer(renderer: HeadlessRenderer, seq: SMPLSequence, fps: int) -
         cam.target = np.array([0.0, 1.0, 0.0])
 
 
-def renderSmplx2Video(
-    smplxParams: np.ndarray,
-    outputPath: str,
+def render_smplx2_video(
+    smplx_params: np.ndarray,
+    output_path: str,
     fps: int = 30,
     betas: np.ndarray | None = None,
     gender: str = "neutral",
     width: int = 1280,
     height: int = 720,
-    inputCoordSystem: str = "yup",
+    input_coord_system: str = "yup",
 ) -> None:
     """Render a Tx168 SMPL-X parameter sequence to an MP4 via aitviewer headless rendering."""
-    out = Path(outputPath)
+    out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    seq = smplxParams2Sequence(smplxParams, betas=betas, gender=gender,
-                               inputCoordSystem=inputCoordSystem)
-    log.info("[M6] SMPLSequence: %d frames, gender=%s", len(smplxParams), gender)
+    seq = smplx_params2_sequence(smplx_params, betas=betas, gender=gender,
+                               input_coord_system=input_coord_system)
+    log.info("[M6] SMPLSequence: %d frames, gender=%s", len(smplx_params), gender)
 
-    renderer = getRenderer(width=width, height=height)
-    resetScene(renderer)
-    configureRenderer(renderer, seq, fps)
+    renderer = get_renderer(width=width, height=height)
+    reset_scene(renderer)
+    configure_renderer(renderer, seq, fps)
     renderer.save_video(video_dir=str(out), output_fps=fps)
 
-    log.info("[M6] video -> %s", outputPath)
+    log.info("[M6] video -> %s", output_path)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from src.utils.mem_profile import tracemallocSnapshot
+from src.utils.mem_profile import tracemalloc_snapshot
 
 from .config import ParserConfig, SpacyConfig
 from .models import ParsedAction, ParsedEntity, ParsedScene
@@ -20,7 +20,7 @@ def invoke(prompt: str, config: ParserConfig | None = None) -> ParsedScene:
     if PARSER is None:
         PARSER = SpacyParser(config)
 
-    with tracemallocSnapshot("M1 parse"):
+    with tracemalloc_snapshot("M1 parse"):
         parsed = PARSER.parse(prompt)
 
     log.info("[M1] %d entities, %d actions", len(parsed.entities), len(parsed.actions))

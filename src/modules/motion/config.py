@@ -16,78 +16,78 @@ from src.shared.constants import (
 class MotionConfig:
     """Runtime config: which checkpoints to load + how to post-process motion clips."""
 
-    checkpointPath: str = "checkpoints/motion_ssm/best_model.pt"
-    rvqCheckpointPath: str = "checkpoints/rvq_tokenizer/best_model.pt"
-    blendFrames: int = 10
-    minActionFrames: int = 20
+    checkpoint_path: str = "checkpoints/motion_ssm/best_model.pt"
+    rvq_checkpoint_path: str = "checkpoints/rvq_tokenizer/best_model.pt"
+    blend_frames: int = 10
+    min_action_frames: int = 20
     # Inference sampling: temperature=1.0+top_p=1.0 is greedy argmax (deterministic).
     # Raise temperature or lower top_p to explore diverse motions.
     temperature: float = 1.0
-    topP: float = 1.0
+    top_p: float = 1.0
 
 
 @dataclass
 class ModelConfig:
     """MotionSSM architecture hyperparameters."""
 
-    dModel: int = SSM_D_MODEL
-    dState: int = SSM_D_STATE
-    nLayers: int = SSM_N_LAYERS
-    motionDim: int = MOTION_DIM
-    textEmbedDim: int = 256
-    maxMotionLength: int = 200
-    maxTextLength: int = 64
-    vocabSize: int = 10000
-    useSbert: bool = True
-    sbertModel: str = "all-MiniLM-L6-v2"
-    freezeSbert: bool = True
+    d_model: int = SSM_D_MODEL
+    d_state: int = SSM_D_STATE
+    n_layers: int = SSM_N_LAYERS
+    motion_dim: int = MOTION_DIM
+    text_embed_dim: int = 256
+    max_motion_length: int = 200
+    max_text_length: int = 64
+    vocab_size: int = 10000
+    use_sbert: bool = True
+    sbert_model: str = "all-MiniLM-L6-v2"
+    freeze_sbert: bool = True
     bidirectional: bool = True
-    gradientCheckpointing: bool = False
-    useFilm: bool = True
+    gradient_checkpointing: bool = False
+    use_film: bool = True
 
     # --- RVQ head (Mogo/MoMask-style discrete token prediction) ---
-    rvqLatentDim: int = 128
-    rvqNCodebooks: int = 6
-    rvqCodebookSize: int = 512
-    rvqDownT: int = 4  # temporal stride: maxMotionLength / rvqDownT = latent seq len
+    rvq_latent_dim: int = 128
+    rvq_n_codebooks: int = 6
+    rvq_codebook_size: int = 512
+    rvq_down_t: int = 4  # temporal stride: max_motion_length / rvq_down_t = latent seq len
 
 
 @dataclass
 class DataConfig:
-    dataDir: str = "data/AMASS"
-    amassDir: str = "data/AMASS"  # AMASS backing store used by HumanML3D loader
-    arcticDataDir: str = "data/arctic/unpack"
-    humanml3dDir: str = "data/humanml3d"
-    interxDir: str = "data/inter-x"
-    maxSamples: int | None = None
-    numWorkers: int = field(
+    data_dir: str = "data/AMASS"
+    amass_dir: str = "data/AMASS"  # AMASS backing store used by HumanML3D loader
+    arctic_data_dir: str = "data/arctic/unpack"
+    humanml3d_dir: str = "data/humanml3d"
+    interx_dir: str = "data/inter-x"
+    max_samples: int | None = None
+    num_workers: int = field(
         default_factory=lambda: 0 if __import__("sys").platform == "win32" else 4
     )
     # Sources to use in unified training mode; subset of {"amass","arctic","humanml3d","interx"}
-    unifiedSources: list = field(default_factory=lambda: ["amass", "arctic"])
+    unified_sources: list = field(default_factory=lambda: ["amass", "arctic"])
 
 
 @dataclass
 class TrainingConfig(ModelConfig, DataConfig):
-    batchSize: int = 32
-    learningRate: float = 1e-4
-    weightDecay: float = 0.01
-    numEpochs: int = 200
-    warmupSteps: int = 1000
-    gradClip: float = 1.0
-    lengthLossWeight: float = 0.1
-    checkpointDir: str = "checkpoints/motion_ssm"
-    rvqCheckpointPath: str = "checkpoints/rvq_tokenizer/best_model.pt"
-    saveEvery: int = 10
+    batch_size: int = 32
+    learning_rate: float = 1e-4
+    weight_decay: float = 0.01
+    num_epochs: int = 200
+    warmup_steps: int = 1000
+    grad_clip: float = 1.0
+    length_loss_weight: float = 0.1
+    checkpoint_dir: str = "checkpoints/motion_ssm"
+    rvq_checkpoint_path: str = "checkpoints/rvq_tokenizer/best_model.pt"
+    save_every: int = 10
     device: str = field(default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu")
-    resumeFrom: str | None = None
+    resume_from: str | None = None
     # Warm start: when resuming, load only model weights (not optimizer / scheduler /
     # epoch counter / step counter). Use this to change LR or other hyperparams while
-    # keeping the pretrained weights as initialisation. bestLoss is still inherited so
+    # keeping the pretrained weights as initialisation. best_loss is still inherited so
     # the early-stop "improvement" bar is the prior best.
-    warmStart: bool = False
+    warm_start: bool = False
     seed: int | None = 42
-    earlyStopPatience: int = 30
-    keepLastCheckpoints: int = 5
-    cfgDropoutProb: float = 0.1  # prob of dropping text conditioning at train time (CFG)
-    useAmp: bool = True  # mixed precision on CUDA
+    early_stop_patience: int = 30
+    keep_last_checkpoints: int = 5
+    cfg_dropout_prob: float = 0.1  # prob of dropping text conditioning at train time (CFG)
+    use_amp: bool = True  # mixed precision on CUDA

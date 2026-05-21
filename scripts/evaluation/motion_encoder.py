@@ -90,21 +90,21 @@ class MovementEncoder(nn.Module):
 
     def __init__(
         self,
-        inChannels: int = MOV_IN,
+        in_channels: int = MOV_IN,
         hidden: int = MOV_HID,
-        outDim: int = GRU_IN,
+        out_dim: int = GRU_IN,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
         self.main = nn.Sequential(
-            nn.Conv1d(inChannels, hidden, kernel_size=MOV_K, stride=MOV_K // 2, bias=True),
+            nn.Conv1d(in_channels, hidden, kernel_size=MOV_K, stride=MOV_K // 2, bias=True),
             nn.Dropout(dropout),
             nn.ReLU(),
             nn.Conv1d(hidden, hidden, kernel_size=MOV_K, stride=MOV_K // 2, bias=True),
             nn.Dropout(dropout),
             nn.ReLU(),
         )
-        self.out_net = nn.Linear(hidden, outDim, bias=True)
+        self.out_net = nn.Linear(hidden, out_dim, bias=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Args: x (B, T, 259). Returns (B, T//4, 512) segment features."""
@@ -122,24 +122,24 @@ class MotionEncoder(nn.Module):
     hidden: torch.Tensor
 
     def __init__(
-        self, inDim: int = GRU_IN, gruHidden: int = GRU_HID, outDim: int = OUT_DIM
+        self, in_dim: int = GRU_IN, gru_hidden: int = GRU_HID, out_dim: int = OUT_DIM
     ) -> None:
         super().__init__()
-        self.input_emb = nn.Linear(inDim, gruHidden, bias=True)
+        self.input_emb = nn.Linear(in_dim, gru_hidden, bias=True)
         self.gru = nn.GRU(
-            input_size=gruHidden,
-            hidden_size=gruHidden,
+            input_size=gru_hidden,
+            hidden_size=gru_hidden,
             num_layers=1,
             batch_first=True,
             bidirectional=True,
         )
         self.output_net = nn.Sequential(
-            nn.Linear(gruHidden * 2, gruHidden, bias=True),
-            nn.LayerNorm(gruHidden),
+            nn.Linear(gru_hidden * 2, gru_hidden, bias=True),
+            nn.LayerNorm(gru_hidden),
             nn.ReLU(),
-            nn.Linear(gruHidden, outDim, bias=True),
+            nn.Linear(gru_hidden, out_dim, bias=True),
         )
-        self.register_buffer("hidden", torch.zeros(2, 1, gruHidden))
+        self.register_buffer("hidden", torch.zeros(2, 1, gru_hidden))
 
     def forward(self, x: torch.Tensor, lengths: torch.Tensor | None = None) -> torch.Tensor:
         """
@@ -174,13 +174,13 @@ class T2MMotionEncoder(nn.Module):
     End-to-end: (B, T, D) motion -> (B, 512) L2-normalised embedding.
     """
 
-    def __init__(self, inputDim: int = MOTION_DIM) -> None:
+    def __init__(self, input_dim: int = MOTION_DIM) -> None:
         super().__init__()
-        self.inputDim = inputDim
+        self.input_dim = input_dim
         self.movement = MovementEncoder()
         self.encoder = MotionEncoder()
 
-    def toVelocity(self, x: torch.Tensor) -> torch.Tensor:
+    def to_velocity(self, x: torch.Tensor) -> torch.Tensor:
         """Convert (B, T, D) motion to (B, T, 259) velocity features for T2M encoder.
 
         Steps:
@@ -207,46 +207,46 @@ class T2MMotionEncoder(nn.Module):
         Returns:
             (B, 512) L2-normalised motion embeddings
         """
-        vel = self.toVelocity(x)
+        vel = self.to_velocity(x)
         seg = self.movement(vel)
 
-        segLengths = None
+        seg_lengths = None
         if lengths is not None:
-            segLengths = (lengths.float() / MOV_K).ceil().long().clamp(min=1, max=seg.size(1))
+            seg_lengths = (lengths.float() / MOV_K).ceil().long().clamp(min=1, max=seg.size(1))
 
-        return self.encoder(seg, segLengths)
+        return self.encoder(seg, seg_lengths)
 
 
 #  Weight loading
 
 
-def loadEncoder(
-    inputDim: int = MOTION_DIM,
-    weightsPath: str | None = None,
+def load_encoder(
+    input_dim: int = MOTION_DIM,
+    weights_path: str | None = None,
     device: str = "cpu",
 ) -> T2MMotionEncoder:
     """Instantiate T2MMotionEncoder and load official pre-trained weights.
 
     Resolution order:
-      1. `weightsPath` if provided and exists
+      1. `weights_path` if provided and exists
       2. Candidates in ``_WEIGHT_CANDIDATES``
       3. Random initialisation with a clearly actionable warning
 
     Args:
-        inputDim:    Motion feature dim fed to the encoder (168 for SMPL-X).
-        weightsPath: Optional explicit path to the .tar checkpoint.
+        input_dim:    Motion feature dim fed to the encoder (168 for SMPL-X).
+        weights_path: Optional explicit path to the .tar checkpoint.
         device:       Torch device string ("cpu" / "cuda").
 
     Returns:
         T2MMotionEncoder in eval mode, placed on ``device``.
     """
-    enc = T2MMotionEncoder(inputDim=inputDim)
+    enc = T2MMotionEncoder(input_dim=input_dim)
     enc._loaded_pretrained = False  # type: ignore[attr-defined]
 
     # Find weights
     resolved: str | None = None
-    if weightsPath and Path(weightsPath).exists():
-        resolved = weightsPath
+    if weights_path and Path(weights_path).exists():
+        resolved = weights_path
     if resolved is None:
         for candidate in WEIGHT_CANDIDATES:
             if Path(candidate).exists():
@@ -259,27 +259,27 @@ def loadEncoder(
 
         # Load movement_encoder
         if "movement_encoder" in ck:
-            movSd = ck["movement_encoder"]
-            modelMovSd = enc.movement.state_dict()
+            mov_sd = ck["movement_encoder"]
+            model_mov_sd = enc.movement.state_dict()
             compat = {
                 k: v
-                for k, v in movSd.items()
-                if k in modelMovSd and v.shape == modelMovSd[k].shape
+                for k, v in mov_sd.items()
+                if k in model_mov_sd and v.shape == model_mov_sd[k].shape
             }
             enc.movement.load_state_dict(compat, strict=False)
-            log.info("[T2MEncoder] movement_encoder: loaded %d/%d keys", len(compat), len(movSd))
+            log.info("[T2MEncoder] movement_encoder: loaded %d/%d keys", len(compat), len(mov_sd))
 
         # Load motion_encoder
         if "motion_encoder" in ck:
-            motSd = ck["motion_encoder"]
-            modelMotSd = enc.encoder.state_dict()
+            mot_sd = ck["motion_encoder"]
+            model_mot_sd = enc.encoder.state_dict()
             compat = {
                 k: v
-                for k, v in motSd.items()
-                if k in modelMotSd and v.shape == modelMotSd[k].shape
+                for k, v in mot_sd.items()
+                if k in model_mot_sd and v.shape == model_mot_sd[k].shape
             }
             enc.encoder.load_state_dict(compat, strict=False)
-            log.info("[T2MEncoder] motion_encoder:   loaded %d/%d keys", len(compat), len(motSd))
+            log.info("[T2MEncoder] motion_encoder:   loaded %d/%d keys", len(compat), len(mot_sd))
 
         enc._loaded_pretrained = True  # type: ignore[attr-defined]
         log.info(
@@ -308,10 +308,10 @@ def loadEncoder(
 
 
 @torch.no_grad()
-def extractFeatures(
+def extract_features(
     encoder: T2MMotionEncoder,
     motions: list[np.ndarray],
-    batchSize: int = 64,
+    batch_size: int = 64,
     device: str = "cpu",
 ) -> np.ndarray:
     """Extract (N, 512) L2-normalised features from a list of (T_i, D) clips.
@@ -319,37 +319,37 @@ def extractFeatures(
     Args:
         encoder:    Loaded T2MMotionEncoder in eval mode.
         motions:    List of (T_i, D) float32 motion arrays.
-        batchSize: Clips per GPU batch.
+        batch_size: Clips per GPU batch.
         device:     Torch device string.
 
     Returns:
         (N, 512) float32 numpy array.
     """
-    allFeats: list[np.ndarray] = []
+    all_feats: list[np.ndarray] = []
 
     def batches(lst: list, n: int) -> Iterator[list]:
         for i in range(0, len(lst), n):
             yield lst[i : i + n]
 
-    for batch_clips in batches(motions, batchSize):
+    for batch_clips in batches(motions, batch_size):
         lengths = torch.tensor(
             [min(c.shape[0], 200) for c in batch_clips],
             dtype=torch.long,
             device=device,
         )
-        maxLen = int(lengths.max().item())
+        max_len = int(lengths.max().item())
         D = batch_clips[0].shape[1]
 
-        padded = np.zeros((len(batch_clips), maxLen, D), dtype=np.float32)
+        padded = np.zeros((len(batch_clips), max_len, D), dtype=np.float32)
         for i, clip in enumerate(batch_clips):
-            t = min(clip.shape[0], maxLen)
+            t = min(clip.shape[0], max_len)
             padded[i, :t] = clip[:t]
 
         x = torch.tensor(padded, device=device, dtype=torch.float32)
         feats = encoder(x, lengths)  # (B, 512)
-        allFeats.append(feats.cpu().numpy())
+        all_feats.append(feats.cpu().numpy())
 
-    return np.concatenate(allFeats, axis=0)
+    return np.concatenate(all_feats, axis=0)
 
 
 #  T2M Text Encoder
@@ -363,7 +363,7 @@ GLOVE_CANDIDATES = [
     "data/glove.6B.300d.txt",
 ]
 
-gloveCache: dict[str, np.ndarray] | None = None
+glove_cache: dict[str, np.ndarray] | None = None
 
 
 class T2MTextEncoder(nn.Module):
@@ -384,44 +384,44 @@ class T2MTextEncoder(nn.Module):
 
     def __init__(
         self,
-        wordSize: int = GLOVE_DIM,
-        posSize: int = TXT_POS_SIZE,
-        hiddenSize: int = 512,
-        outputSize: int = 512,
+        word_size: int = GLOVE_DIM,
+        pos_size: int = TXT_POS_SIZE,
+        hidden_size: int = 512,
+        output_size: int = 512,
     ) -> None:
         super().__init__()
-        self.pos_emb = nn.Linear(posSize, wordSize)
-        self.input_emb = nn.Linear(wordSize, hiddenSize)
-        self.register_buffer("hidden", torch.zeros(2, 1, hiddenSize))
+        self.pos_emb = nn.Linear(pos_size, word_size)
+        self.input_emb = nn.Linear(word_size, hidden_size)
+        self.register_buffer("hidden", torch.zeros(2, 1, hidden_size))
         self.gru = nn.GRU(
-            hiddenSize,
-            hiddenSize,
+            hidden_size,
+            hidden_size,
             num_layers=1,
             batch_first=True,
             bidirectional=True,
         )
         self.output_net = nn.Sequential(
-            nn.Linear(2 * hiddenSize, hiddenSize),
-            nn.LayerNorm(hiddenSize),
+            nn.Linear(2 * hidden_size, hidden_size),
+            nn.LayerNorm(hidden_size),
             nn.ReLU(),
-            nn.Linear(hiddenSize, outputSize),
+            nn.Linear(hidden_size, output_size),
         )
 
     def forward(
         self,
-        wordEmbs: torch.Tensor,  # (B, T, 300) GloVe embeddings (zero-padded)
+        word_embs: torch.Tensor,  # (B, T, 300) GloVe embeddings (zero-padded)
         lengths: torch.Tensor | None = None,  # (B,) actual token counts
     ) -> torch.Tensor:
         """
         Returns:
             (B, 512) L2-normalised text embeddings in T2M joint space.
         """
-        B = wordEmbs.size(0)
+        B = word_embs.size(0)
         # Zero POS input -> contributes exactly pos_emb.bias (consistent offset)
-        posZero = torch.zeros(
-            B, wordEmbs.size(1), TXT_POS_SIZE, device=wordEmbs.device, dtype=wordEmbs.dtype
+        pos_zero = torch.zeros(
+            B, word_embs.size(1), TXT_POS_SIZE, device=word_embs.device, dtype=word_embs.dtype
         )
-        x = wordEmbs + self.pos_emb(posZero)  # (B, T, 300) word + pos offset
+        x = word_embs + self.pos_emb(pos_zero)  # (B, T, 300) word + pos offset
         x = self.input_emb(x)  # (B, T, 512)
 
         h0 = self.hidden.repeat(1, B, 1)  # type: ignore[union-attr]  # (2, B, 512)
@@ -441,13 +441,13 @@ class T2MTextEncoder(nn.Module):
         return F.normalize(embed, dim=-1)
 
 
-def loadGlove(glovePath: str | None = None) -> dict[str, np.ndarray]:
+def load_glove(glove_path: str | None = None) -> dict[str, np.ndarray]:
     """Load GloVe 300d word vectors, caching on first call."""
-    global gloveCache
-    if gloveCache is not None:
-        return gloveCache
+    global glove_cache
+    if glove_cache is not None:
+        return glove_cache
 
-    candidates = ([glovePath] if glovePath else []) + GLOVE_CANDIDATES
+    candidates = ([glove_path] if glove_path else []) + GLOVE_CANDIDATES
     resolved = next((c for c in candidates if c and Path(c).exists()), None)
 
     if resolved is None:
@@ -455,8 +455,8 @@ def loadGlove(glovePath: str | None = None) -> dict[str, np.ndarray]:
             "[T2MTextEncoder] GloVe 300d not found at %s --word embeddings will be zero.",
             GLOVE_CANDIDATES,
         )
-        gloveCache = {}
-        return gloveCache
+        glove_cache = {}
+        return glove_cache
 
     log.info("[T2MTextEncoder] Loading GloVe from %s ...", resolved)
     vocab: dict[str, np.ndarray] = {}
@@ -466,36 +466,36 @@ def loadGlove(glovePath: str | None = None) -> dict[str, np.ndarray]:
             if len(parts) == GLOVE_DIM + 1:
                 vocab[parts[0]] = np.array(parts[1:], dtype=np.float32)
     log.info("[T2MTextEncoder] Loaded %d GloVe vectors", len(vocab))
-    gloveCache = vocab
-    return gloveCache
+    glove_cache = vocab
+    return glove_cache
 
 
-def textsToGlove(
+def texts_to_glove(
     texts: list[str],
     glove: dict[str, np.ndarray],
-    maxLen: int = 40,
+    max_len: int = 40,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Tokenize texts (whitespace) and look up GloVe embeddings.
 
     Returns:
-        word_embs: (N, maxLen, 300) float32 --zero-padded
+        word_embs: (N, max_len, 300) float32 --zero-padded
         lengths:   (N,) int64 --actual token counts (>= 1)
     """
     N = len(texts)
-    wordEmbs = np.zeros((N, maxLen, GLOVE_DIM), dtype=np.float32)
+    word_embs = np.zeros((N, max_len, GLOVE_DIM), dtype=np.float32)
     lengths = np.ones(N, dtype=np.int64)
     for i, text in enumerate(texts):
-        tokens = text.lower().split()[:maxLen]
+        tokens = text.lower().split()[:max_len]
         for j, tok in enumerate(tokens):
             vec = glove.get(tok)
             if vec is not None:
-                wordEmbs[i, j] = vec
+                word_embs[i, j] = vec
         lengths[i] = max(len(tokens), 1)
-    return wordEmbs, lengths
+    return word_embs, lengths
 
 
-def loadTextEncoder(
-    weightsPath: str | None = None,
+def load_text_encoder(
+    weights_path: str | None = None,
     device: str = "cpu",
 ) -> T2MTextEncoder | None:
     """Load T2MTextEncoder from finest.tar.
@@ -503,7 +503,7 @@ def loadTextEncoder(
     Returns None if no weights are found --``compute_r_precision`` will then
     fall back to SBERT with a warning that the result is not valid.
     """
-    candidates = ([weightsPath] if weightsPath else []) + WEIGHT_CANDIDATES
+    candidates = ([weights_path] if weights_path else []) + WEIGHT_CANDIDATES
     resolved = next((c for c in candidates if c and Path(c).exists()), None)
     if resolved is None:
         log.warning("[T2MTextEncoder] finest.tar not found; R-Precision will use SBERT.")
@@ -515,21 +515,21 @@ def loadTextEncoder(
         return None
 
     enc = T2MTextEncoder()
-    txtSd = ck["text_encoder"]
-    modelSd = enc.state_dict()
-    compat = {k: v for k, v in txtSd.items() if k in modelSd and v.shape == modelSd[k].shape}
+    txt_sd = ck["text_encoder"]
+    model_sd = enc.state_dict()
+    compat = {k: v for k, v in txt_sd.items() if k in model_sd and v.shape == model_sd[k].shape}
     enc.load_state_dict(compat, strict=False)
-    log.info("[T2MTextEncoder] loaded %d/%d weights from %s", len(compat), len(txtSd), resolved)
+    log.info("[T2MTextEncoder] loaded %d/%d weights from %s", len(compat), len(txt_sd), resolved)
     return enc.to(device).eval()
 
 
 @torch.no_grad()
-def encodeTextsT2M(
+def encode_texts_t2m(
     encoder: T2MTextEncoder,
     texts: list[str],
     device: str = "cpu",
-    glovePath: str | None = None,
-    batchSize: int = 64,
+    glove_path: str | None = None,
+    batch_size: int = 64,
 ) -> np.ndarray:
     """Encode text descriptions into (N, 512) L2-normalised T2M text features.
 
@@ -538,12 +538,12 @@ def encodeTextsT2M(
 
     Returns: (N, 512) float32 array in the same space as ``extract_features``.
     """
-    glove = loadGlove(glovePath)
-    word_embs, lengths = textsToGlove(texts, glove)
-    allFeats: list[np.ndarray] = []
-    for i in range(0, len(texts), batchSize):
-        we = torch.tensor(word_embs[i : i + batchSize], device=device)
-        ln = torch.tensor(lengths[i : i + batchSize], device=device)
+    glove = load_glove(glove_path)
+    word_embs, lengths = texts_to_glove(texts, glove)
+    all_feats: list[np.ndarray] = []
+    for i in range(0, len(texts), batch_size):
+        we = torch.tensor(word_embs[i : i + batch_size], device=device)
+        ln = torch.tensor(lengths[i : i + batch_size], device=device)
         feats = encoder(we, ln)
-        allFeats.append(feats.cpu().numpy())
-    return np.concatenate(allFeats, axis=0)
+        all_feats.append(feats.cpu().numpy())
+    return np.concatenate(all_feats, axis=0)

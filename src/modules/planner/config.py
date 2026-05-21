@@ -5,19 +5,19 @@ from dataclasses import dataclass, field
 
 @dataclass
 class PlannerConfig:
-    randomLayout: bool = False
-    baseDuration: float = 5.0  # fallback when prompt has no explicit durations
-    durationJitter: float = 0.0
-    actorDist: float = 1.5
-    objSpace: float = 0.4
-    fallHeight: float = 1.5
-    groundHeight: float = 0.5
-    defaultSize: list[float] = field(default_factory=lambda: [0.1, 0.1, 0.1])
-    defaultMass: float = 1.0
-    closeActionDist: dict[str, float] = field(
+    random_layout: bool = False
+    base_duration: float = 5.0  # fallback when prompt has no explicit durations
+    duration_jitter: float = 0.0
+    actor_dist: float = 1.5
+    obj_space: float = 0.4
+    fall_height: float = 1.5
+    ground_height: float = 0.5
+    default_size: list[float] = field(default_factory=lambda: [0.1, 0.1, 0.1])
+    default_mass: float = 1.0
+    close_action_dist: dict[str, float] = field(
         default_factory=lambda: {"kick": 0.8, "pick_up": 0.5}
     )
-    randomRange: float = 2.0
+    random_range: float = 2.0
     # Random-layout seed. None = nondeterministic (different on every run).
     # Set to an int for reproducible ablations.
-    randomSeed: int | None = None
+    random_seed: int | None = None

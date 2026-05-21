@@ -20,25 +20,25 @@ from src.pipeline import Pipeline
 @dataclass
 class FuncStats:
     name: str
-    nInstructions: int
-    nLoadAttr: int  # attribute lookups (can cache)
-    nCall: int  # function calls (overhead)
-    nForIter: int  # loop iterations
-    nCompare: int  # comparisons
-    nLoadGlobal: int  # global lookups (can hoist)
+    n_instructions: int
+    n_load_attr: int  # attribute lookups (can cache)
+    n_call: int  # function calls (overhead)
+    n_for_iter: int  # loop iterations
+    n_compare: int  # comparisons
+    n_load_global: int  # global lookups (can hoist)
 
     @property
-    def hottestOpcode(self) -> str:
+    def hottest_opcode(self) -> str:
         counts = {
-            "LOAD_ATTR": self.nLoadAttr,
-            "CALL": self.nCall,
-            "FOR_ITER": self.nForIter,
-            "COMPARE_OP": self.nCompare,
-            "LOAD_GLOBAL": self.nLoadGlobal,
+            "LOAD_ATTR": self.n_load_attr,
+            "CALL": self.n_call,
+            "FOR_ITER": self.n_for_iter,
+            "COMPARE_OP": self.n_compare,
+            "LOAD_GLOBAL": self.n_load_global,
         }
         return max(counts, key=counts.__getitem__)
 
-def analyseFunction(func: types.FunctionType) -> FuncStats:
+def analyse_function(func: types.FunctionType) -> FuncStats:
     """Disassemble *func* and count key instruction types."""
     buf = io.StringIO()
     dis.dis(func, file=buf)
@@ -58,15 +58,15 @@ def analyseFunction(func: types.FunctionType) -> FuncStats:
 
     return FuncStats(
         name=func.__qualname__,
-        nInstructions=total,
-        nLoadAttr=counters["LOAD_ATTR"],
-        nCall=counters["CALL"] + counters["CALL_FUNCTION"],
-        nForIter=counters["FOR_ITER"],
-        nCompare=counters["COMPARE_OP"],
-        nLoadGlobal=counters["LOAD_GLOBAL"],
+        n_instructions=total,
+        n_load_attr=counters["LOAD_ATTR"],
+        n_call=counters["CALL"] + counters["CALL_FUNCTION"],
+        n_for_iter=counters["FOR_ITER"],
+        n_compare=counters["COMPARE_OP"],
+        n_load_global=counters["LOAD_GLOBAL"],
     )
 
-def printBytecode(func: types.FunctionType, highlightHot: bool = True) -> None:
+def print_bytecode(func: types.FunctionType, highlight_hot: bool = True) -> None:
     """Print annotated bytecode for a function."""
     print(f"\n{'='*70}")
     print(f"  BYTECODE: {func.__qualname__}")
@@ -74,7 +74,7 @@ def printBytecode(func: types.FunctionType, highlightHot: bool = True) -> None:
     buf = io.StringIO()
     dis.dis(func, file=buf)
     text = buf.getvalue()
-    if highlightHot:
+    if highlight_hot:
         HOT_OPS = ("FOR_ITER", "LOAD_ATTR", "LOAD_GLOBAL")
         for line in text.splitlines():
             marker = "  HOT" if any(op in line for op in HOT_OPS) else ""
@@ -82,7 +82,7 @@ def printBytecode(func: types.FunctionType, highlightHot: bool = True) -> None:
     else:
         print(text)
 
-def printStats(funcs: list) -> None:
+def print_stats(funcs: list) -> None:
     """Print a summary table of function stats."""
     print(f"\n{'='*70}")
     print("  PERFORMANCE SUMMARY")
@@ -90,14 +90,14 @@ def printStats(funcs: list) -> None:
     hdr = f"{'Function':<45} {'Instr':>6} {'Attr':>5} {'Call':>5} {'Loop':>5} {'Global':>7}"
     print(hdr)
     print("-" * 70)
-    for stat in sorted(funcs, key=lambda s: s.nInstructions, reverse=True):
+    for stat in sorted(funcs, key=lambda s: s.n_instructions, reverse=True):
         print(
-            f"{stat.name:<45} {stat.nInstructions:>6} "
-            f"{stat.nLoadAttr:>5} {stat.nCall:>5} "
-            f"{stat.nForIter:>5} {stat.nLoadGlobal:>7}"
+            f"{stat.name:<45} {stat.n_instructions:>6} "
+            f"{stat.n_load_attr:>5} {stat.n_call:>5} "
+            f"{stat.n_for_iter:>5} {stat.n_load_global:>7}"
         )
 
-def printRecommendations(stats: list) -> None:
+def print_recommendations(stats: list) -> None:
     """Print concrete optimization advice based on bytecode analysis."""
     print(f"\n{'='*70}")
     print("  OPTIMIZATION RECOMMENDATIONS")
@@ -107,24 +107,24 @@ def printRecommendations(stats: list) -> None:
         issues = []
 
         # High attribute lookups inside loops -> cache as local var
-        if stat.nLoadAttr > 8 and stat.nForIter > 0:
+        if stat.n_load_attr > 8 and stat.n_for_iter > 0:
             issues.append(
-                f"    {stat.nLoadAttr} LOAD_ATTR inside loops "
+                f"    {stat.n_load_attr} LOAD_ATTR inside loops "
                 f"-> cache self.xxx as local variables before loop entry\n"
                 f"     e.g.: clips = self._motion_gen  (saves repeated dict/obj lookup)"
             )
 
         # Many global lookups -> hoist to local
-        if stat.nLoadGlobal > 6:
+        if stat.n_load_global > 6:
             issues.append(
-                f"  !!  {stat.nLoadGlobal} LOAD_GLOBAL -> hoist frequently used globals "
+                f"  !!  {stat.n_load_global} LOAD_GLOBAL -> hoist frequently used globals "
                 f"(numpy, GRAVITY) to local vars at function start"
             )
 
         # High call count -> spot inline-able helpers
-        if stat.nCall > 15:
+        if stat.n_call > 15:
             issues.append(
-                f"  !!  {stat.nCall} CALL instructions -> "
+                f"  !!  {stat.n_call} CALL instructions -> "
                 f"consider inlining hot helper calls or using __slots__"
             )
 
@@ -149,15 +149,15 @@ def main():
         ScenePlanner.plan,
     ]
 
-    stats = [analyseFunction(fn) for fn in targets]
-    printStats(stats)
-    printRecommendations(stats)
+    stats = [analyse_function(fn) for fn in targets]
+    print_stats(stats)
+    print_recommendations(stats)
 
     # Detailed bytecode for two hottest functions
-    hottest = sorted(stats, key=lambda s: s.nInstructions, reverse=True)[:2]
-    hotFuncs = [fn for fn in targets if fn.__qualname__ in {s.name for s in hottest}]
-    for fn in hotFuncs:
-        printBytecode(fn)
+    hottest = sorted(stats, key=lambda s: s.n_instructions, reverse=True)[:2]
+    hot_funcs = [fn for fn in targets if fn.__qualname__ in {s.name for s in hottest}]
+    for fn in hot_funcs:
+        print_bytecode(fn)
 
     print(f"\n{'='*70}")
     print("  INSTRUCTION COUNT LEGEND")

@@ -17,8 +17,8 @@ class Pipeline:
         self.config = config or PipelineConfig()
         log.info("Pipeline ready (device=%s)", self.config.device)
 
-    def run(self, prompt: str, outputName: str = "output") -> dict[str, Any]:
-        prompt = (prompt or "").strip()[: self.config.promptMaxChars]
+    def run(self, prompt: str, output_name: str = "output") -> dict[str, Any]:
+        prompt = (prompt or "").strip()[: self.config.prompt_max_chars]
 
         if not prompt:
             return {"prompt": "", "error": "empty prompt"}
@@ -29,7 +29,7 @@ class Pipeline:
         parsed = understanding.invoke(prompt, cfg.understanding)
         planned = planner.invoke(parsed, cfg.planner)
         clips = motion.invoke(planned, cfg.motion)
-        video = render.invoke(clips, cfg.videoPath(outputName), cfg.render)
+        video = render.invoke(clips, cfg.video_path(output_name), cfg.render)
 
         return {
             "prompt": prompt,

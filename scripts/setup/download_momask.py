@@ -41,7 +41,7 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
     subprocess.run(cmd, cwd=cwd, check=True)
 
 
-def cloneRepo() -> None:
+def clone_repo() -> None:
     if VENDOR_DIR.exists():
         print(f"[setup] vendor already present at {VENDOR_DIR}, skipping clone")
         return
@@ -51,17 +51,17 @@ def cloneRepo() -> None:
         run(["git", "checkout", REPO_COMMIT], cwd=VENDOR_DIR)
 
 
-def installDeps() -> None:
+def install_deps() -> None:
     run([sys.executable, "-m", "pip", "install", *MOMASK_DEPS])
 
 
-def downloadCheckpoints() -> None:
-    ckptRoot = VENDOR_DIR / "checkpoints"
-    if (ckptRoot / "t2m").exists():
-        print(f"[setup] checkpoints already present at {ckptRoot / 't2m'}, skipping download")
+def download_checkpoints() -> None:
+    ckpt_root = VENDOR_DIR / "checkpoints"
+    if (ckpt_root / "t2m").exists():
+        print(f"[setup] checkpoints already present at {ckpt_root / 't2m'}, skipping download")
         return
-    ckptRoot.mkdir(parents=True, exist_ok=True)
-    zipPath = ckptRoot / CHECKPOINT_ZIP_NAME
+    ckpt_root.mkdir(parents=True, exist_ok=True)
+    zip_path = ckpt_root / CHECKPOINT_ZIP_NAME
     run(
         [
             sys.executable,
@@ -69,30 +69,30 @@ def downloadCheckpoints() -> None:
             "gdown",
             f"https://drive.google.com/uc?id={CHECKPOINT_ZIP_ID}",
             "-O",
-            str(zipPath),
+            str(zip_path),
         ]
     )
-    print(f"[setup] unzipping {zipPath} -> {ckptRoot}")
-    with zipfile.ZipFile(zipPath) as z:
-        z.extractall(ckptRoot)
-    zipPath.unlink()
+    print(f"[setup] unzipping {zip_path} -> {ckpt_root}")
+    with zipfile.ZipFile(zip_path) as z:
+        z.extractall(ckpt_root)
+    zip_path.unlink()
 
 
 def verify() -> None:
-    genScript = VENDOR_DIR / "gen_t2m.py"
-    t2mDir = VENDOR_DIR / "checkpoints" / "t2m"
-    if not genScript.exists():
-        raise RuntimeError(f"[setup] gen_t2m.py missing at {genScript}")
-    if not t2mDir.exists():
-        raise RuntimeError(f"[setup] checkpoints missing at {t2mDir}")
-    print(f"[setup] OK  gen_t2m.py -> {genScript}")
-    print(f"[setup] OK  checkpoints -> {t2mDir}")
+    gen_script = VENDOR_DIR / "gen_t2m.py"
+    t2m_dir = VENDOR_DIR / "checkpoints" / "t2m"
+    if not gen_script.exists():
+        raise RuntimeError(f"[setup] gen_t2m.py missing at {gen_script}")
+    if not t2m_dir.exists():
+        raise RuntimeError(f"[setup] checkpoints missing at {t2m_dir}")
+    print(f"[setup] OK  gen_t2m.py -> {gen_script}")
+    print(f"[setup] OK  checkpoints -> {t2m_dir}")
 
 
 def main() -> None:
-    cloneRepo()
-    installDeps()
-    downloadCheckpoints()
+    clone_repo()
+    install_deps()
+    download_checkpoints()
     verify()
     print("[setup] MoMask is ready. Run the pipeline with the default motion backend.")
 

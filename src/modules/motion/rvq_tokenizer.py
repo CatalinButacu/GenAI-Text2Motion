@@ -31,24 +31,24 @@ class RVQCodebook(nn.Module):
     """
 
     codebook: torch.Tensor
-    clusterSize: torch.Tensor
-    embedAvg: torch.Tensor
+    cluster_size: torch.Tensor
+    embed_avg: torch.Tensor
 
-    def __init__(self, numEntries: int, latentDim: int, decay: float = 0.99, eps: float = 1e-5):
+    def __init__(self, num_entries: int, latent_dim: int, decay: float = 0.99, eps: float = 1e-5):
         super().__init__()
-        self.numEntries = numEntries
-        self.latentDim = latentDim
+        self.num_entries = num_entries
+        self.latent_dim = latent_dim
         self.decay = decay
         self.eps = eps
 
-        codebook = torch.randn(numEntries, latentDim) * 0.01
+        codebook = torch.randn(num_entries, latent_dim) * 0.01
         self.register_buffer("codebook", codebook)
-        self.register_buffer("clusterSize", torch.zeros(numEntries))
-        self.register_buffer("embedAvg", codebook.clone())
+        self.register_buffer("cluster_size", torch.zeros(num_entries))
+        self.register_buffer("embed_avg", codebook.clone())
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # x: (B, T, D) -- continuous latent to quantize
-        flat = x.reshape(-1, self.latentDim)  # (B*T, D)
+        flat = x.reshape(-1, self.latent_dim)  # (B*T, D)
 
         # Squared euclidean distance to every codebook entry
         dists = (
@@ -57,50 +57,50 @@ class RVQCodebook(nn.Module):
             + self.codebook.pow(2).sum(dim=1)
         )
         indices = dists.argmin(dim=1)  # (B*T,)
-        onehot = F.one_hot(indices, self.numEntries).type(flat.dtype)
+        onehot = F.one_hot(indices, self.num_entries).type(flat.dtype)
 
         if self.training:
-            self.emaUpdate(flat, onehot)
+            self.ema_update(flat, onehot)
 
         quantized = self.codebook[indices].reshape_as(x)
         # Straight-through: gradients flow from quantized back to x (encoder)
-        quantizedSt = x + (quantized - x).detach()
+        quantized_st = x + (quantized - x).detach()
         indices = indices.reshape(x.shape[:-1])
 
-        return quantizedSt, indices, quantized
+        return quantized_st, indices, quantized
 
     @torch.no_grad()
-    def emaUpdate(self, flat: torch.Tensor, onehot: torch.Tensor) -> None:
+    def ema_update(self, flat: torch.Tensor, onehot: torch.Tensor) -> None:
         n = onehot.sum(dim=0)
-        self.clusterSize.mul_(self.decay).add_(n, alpha=1 - self.decay)
+        self.cluster_size.mul_(self.decay).add_(n, alpha=1 - self.decay)
 
-        embedSum = onehot.t() @ flat
-        self.embedAvg.mul_(self.decay).add_(embedSum, alpha=1 - self.decay)
+        embed_sum = onehot.t() @ flat
+        self.embed_avg.mul_(self.decay).add_(embed_sum, alpha=1 - self.decay)
 
-        total = self.clusterSize.sum()
-        smoothed = (self.clusterSize + self.eps) / (total + self.numEntries * self.eps) * total
-        self.codebook.copy_(self.embedAvg / smoothed.unsqueeze(1))
+        total = self.cluster_size.sum()
+        smoothed = (self.cluster_size + self.eps) / (total + self.num_entries * self.eps) * total
+        self.codebook.copy_(self.embed_avg / smoothed.unsqueeze(1))
 
     @torch.no_grad()
-    def resetDeadCodes(self, flat: torch.Tensor, threshold: float = 1.0,
-                       noiseStd: float = 0.01) -> int:
+    def reset_dead_codes(self, flat: torch.Tensor, threshold: float = 1.0,
+                       noise_std: float = 0.01) -> int:
         # VQ-VAE-2 dead-code revival: replace entries with cluster_size below
         # threshold by random latents from the current batch (+ small noise).
-        dead = (self.clusterSize < threshold).nonzero(as_tuple=True)[0]
+        dead = (self.cluster_size < threshold).nonzero(as_tuple=True)[0]
 
         if dead.numel() == 0 or flat.numel() == 0:
             return 0
         n = dead.numel()
-        sampleIdx = torch.randint(0, flat.shape[0], (n,), device=flat.device)
-        replacements = flat[sampleIdx] + noiseStd * torch.randn_like(flat[sampleIdx])
+        sample_idx = torch.randint(0, flat.shape[0], (n,), device=flat.device)
+        replacements = flat[sample_idx] + noise_std * torch.randn_like(flat[sample_idx])
         self.codebook[dead] = replacements
-        self.embedAvg[dead] = replacements
-        self.clusterSize[dead] = 1.0
+        self.embed_avg[dead] = replacements
+        self.cluster_size[dead] = 1.0
 
         return int(n)
 
     @torch.no_grad()
-    def decodeIndices(self, indices: torch.Tensor) -> torch.Tensor:
+    def decode_indices(self, indices: torch.Tensor) -> torch.Tensor:
         # indices: (B, T) -> (B, T, D)
         # Guard against out-of-range indices from a misconfigured sampler --
         # silently wrapping into the wrong codebook entry is the bug class
@@ -108,8 +108,8 @@ class RVQCodebook(nn.Module):
         if indices.numel() > 0:
             mx = int(indices.max().item())
             mn = int(indices.min().item())
-            assert 0 <= mn and mx < self.numEntries, (
-                f"codebook index out of range: [{mn}, {mx}] vs [0, {self.numEntries})"
+            assert 0 <= mn and mx < self.num_entries, (
+                f"codebook index out of range: [{mn}, {mx}] vs [0, {self.num_entries})"
             )
         return self.codebook[indices]
 
@@ -117,65 +117,65 @@ class RVQCodebook(nn.Module):
 class ResidualVectorQuantizer(nn.Module):
     """Stack of K VQ codebooks. Each quantizes the residual of the previous."""
 
-    def __init__(self, nCodebooks: int, codebookSize: int, latentDim: int):
+    def __init__(self, n_codebooks: int, codebook_size: int, latent_dim: int):
         super().__init__()
-        self.nCodebooks = nCodebooks
-        self.codebookSize = codebookSize
-        self.latentDim = latentDim
+        self.n_codebooks = n_codebooks
+        self.codebook_size = codebook_size
+        self.latent_dim = latent_dim
         self.codebooks = nn.ModuleList(
-            [RVQCodebook(codebookSize, latentDim) for _ in range(nCodebooks)]
+            [RVQCodebook(codebook_size, latent_dim) for _ in range(n_codebooks)]
         )
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # x: (B, T, D) -> quantized (B, T, D), indices (B, T, K), commit_loss scalar
         residual = x
-        quantizedSum = torch.zeros_like(x)
-        allIndices = []
-        commitLoss = torch.zeros((), device=x.device, dtype=x.dtype)
+        quantized_sum = torch.zeros_like(x)
+        all_indices = []
+        commit_loss = torch.zeros((), device=x.device, dtype=x.dtype)
 
         for cb in self.codebooks:
             q_st, idx, q_hard = cb(residual)
-            quantizedSum = quantizedSum + q_st
+            quantized_sum = quantized_sum + q_st
             # Two-term commitment loss (Oord et al. 2017, eq. 4):
             #   term 1 (sg[z] - e)^2  — moves codebook toward encoder output
             #   term 2 β*(z - sg[e])^2 — encoder commitment (β handled externally)
-            commitLoss = commitLoss + F.mse_loss(residual.detach(), q_hard) + F.mse_loss(
+            commit_loss = commit_loss + F.mse_loss(residual.detach(), q_hard) + F.mse_loss(
                 residual, q_hard.detach()
             )
             residual = residual - q_st
-            allIndices.append(idx)
+            all_indices.append(idx)
 
-        indices = torch.stack(allIndices, dim=-1)  # (B, T, K)
-        commitLoss = commitLoss / self.nCodebooks
+        indices = torch.stack(all_indices, dim=-1)  # (B, T, K)
+        commit_loss = commit_loss / self.n_codebooks
 
-        return quantizedSum, indices, commitLoss
+        return quantized_sum, indices, commit_loss
 
     @torch.no_grad()
     def decode(self, indices: torch.Tensor) -> torch.Tensor:
         # indices: (B, T, K) -> (B, T, D)
-        firstCb: RVQCodebook = self.codebooks[0]  # type: ignore[assignment]
+        first_cb: RVQCodebook = self.codebooks[0]  # type: ignore[assignment]
         out = torch.zeros(
-            (*indices.shape[:-1], self.latentDim),
+            (*indices.shape[:-1], self.latent_dim),
             device=indices.device,
-            dtype=firstCb.codebook.dtype,
+            dtype=first_cb.codebook.dtype,
         )
         for k, module in enumerate(self.codebooks):
             cb: RVQCodebook = module  # type: ignore[assignment]
-            out = out + cb.decodeIndices(indices[..., k])
+            out = out + cb.decode_indices(indices[..., k])
 
         return out
 
     @torch.no_grad()
-    def resetDeadCodesPipeline(self, x: torch.Tensor, threshold: float = 1.0) -> list[int]:
+    def reset_dead_codes_pipeline(self, x: torch.Tensor, threshold: float = 1.0) -> list[int]:
         # Walk the residual chain just like forward, but reset dead codes per layer
         # using whichever residual that codebook actually sees.
-        flat = x.reshape(-1, self.latentDim)
+        flat = x.reshape(-1, self.latent_dim)
         counts: list[int] = []
 
         for module in self.codebooks:
             cb: RVQCodebook = module  # type: ignore[assignment]
-            nReset = cb.resetDeadCodes(flat, threshold)
-            counts.append(nReset)
+            n_reset = cb.reset_dead_codes(flat, threshold)
+            counts.append(n_reset)
             dists = (
                 flat.pow(2).sum(dim=1, keepdim=True)
                 - 2 * flat @ cb.codebook.t()
@@ -192,62 +192,62 @@ class MotionRVQTokenizer(nn.Module):
 
     def __init__(
         self,
-        motionDim: int = 168,
-        latentDim: int = 128,
-        nCodebooks: int = 6,
-        codebookSize: int = 512,
-        downT: int = 4,
+        motion_dim: int = 168,
+        latent_dim: int = 128,
+        n_codebooks: int = 6,
+        codebook_size: int = 512,
+        down_t: int = 4,
     ):
         super().__init__()
-        assert downT in (1, 2, 4, 8), "downT must be power of 2"
-        self.motionDim = motionDim
-        self.latentDim = latentDim
-        self.downT = downT
+        assert down_t in (1, 2, 4, 8), "down_t must be power of 2"
+        self.motion_dim = motion_dim
+        self.latent_dim = latent_dim
+        self.down_t = down_t
 
-        self.encoder = self.buildEncoder(motionDim, latentDim, downT)
-        self.rvq = ResidualVectorQuantizer(nCodebooks, codebookSize, latentDim)
-        self.decoder = self.buildDecoder(latentDim, motionDim, downT)
+        self.encoder = self.build_encoder(motion_dim, latent_dim, down_t)
+        self.rvq = ResidualVectorQuantizer(n_codebooks, codebook_size, latent_dim)
+        self.decoder = self.build_decoder(latent_dim, motion_dim, down_t)
 
     @staticmethod
-    def buildEncoder(inDim: int, latentDim: int, downT: int) -> nn.Sequential:
-        # downT is applied via stride-2 blocks
-        nStride = {1: 0, 2: 1, 4: 2, 8: 3}[downT]
-        hidden = latentDim
+    def build_encoder(in_dim: int, latent_dim: int, down_t: int) -> nn.Sequential:
+        # down_t is applied via stride-2 blocks
+        n_stride = {1: 0, 2: 1, 4: 2, 8: 3}[down_t]
+        hidden = latent_dim
         layers: list[nn.Module] = [
-            nn.Conv1d(inDim, hidden, kernel_size=3, padding=1),
+            nn.Conv1d(in_dim, hidden, kernel_size=3, padding=1),
             nn.SiLU(),
         ]
-        for _ in range(nStride):
+        for _ in range(n_stride):
             layers += [
                 nn.Conv1d(hidden, hidden, kernel_size=4, stride=2, padding=1),
                 nn.SiLU(),
                 nn.Conv1d(hidden, hidden, kernel_size=3, padding=1),
                 nn.SiLU(),
             ]
-        layers.append(nn.Conv1d(hidden, latentDim, kernel_size=3, padding=1))
+        layers.append(nn.Conv1d(hidden, latent_dim, kernel_size=3, padding=1))
 
         return nn.Sequential(*layers)
 
     @staticmethod
-    def buildDecoder(latentDim: int, outDim: int, downT: int) -> nn.Sequential:
-        nStride = {1: 0, 2: 1, 4: 2, 8: 3}[downT]
-        hidden = latentDim
+    def build_decoder(latent_dim: int, out_dim: int, down_t: int) -> nn.Sequential:
+        n_stride = {1: 0, 2: 1, 4: 2, 8: 3}[down_t]
+        hidden = latent_dim
         layers: list[nn.Module] = [
-            nn.Conv1d(latentDim, hidden, kernel_size=3, padding=1),
+            nn.Conv1d(latent_dim, hidden, kernel_size=3, padding=1),
             nn.SiLU(),
         ]
-        for _ in range(nStride):
+        for _ in range(n_stride):
             layers += [
                 nn.ConvTranspose1d(hidden, hidden, kernel_size=4, stride=2, padding=1),
                 nn.SiLU(),
                 nn.Conv1d(hidden, hidden, kernel_size=3, padding=1),
                 nn.SiLU(),
             ]
-        layers.append(nn.Conv1d(hidden, outDim, kernel_size=3, padding=1))
+        layers.append(nn.Conv1d(hidden, out_dim, kernel_size=3, padding=1))
 
         return nn.Sequential(*layers)
 
-    def codebookUtilization(self) -> list[dict]:
+    def codebook_utilization(self) -> list[dict]:
         """Per-codebook utilization: entropy (bits) and active fraction.
 
         Call after a training epoch to detect codebook collapse early.
@@ -256,15 +256,15 @@ class MotionRVQTokenizer(nn.Module):
         results = []
         for module in self.rvq.codebooks:
             cb: RVQCodebook = module  # type: ignore[assignment]
-            sizes = cb.clusterSize.float()
+            sizes = cb.cluster_size.float()
             total = sizes.sum().clamp(min=1.0)
             p = sizes / total
             nonzero = p[p > 0]
             entropy = -(nonzero * nonzero.log2()).sum().item() if len(nonzero) > 0 else 0.0
-            maxEntropy = math.log2(cb.numEntries)
+            max_entropy = math.log2(cb.num_entries)
             active = (sizes > 0.5).float().mean().item()
             results.append({
-                "entropy": entropy, "max_entropy": maxEntropy, "active_fraction": active,
+                "entropy": entropy, "max_entropy": max_entropy, "active_fraction": active,
             })
         return results
 
@@ -277,14 +277,14 @@ class MotionRVQTokenizer(nn.Module):
         return indices
 
     @torch.no_grad()
-    def resetDeadCodes(self, motion: torch.Tensor, threshold: float = 1.0) -> list[int]:
-        wasTraining = self.training
+    def reset_dead_codes(self, motion: torch.Tensor, threshold: float = 1.0) -> list[int]:
+        was_training = self.training
         self.eval()
         x = motion.transpose(1, 2)
         z = self.encoder(x).transpose(1, 2)
-        counts = self.rvq.resetDeadCodesPipeline(z, threshold)
+        counts = self.rvq.reset_dead_codes_pipeline(z, threshold)
 
-        if wasTraining:
+        if was_training:
             self.train()
 
         return counts

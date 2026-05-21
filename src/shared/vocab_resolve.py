@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 LEMMA_NLP: Any = None
 
 
-def registerNlp(nlp) -> None:
+def register_nlp(nlp) -> None:
     global LEMMA_NLP
 
     if LEMMA_NLP is None:
@@ -24,7 +24,7 @@ def registerNlp(nlp) -> None:
         log.debug("[vocab] spaCy lemmatizer: reusing shared Language instance")
 
 
-def getLemmaNlp():
+def get_lemma_nlp():
     global LEMMA_NLP
 
     if LEMMA_NLP is None:
@@ -38,8 +38,8 @@ def getLemmaNlp():
     return None if LEMMA_NLP is False else LEMMA_NLP
 
 
-def spacyLemma(word: str) -> str | None:
-    nlp = getLemmaNlp()
+def spacy_lemma(word: str) -> str | None:
+    nlp = get_lemma_nlp()
 
     if not nlp:
         return None
@@ -55,14 +55,14 @@ def spacyLemma(word: str) -> str | None:
 
 
 @cache
-def getActionByKeyword(keyword: str) -> ActionDefinition | None:
+def get_action_by_keyword(keyword: str) -> ActionDefinition | None:
     kw = keyword.lower().strip()
     exact = next((a for a in ACTIONS.values() if kw in a.keywords), None)
 
     if exact:
         return exact
 
-    lemma = spacyLemma(kw)
+    lemma = spacy_lemma(kw)
 
     if lemma:
         return next((a for a in ACTIONS.values() if lemma in a.keywords), None)
@@ -71,14 +71,14 @@ def getActionByKeyword(keyword: str) -> ActionDefinition | None:
 
 
 @cache
-def getObjectByKeyword(keyword: str) -> ObjectDefinition | None:
+def get_object_by_keyword(keyword: str) -> ObjectDefinition | None:
     kw = keyword.lower().strip()
     exact = next((o for o in OBJECTS.values() if kw in o.keywords), None)
 
     if exact:
         return exact
 
-    lemma = spacyLemma(kw)
+    lemma = spacy_lemma(kw)
 
     if lemma:
         return next((o for o in OBJECTS.values() if lemma in o.keywords), None)
@@ -86,16 +86,16 @@ def getObjectByKeyword(keyword: str) -> ObjectDefinition | None:
     return None
 
 
-def resolveAction(text: str) -> ActionDefinition | None:
+def resolve_action(text: str) -> ActionDefinition | None:
     for word in text.lower().split():
-        result = getActionByKeyword(word)
+        result = get_action_by_keyword(word)
 
         if result is not None:
             return result
 
-    result = getActionByKeyword(text.lower().strip())
+    result = get_action_by_keyword(text.lower().strip())
 
     if result is not None:
         return result
 
-    return SemanticActionResolver.getInstance().resolve(text)
+    return SemanticActionResolver.get_instance().resolve(text)

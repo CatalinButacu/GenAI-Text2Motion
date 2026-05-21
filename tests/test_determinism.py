@@ -21,80 +21,80 @@ from src.modules.motion.ssm import BiMambaLayer, MambaLayer, SSMConfig
 from src.modules.understanding.spacy import SpacyParser
 
 
-def tensorHash(t: torch.Tensor) -> str:
+def tensor_hash(t: torch.Tensor) -> str:
     """Stable hash of a tensor's float32 bytes — useful for diffing across runs."""
     arr = t.detach().to(torch.float32).contiguous().cpu().numpy().tobytes()
     return hashlib.sha256(arr).hexdigest()[:16]
 
 
-def lockTorchSeed(seed: int = 0) -> None:
+def lock_torch_seed(seed: int = 0) -> None:
     torch.manual_seed(seed)
     torch.use_deterministic_algorithms(False)  # CPU only; full determinism not needed
 
 
 class TestSsmForwardDeterminism(unittest.TestCase):
 
-    def configFor(self, dModel: int = 16, dState: int = 4) -> SSMConfig:
-        return SSMConfig(dModel=dModel, dState=dState, dConv=4, expand=2)
+    def config_for(self, d_model: int = 16, d_state: int = 4) -> SSMConfig:
+        return SSMConfig(d_model=d_model, d_state=d_state, d_conv=4, expand=2)
 
     def test_same_seed_same_output(self):
-        cfg = self.configFor()
-        lockTorchSeed(123)
+        cfg = self.config_for()
+        lock_torch_seed(123)
         layer1 = MambaLayer(cfg)
-        x = torch.randn(2, 8, cfg.dModel)
+        x = torch.randn(2, 8, cfg.d_model)
         out1 = layer1(x)
 
-        lockTorchSeed(123)
+        lock_torch_seed(123)
         layer2 = MambaLayer(cfg)
         out2 = layer2(x)
 
-        self.assertEqual(tensorHash(out1), tensorHash(out2))
+        self.assertEqual(tensor_hash(out1), tensor_hash(out2))
 
     def test_different_seed_different_output(self):
-        cfg = self.configFor()
-        lockTorchSeed(1)
+        cfg = self.config_for()
+        lock_torch_seed(1)
         layer1 = MambaLayer(cfg)
-        lockTorchSeed(2)
+        lock_torch_seed(2)
         layer2 = MambaLayer(cfg)
-        x = torch.randn(2, 8, cfg.dModel)
+        x = torch.randn(2, 8, cfg.d_model)
         out1 = layer1(x)
         out2 = layer2(x)
 
-        self.assertNotEqual(tensorHash(out1), tensorHash(out2))
+        self.assertNotEqual(tensor_hash(out1), tensor_hash(out2))
 
     def test_eval_mode_is_deterministic_across_calls(self):
-        cfg = self.configFor()
-        lockTorchSeed(99)
+        cfg = self.config_for()
+        lock_torch_seed(99)
         layer = MambaLayer(cfg).eval()
-        x = torch.randn(2, 8, cfg.dModel)
+        x = torch.randn(2, 8, cfg.d_model)
 
         with torch.no_grad():
-            outA = layer(x)
-            outB = layer(x)
+            out_a = layer(x)
+            out_b = layer(x)
 
-        self.assertTrue(torch.equal(outA, outB))
+        self.assertTrue(torch.equal(out_a, out_b))
 
     def test_bimamba_same_seed_same_output(self):
-        cfg = self.configFor()
-        lockTorchSeed(7)
+        cfg = self.config_for()
+        lock_torch_seed(7)
         layer1 = BiMambaLayer(cfg)
-        x = torch.randn(2, 6, cfg.dModel)
+        x = torch.randn(2, 6, cfg.d_model)
         out1 = layer1(x)
 
-        lockTorchSeed(7)
+        lock_torch_seed(7)
         layer2 = BiMambaLayer(cfg)
         out2 = layer2(x)
 
-        self.assertEqual(tensorHash(out1), tensorHash(out2))
+        self.assertEqual(tensor_hash(out1), tensor_hash(out2))
 
 
 class TestSsmScanNumericalStability(unittest.TestCase):
     """Forward pass must not produce NaN/inf on extreme inputs."""
 
     def test_zero_input_yields_finite_output(self):
-        cfg = SSMConfig(dModel=16, dState=4, dConv=4, expand=2)
+        cfg = SSMConfig(d_model=16, d_state=4, d_conv=4, expand=2)
         layer = MambaLayer(cfg).eval()
-        x = torch.zeros(2, 8, cfg.dModel)
+        x = torch.zeros(2, 8, cfg.d_model)
 
         with torch.no_grad():
             out = layer(x)
@@ -102,9 +102,9 @@ class TestSsmScanNumericalStability(unittest.TestCase):
         self.assertTrue(torch.isfinite(out).all().item())
 
     def test_large_input_does_not_explode(self):
-        cfg = SSMConfig(dModel=16, dState=4, dConv=4, expand=2)
+        cfg = SSMConfig(d_model=16, d_state=4, d_conv=4, expand=2)
         layer = MambaLayer(cfg).eval()
-        x = torch.randn(2, 8, cfg.dModel) * 50.0
+        x = torch.randn(2, 8, cfg.d_model) * 50.0
 
         with torch.no_grad():
             out = layer(x)
@@ -113,17 +113,17 @@ class TestSsmScanNumericalStability(unittest.TestCase):
                         "large input produced NaN or inf in SSM forward")
 
     def test_long_sequence_state_stays_bounded(self):
-        cfg = SSMConfig(dModel=8, dState=4, dConv=4, expand=2)
+        cfg = SSMConfig(d_model=8, d_state=4, d_conv=4, expand=2)
         layer = MambaLayer(cfg).eval()
-        x = torch.randn(1, 200, cfg.dModel) * 0.5
+        x = torch.randn(1, 200, cfg.d_model) * 0.5
 
         with torch.no_grad():
             out = layer(x)
 
         self.assertTrue(torch.isfinite(out).all().item())
-        maxAbs = float(out.abs().max())
-        self.assertLess(maxAbs, 1e3,
-                        f"long-sequence output magnitude unbounded: {maxAbs}")
+        max_abs = float(out.abs().max())
+        self.assertLess(max_abs, 1e3,
+                        f"long-sequence output magnitude unbounded: {max_abs}")
 
 
 class TestUnderstandingDeterminism(unittest.TestCase):
@@ -138,10 +138,10 @@ class TestUnderstandingDeterminism(unittest.TestCase):
         self.assertEqual(len(a.entities), len(b.entities))
         self.assertEqual(len(a.actions), len(b.actions))
         for ea, eb in zip(a.entities, b.entities, strict=True):
-            self.assertEqual(ea.objectType, eb.objectType)
+            self.assertEqual(ea.object_type, eb.object_type)
             self.assertEqual(ea.name, eb.name)
         for aa, ab in zip(a.actions, b.actions, strict=True):
-            self.assertEqual(aa.actionType, ab.actionType)
+            self.assertEqual(aa.action_type, ab.action_type)
             self.assertEqual(aa.order, ab.order)
 
 

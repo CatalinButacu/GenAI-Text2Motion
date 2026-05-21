@@ -108,7 +108,7 @@ CLAUSE_RE = re.compile(
 CONCURRENT_MAP: dict[str, bool] = {m.lower(): c for m, c in SEQUENCE_MARKERS}
 
 
-def splitIntoClauses(text: str) -> list[tuple[str, bool]]:
+def split_into_clauses(text: str) -> list[tuple[str, bool]]:
     clauses: list[tuple[str, bool]] = []
     concurrent = False
 

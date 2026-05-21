@@ -37,106 +37,106 @@ logging.basicConfig(
 )
 
 
-def buildTinyRvq() -> MotionRVQTokenizer:
+def build_tiny_rvq() -> MotionRVQTokenizer:
     return MotionRVQTokenizer(
-        motionDim=168, latentDim=64, nCodebooks=4, codebookSize=128, downT=4,
+        motion_dim=168, latent_dim=64, n_codebooks=4, codebook_size=128, down_t=4,
     )
 
 
-def buildTinySsm() -> TextToMotionSSM:
+def build_tiny_ssm() -> TextToMotionSSM:
     cfg = TrainingConfig(
-        dModel=128,
-        dState=16,
-        nLayers=2,
-        useSbert=False,
-        useFilm=False,
+        d_model=128,
+        d_state=16,
+        n_layers=2,
+        use_sbert=False,
+        use_film=False,
         bidirectional=False,
-        gradientCheckpointing=False,
-        maxMotionLength=120,
-        rvqDownT=4,
-        rvqLatentDim=64,
-        rvqNCodebooks=4,
-        rvqCodebookSize=128,
-        vocabSize=512,
-        useAmp=False,
+        gradient_checkpointing=False,
+        max_motion_length=120,
+        rvq_down_t=4,
+        rvq_latent_dim=64,
+        rvq_n_codebooks=4,
+        rvq_codebook_size=128,
+        vocab_size=512,
+        use_amp=False,
     )
     return TextToMotionSSM(cfg)
 
 
-def timeIt(stepFn, warmupSteps: int, measureSteps: int) -> float:
-    for _ in range(warmupSteps):
-        stepFn()
+def time_it(step_fn, warmup_steps: int, measure_steps: int) -> float:
+    for _ in range(warmup_steps):
+        step_fn()
     t0 = time.perf_counter()
-    for _ in range(measureSteps):
-        stepFn()
+    for _ in range(measure_steps):
+        step_fn()
     if torch.cuda.is_available():
         torch.cuda.synchronize()
     return time.perf_counter() - t0
 
 
-def benchRvq(device: str, steps: int, batch: int) -> dict[str, float]:
+def bench_rvq(device: str, steps: int, batch: int) -> dict[str, float]:
     motion = torch.randn(batch, 64, 168, device=device)
 
-    def makeRvqStep(model):  # accepts nn.Module OR torch.compile output
+    def make_rvq_step(model):  # accepts nn.Module OR torch.compile output
         opt = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
         def step() -> None:
             opt.zero_grad(set_to_none=True)
-            recon, _, commitLoss = model(motion)
-            loss = F.mse_loss(recon, motion) + 0.25 * commitLoss
+            recon, _, commit_loss = model(motion)
+            loss = F.mse_loss(recon, motion) + 0.25 * commit_loss
             loss.backward()
             opt.step()
         return step
 
-    baseline = buildTinyRvq().to(device)
-    baseStep = makeRvqStep(baseline)
-    baseSec = timeIt(baseStep, warmupSteps=3, measureSteps=steps)
+    baseline = build_tiny_rvq().to(device)
+    base_step = make_rvq_step(baseline)
+    base_sec = time_it(base_step, warmup_steps=3, measure_steps=steps)
 
-    compiled = buildTinyRvq().to(device)
+    compiled = build_tiny_rvq().to(device)
     compiled = torch.compile(compiled, mode="reduce-overhead", dynamic=False)
-    compStep = makeRvqStep(compiled)
+    comp_step = make_rvq_step(compiled)
     # Compile mode needs more warmup (first-batch compile + reduce-overhead caches).
-    compSec = timeIt(compStep, warmupSteps=5, measureSteps=steps)
+    comp_sec = time_it(comp_step, warmup_steps=5, measure_steps=steps)
 
     return {
-        "baseline_steps_per_sec": steps / baseSec,
-        "compile_steps_per_sec": steps / compSec,
-        "speedup": baseSec / compSec,
+        "baseline_steps_per_sec": steps / base_sec,
+        "compile_steps_per_sec": steps / comp_sec,
+        "speedup": base_sec / comp_sec,
     }
 
 
-def benchSsm(device: str, steps: int, batch: int) -> dict[str, float]:
+def bench_ssm(device: str, steps: int, batch: int) -> dict[str, float]:
     tokens = torch.randint(0, 512, (batch, 32), device=device)
     target = torch.randint(0, 128, (batch, 30, 4), device=device)
 
-    def makeSsmStep(model):  # accepts nn.Module OR torch.compile output
+    def make_ssm_step(model):  # accepts nn.Module OR torch.compile output
         opt = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
         def step() -> None:
             opt.zero_grad(set_to_none=True)
-            logits, _ = model(tokens, motionLength=120)
-            tLen = min(logits.shape[1], target.shape[1])
+            logits, _ = model(tokens, motion_length=120)
+            t_len = min(logits.shape[1], target.shape[1])
             loss = F.cross_entropy(
-                logits[:, :tLen].reshape(-1, logits.shape[-1]),
-                target[:, :tLen].reshape(-1),
+                logits[:, :t_len].reshape(-1, logits.shape[-1]),
+                target[:, :t_len].reshape(-1),
             )
             loss.backward()
             opt.step()
         return step
 
-    baseline = buildTinySsm().to(device)
-    baseStep = makeSsmStep(baseline)
-    baseSec = timeIt(baseStep, warmupSteps=3, measureSteps=steps)
+    baseline = build_tiny_ssm().to(device)
+    base_step = make_ssm_step(baseline)
+    base_sec = time_it(base_step, warmup_steps=3, measure_steps=steps)
 
-    compiled = buildTinySsm().to(device)
+    compiled = build_tiny_ssm().to(device)
     compiled = torch.compile(compiled, mode="reduce-overhead", dynamic=False)
-    compStep = makeSsmStep(compiled)
-    compSec = timeIt(compStep, warmupSteps=5, measureSteps=steps)
+    comp_step = make_ssm_step(compiled)
+    comp_sec = time_it(comp_step, warmup_steps=5, measure_steps=steps)
 
     return {
-        "baseline_steps_per_sec": steps / baseSec,
-        "compile_steps_per_sec": steps / compSec,
-        "speedup": baseSec / compSec,
+        "baseline_steps_per_sec": steps / base_sec,
+        "compile_steps_per_sec": steps / comp_sec,
+        "speedup": base_sec / comp_sec,
     }
 
 
@@ -159,9 +159,9 @@ def main() -> None:
 
     rows: list[tuple[str, dict[str, float]]] = []
     log.info("[bench] RVQ tokenizer ...")
-    rows.append(("MotionRVQTokenizer", benchRvq(device, args.steps, args.batch)))
+    rows.append(("MotionRVQTokenizer", bench_rvq(device, args.steps, args.batch)))
     log.info("[bench] TextToMotionSSM ...")
-    rows.append(("TextToMotionSSM", benchSsm(device, args.steps, args.batch)))
+    rows.append(("TextToMotionSSM", bench_ssm(device, args.steps, args.batch)))
 
     print()
     print(f"{'model':<22}  {'baseline (steps/s)':<20}  "
@@ -177,7 +177,7 @@ def main() -> None:
     print("How to apply (if compile wins on GPU):")
     print("  In the trainer, after model construction:")
     print("    model = torch.compile(model, mode='reduce-overhead', dynamic=False)")
-    print("  Use dynamic=False with bucketed/padded batches (we already use maxMotionLength).")
+    print("  Use dynamic=False with bucketed/padded batches (we already use max_motion_length).")
     print("  First-batch compile takes 30-90s; amortizes after ~3 epochs.")
 
 

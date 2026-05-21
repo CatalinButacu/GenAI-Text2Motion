@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import torch  # noqa: F401  (loaded for side effects when motion_encoder imports torch)
 
-from scripts.evaluation.motion_encoder import extractFeatures, loadEncoder
+from scripts.evaluation.motion_encoder import extract_features, load_encoder
 
 SRC = Path("data/t2m_download/extracted/t2m/text_mot_match/model/finest.tar")
 DEST = Path("data/t2m/text_mot_match/model/finest.tar")
@@ -50,7 +50,7 @@ def setup() -> bool:
     # Validate
     print("[setup] Validating weight load ...")
 
-    enc = loadEncoder(inputDim=168, device="cpu")
+    enc = load_encoder(input_dim=168, device="cpu")
     if not enc._loaded_pretrained:
         print("[setup] FAILED: weights not loaded (check error above)")
         return False
@@ -60,7 +60,7 @@ def setup() -> bool:
         np.random.randn(60, 168).astype("float32"),
         np.random.randn(30, 168).astype("float32"),
     ]
-    feats = extractFeatures(enc, motions, device="cpu")
+    feats = extract_features(enc, motions, device="cpu")
 
     norms = np.linalg.norm(feats, axis=1)
     ok = feats.shape == (2, 512) and np.allclose(norms, 1.0, atol=1e-5)

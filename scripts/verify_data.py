@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-from src.shared.run_ctx import dataFingerprint
+from src.shared.run_ctx import data_fingerprint
 
 DATA_ROOTS = ["data/AMASS", "data/humanml3d", "data/arctic/unpack"]
 BASELINE = Path("data/.cache/data_fingerprint.json")
@@ -22,7 +22,7 @@ def compute() -> dict[str, str]:
 
     for r in DATA_ROOTS:
         if Path(r).exists():
-            result[r] = dataFingerprint([r])
+            result[r] = data_fingerprint([r])
             print(f"  {r:30s}  {result[r]}")
         else:
             print(f"  {r:30s}  (missing)")

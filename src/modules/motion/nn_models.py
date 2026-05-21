@@ -12,20 +12,20 @@ log = logging.getLogger(__name__)
 
 
 class SimpleTextEncoder(nn.Module):
-    def __init__(self, vocabSize: int, embedDim: int, maxLength: int):
+    def __init__(self, vocab_size: int, embed_dim: int, max_length: int):
         super().__init__()
-        self.word_embed = nn.Embedding(vocabSize, embedDim, padding_idx=0)
-        self.pos_embed = nn.Embedding(maxLength, embedDim)
+        self.word_embed = nn.Embedding(vocab_size, embed_dim, padding_idx=0)
+        self.pos_embed = nn.Embedding(max_length, embed_dim)
         self.encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=embedDim, nhead=4, batch_first=True),
+            nn.TransformerEncoderLayer(d_model=embed_dim, nhead=4, batch_first=True),
             num_layers=2,
         )
-        self.register_buffer("pos_ids", torch.arange(maxLength).unsqueeze(0))
+        self.register_buffer("pos_ids", torch.arange(max_length).unsqueeze(0))
 
-    def forward(self, tokenIds: torch.Tensor) -> torch.Tensor:
-        b, s = tokenIds.shape
+    def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+        b, s = token_ids.shape
         pos = self.pos_ids[:, :s].expand(b, -1)  # type: ignore[index]
-        x = self.word_embed(tokenIds) + self.pos_embed(pos)
+        x = self.word_embed(token_ids) + self.pos_embed(pos)
 
         return self.encoder(x).mean(dim=1)
 
@@ -33,16 +33,16 @@ class SimpleTextEncoder(nn.Module):
 class SBERTTextEncoder(nn.Module):
     SBERT_DIM = 384  # fixed by all-MiniLM-L6-v2
 
-    def __init__(self, dModel: int, modelName: str = "all-MiniLM-L6-v2", freeze: bool = True):
+    def __init__(self, d_model: int, model_name: str = "all-MiniLM-L6-v2", freeze: bool = True):
         super().__init__()
-        self.sbert = SentenceTransformer(modelName)
+        self.sbert = SentenceTransformer(model_name)
 
         if freeze:
             for param in self.sbert.parameters():
                 param.requires_grad = False
         self.available = True
-        log.info("SBERTTextEncoder: loaded %s (frozen=%s)", modelName, freeze)
-        self.proj = nn.Sequential(nn.Linear(self.SBERT_DIM, dModel), nn.LayerNorm(dModel))
+        log.info("SBERTTextEncoder: loaded %s (frozen=%s)", model_name, freeze)
+        self.proj = nn.Sequential(nn.Linear(self.SBERT_DIM, d_model), nn.LayerNorm(d_model))
 
     def forward(self, texts: list[str]) -> torch.Tensor:
         device = next(self.proj.parameters()).device
@@ -69,14 +69,14 @@ class FiLM(nn.Module):
     (identity at start of training).
     """
 
-    def __init__(self, dModel: int, dCond: int):
+    def __init__(self, d_model: int, d_cond: int):
         super().__init__()
-        self.norm = nn.LayerNorm(dModel)
-        self.proj = nn.Linear(dCond, dModel * 2)
+        self.norm = nn.LayerNorm(d_model)
+        self.proj = nn.Linear(d_cond, d_model * 2)
         # Identity init: gamma->1, beta->0
         nn.init.zeros_(self.proj.weight)
-        nn.init.ones_(self.proj.bias[:dModel])
-        nn.init.zeros_(self.proj.bias[dModel:])
+        nn.init.ones_(self.proj.bias[:d_model])
+        nn.init.zeros_(self.proj.bias[d_model:])
 
     def forward(self, x: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
         # x: (B, T, d_model)  cond: (B, d_cond)
@@ -94,27 +94,27 @@ class RVQMotionDecoder(nn.Module):
 
     def __init__(
         self,
-        dModel: int,
-        nCodebooks: int,
-        codebookSize: int,
-        maxLength: int,
+        d_model: int,
+        n_codebooks: int,
+        codebook_size: int,
+        max_length: int,
     ):
         super().__init__()
-        self.nCodebooks = nCodebooks
-        self.codebookSize = codebookSize
-        self.maxLength = maxLength
-        self.length_head = nn.Linear(dModel, 1)
+        self.n_codebooks = n_codebooks
+        self.codebook_size = codebook_size
+        self.max_length = max_length
+        self.length_head = nn.Linear(d_model, 1)
         self.token_heads = nn.ModuleList(
-            [nn.Linear(dModel, codebookSize) for _ in range(nCodebooks)]
+            [nn.Linear(d_model, codebook_size) for _ in range(n_codebooks)]
         )
 
     def forward(self, features: torch.Tensor, condition: torch.Tensor) -> tuple:
         # features: (B, T', d_model), condition: (B, d_model)
         # returns: logits (B, T', K, V), length_pred (B,)
         logits = torch.stack([head(features) for head in self.token_heads], dim=2)
-        lengthPred = torch.sigmoid(self.length_head(condition)).squeeze(-1) * self.maxLength
+        length_pred = torch.sigmoid(self.length_head(condition)).squeeze(-1) * self.max_length
 
-        return logits, lengthPred
+        return logits, length_pred
 
 
 class TextToMotionSSM(nn.Module):
@@ -122,56 +122,56 @@ class TextToMotionSSM(nn.Module):
         super().__init__()
         self.config = config
 
-        if config.useSbert:
+        if config.use_sbert:
             self.text_encoder = SBERTTextEncoder(
-                dModel=config.dModel,
-                modelName=config.sbertModel,
-                freeze=config.freezeSbert,
+                d_model=config.d_model,
+                model_name=config.sbert_model,
+                freeze=config.freeze_sbert,
             )
             self.condition_proj = nn.Identity()
         else:
             self.text_encoder = SimpleTextEncoder(
-                config.vocabSize,
-                config.textEmbedDim,
-                config.maxTextLength,
+                config.vocab_size,
+                config.text_embed_dim,
+                config.max_text_length,
             )
-            self.condition_proj = nn.Linear(config.textEmbedDim, config.dModel)
+            self.condition_proj = nn.Linear(config.text_embed_dim, config.d_model)
 
-        self.latent_length = config.maxMotionLength // config.rvqDownT
-        self.pos_embed = nn.Embedding(self.latent_length, config.dModel)
+        self.latent_length = config.max_motion_length // config.rvq_down_t
+        self.pos_embed = nn.Embedding(self.latent_length, config.d_model)
         self.register_buffer("motion_pos_ids", torch.arange(self.latent_length))
 
         bidirectional = config.bidirectional
-        gradCkpt = config.gradientCheckpointing
-        useFilm = config.useFilm
-        layerCls = BiMambaLayer if bidirectional else MambaLayer
-        ssmCfg = SSMConfig(
-            dModel=config.dModel, dState=config.dState, gradientCheckpointing=gradCkpt
+        grad_ckpt = config.gradient_checkpointing
+        use_film = config.use_film
+        layer_cls = BiMambaLayer if bidirectional else MambaLayer
+        ssm_cfg = SSMConfig(
+            d_model=config.d_model, d_state=config.d_state, gradient_checkpointing=grad_ckpt
         )
-        self.layers = nn.ModuleList([layerCls(ssmCfg) for _ in range(config.nLayers)])
-        self.useFilm = useFilm
+        self.layers = nn.ModuleList([layer_cls(ssm_cfg) for _ in range(config.n_layers)])
+        self.use_film = use_film
         self.bidirectional = bidirectional
-        self.ssm_cfg = ssmCfg
+        self.ssm_cfg = ssm_cfg
 
-        if useFilm:
+        if use_film:
             self.films = nn.ModuleList(
-                [FiLM(config.dModel, config.dModel) for _ in range(config.nLayers)]
+                [FiLM(config.d_model, config.d_model) for _ in range(config.n_layers)]
             )
         else:
             self.norms = nn.ModuleList(
-                [nn.LayerNorm(config.dModel) for _ in range(config.nLayers)]
+                [nn.LayerNorm(config.d_model) for _ in range(config.n_layers)]
             )
         self.decoder = RVQMotionDecoder(
-            dModel=config.dModel,
-            nCodebooks=config.rvqNCodebooks,
-            codebookSize=config.rvqCodebookSize,
-            maxLength=config.maxMotionLength,
+            d_model=config.d_model,
+            n_codebooks=config.rvq_n_codebooks,
+            codebook_size=config.rvq_codebook_size,
+            max_length=config.max_motion_length,
         )
 
     def forward(
         self,
         inputs: torch.Tensor | list[str],
-        motionLength: int | None = None,
+        motion_length: int | None = None,
     ) -> tuple:
         """Parallel forward pass over latent (downsampled) frames.
 
@@ -186,14 +186,14 @@ class TextToMotionSSM(nn.Module):
         """
         cond = self.condition_proj(self.text_encoder(inputs))
 
-        if motionLength is None or motionLength > self.config.maxMotionLength:
-            motionLength = self.config.maxMotionLength
-        assert isinstance(motionLength, int)
-        latentLen = max(1, motionLength // self.config.rvqDownT)
-        pos = self.pos_embed(self.motion_pos_ids[:latentLen])  # type: ignore[index]
+        if motion_length is None or motion_length > self.config.max_motion_length:
+            motion_length = self.config.max_motion_length
+        assert isinstance(motion_length, int)
+        latent_len = max(1, motion_length // self.config.rvq_down_t)
+        pos = self.pos_embed(self.motion_pos_ids[:latent_len])  # type: ignore[index]
         x = cond.unsqueeze(1) + pos.unsqueeze(0)  # (B, T', d_model)
 
-        if self.useFilm:
+        if self.use_film:
             for layer, film in zip(self.layers, self.films):
                 x = x + layer(film(x, cond))
         else:

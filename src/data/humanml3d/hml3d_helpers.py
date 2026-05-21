@@ -10,7 +10,7 @@ DEFAULT_DIR = "data/humanml3d"
 METADATA_RE = re.compile(r"#.*$")
 
 
-def parseAnnotationLine(line: str) -> str | None:
+def parse_annotation_line(line: str) -> str | None:
     line = line.strip()
 
     if not line:
@@ -21,7 +21,7 @@ def parseAnnotationLine(line: str) -> str | None:
     return text if text else None
 
 
-def normalizeAmassPath(p: str) -> str:
+def normalize_amass_path(p: str) -> str:
     p = p.replace("\\", "/").lower()
     p = re.sub(r"_stageii|_stagei", "", p)
     p = re.sub(r"\.(npz|pkl|pt|npy)$", "", p)
@@ -32,14 +32,14 @@ def normalizeAmassPath(p: str) -> str:
 
 
 class HumanML3DLoader:
-    def __init__(self, dataDir: str = DEFAULT_DIR) -> None:
-        self.dir = Path(dataDir)
+    def __init__(self, data_dir: str = DEFAULT_DIR) -> None:
+        self.dir = Path(data_dir)
         self.texts_dir = self.dir / "texts"
 
-    def isAvailable(self) -> bool:
+    def is_available(self) -> bool:
         return self.texts_dir.exists() and any(self.texts_dir.glob("*.txt"))
 
-    def loadTexts(self) -> list[dict]:
+    def load_texts(self) -> list[dict]:
         if not self.texts_dir.exists():
             return []
 
@@ -50,7 +50,7 @@ class HumanML3DLoader:
                 continue
 
             anns = [t for ln in path.read_text(encoding="utf-8").splitlines()
-                    if (t := parseAnnotationLine(ln)) is not None]
+                    if (t := parse_annotation_line(ln)) is not None]
 
             if anns:
                 results.append({"clip_id": path.stem, "texts": anns})
@@ -58,7 +58,7 @@ class HumanML3DLoader:
 
         return results
 
-    def loadSplit(self, split: str = "train") -> list[str]:
+    def load_split(self, split: str = "train") -> list[str]:
         path = self.dir / "split" / f"{split}.txt"
 
         if not path.exists():
@@ -66,5 +66,5 @@ class HumanML3DLoader:
 
         return [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
-    def buildTextCorpus(self) -> list[str]:
-        return list(dict.fromkeys(t for item in self.loadTexts() for t in item["texts"]))
+    def build_text_corpus(self) -> list[str]:
+        return list(dict.fromkeys(t for item in self.load_texts() for t in item["texts"]))

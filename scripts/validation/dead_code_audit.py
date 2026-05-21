@@ -30,7 +30,7 @@ ENTRY_POINT_PATTERNS = [
 ]
 
 
-def collectFiles() -> list[Path]:
+def collect_files() -> list[Path]:
     files: list[Path] = []
 
     for top in TOP_LEVEL_FILES:
@@ -54,7 +54,7 @@ def collectFiles() -> list[Path]:
     return files
 
 
-def fileToModule(path: Path) -> str:
+def file_to_module(path: Path) -> str:
     rel = path.relative_to(PROJECT_ROOT)
     parts = list(rel.parts)
     if parts[-1] == "__init__.py":
@@ -65,17 +65,17 @@ def fileToModule(path: Path) -> str:
     return ".".join(parts)
 
 
-def collectImports(text: str, fileMod: str) -> set[str]:
+def collect_imports(text: str, file_mod: str) -> set[str]:
     """Return all module-name strings imported by this file (best-effort).
-    Resolves relative imports against fileMod (the importing file's dotted name)."""
+    Resolves relative imports against file_mod (the importing file's dotted name)."""
     imports: set[str] = set()
     try:
         tree = ast.parse(text)
     except SyntaxError:
         return imports
 
-    parts = fileMod.split(".") if fileMod else []
-    pkgParts = parts[:-1]  # the package this file lives in
+    parts = file_mod.split(".") if file_mod else []
+    pkg_parts = parts[:-1]  # the package this file lives in
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -86,8 +86,8 @@ def collectImports(text: str, fileMod: str) -> set[str]:
             level = node.level or 0
             base: list[str] = []
             if level > 0:
-                # relative — strip `level` parts off pkgParts
-                base = pkgParts[: max(0, len(pkgParts) - level + 1)]
+                # relative — strip `level` parts off pkg_parts
+                base = pkg_parts[: max(0, len(pkg_parts) - level + 1)]
             mod = node.module or ""
             full = ".".join([*base, mod]) if mod else ".".join(base)
             full = full.strip(".")
@@ -103,7 +103,7 @@ def collectImports(text: str, fileMod: str) -> set[str]:
     return imports
 
 
-def isEntryFile(path: Path, text: str) -> bool:
+def is_entry_file(path: Path, text: str) -> bool:
     if path.name == "main.py":
         return True
     if path.parts[-1].startswith("conftest"):
@@ -122,8 +122,8 @@ def isEntryFile(path: Path, text: str) -> bool:
 
 
 class DefVisitor(ast.NodeVisitor):
-    def __init__(self, filePath: Path) -> None:
-        self.filePath = filePath
+    def __init__(self, file_path: Path) -> None:
+        self.file_path = file_path
         self.scopes: list[str] = []
         self.defs: list[dict] = []
 
@@ -133,20 +133,20 @@ class DefVisitor(ast.NodeVisitor):
         self.scopes.pop()
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        self.recordDef(node)
+        self.record_def(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        self.recordDef(node)
+        self.record_def(node)
 
-    def recordDef(self, node) -> None:
+    def record_def(self, node) -> None:
         qualname = ".".join(self.scopes + [node.name])
         decorators = [ast.unparse(d) for d in node.decorator_list]
         self.defs.append({
             "name": node.name,
             "qualname": qualname,
             "lineno": node.lineno,
-            "file": str(self.filePath.relative_to(PROJECT_ROOT)).replace("\\", "/"),
-            "isMethod": bool(self.scopes),
+            "file": str(self.file_path.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+            "is_method": bool(self.scopes),
             "decorators": decorators,
             "isPrivate": node.name.startswith("_") and not node.name.startswith("__"),
             "isDunder": node.name.startswith("__") and node.name.endswith("__"),
@@ -156,17 +156,19 @@ class DefVisitor(ast.NodeVisitor):
         self.scopes.pop()
 
 
-def buildCorpus(files: list[Path]) -> dict[Path, str]:
+def build_corpus(files: list[Path]) -> dict[Path, str]:
     return {f: f.read_text(encoding="utf-8", errors="ignore") for f in files}
 
 
-def findReferences(name: str, corpus: dict[Path, str], defFile: Path) -> list[tuple[str, int, str]]:
+def find_references(
+    name: str, corpus: dict[Path, str], def_file: Path,
+) -> list[tuple[str, int, str]]:
     """List every external reference site as (file, line, line_text)."""
     pattern = re.compile(rf"\b{re.escape(name)}\b")
     out: list[tuple[str, int, str]] = []
 
     for path, text in corpus.items():
-        if path == defFile:
+        if path == def_file:
             continue
         for i, line in enumerate(text.splitlines(), start=1):
             if pattern.search(line):
@@ -176,7 +178,7 @@ def findReferences(name: str, corpus: dict[Path, str], defFile: Path) -> list[tu
     return out
 
 
-def isAlwaysUsed(d: dict) -> bool:
+def is_always_used(d: dict) -> bool:
     name = d["name"]
     if d["isDunder"]:
         return True
@@ -184,8 +186,8 @@ def isAlwaysUsed(d: dict) -> bool:
         return True
     if name.startswith("test_") or name.startswith("Test"):
         return True
-    decoStr = " ".join(d["decorators"])
-    if any(tag in decoStr for tag in ("fixture", "parametrize", "given(", "register",
+    deco_str = " ".join(d["decorators"])
+    if any(tag in deco_str for tag in ("fixture", "parametrize", "given(", "register",
                                        "click.command", "click.group", "app.command",
                                        "app.callback")):
         return True
@@ -199,31 +201,31 @@ def isAlwaysUsed(d: dict) -> bool:
 
 
 def main() -> None:
-    files = collectFiles()
-    corpus = buildCorpus(files)
+    files = collect_files()
+    corpus = build_corpus(files)
     print(f"Scanned {len(files)} Python files.")
 
     # ---- Step 1: orphan modules ----
-    moduleNames: dict[str, Path] = {}
+    module_names: dict[str, Path] = {}
     for f in files:
-        moduleNames[fileToModule(f)] = f
+        module_names[file_to_module(f)] = f
 
-    importedModules: set[str] = set()
+    imported_modules: set[str] = set()
     for f in files:
-        imps = collectImports(corpus[f], fileToModule(f))
+        imps = collect_imports(corpus[f], file_to_module(f))
         for imp in imps:
             # Mark every prefix of dotted import as "imported" so that
             # `from src.modules.understanding import x` covers x's package.
             parts = imp.split(".")
             for i in range(1, len(parts) + 1):
-                importedModules.add(".".join(parts[:i]))
+                imported_modules.add(".".join(parts[:i]))
 
     orphans: list[dict] = []
-    for mod, f in moduleNames.items():
+    for mod, f in module_names.items():
         text = corpus[f]
-        if mod in importedModules:
+        if mod in imported_modules:
             continue
-        if isEntryFile(f, text):
+        if is_entry_file(f, text):
             continue
         orphans.append({
             "module": mod,
@@ -234,7 +236,7 @@ def main() -> None:
     print(f"Orphan modules (never imported, not entry points): {len(orphans)}")
 
     # ---- Step 2: low-use standalone functions ----
-    allDefs: list[dict] = []
+    all_defs: list[dict] = []
     for f in files:
         try:
             tree = ast.parse(corpus[f])
@@ -242,41 +244,41 @@ def main() -> None:
             continue
         v = DefVisitor(f)
         v.visit(tree)
-        allDefs.extend(v.defs)
+        all_defs.extend(v.defs)
 
     # Group by name to flag overloads
-    byName: dict[str, int] = defaultdict(int)
-    for d in allDefs:
-        byName[d["name"]] += 1
+    by_name: dict[str, int] = defaultdict(int)
+    for d in all_defs:
+        by_name[d["name"]] += 1
 
-    lowUse: list[dict] = []
-    for d in allDefs:
-        if d["isMethod"] or d["isDunder"]:
+    low_use: list[dict] = []
+    for d in all_defs:
+        if d["is_method"] or d["isDunder"]:
             continue
-        if isAlwaysUsed(d):
+        if is_always_used(d):
             continue
-        if byName[d["name"]] > 1:
+        if by_name[d["name"]] > 1:
             continue  # ambiguous (multiple defs share name)
-        defPath = PROJECT_ROOT / d["file"]
-        refs = findReferences(d["name"], corpus, defPath)
+        def_path = PROJECT_ROOT / d["file"]
+        refs = find_references(d["name"], corpus, def_path)
         # Filter out reference lines that are themselves a `def name(` line
-        # in another file (shouldn't happen here since byName>1 was excluded).
+        # in another file (shouldn't happen here since by_name>1 was excluded).
         refs = [r for r in refs if not r[2].startswith(f"def {d['name']}(")]
         if len(refs) <= 2:
             d["refs"] = refs
             d["refCount"] = len(refs)
-            lowUse.append(d)
+            low_use.append(d)
 
-    print(f"Low-use standalone functions (<=2 external refs, unique-name): {len(lowUse)}")
+    print(f"Low-use standalone functions (<=2 external refs, unique-name): {len(low_use)}")
 
     out = {
         "totalFiles": len(files),
         "orphanModules": orphans,
-        "lowUseFunctions": lowUse,
+        "lowUseFunctions": low_use,
     }
-    outPath = PROJECT_ROOT / "scripts" / "validation" / "dead_code_audit.json"
-    outPath.write_text(json.dumps(out, indent=2), encoding="utf-8")
-    print(f"Wrote {outPath}")
+    out_path = PROJECT_ROOT / "scripts" / "validation" / "dead_code_audit.json"
+    out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
+    print(f"Wrote {out_path}")
 
     # ---- Stdout summary ----
     print("\n## Orphan modules\n")
@@ -286,7 +288,7 @@ def main() -> None:
     print("\n## Low-use standalone functions\n")
     print("| File:Line | Function | Refs | Sample sites |")
     print("|---|---|---|---|")
-    for d in sorted(lowUse, key=lambda x: (x["refCount"], x["file"])):
+    for d in sorted(low_use, key=lambda x: (x["refCount"], x["file"])):
         sample = "; ".join(f"{r[0]}:{r[1]}" for r in d["refs"][:3]) or "(none)"
         print(f"| {d['file']}:{d['lineno']} | `{d['name']}` | {d['refCount']} | {sample} |")
 

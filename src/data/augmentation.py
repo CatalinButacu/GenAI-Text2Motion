@@ -7,8 +7,8 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.spatial.transform import Rotation as R
 
-from .aug_quality import detectTpose, qualityFilter
-from .aug_slerp import slerpResample
+from .aug_quality import detect_tpose, quality_filter
+from .aug_slerp import slerp_resample
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ BODY_LR_PAIRS: tuple[tuple[int, int], ...] = (
 )
 
 
-def mirrorRotvecInplace(m: np.ndarray, start: int, end: int) -> None:
+def mirror_rotvec_inplace(m: np.ndarray, start: int, end: int) -> None:
     """Negate y,z components of every 3D rotvec in channels[start:end].
 
     Under mirror M=diag(-1,1,1): rotvec (rx,ry,rz) -> (rx,-ry,-rz).
@@ -41,7 +41,7 @@ def mirrorRotvecInplace(m: np.ndarray, start: int, end: int) -> None:
     m[:, start + 2:end:3] *= -1.0
 
 
-def mirrorFlip(motion: np.ndarray) -> np.ndarray:
+def mirror_flip(motion: np.ndarray) -> np.ndarray:
     """Mirror the pose left<->right across the YZ plane (x <-> -x).
 
     Produces a biomechanically valid mirrored sequence: requires matching
@@ -53,24 +53,24 @@ def mirrorFlip(motion: np.ndarray) -> np.ndarray:
 
     m = motion.copy()
 
-    mirrorRotvecInplace(m, 0, 3)     # root orient
+    mirror_rotvec_inplace(m, 0, 3)     # root orient
     m[:, 3] *= -1.0                      # translation x -> -x
 
-    bodyStart = 6
-    mirrorRotvecInplace(m, bodyStart, bodyStart + 63)
+    body_start = 6
+    mirror_rotvec_inplace(m, body_start, body_start + 63)
 
     for a, b in BODY_LR_PAIRS:
-        ia, ib = bodyStart + 3 * a, bodyStart + 3 * b
+        ia, ib = body_start + 3 * a, body_start + 3 * b
         m[:, [ia, ia + 1, ia + 2, ib, ib + 1, ib + 2]] = (
             m[:, [ib, ib + 1, ib + 2, ia, ia + 1, ia + 2]]
         )
 
     l_start, r_start, hand_len = 69, 114, 45
-    leftBlock = m[:, l_start:l_start + hand_len].copy()
+    left_block = m[:, l_start:l_start + hand_len].copy()
     m[:, l_start:l_start + hand_len] = m[:, r_start:r_start + hand_len]
-    m[:, r_start:r_start + hand_len] = leftBlock
-    mirrorRotvecInplace(m, l_start, l_start + hand_len)
-    mirrorRotvecInplace(m, r_start, r_start + hand_len)
+    m[:, r_start:r_start + hand_len] = left_block
+    mirror_rotvec_inplace(m, l_start, l_start + hand_len)
+    mirror_rotvec_inplace(m, r_start, r_start + hand_len)
 
     return m.astype(np.float32)
 
@@ -80,12 +80,12 @@ LR_SWAP = {"left": "right", "right": "left", "Left": "Right", "Right": "Left",
             "LEFT": "RIGHT", "RIGHT": "LEFT"}
 
 
-def mirrorFlipText(text: str) -> str:
+def mirror_flip_text(text: str) -> str:
     """Swap left<->right tokens so text matches a mirror-flipped motion."""
     return LR_WORD_RE.sub(lambda m: LR_SWAP[m.group(0)], text)
 
 
-def canonicalizeRoot(motion: np.ndarray) -> np.ndarray:
+def canonicalize_root(motion: np.ndarray) -> np.ndarray:
     """Zero the frame-0 XY translation AND remove frame-0 yaw.
 
     Z-up convention: channels 3,4 = (tx,ty), channel 5 = tz (height).
@@ -110,29 +110,29 @@ def canonicalizeRoot(motion: np.ndarray) -> np.ndarray:
     if abs(yaw0) < 1e-4:
         return m
 
-    yawInv = R.from_euler("Z", -yaw0)
+    yaw_inv = R.from_euler("Z", -yaw0)
     rots = R.from_rotvec(m[:, 0:3])
-    m[:, 0:3] = (yawInv * rots).as_rotvec().astype(m.dtype)
-    m[:, 3:6] = yawInv.apply(m[:, 3:6]).astype(m.dtype)
+    m[:, 0:3] = (yaw_inv * rots).as_rotvec().astype(m.dtype)
+    m[:, 3:6] = yaw_inv.apply(m[:, 3:6]).astype(m.dtype)
 
     return m
 
 
-def resampleToFps(motion: np.ndarray, srcFps: float, tgtFps: float = 30.0) -> np.ndarray:
-    """Time-resample a motion clip from srcFps to tgtFps.
+def resample_to_fps(motion: np.ndarray, src_fps: float, tgt_fps: float = 30.0) -> np.ndarray:
+    """Time-resample a motion clip from src_fps to tgt_fps.
 
     SLERP is used for full SMPL-X (168-dim) so axis-angle channels interpolate
     on the rotation manifold. Linear interp is used for non-rotation tensors.
     Refuses to resample when input is degenerate (NaN, <=1 frame, fps<=1 Hz),
     returning the input unchanged so the caller's quality filter rejects it.
     """
-    if not np.isfinite(srcFps) or srcFps <= 1.0:
+    if not np.isfinite(src_fps) or src_fps <= 1.0:
         return motion
 
-    if not np.isfinite(tgtFps) or tgtFps <= 1.0:
+    if not np.isfinite(tgt_fps) or tgt_fps <= 1.0:
         return motion
 
-    if abs(srcFps - tgtFps) < 0.5:
+    if abs(src_fps - tgt_fps) < 0.5:
         return motion
 
     T_src = motion.shape[0]
@@ -143,39 +143,39 @@ def resampleToFps(motion: np.ndarray, srcFps: float, tgtFps: float = 30.0) -> np
     if not np.isfinite(motion).all():
         return motion
 
-    duration = T_src / srcFps
-    T_tgt = max(1, int(round(duration * tgtFps)))
-    srcT = np.linspace(0, duration, T_src)
-    tgtT = np.linspace(0, duration, T_tgt)
+    duration = T_src / src_fps
+    T_tgt = max(1, int(round(duration * tgt_fps)))
+    src_t = np.linspace(0, duration, T_src)
+    tgt_t = np.linspace(0, duration, T_tgt)
 
     if motion.shape[1] == 168:
-        return slerpResample(motion, srcT, tgtT)
+        return slerp_resample(motion, src_t, tgt_t)
 
-    f = interp1d(srcT, motion, axis=0, assume_sorted=True)
+    f = interp1d(src_t, motion, axis=0, assume_sorted=True)
 
-    return f(tgtT).astype(motion.dtype)
+    return f(tgt_t).astype(motion.dtype)
 
 
-def temporalCrop(
-    motion: np.ndarray, maxLength: int, rng: np.random.Generator | None = None,
+def temporal_crop(
+    motion: np.ndarray, max_length: int, rng: np.random.Generator | None = None,
 ) -> np.ndarray:
     T = motion.shape[0]
 
-    if T <= maxLength:
+    if T <= max_length:
         return motion
 
     rng = rng or np.random.default_rng()
-    start = rng.integers(0, T - maxLength + 1)
+    start = rng.integers(0, T - max_length + 1)
 
-    return motion[start:start + maxLength]
+    return motion[start:start + max_length]
 
 
-def speedPerturbation(
+def speed_perturbation(
     motion: np.ndarray, rng: np.random.Generator | None = None,
-    speedRange: tuple[float, float] = (0.8, 1.2),
+    speed_range: tuple[float, float] = (0.8, 1.2),
 ) -> np.ndarray:
     rng = rng or np.random.default_rng()
-    factor = rng.uniform(*speedRange)
+    factor = rng.uniform(*speed_range)
 
     if abs(factor - 1.0) < 0.02:
         return motion
@@ -188,18 +188,18 @@ def speedPerturbation(
         return motion
 
     T_new = max(1, int(round(T / factor)))
-    srcT = np.linspace(0, 1, T)
-    tgtT = np.linspace(0, 1, T_new)
+    src_t = np.linspace(0, 1, T)
+    tgt_t = np.linspace(0, 1, T_new)
 
     if motion.shape[1] == 168:
-        return slerpResample(motion, srcT, tgtT)
+        return slerp_resample(motion, src_t, tgt_t)
 
-    f = interp1d(srcT, motion, axis=0, assume_sorted=True)
+    f = interp1d(src_t, motion, axis=0, assume_sorted=True)
 
-    return f(tgtT).astype(motion.dtype)
+    return f(tgt_t).astype(motion.dtype)
 
 
-def addNoise(
+def add_noise(
     motion: np.ndarray, sigma: float = 0.002, rng: np.random.Generator | None = None,
 ) -> np.ndarray:
     rng = rng or np.random.default_rng()
@@ -213,31 +213,31 @@ def addNoise(
 
 class AugmentationPipeline:
     def __init__(
-        self, *, temporalCropEnabled: bool = True, speedPerturbEnabled: bool = True,
-        noiseEnabled: bool = True, noiseSigma: float = 0.002,
-        speedRange: tuple[float, float] = (0.8, 1.2), maxLength: int = 200,
-        speedProb: float = 0.5, noiseProb: float = 0.3,
+        self, *, temporal_crop_enabled: bool = True, speed_perturb_enabled: bool = True,
+        noise_enabled: bool = True, noise_sigma: float = 0.002,
+        speed_range: tuple[float, float] = (0.8, 1.2), max_length: int = 200,
+        speed_prob: float = 0.5, noise_prob: float = 0.3,
         seed: int | None = None,
     ) -> None:
-        self.temporalCropEnabled = temporalCropEnabled
-        self.speedPerturbEnabled = speedPerturbEnabled
-        self.noiseEnabled = noiseEnabled
-        self.noiseSigma = noiseSigma
-        self.speedRange = speedRange
-        self.maxLength = maxLength
-        self.speedProb = speedProb
-        self.noiseProb = noiseProb
+        self.temporal_crop_enabled = temporal_crop_enabled
+        self.speed_perturb_enabled = speed_perturb_enabled
+        self.noise_enabled = noise_enabled
+        self.noise_sigma = noise_sigma
+        self.speed_range = speed_range
+        self.max_length = max_length
+        self.speed_prob = speed_prob
+        self.noise_prob = noise_prob
         self.rng = np.random.default_rng(seed)
 
     def __call__(self, motion: np.ndarray) -> np.ndarray:
-        if self.speedPerturbEnabled and self.rng.random() < self.speedProb:
-            motion = speedPerturbation(motion, self.rng, self.speedRange)
+        if self.speed_perturb_enabled and self.rng.random() < self.speed_prob:
+            motion = speed_perturbation(motion, self.rng, self.speed_range)
 
-        if self.temporalCropEnabled:
-            motion = temporalCrop(motion, self.maxLength, self.rng)
+        if self.temporal_crop_enabled:
+            motion = temporal_crop(motion, self.max_length, self.rng)
 
-        if self.noiseEnabled and self.rng.random() < self.noiseProb:
-            motion = addNoise(motion, self.noiseSigma, self.rng)
+        if self.noise_enabled and self.rng.random() < self.noise_prob:
+            motion = add_noise(motion, self.noise_sigma, self.rng)
 
         return motion
 

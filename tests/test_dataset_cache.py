@@ -4,13 +4,13 @@ Targets the bug class that destroyed two weeks of training on 2026-05-13:
 cache hash drift between machines silently reused the wrong preprocessed
 dataset, polluting train splits.
 
-The contract these tests enforce on `loadOrBuildCache`'s hash:
+The contract these tests enforce on `load_or_build_cache`'s hash:
 
   1. Identical inputs -> identical hash on the same machine, byte-for-byte.
   2. CACHE_SCHEMA bump -> different hash (forces rebuild).
   3. Any filter-kwarg value change -> different hash.
   4. Filter-kwarg dict ORDER does not matter (sorted internally).
-  5. Different dataDir or maxLength or maxSamples -> different hash.
+  5. Different data_dir or max_length or max_samples -> different hash.
 
 The hash function is small enough to reproduce inline; if production drifts
 from the formula tested here, the test starts failing — which is precisely
@@ -25,98 +25,98 @@ import unittest
 from src.data.dataset_cache import CACHE_SCHEMA, DEFAULT_FILTER_KWARGS
 
 
-def hashOf(dataDir: str, maxSamples: int | None, maxLength: int,
-            filterKwargs: dict, schema: int) -> str:
-    """Reproduce dataset_cache.loadOrBuildCache's hash formula in test space.
+def hash_of(data_dir: str, max_samples: int | None, max_length: int,
+            filter_kwargs: dict, schema: int) -> str:
+    """Reproduce dataset_cache.load_or_build_cache's hash formula in test space.
 
     Kept in lockstep with src/data/dataset_cache.py:84-87. If the production
     formula changes, this helper must change too — and that change is the
     signal we want, not a silent drift.
     """
-    fkwStr = ":".join(f"{k}={v}" for k, v in sorted(filterKwargs.items()))
+    fkw_str = ":".join(f"{k}={v}" for k, v in sorted(filter_kwargs.items()))
     return hashlib.md5(
-        f"{dataDir}:{maxSamples}:{maxLength}:{fkwStr}:{schema}".encode()
+        f"{data_dir}:{max_samples}:{max_length}:{fkw_str}:{schema}".encode()
     ).hexdigest()[:12]
 
 
 class TestCacheHashStability(unittest.TestCase):
 
-    def baseArgs(self) -> dict:
+    def base_args(self) -> dict:
         return {
-            "dataDir": "data/AMASS",
-            "maxSamples": None,
-            "maxLength": 1000,
-            "filterKwargs": DEFAULT_FILTER_KWARGS,
+            "data_dir": "data/AMASS",
+            "max_samples": None,
+            "max_length": 1000,
+            "filter_kwargs": DEFAULT_FILTER_KWARGS,
             "schema": CACHE_SCHEMA,
         }
 
     def test_identical_inputs_same_hash(self):
-        h1 = hashOf(**self.baseArgs())
-        h2 = hashOf(**self.baseArgs())
+        h1 = hash_of(**self.base_args())
+        h2 = hash_of(**self.base_args())
         self.assertEqual(h1, h2)
 
     def test_schema_bump_changes_hash(self):
-        h1 = hashOf(**self.baseArgs())
-        args = self.baseArgs()
+        h1 = hash_of(**self.base_args())
+        args = self.base_args()
         args["schema"] = CACHE_SCHEMA + 1
-        h2 = hashOf(**args)
+        h2 = hash_of(**args)
         self.assertNotEqual(h1, h2)
 
     def test_data_dir_change_changes_hash(self):
-        h1 = hashOf(**self.baseArgs())
-        args = self.baseArgs()
-        args["dataDir"] = "data/AMASS_subset"
-        h2 = hashOf(**args)
+        h1 = hash_of(**self.base_args())
+        args = self.base_args()
+        args["data_dir"] = "data/AMASS_subset"
+        h2 = hash_of(**args)
         self.assertNotEqual(h1, h2)
 
     def test_max_samples_change_changes_hash(self):
-        h1 = hashOf(**self.baseArgs())
-        args = self.baseArgs()
-        args["maxSamples"] = 500
-        h2 = hashOf(**args)
+        h1 = hash_of(**self.base_args())
+        args = self.base_args()
+        args["max_samples"] = 500
+        h2 = hash_of(**args)
         self.assertNotEqual(h1, h2)
 
     def test_max_length_change_changes_hash(self):
-        h1 = hashOf(**self.baseArgs())
-        args = self.baseArgs()
-        args["maxLength"] = 200
-        h2 = hashOf(**args)
+        h1 = hash_of(**self.base_args())
+        args = self.base_args()
+        args["max_length"] = 200
+        h2 = hash_of(**args)
         self.assertNotEqual(h1, h2)
 
     def test_filter_kwarg_value_change_changes_hash(self):
-        h1 = hashOf(**self.baseArgs())
-        args = self.baseArgs()
+        h1 = hash_of(**self.base_args())
+        args = self.base_args()
         modified = dict(DEFAULT_FILTER_KWARGS)
-        modified["minFrames"] = 60  # was 30
-        args["filterKwargs"] = modified
-        h2 = hashOf(**args)
+        modified["min_frames"] = 60  # was 30
+        args["filter_kwargs"] = modified
+        h2 = hash_of(**args)
         self.assertNotEqual(h1, h2)
 
     def test_filter_kwarg_order_does_not_matter(self):
         """Two identical filter sets in different insertion order must hash equal."""
         keys = list(DEFAULT_FILTER_KWARGS.keys())
-        forwardOrder = {k: DEFAULT_FILTER_KWARGS[k] for k in keys}
-        reverseOrder = {k: DEFAULT_FILTER_KWARGS[k] for k in reversed(keys)}
+        forward_order = {k: DEFAULT_FILTER_KWARGS[k] for k in keys}
+        reverse_order = {k: DEFAULT_FILTER_KWARGS[k] for k in reversed(keys)}
 
-        args1 = self.baseArgs()
-        args1["filterKwargs"] = forwardOrder
-        args2 = self.baseArgs()
-        args2["filterKwargs"] = reverseOrder
+        args1 = self.base_args()
+        args1["filter_kwargs"] = forward_order
+        args2 = self.base_args()
+        args2["filter_kwargs"] = reverse_order
 
-        self.assertEqual(hashOf(**args1), hashOf(**args2))
+        self.assertEqual(hash_of(**args1), hash_of(**args2))
 
     def test_extra_filter_kwarg_changes_hash(self):
-        h1 = hashOf(**self.baseArgs())
-        args = self.baseArgs()
+        h1 = hash_of(**self.base_args())
+        args = self.base_args()
         modified = dict(DEFAULT_FILTER_KWARGS)
         modified["newConstraint"] = 0.5
-        args["filterKwargs"] = modified
-        h2 = hashOf(**args)
+        args["filter_kwargs"] = modified
+        h2 = hash_of(**args)
         self.assertNotEqual(h1, h2)
 
     def test_hash_is_12_hex_chars(self):
         """Length is part of the contract — production code stores it in the filename."""
-        h = hashOf(**self.baseArgs())
+        h = hash_of(**self.base_args())
         self.assertEqual(len(h), 12)
         int(h, 16)  # must parse as hex; raises if not
 
@@ -127,22 +127,22 @@ class TestCacheHashStability(unittest.TestCase):
         cache key formula without updating this test — exactly the signal
         we lacked during the cache-drift incident.
         """
-        expected = hashOf(
-            dataDir="data/AMASS",
-            maxSamples=None,
-            maxLength=1000,
-            filterKwargs={"maxAccel": 50.0, "maxJointRotvel": 30.0,
-                          "maxRootSpeed": 10.0, "minFrames": 30,
-                          "minVariance": 0.0001},
+        expected = hash_of(
+            data_dir="data/AMASS",
+            max_samples=None,
+            max_length=1000,
+            filter_kwargs={"max_accel": 50.0, "max_joint_rotvel": 30.0,
+                          "max_root_speed": 10.0, "min_frames": 30,
+                          "min_variance": 0.0001},
             schema=4,
         )
         # If CACHE_SCHEMA / DEFAULT_FILTER_KWARGS / formula change, this test
         # FAILS and we get a deliberate review moment instead of silent drift.
-        actual = hashOf(
-            dataDir="data/AMASS",
-            maxSamples=None,
-            maxLength=1000,
-            filterKwargs=DEFAULT_FILTER_KWARGS,
+        actual = hash_of(
+            data_dir="data/AMASS",
+            max_samples=None,
+            max_length=1000,
+            filter_kwargs=DEFAULT_FILTER_KWARGS,
             schema=CACHE_SCHEMA,
         )
         self.assertEqual(expected, actual,

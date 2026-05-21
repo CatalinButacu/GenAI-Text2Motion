@@ -8,7 +8,7 @@ from collections import defaultdict
 from src.shared.constants import SCENE_COLORS
 from src.shared.vocabulary import ACTIONS, OBJECTS, ObjectCategory
 
-from .actions import resolveNoun
+from .actions import resolve_noun
 from .models import ParsedEntity, SpatialRelation
 from .parsing_utils import RGBA_TO_NAME, SPATIAL_RELATIONS
 
@@ -48,7 +48,7 @@ ANAPHORIC_HUMANOID: frozenset[str] = frozenset(
 )
 
 
-def tokenColor(token) -> tuple | None:
+def token_color(token) -> tuple | None:
     for child in token.children:
         if child.dep_ == "amod" and child.lemma_.lower() in SCENE_COLORS:
             return SCENE_COLORS[child.lemma_.lower()]
@@ -56,7 +56,7 @@ def tokenColor(token) -> tuple | None:
     return None
 
 
-def tokenCount(token) -> int:
+def token_count(token) -> int:
     for child in token.children:
         if child.dep_ == "nummod":
             try:
@@ -68,48 +68,48 @@ def tokenCount(token) -> int:
     return 1
 
 
-def buildEntity(objType: str, isActor: bool, color) -> ParsedEntity:
-    colorName = RGBA_TO_NAME.get(color, "") if color else ""
+def build_entity(obj_type: str, is_actor: bool, color) -> ParsedEntity:
+    color_name = RGBA_TO_NAME.get(color, "") if color else ""
 
     return ParsedEntity(
-        name=f"{colorName}_{objType}".strip("_") if colorName else objType,
-        objectType=objType,
-        isActor=isActor,
-        skin=colorName or None,
+        name=f"{color_name}_{obj_type}".strip("_") if color_name else obj_type,
+        object_type=obj_type,
+        is_actor=is_actor,
+        skin=color_name or None,
     )
 
 
-def addEntity(
+def add_entity(
     entity: ParsedEntity,
     count: int,
-    seenNames: set[str],
-    seenTypes: set[str],
+    seen_names: set[str],
+    seen_types: set[str],
     result: list[ParsedEntity],
 ) -> None:
     if count > 1:
-        if f"{entity.name}_1" in seenNames:
+        if f"{entity.name}_1" in seen_names:
             return
 
-        seenTypes.add(entity.objectType)
+        seen_types.add(entity.object_type)
 
         for i in range(1, count + 1):
             n = f"{entity.name}_{i}"
-            seenNames.add(n)
+            seen_names.add(n)
             result.append(dataclasses.replace(entity, name=n, actions=[]))
     else:
-        if entity.name in seenNames:
+        if entity.name in seen_names:
             return
 
-        seenNames.add(entity.name)
-        seenTypes.add(entity.objectType)
+        seen_names.add(entity.name)
+        seen_types.add(entity.object_type)
         result.append(entity)
 
 
-def spanHasAnaphoricDet(entRoot) -> bool:
-    return any(c.dep_ == "det" and c.lower_ in ANAPHORIC_HUMANOID for c in entRoot.children)
+def span_has_anaphoric_det(ent_root) -> bool:
+    return any(c.dep_ == "det" and c.lower_ in ANAPHORIC_HUMANOID for c in ent_root.children)
 
 
-def buildEntityRuler(nlp) -> None:
+def build_entity_ruler(nlp) -> None:
     if nlp.has_pipe(RULER_NAME):
         return
 
@@ -133,7 +133,7 @@ def buildEntityRuler(nlp) -> None:
     log.debug("[M1] EntityRuler: %d patterns added", len(patterns))
 
 
-def registerEntity(e: ParsedEntity, registry: dict[str, ParsedEntity]) -> tuple[str, str | None]:
+def register_entity(e: ParsedEntity, registry: dict[str, ParsedEntity]) -> tuple[str, str | None]:
     base = e.name
 
     if base not in registry:
@@ -142,10 +142,10 @@ def registerEntity(e: ParsedEntity, registry: dict[str, ParsedEntity]) -> tuple[
 
             while f"{base}_{i}" in registry:
                 i += 1
-            newName = f"{base}_{i}"
-            registry[newName] = dataclasses.replace(e, name=newName, actions=[])
+            new_name = f"{base}_{i}"
+            registry[new_name] = dataclasses.replace(e, name=new_name, actions=[])
 
-            return newName, None
+            return new_name, None
 
         registry[base] = e
 
@@ -158,64 +158,64 @@ def registerEntity(e: ParsedEntity, registry: dict[str, ParsedEntity]) -> tuple[
     return f"{base}_2", base
 
 
-def isHumanoidObjType(objType: str) -> bool:
-    odef = OBJECTS.get(objType)
+def is_humanoid_obj_type(obj_type: str) -> bool:
+    odef = OBJECTS.get(obj_type)
 
     return bool(odef and odef.category == ObjectCategory.HUMANOID)
 
 
-def extractEntities(doc) -> list[ParsedEntity]:
-    seenNames: set[str] = set()
-    seenTypes: set[str] = set()
+def extract_entities(doc) -> list[ParsedEntity]:
+    seen_names: set[str] = set()
+    seen_types: set[str] = set()
     result: list[ParsedEntity] = []
 
-    spanList: list[tuple[ParsedEntity, int, bool]] = []
+    span_list: list[tuple[ParsedEntity, int, bool]] = []
 
     for ent in doc.ents:
         if not ent.label_.startswith("VOCAB_OBJ:"):
             continue
 
-        objType = ent.label_.split(":", 1)[1]
-        entity = buildEntity(objType, isHumanoidObjType(objType), tokenColor(ent.root))
-        spanList.append((entity, tokenCount(ent.root), spanHasAnaphoricDet(ent.root)))
+        obj_type = ent.label_.split(":", 1)[1]
+        entity = build_entity(obj_type, is_humanoid_obj_type(obj_type), token_color(ent.root))
+        span_list.append((entity, token_count(ent.root), span_has_anaphoric_det(ent.root)))
 
-    nameGroups: dict[str, list] = defaultdict(list)
+    name_groups: dict[str, list] = defaultdict(list)
 
-    for entry in spanList:
-        nameGroups[entry[0].name].append(entry)
+    for entry in span_list:
+        name_groups[entry[0].name].append(entry)
 
-    for base_name, group in nameGroups.items():
+    for base_name, group in name_groups.items():
         first_entity, first_count, _ = group[0]
         # Use the explicit numeric count from the first mention only.
         # Multiple NLP spans of the same object type in one clause may be
         # coreferential (e.g. "a ball rolls and hits a ball") -- dedup to 1.
         # Genuinely distinct types appear in separate groups.
-        addEntity(first_entity, first_count, seenNames, seenTypes, result)
+        add_entity(first_entity, first_count, seen_names, seen_types, result)
 
     for token in doc:
         if token.pos_ not in ("NOUN", "PROPN"):
             continue
 
-        objType = resolveNoun(token.text, token.lemma_)
+        obj_type = resolve_noun(token.text, token.lemma_)
 
-        if not objType or objType in seenTypes:
+        if not obj_type or obj_type in seen_types:
             continue
 
-        entity = buildEntity(objType, isHumanoidObjType(objType), tokenColor(token))
-        addEntity(entity, tokenCount(token), seenNames, seenTypes, result)
+        entity = build_entity(obj_type, is_humanoid_obj_type(obj_type), token_color(token))
+        add_entity(entity, token_count(token), seen_names, seen_types, result)
 
     return result
 
 
-def hasAnaphoricHumanoidMarker(doc) -> bool:
+def has_anaphoric_humanoid_marker(doc) -> bool:
     return any(t.lower_ in ANAPHORIC_HUMANOID for t in doc)
 
 
-def makeAnaphoricHumanoid() -> ParsedEntity:
-    return ParsedEntity(name="humanoid", objectType="humanoid", isActor=True)
+def make_anaphoric_humanoid() -> ParsedEntity:
+    return ParsedEntity(name="humanoid", object_type="humanoid", is_actor=True)
 
 
-def extractSpatial(text: str, entities: list[ParsedEntity]) -> list[SpatialRelation]:
+def extract_spatial(text: str, entities: list[ParsedEntity]) -> list[SpatialRelation]:
     result: list[SpatialRelation] = []
     consumed: list[tuple[int, int]] = []  # (start, end) of matched prep spans
 
@@ -230,8 +230,8 @@ def extractSpatial(text: str, entities: list[ParsedEntity]) -> list[SpatialRelat
         if any(s <= idx < e for s, e in consumed):
             continue
 
-        subj = findEntity(text[:idx], entities)
-        obj = findEntity(text[end:], entities)
+        subj = find_entity(text[:idx], entities)
+        obj = find_entity(text[end:], entities)
 
         if subj and obj:
             result.append(
@@ -242,9 +242,9 @@ def extractSpatial(text: str, entities: list[ParsedEntity]) -> list[SpatialRelat
     return result
 
 
-def findEntity(text: str, entities: list[ParsedEntity]) -> str:
+def find_entity(text: str, entities: list[ParsedEntity]) -> str:
     for e in entities:
-        odef = OBJECTS.get(e.objectType)
+        odef = OBJECTS.get(e.object_type)
 
         if odef:
             for kw in odef.keywords:

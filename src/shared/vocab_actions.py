@@ -26,12 +26,12 @@ class ActionDefinition:
     name: str
     category: ActionCategory
     keywords: list[str] = field(default_factory=list)
-    requiresTarget: bool = False
-    motionClip: str | None = None
+    requires_target: bool = False
+    motion_clip: str | None = None
 
 
 @cache
-def loadActions() -> dict[str, ActionDefinition]:
+def load_actions() -> dict[str, ActionDefinition]:
     with open(VOCAB_DIR / "actions.yaml", encoding="utf-8") as f:
         raw: dict = yaml.safe_load(f)
 
@@ -40,11 +40,11 @@ def loadActions() -> dict[str, ActionDefinition]:
             name=name,
             category=ActionCategory[d["category"]],
             keywords=[str(k) for k in d.get("keywords", [name])],
-            requiresTarget=bool(d.get("requires_target", False)),
-            motionClip=d.get("motion_clip") or None,
+            requires_target=bool(d.get("requires_target", False)),
+            motion_clip=d.get("motion_clip") or None,
         )
         for name, d in raw.items()
     }
 
 
-ACTIONS: dict[str, ActionDefinition] = loadActions()
+ACTIONS: dict[str, ActionDefinition] = load_actions()

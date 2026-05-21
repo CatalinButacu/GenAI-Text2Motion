@@ -21,21 +21,21 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class SSMConfig:
-    dModel: int = SSM_D_MODEL
-    dState: int = SSM_D_STATE
-    dConv: int = 4
+    d_model: int = SSM_D_MODEL
+    d_state: int = SSM_D_STATE
+    d_conv: int = 4
     expand: int = 2
-    dtRank: str | int = "auto"
-    dtMin: float = 0.001
-    dtMax: float = 0.1
-    dtInit: str = "random"
-    gradientCheckpointing: bool = False
+    dt_rank: str | int = "auto"
+    dt_min: float = 0.001
+    dt_max: float = 0.1
+    dt_init: str = "random"
+    gradient_checkpointing: bool = False
 
     def __post_init__(self):
-        self.d_inner = self.expand * self.dModel
+        self.d_inner = self.expand * self.d_model
 
-        if self.dtRank == "auto":
-            self.dtRank = math.ceil(self.dModel / 16)
+        if self.dt_rank == "auto":
+            self.dt_rank = math.ceil(self.d_model / 16)
 
 
 # ---------------------------------------------------------------------------
@@ -43,23 +43,23 @@ class SSMConfig:
 # ---------------------------------------------------------------------------
 
 
-def ssmScan(
-    aBarT: torch.Tensor,
-    bxT: torch.Tensor,
-    cSel: torch.Tensor,
-    dSkip: torch.Tensor,
+def ssm_scan(
+    a_bar_t: torch.Tensor,
+    bx_t: torch.Tensor,
+    c_sel: torch.Tensor,
+    d_skip: torch.Tensor,
     x: torch.Tensor,
 ) -> torch.Tensor:
     # NOTE: @torch.jit.script intentionally removed -- it conflicts with
     # torch.utils.checkpoint during the backward recompute pass.
     B, T, d_inner = x.shape
-    dState = aBarT.shape[3]
-    h = torch.zeros(B, d_inner, dState, device=x.device, dtype=x.dtype)
+    d_state = a_bar_t.shape[3]
+    h = torch.zeros(B, d_inner, d_state, device=x.device, dtype=x.dtype)
     out = torch.zeros(B, T, d_inner, device=x.device, dtype=x.dtype)
 
     for t in range(T):
-        h = aBarT[:, t] * h + bxT[:, t]
-        out[:, t] = (h * cSel[:, t, :].unsqueeze(1)).sum(-1) + dSkip * x[:, t]
+        h = a_bar_t[:, t] * h + bx_t[:, t]
+        out[:, t] = (h * c_sel[:, t, :].unsqueeze(1)).sum(-1) + d_skip * x[:, t]
 
     return out
 
@@ -68,33 +68,33 @@ class MambaLayer(nn.Module):
     def __init__(self, config: SSMConfig):
         super().__init__()
         self.config = config
-        dModel = config.dModel
-        dState = config.dState
-        dInner = config.d_inner
-        self.dtRank = config.dtRank if isinstance(config.dtRank, int) else dModel // 16
-        self.in_proj = nn.Linear(dModel, dInner * 2, bias=False)
+        d_model = config.d_model
+        d_state = config.d_state
+        d_inner = config.d_inner
+        self.dt_rank = config.dt_rank if isinstance(config.dt_rank, int) else d_model // 16
+        self.in_proj = nn.Linear(d_model, d_inner * 2, bias=False)
         self.conv1d = nn.Conv1d(
-            dInner,
-            dInner,
-            config.dConv,
-            padding=config.dConv - 1,
-            groups=dInner,
+            d_inner,
+            d_inner,
+            config.d_conv,
+            padding=config.d_conv - 1,
+            groups=d_inner,
         )
-        aInit = torch.arange(1, dState + 1, dtype=torch.float32)
-        self.A_log = nn.Parameter(torch.log(aInit))
-        self.D = nn.Parameter(torch.ones(dInner))
-        self.x_proj = nn.Linear(dInner, self.dtRank + dState * 2, bias=False)
-        self.dt_proj = nn.Linear(self.dtRank, dInner, bias=True)
-        self.out_proj = nn.Linear(dInner, dModel, bias=False)
-        self.initDt()
+        a_init = torch.arange(1, d_state + 1, dtype=torch.float32)
+        self.A_log = nn.Parameter(torch.log(a_init))
+        self.D = nn.Parameter(torch.ones(d_inner))
+        self.x_proj = nn.Linear(d_inner, self.dt_rank + d_state * 2, bias=False)
+        self.dt_proj = nn.Linear(self.dt_rank, d_inner, bias=True)
+        self.out_proj = nn.Linear(d_inner, d_model, bias=False)
+        self.init_dt()
 
-    def initDt(self):
-        std = self.dtRank**-0.5
+    def init_dt(self):
+        std = self.dt_rank**-0.5
         nn.init.uniform_(self.dt_proj.weight, -std, std)
         dt = torch.exp(
             torch.rand(self.config.d_inner)
-            * (math.log(self.config.dtMax) - math.log(self.config.dtMin))
-            + math.log(self.config.dtMin)
+            * (math.log(self.config.dt_max) - math.log(self.config.dt_min))
+            + math.log(self.config.dt_min)
         ).clamp(min=1e-4)
         self.dt_proj.bias.data = dt + torch.log(-torch.expm1(-dt))
 
@@ -104,24 +104,24 @@ class MambaLayer(nn.Module):
         x, z = xz.chunk(2, dim=-1)
         x = F.silu(self.conv1d(x.transpose(1, 2))[:, :, :length].transpose(1, 2))
 
-        if self.config.gradientCheckpointing:
-            y = checkpoint(self.ssmForward, x, use_reentrant=False)
+        if self.config.gradient_checkpointing:
+            y = checkpoint(self.ssm_forward, x, use_reentrant=False)
         else:
-            y = self.ssmForward(x)
+            y = self.ssm_forward(x)
 
         return self.out_proj(y * F.silu(z))  # type: ignore[operator]
 
-    def ssmForward(self, x: torch.Tensor) -> torch.Tensor:
+    def ssm_forward(self, x: torch.Tensor) -> torch.Tensor:
         _, length, _ = x.shape
-        dState = self.config.dState
-        xDbl = self.x_proj(x)
-        dt, b_sel, c_sel = xDbl.split([self.dtRank, dState, dState], dim=-1)
+        d_state = self.config.d_state
+        x_dbl = self.x_proj(x)
+        dt, b_sel, c_sel = x_dbl.split([self.dt_rank, d_state, d_state], dim=-1)
         dt = F.softplus(self.dt_proj(dt))
-        aDiag = -torch.exp(self.A_log)
+        a_diag = -torch.exp(self.A_log)
         dt3d = dt.unsqueeze(-1)
-        aBarT = torch.exp(dt3d * aDiag)
-        bxT = dt3d * b_sel.unsqueeze(2) * x.unsqueeze(-1)
-        y = ssmScan(aBarT, bxT, c_sel, self.D, x)
+        a_bar_t = torch.exp(dt3d * a_diag)
+        bx_t = dt3d * b_sel.unsqueeze(2) * x.unsqueeze(-1)
+        y = ssm_scan(a_bar_t, bx_t, c_sel, self.D, x)
 
         if length == 0:
             return torch.zeros_like(x)
@@ -130,14 +130,14 @@ class MambaLayer(nn.Module):
 
     def step(
         self,
-        xT: torch.Tensor,
+        x_t: torch.Tensor,
         h: torch.Tensor,
-        convBuf: torch.Tensor | None = None,
+        conv_buf: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Single-frame autoregressive step.
 
         Args:
-            xT:      (B, d_model)            -- input for timestep t.
+            x_t:      (B, d_model)            -- input for timestep t.
             h:        (B, d_inner, d_state)   -- recurrent SSM state from t-1.
             conv_buf: (B, d_inner, d_conv-1)  -- rolling conv input history.
                       Pass None on the first frame; a zero buffer is created.
@@ -147,62 +147,62 @@ class MambaLayer(nn.Module):
             h:        (B, d_inner, d_state)   -- updated state.
             conv_buf: (B, d_inner, d_conv-1)  -- updated history for next call.
         """
-        xT3 = xT.unsqueeze(1)  # (B, 1, d_model)
-        xz = self.in_proj(xT3)
+        x_t3 = x_t.unsqueeze(1)  # (B, 1, d_model)
+        xz = self.in_proj(x_t3)
         x_inner, z = xz.chunk(2, dim=-1)  # each (B, 1, d_inner)
 
-        if h.shape[1] != self.config.d_inner or h.shape[2] != self.config.dState:
+        if h.shape[1] != self.config.d_inner or h.shape[2] != self.config.d_state:
             raise ValueError(
                 f"step(): h shape {tuple(h.shape)} does not match expected "
-                f"(B, {self.config.d_inner}, {self.config.dState})"
+                f"(B, {self.config.d_inner}, {self.config.d_state})"
             )
 
         # Maintain a rolling buffer of the last d_conv-1 frames so conv1d sees
         # the same context it would in the parallel forward pass.
-        xInnerT = x_inner.squeeze(1)  # (B, d_inner)
-        dConvM1 = self.config.dConv - 1
+        x_inner_t = x_inner.squeeze(1)  # (B, d_inner)
+        d_conv_m1 = self.config.d_conv - 1
 
-        if convBuf is None:
-            convBuf = torch.zeros(
-                xInnerT.shape[0],
-                xInnerT.shape[1],
-                dConvM1,
-                device=xT.device,
-                dtype=xT.dtype,
+        if conv_buf is None:
+            conv_buf = torch.zeros(
+                x_inner_t.shape[0],
+                x_inner_t.shape[1],
+                d_conv_m1,
+                device=x_t.device,
+                dtype=x_t.dtype,
             )
         # Concatenate history + current frame -> (B, d_inner, d_conv)
-        convInput = torch.cat([convBuf, xInnerT.unsqueeze(-1)], dim=-1)
+        conv_input = torch.cat([conv_buf, x_inner_t.unsqueeze(-1)], dim=-1)
         # Slide buffer forward: drop oldest frame, keep last d_conv-1 frames.
-        convBuf = convInput[:, :, 1:].detach()
+        conv_buf = conv_input[:, :, 1:].detach()
         # Apply depthwise conv (no extra padding; input is exactly d_conv long).
-        xInnerConv = F.silu(
+        x_inner_conv = F.silu(
             F.conv1d(
-                convInput,
+                conv_input,
                 self.conv1d.weight,
                 self.conv1d.bias,
                 groups=self.conv1d.groups,
             )[:, :, 0]
         )  # (B, d_inner)
 
-        xDbl = self.x_proj(xInnerConv)  # (B, dt_rank + 2*d_state)
-        dt, b_sel, c_sel = xDbl.split(
-            [self.dtRank, self.config.dState, self.config.dState], dim=-1
+        x_dbl = self.x_proj(x_inner_conv)  # (B, dt_rank + 2*d_state)
+        dt, b_sel, c_sel = x_dbl.split(
+            [self.dt_rank, self.config.d_state, self.config.d_state], dim=-1
         )
         dt = F.softplus(self.dt_proj(dt))  # (B, d_inner)
-        aDiag = -torch.exp(self.A_log)  # (d_state,)
+        a_diag = -torch.exp(self.A_log)  # (d_state,)
 
         # ZOH discretisation
-        aBar = torch.exp(dt.unsqueeze(-1) * aDiag)  # (B, d_inner, d_state)
+        a_bar = torch.exp(dt.unsqueeze(-1) * a_diag)  # (B, d_inner, d_state)
         bx = (
-            dt.unsqueeze(-1) * b_sel.unsqueeze(1) * xInnerConv.unsqueeze(-1)
+            dt.unsqueeze(-1) * b_sel.unsqueeze(1) * x_inner_conv.unsqueeze(-1)
         )  # (B, d_inner, d_state)
 
-        h = aBar * h + bx  # (B, d_inner, d_state)
-        y = (h * c_sel.unsqueeze(1)).sum(-1) + self.D * xInnerConv  # (B, d_inner)
+        h = a_bar * h + bx  # (B, d_inner, d_state)
+        y = (h * c_sel.unsqueeze(1)).sum(-1) + self.D * x_inner_conv  # (B, d_inner)
 
         out = self.out_proj(y * F.silu(z.squeeze(1)))  # (B, d_model)
 
-        return out, h, convBuf
+        return out, h, conv_buf
 
 
 class BiMambaLayer(nn.Module):
@@ -210,13 +210,13 @@ class BiMambaLayer(nn.Module):
         super().__init__()
         self.fwd = MambaLayer(config)
         self.bwd = MambaLayer(config)
-        self.merge = nn.Linear(config.dModel * 2, config.dModel, bias=False)
+        self.merge = nn.Linear(config.d_model * 2, config.d_model, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        fwdOut = self.fwd(x)
-        bwdOut = self.bwd(x.flip(1)).flip(1)
+        fwd_out = self.fwd(x)
+        bwd_out = self.bwd(x.flip(1)).flip(1)
 
-        return self.merge(torch.cat([fwdOut, bwdOut], dim=-1))
+        return self.merge(torch.cat([fwd_out, bwd_out], dim=-1))
 
 
 # ---------------------------------------------------------------------------
@@ -228,14 +228,14 @@ LAYER_BUILDERS = {
 }
 
 
-def createSsmLayer(layerType: str = "mamba", **kwargs):
-    if (builder := LAYER_BUILDERS.get(layerType)) is None:
-        raise ValueError(f"Unknown layer type: {layerType}")
+def create_ssm_layer(layer_type: str = "mamba", **kwargs):
+    if (builder := LAYER_BUILDERS.get(layer_type)) is None:
+        raise ValueError(f"Unknown layer type: {layer_type}")
 
     return builder(**kwargs)
 
 
-def getSsmInfo() -> dict:
+def get_ssm_info() -> dict:
     return {
         "torch_available": True,
         "layers": ["mamba", "bimamba"],
@@ -253,6 +253,6 @@ __all__ = [
     "SSMConfig",
     "MambaLayer",
     "BiMambaLayer",
-    "createSsmLayer",
-    "getSsmInfo",
+    "create_ssm_layer",
+    "get_ssm_info",
 ]

@@ -1,19 +1,19 @@
 from .augmentation import (
     AugmentationPipeline,
-    addNoise,
-    detectTpose,
-    qualityFilter,
-    resampleToFps,
-    speedPerturbation,
-    temporalCrop,
+    add_noise,
+    detect_tpose,
+    quality_filter,
+    resample_to_fps,
+    speed_perturbation,
+    temporal_crop,
 )
 
 __all__ = [
     "AugmentationPipeline",
-    "resampleToFps",
-    "qualityFilter",
-    "detectTpose",
-    "addNoise",
-    "temporalCrop",
-    "speedPerturbation",
+    "resample_to_fps",
+    "quality_filter",
+    "detect_tpose",
+    "add_noise",
+    "temporal_crop",
+    "speed_perturbation",
 ]

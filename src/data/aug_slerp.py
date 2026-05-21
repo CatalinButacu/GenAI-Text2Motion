@@ -10,20 +10,20 @@ ROTATION_SLICES = [slice(0, 3)] + [
 TRANSLATION_SLICE = slice(3, 6)  # root translation channels (linear interpolation)
 
 
-def slerpResample(motion: np.ndarray, srcTimes: np.ndarray, tgtTimes: np.ndarray) -> np.ndarray:
+def slerp_resample(motion: np.ndarray, src_times: np.ndarray, tgt_times: np.ndarray) -> np.ndarray:
     D = motion.shape[1]
-    out = np.empty((len(tgtTimes), D), dtype=motion.dtype)
-    fTrans = interp1d(srcTimes, motion[:, TRANSLATION_SLICE], axis=0, assume_sorted=True)
-    out[:, TRANSLATION_SLICE] = fTrans(tgtTimes)
+    out = np.empty((len(tgt_times), D), dtype=motion.dtype)
+    f_trans = interp1d(src_times, motion[:, TRANSLATION_SLICE], axis=0, assume_sorted=True)
+    out[:, TRANSLATION_SLICE] = f_trans(tgt_times)
 
     for sl in ROTATION_SLICES:
         aa = motion[:, sl]
         try:
             rots = Rotation.from_rotvec(aa)
-            slerp = Slerp(srcTimes, rots)
-            out[:, sl] = slerp(tgtTimes).as_rotvec().astype(motion.dtype)
+            slerp = Slerp(src_times, rots)
+            out[:, sl] = slerp(tgt_times).as_rotvec().astype(motion.dtype)
         except ValueError:
-            f = interp1d(srcTimes, aa, axis=0, assume_sorted=True)
-            out[:, sl] = f(tgtTimes)
+            f = interp1d(src_times, aa, axis=0, assume_sorted=True)
+            out[:, sl] = f(tgt_times)
 
     return out

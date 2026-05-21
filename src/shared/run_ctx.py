@@ -25,11 +25,11 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 
-def newRunId() -> str:
+def new_run_id() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-def logGpuSanity() -> dict[str, Any]:
+def log_gpu_sanity() -> dict[str, Any]:
     """Log + return env details. Written to run log so you can spot T4-instead-of-A100."""
     info: dict[str, Any] = {
         "python": sys.version.split()[0],
@@ -59,16 +59,16 @@ def logGpuSanity() -> dict[str, Any]:
     return info
 
 
-def makeRunDir(base: str, runId: str | None = None) -> tuple[Path, str]:
+def make_run_dir(base: str, run_id: str | None = None) -> tuple[Path, str]:
     """Create checkpoints/<task>/<run_id>/ and return (path, run_id)."""
-    runId = runId or newRunId()
-    out = Path(base) / runId
+    run_id = run_id or new_run_id()
+    out = Path(base) / run_id
     out.mkdir(parents=True, exist_ok=True)
 
-    return out, runId
+    return out, run_id
 
 
-def configToDict(cfg: Any) -> dict[str, Any]:
+def config_to_dict(cfg: Any) -> dict[str, Any]:
     """Best-effort conversion of a config (dataclass instance or mapping) to a plain dict."""
     if dataclasses.is_dataclass(cfg) and not isinstance(cfg, type):
         return dataclasses.asdict(cfg)
@@ -76,40 +76,40 @@ def configToDict(cfg: Any) -> dict[str, Any]:
     return dict(cfg)  # type: ignore[arg-type]
 
 
-def snapshotConfig(runDir: Path, cfg: Any) -> None:
+def snapshot_config(run_dir: Path, cfg: Any) -> None:
     """Serialize a dataclass config to run_dir/config.json."""
-    payload = configToDict(cfg)
-    (runDir / "config.json").write_text(json.dumps(payload, indent=2, default=str))
+    payload = config_to_dict(cfg)
+    (run_dir / "config.json").write_text(json.dumps(payload, indent=2, default=str))
 
 
-def initWandb(
-    project: str, runId: str, runDir: Path, config: Any, tags: list[str] | None = None,
+def init_wandb(
+    project: str, run_id: str, run_dir: Path, config: Any, tags: list[str] | None = None,
 ):
     """Init wandb in offline mode. Run data lives in run_dir/wandb/ -- no network needed."""
     os.environ.setdefault("WANDB_MODE", "offline")
-    os.environ["WANDB_DIR"] = str(runDir)
+    os.environ["WANDB_DIR"] = str(run_dir)
     os.environ["WANDB_SILENT"] = "true"
 
     if not WANDB_AVAILABLE:
         log.warning("[run_ctx] wandb not installed -- skipping experiment tracking")
         return None
 
-    cfgDict = configToDict(config)
+    cfg_dict = config_to_dict(config)
     run = wandb.init(  # type: ignore[union-attr]
         project=project,
-        name=runId,
-        id=runId,
-        dir=str(runDir),
-        config=cfgDict,
+        name=run_id,
+        id=run_id,
+        dir=str(run_dir),
+        config=cfg_dict,
         tags=tags or [],
         reinit=True,
     )
-    log.info("[run_ctx] wandb offline run initialised: %s (dir=%s)", runId, runDir)
+    log.info("[run_ctx] wandb offline run initialised: %s (dir=%s)", run_id, run_dir)
 
     return run
 
 
-def wandbLog(metrics: dict[str, Any], step: int | None = None) -> None:
+def wandb_log(metrics: dict[str, Any], step: int | None = None) -> None:
     """No-op if wandb is not installed or no active run.
 
     Wraps wandb.log in a broad except — wandb's offline service uses an inter-
@@ -124,7 +124,7 @@ def wandbLog(metrics: dict[str, Any], step: int | None = None) -> None:
             log.warning("[run_ctx] wandb.log failed (%s): %s", type(exc).__name__, exc)
 
 
-def wandbFinish() -> None:
+def wandb_finish() -> None:
     if WANDB_AVAILABLE and wandb.run is not None:  # type: ignore[union-attr]
 
         try:
@@ -135,7 +135,7 @@ def wandbFinish() -> None:
 
 # ---- data integrity ---------------------------------------------------------
 
-def hashPaths(paths: list[Path], chunk: int = 1024 * 1024) -> str:
+def hash_paths(paths: list[Path], chunk: int = 1024 * 1024) -> str:
     """Sha256 over (path, size, first+last chunk) of every file. Fast, not cryptographic."""
     h = hashlib.sha256()
 
@@ -157,7 +157,7 @@ def hashPaths(paths: list[Path], chunk: int = 1024 * 1024) -> str:
     return h.hexdigest()[:16]
 
 
-def dataFingerprint(
+def data_fingerprint(
     roots: list[str], globs: tuple[str, ...] = ("*.npz", "*.pkl", "*.txt")
 ) -> str:
     """Fingerprint a set of data dirs so training can refuse to start if corpus changed silently."""
@@ -172,4 +172,4 @@ def dataFingerprint(
         for g in globs:
             files.extend(p.rglob(g))
 
-    return hashPaths(files)
+    return hash_paths(files)

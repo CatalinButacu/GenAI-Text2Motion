@@ -36,17 +36,17 @@ from pathlib import Path
 import torch
 
 from src.modules.motion.config import TrainingConfig
-from src.modules.motion.training import trainAmass, trainHumanml3d, trainUnified
+from src.modules.motion.training import train_amass, train_humanml3d, train_unified
 from src.shared.constants import (
     SSM_D_MODEL,
     SSM_D_STATE,
     SSM_N_LAYERS,
 )
-from src.shared.run_ctx import initWandb, logGpuSanity, makeRunDir, snapshotConfig
+from src.shared.run_ctx import init_wandb, log_gpu_sanity, make_run_dir, snapshot_config
 
 NPZ = "*.npz"
 
-def checkPrereqsAmass(d: Path) -> None:
+def check_prereqs_amass(d: Path) -> None:
     npz = list(d.rglob(NPZ)) if d.exists() else []
     print(f"[INFO] AMASS: {len(npz)} .npz files at {d}")
     hml = Path("data/humanml3d/texts")
@@ -57,11 +57,11 @@ def checkPrereqsAmass(d: Path) -> None:
     if not npz:
         print("[WARNING] No .npz files found --training will use synthetic data.")
 
-def checkPrereqsUnified() -> None:
+def check_prereqs_unified() -> None:
     cfg = TrainingConfig()
     dirs = {
-        "AMASS": Path(cfg.dataDir),
-        "ARCTIC": Path(cfg.arcticDataDir),
+        "AMASS": Path(cfg.data_dir),
+        "ARCTIC": Path(cfg.arctic_data_dir),
     }
     for name, p in dirs.items():
         if p.exists():
@@ -70,42 +70,42 @@ def checkPrereqsUnified() -> None:
         else:
             print(f"[WARNING] {name} directory not found at {p} -- will be skipped")
 
-def checkPrereqsHumanml3d(d: Path) -> None:
+def check_prereqs_humanml3d(d: Path) -> None:
     texts = d / "texts"
-    splitDir = d / "split"
-    indexCsv = d / "index.csv"
-    amassDir = Path(TrainingConfig().dataDir)
-    amassNpz = list(amassDir.rglob(NPZ)) if amassDir.exists() else []
+    split_dir = d / "split"
+    index_csv = d / "index.csv"
+    amass_dir = Path(TrainingConfig().data_dir)
+    amass_npz = list(amass_dir.rglob(NPZ)) if amass_dir.exists() else []
 
     if not texts.exists():
         print(f"[ERROR] {texts} not found.")
         print("        Run: python scripts/data/download_humanml3d.py")
         sys.exit(1)
-    if not splitDir.exists():
-        print(f"[ERROR] {splitDir} not found.")
+    if not split_dir.exists():
+        print(f"[ERROR] {split_dir} not found.")
         print("        Run: python scripts/data/download_humanml3d.py")
         sys.exit(1)
-    if not indexCsv.exists():
-        print(f"[ERROR] {indexCsv} not found.")
+    if not index_csv.exists():
+        print(f"[ERROR] {index_csv} not found.")
         print("        HumanML3D SMPL-X training uses index.csv to map texts onto AMASS clips.")
         sys.exit(1)
-    if not amassNpz:
-        print(f"[ERROR] No AMASS .npz files found at {amassDir}.")
+    if not amass_npz:
+        print(f"[ERROR] No AMASS .npz files found at {amass_dir}.")
         print("        HumanML3D mode now loads native SMPL-X motion from AMASS, not motion_data/.")
         sys.exit(1)
 
-    nT = len(list(texts.glob("*.txt")))
-    print(f"[INFO] HumanML3D annotations: {nT} text files, index={indexCsv}")
-    print(f"[INFO] AMASS backing store: {len(amassNpz)} .npz files at {amassDir}")
+    n_t = len(list(texts.glob("*.txt")))
+    print(f"[INFO] HumanML3D annotations: {n_t} text files, index={index_csv}")
+    print(f"[INFO] AMASS backing store: {len(amass_npz)} .npz files at {amass_dir}")
 
-def checkPrereqs(source: str, dataDir: str) -> None:
-    d = Path(dataDir)
+def check_prereqs(source: str, data_dir: str) -> None:
+    d = Path(data_dir)
     if source == "amass":
-        checkPrereqsAmass(d)
+        check_prereqs_amass(d)
     elif source == "unified":
-        checkPrereqsUnified()
+        check_prereqs_unified()
     else:
-        checkPrereqsHumanml3d(d)
+        check_prereqs_humanml3d(d)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -114,54 +114,54 @@ def main():
         epilog=__doc__,
     )
     parser.add_argument("--data-source", choices=["amass", "humanml3d", "unified"],
-                        default="amass", dest="dataSource")
+                        default="amass", dest="data_source")
     parser.add_argument(
         "--data-dir",
         type=str,
         default=None,
         help="Data directory. Default: data/AMASS or data/humanml3d annotations",
-    dest="dataDir")
+    dest="data_dir")
     parser.add_argument("--epochs", type=int, default=50)
-    parser.add_argument("--batch-size", type=int, default=32, dest="batchSize")
+    parser.add_argument("--batch-size", type=int, default=32, dest="batch_size")
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
-    parser.add_argument("--checkpoint-dir", type=str, default=None, dest="checkpointDir")
+    parser.add_argument("--checkpoint-dir", type=str, default=None, dest="checkpoint_dir")
     parser.add_argument("--resume", type=str, default=None, help="Checkpoint path or 'latest'")
     parser.add_argument(
-        "--warm-start", action="store_true", dest="warmStart",
+        "--warm-start", action="store_true", dest="warm_start",
         help="With --resume: load model weights only, skip optimizer/scheduler/epoch state. "
              "Use to change LR or other hyperparams while keeping pretrained weights.",
     )
-    parser.add_argument("--d-model", type=int, default=SSM_D_MODEL, dest="dModel")
-    parser.add_argument("--d-state", type=int, default=SSM_D_STATE, dest="dState")
-    parser.add_argument("--n-layers", type=int, default=SSM_N_LAYERS, dest="nLayers")
+    parser.add_argument("--d-model", type=int, default=SSM_D_MODEL, dest="d_model")
+    parser.add_argument("--d-state", type=int, default=SSM_D_STATE, dest="d_state")
+    parser.add_argument("--n-layers", type=int, default=SSM_N_LAYERS, dest="n_layers")
     parser.add_argument("--seed", type=int, default=42, help="Random seed (-1 = non-deterministic)")
-    parser.add_argument("--weight-decay", type=float, default=0.01, dest="weightDecay")
+    parser.add_argument("--weight-decay", type=float, default=0.01, dest="weight_decay")
     parser.add_argument(
         "--num-workers",
         type=int,
         default=0,
         help="DataLoader workers (0 = main process, safe on Windows)",
-    dest="numWorkers")
+    dest="num_workers")
     # ---- Architecture flags (Phase 2 & 3) ----
     parser.add_argument(
         "--use-sbert",
         action="store_true",
         help="Use frozen SentenceTransformer encoder (recommended for new runs)",
-    dest="useSbert")
+    dest="use_sbert")
     parser.add_argument(
         "--sbert-model",
         type=str,
         default="all-MiniLM-L6-v2",
         help="HuggingFace model name for SBERT encoder",
-    dest="sbertModel")
+    dest="sbert_model")
     parser.add_argument(
         "--no-freeze-sbert",
         action="store_true",
         help="Fine-tune SBERT weights instead of freezing them",
-    dest="noFreezeSbert")
+    dest="no_freeze_sbert")
     parser.add_argument(
         "--bidirectional",
         action="store_true",
@@ -172,31 +172,31 @@ def main():
         action="store_true",
         help="Recompute SSM activations during backward (halves VRAM, +33%% time). "
         "Required for 4 GB GPUs with bidirectional or large batch.",
-    dest="gradientCheckpointing")
+    dest="gradient_checkpointing")
     parser.add_argument(
         "--use-film",
         action="store_true",
         help="FiLM conditioning at every SSM layer (text scale+shift). "
         "Recommended for new runs: text is injected at every layer, not just input.",
-    dest="useFilm")
+    dest="use_film")
     parser.add_argument(
         "--max-motion-length",
         type=int,
         default=200,
         help="Maximum motion sequence length in frames (default: 200 = 6.7s at 30fps).",
-    dest="maxMotionLength")
+    dest="max_motion_length")
     parser.add_argument(
         "--max-samples",
         type=int,
         default=None,
         help="Limit dataset size (None = all). Useful for smoke tests.",
-    dest="maxSamples")
+    dest="max_samples")
     parser.add_argument(
         "--rvq-checkpoint",
         type=str,
         default="checkpoints/rvq_tokenizer/best_model.pt",
         help="Path to the frozen RVQ tokenizer checkpoint (trained first).",
-    dest="rvqCheckpoint")
+    dest="rvq_checkpoint")
     parser.add_argument(
         "--sources",
         nargs="+",
@@ -206,31 +206,31 @@ def main():
              "Example: --sources amass humanml3d interx",
     )
     parser.add_argument("--arctic-dir", type=str, default="data/arctic/unpack",
-                        dest="arcticDir",
+                        dest="arctic_dir",
                         help="ARCTIC dataset root (used when --sources includes arctic)")
     parser.add_argument("--humanml3d-dir", type=str, default="data/humanml3d",
-                        dest="humanml3dDir",
+                        dest="humanml3d_dir",
                         help="HumanML3D root (used when --sources includes humanml3d)")
     parser.add_argument("--interx-dir", type=str, default="data/inter-x",
-                        dest="interxDir",
+                        dest="interx_dir",
                         help="Inter-X root (used when --sources includes interx)")
     parser.add_argument("--amass-dir", type=str, default="data/AMASS",
-                        dest="amassDir",
+                        dest="amass_dir",
                         help="AMASS backing store path (used as the motion source "
                              "for HumanML3D, and for unified mode amass)")
     args = parser.parse_args()
 
     # Resolve defaults
-    if args.dataDir is None:
-        args.dataDir = "data/humanml3d" if args.dataSource == "humanml3d" else "data/AMASS"
-    if args.checkpointDir is None:
-        suffix = "_hml3d" if args.dataSource == "humanml3d" else ""
-        args.checkpointDir = f"checkpoints/motion_ssm{suffix}"
+    if args.data_dir is None:
+        args.data_dir = "data/humanml3d" if args.data_source == "humanml3d" else "data/AMASS"
+    if args.checkpoint_dir is None:
+        suffix = "_hml3d" if args.data_source == "humanml3d" else ""
+        args.checkpoint_dir = f"checkpoints/motion_ssm{suffix}"
 
     # Per-run directory: checkpoints/<base>/<run_id>/ -- isolates artifacts, configs, logs
-    runBase = Path(args.checkpointDir)
-    run_dir, run_id = makeRunDir(str(runBase))
-    args.checkpointDir = str(run_dir)
+    run_base = Path(args.checkpoint_dir)
+    run_dir, run_id = make_run_dir(str(run_base))
+    args.checkpoint_dir = str(run_dir)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s  %(levelname)-8s  %(message)s",
@@ -243,80 +243,80 @@ def main():
     log = logging.getLogger(__name__)
     log.info(
         "data_source=%s  data_dir=%s  epochs=%d  device=%s  batch=%d",
-        args.dataSource,
-        args.dataDir,
+        args.data_source,
+        args.data_dir,
         args.epochs,
         args.device,
-        args.batchSize,
+        args.batch_size,
     )
 
-    checkPrereqs(args.dataSource, args.dataDir)
+    check_prereqs(args.data_source, args.data_dir)
 
     config = TrainingConfig(
-        dataDir=args.dataDir,
-        batchSize=args.batchSize,
-        learningRate=args.lr,
-        numEpochs=args.epochs,
+        data_dir=args.data_dir,
+        batch_size=args.batch_size,
+        learning_rate=args.lr,
+        num_epochs=args.epochs,
         device=args.device,
-        checkpointDir=args.checkpointDir,
-        resumeFrom=args.resume,
-        dModel=args.dModel,
-        dState=args.dState,
-        nLayers=args.nLayers,
+        checkpoint_dir=args.checkpoint_dir,
+        resume_from=args.resume,
+        d_model=args.d_model,
+        d_state=args.d_state,
+        n_layers=args.n_layers,
         seed=None if args.seed == -1 else args.seed,
-        weightDecay=args.weightDecay,
-        numWorkers=args.numWorkers,
-        useSbert=args.useSbert,
-        sbertModel=args.sbertModel,
-        freezeSbert=not args.noFreezeSbert,
+        weight_decay=args.weight_decay,
+        num_workers=args.num_workers,
+        use_sbert=args.use_sbert,
+        sbert_model=args.sbert_model,
+        freeze_sbert=not args.no_freeze_sbert,
         bidirectional=args.bidirectional,
-        gradientCheckpointing=args.gradientCheckpointing,
-        useFilm=args.useFilm,
-        maxMotionLength=args.maxMotionLength,
-        maxSamples=args.maxSamples,
-        rvqCheckpointPath=args.rvqCheckpoint,
-        warmStart=args.warmStart,
+        gradient_checkpointing=args.gradient_checkpointing,
+        use_film=args.use_film,
+        max_motion_length=args.max_motion_length,
+        max_samples=args.max_samples,
+        rvq_checkpoint_path=args.rvq_checkpoint,
+        warm_start=args.warm_start,
     )
-    if args.sources is not None and args.dataSource == "unified":
-        config.unifiedSources = args.sources
-    # Pass per-source data dirs through so unifiedFactory can find them
-    config.arcticDataDir = args.arcticDir
-    config.humanml3dDir = args.humanml3dDir
-    config.interxDir = args.interxDir
+    if args.sources is not None and args.data_source == "unified":
+        config.unified_sources = args.sources
+    # Pass per-source data dirs through so unified_factory can find them
+    config.arctic_data_dir = args.arctic_dir
+    config.humanml3d_dir = args.humanml3d_dir
+    config.interx_dir = args.interx_dir
     # In humanml3d mode the AMASS backing store is separate from --data-dir
     # (which points at HumanML3D texts/indices). Use --amass-dir for that.
-    config.amassDir = args.amassDir if args.dataSource == "humanml3d" else args.dataDir
+    config.amass_dir = args.amass_dir if args.data_source == "humanml3d" else args.data_dir
     log.info(
         "arch: use_sbert=%s  bidirectional=%s  use_film=%s  grad_ckpt=%s  "
         "d_model=%d  n_layers=%d  max_motion_length=%d  rvq_ckpt=%s",
-        config.useSbert,
+        config.use_sbert,
         config.bidirectional,
-        config.useFilm,
-        config.gradientCheckpointing,
-        config.dModel,
-        config.nLayers,
-        config.maxMotionLength,
-        config.rvqCheckpointPath,
+        config.use_film,
+        config.gradient_checkpointing,
+        config.d_model,
+        config.n_layers,
+        config.max_motion_length,
+        config.rvq_checkpoint_path,
     )
 
     log.info("[train_motion_ssm] run_id=%s  run_dir=%s", run_id, run_dir)
-    logGpuSanity()
-    snapshotConfig(run_dir, config)
-    initWandb(
+    log_gpu_sanity()
+    snapshot_config(run_dir, config)
+    init_wandb(
         project="motion_ssm",
-        runId=run_id,
-        runDir=run_dir,
+        run_id=run_id,
+        run_dir=run_dir,
         config=config,
-        tags=[args.dataSource],
+        tags=[args.data_source],
     )
 
-    dispatch = {"humanml3d": trainHumanml3d, "unified": trainUnified, "amass": trainAmass}
-    best = dispatch[args.dataSource](config)
+    dispatch = {"humanml3d": train_humanml3d, "unified": train_unified, "amass": train_amass}
+    best = dispatch[args.data_source](config)
 
     log.info(
         "Training complete. best_val_loss=%.4f  checkpoint: %s/best_model.pt",
         best,
-        args.checkpointDir,
+        args.checkpoint_dir,
     )
 
 if __name__ == "__main__":

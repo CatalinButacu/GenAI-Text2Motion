@@ -12,14 +12,14 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.mark.slow
-def test_pipeline_runs(tmpPath: Path) -> None:
+def test_pipeline_runs(tmp_path: Path) -> None:
     ckpt = ROOT / "checkpoints" / "motion_ssm" / "best_model.pt"
     rvq = ROOT / "checkpoints" / "rvq_tokenizer" / "best_model.pt"
 
     if not ckpt.exists() or not rvq.exists():
         pytest.skip(f"missing trained checkpoints ({ckpt}, {rvq})")
 
-    out_dir = tmpPath / "outputs"
+    out_dir = tmp_path / "outputs"
     env = {**os.environ, "PYTHONPATH": str(ROOT)}
     cmd = [
         sys.executable, str(ROOT / "main.py"),
@@ -48,4 +48,4 @@ def test_imports_resolve() -> None:
 
     cfg = PipelineConfig(duration=5.0, fps=30)
     assert cfg.render.fps == 30
-    assert cfg.planner.baseDuration == 5.0
+    assert cfg.planner.base_duration == 5.0

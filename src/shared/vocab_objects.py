@@ -23,16 +23,16 @@ class ObjectDefinition:
     name: str
     category: ObjectCategory
     keywords: list[str] = field(default_factory=list)
-    defaultShape: str = "box"
-    defaultSize: list[float] = field(default_factory=lambda: [0.1, 0.1, 0.1])
-    defaultMass: float = 1.0
-    canBeGrasped: bool = True
-    meshPrompt: str | None = None
-    urdfPath: str | None = None
+    default_shape: str = "box"
+    default_size: list[float] = field(default_factory=lambda: [0.1, 0.1, 0.1])
+    default_mass: float = 1.0
+    can_be_grasped: bool = True
+    mesh_prompt: str | None = None
+    urdf_path: str | None = None
 
 
 @cache
-def loadObjects() -> dict[str, ObjectDefinition]:
+def load_objects() -> dict[str, ObjectDefinition]:
     with open(VOCAB_DIR / "objects.yaml", encoding="utf-8") as f:
         raw: dict = yaml.safe_load(f)
 
@@ -41,15 +41,15 @@ def loadObjects() -> dict[str, ObjectDefinition]:
             name=name,
             category=ObjectCategory[d["category"]],
             keywords=[str(k) for k in d.get("keywords", [name])],
-            defaultShape=str(d.get("default_shape", "box")),
-            defaultSize=[float(x) for x in d.get("default_size", [0.1, 0.1, 0.1])],
-            defaultMass=float(d.get("default_mass", 1.0)),
-            canBeGrasped=bool(d.get("can_be_grasped", True)),
-            meshPrompt=d.get("mesh_prompt") or None,
-            urdfPath=d.get("urdf_path") or None,
+            default_shape=str(d.get("default_shape", "box")),
+            default_size=[float(x) for x in d.get("default_size", [0.1, 0.1, 0.1])],
+            default_mass=float(d.get("default_mass", 1.0)),
+            can_be_grasped=bool(d.get("can_be_grasped", True)),
+            mesh_prompt=d.get("mesh_prompt") or None,
+            urdf_path=d.get("urdf_path") or None,
         )
         for name, d in raw.items()
     }
 
 
-OBJECTS: dict[str, ObjectDefinition] = loadObjects()
+OBJECTS: dict[str, ObjectDefinition] = load_objects()

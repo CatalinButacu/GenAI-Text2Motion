@@ -3,13 +3,13 @@ from __future__ import annotations
 import re
 from itertools import groupby
 
-from src.shared.vocabulary import ACTIONS, OBJECTS, resolveAction
+from src.shared.vocabulary import ACTIONS, OBJECTS, resolve_action
 
 from .models import ParsedAction, ParsedEntity
 from .parsing_utils import DURATION_RE, MODIFIER_WORDS, OBJ_DEPS, SUBJ_DEPS
 
 
-def buildActionLemmaMap() -> dict[str, str]:
+def build_action_lemma_map() -> dict[str, str]:
     result: dict[str, str] = {}
 
     for action_name, act_def in ACTIONS.items():
@@ -23,107 +23,107 @@ def buildActionLemmaMap() -> dict[str, str]:
     return result
 
 
-LEMMA_TO_ACTION: dict[str, str] = buildActionLemmaMap()
+LEMMA_TO_ACTION: dict[str, str] = build_action_lemma_map()
 LEMMA_TO_OBJECT: dict[str, str] = {
     kw.lower(): obj_name for obj_name, obj_def in OBJECTS.items() for kw in obj_def.keywords
 }
 
 
-def resolveVerb(lemma: str, raw: str) -> str | None:
+def resolve_verb(lemma: str, raw: str) -> str | None:
     for candidate in (lemma.lower(), raw.lower()):
         if candidate in LEMMA_TO_ACTION:
             return LEMMA_TO_ACTION[candidate]
 
-    actDef = resolveAction(lemma)
+    act_def = resolve_action(lemma)
 
-    return actDef.name if actDef else None
+    return act_def.name if act_def else None
 
 
-def resolveNoun(tokenText: str, lemma: str) -> str | None:
-    for candidate in (tokenText.lower(), lemma.lower()):
+def resolve_noun(token_text: str, lemma: str) -> str | None:
+    for candidate in (token_text.lower(), lemma.lower()):
         if candidate in LEMMA_TO_OBJECT:
             return LEMMA_TO_OBJECT[candidate]
 
     return None
 
 
-def nameForNoun(token, entities) -> str:
-    resolved = resolveNoun(token.text, token.lemma_)
+def name_for_noun(token, entities) -> str:
+    resolved = resolve_noun(token.text, token.lemma_)
 
     if not resolved:
         return ""
 
     for e in entities:
-        if e.objectType == resolved:
+        if e.object_type == resolved:
             return e.name
 
     return ""
 
 
-def namesForToken(t, entities) -> list[str]:
-    resolved = resolveNoun(t.text, t.lemma_)
+def names_for_token(t, entities) -> list[str]:
+    resolved = resolve_noun(t.text, t.lemma_)
 
     if not resolved:
         return []
 
-    return [e.name for e in entities if e.objectType == resolved]
+    return [e.name for e in entities if e.object_type == resolved]
 
 
-def addUnique(subjects: list[str], names: list[str]) -> None:
+def add_unique(subjects: list[str], names: list[str]) -> None:
     for name in names:
         if name not in subjects:
             subjects.append(name)
 
 
-def collectSubjToken(tkn, entities, subjects: list[str]) -> None:
+def collect_subj_token(tkn, entities, subjects: list[str]) -> None:
     for child in tkn.children:
         if child.dep_ in SUBJ_DEPS:
-            addUnique(subjects, namesForToken(child, entities))
+            add_unique(subjects, names_for_token(child, entities))
             # coordinated subjects: "a person and a robot walk"
             for conj in child.children:
                 if conj.dep_ == "conj":
-                    addUnique(subjects, namesForToken(conj, entities))
+                    add_unique(subjects, names_for_token(conj, entities))
 
 
-def collectAgentToken(tkn, entities, subjects: list[str]) -> None:
+def collect_agent_token(tkn, entities, subjects: list[str]) -> None:
     """Passive voice: 'ball is kicked by person' -- agent prep gives real actor."""
     for child in tkn.children:
         if child.dep_ == "agent":
             for gc in child.children:
-                addUnique(subjects, namesForToken(gc, entities))
+                add_unique(subjects, names_for_token(gc, entities))
 
 
-def collectCompoundToken(tkn, entities, subjects: list[str]) -> None:
+def collect_compound_token(tkn, entities, subjects: list[str]) -> None:
     for child in tkn.children:
         if child.dep_ == "compound":
-            addUnique(subjects, namesForToken(child, entities))
+            add_unique(subjects, names_for_token(child, entities))
 
 
-def depSubjects(token, entities) -> list[str]:
+def dep_subjects(token, entities) -> list[str]:
     subjects: list[str] = []
     # For coordinated verbs (e.g. "rolls and hits"), the grammatical subject
     # is attached to the head verb, not the conj verb.
     target = token.head if token.dep_ == "conj" else token
 
     # Prefer agent (passive) over nsubjpass when both present
-    collectAgentToken(target, entities, subjects)
+    collect_agent_token(target, entities, subjects)
 
     if not subjects:
-        collectSubjToken(target, entities, subjects)
+        collect_subj_token(target, entities, subjects)
 
     # Fallback: spaCy's en_core_web_sm mislabels short physics-context sentences
     # (e.g. "a cube slides") as NOUN ROOT with the subject as a "compound" dep.
     if not subjects:
-        collectCompoundToken(target, entities, subjects)
+        collect_compound_token(target, entities, subjects)
 
     return subjects
 
 
-def depArgViaPrep(child, entities, deps: frozenset[str]) -> str:
+def dep_arg_via_prep(child, entities, deps: frozenset[str]) -> str:
     """Search grandchildren of a prep token for an object dep match."""
     for grandchild in child.children:
         if grandchild.dep_ in deps:
-            name = nameForNoun(grandchild, entities)
+            name = name_for_noun(grandchild, entities)
 
             if name:
                 return name
@@ -131,16 +131,16 @@ def depArgViaPrep(child, entities, deps: frozenset[str]) -> str:
     return ""
 
 
-def depArg(token, entities, deps: frozenset[str]) -> str:
+def dep_arg(token, entities, deps: frozenset[str]) -> str:
     for child in token.children:
         if child.dep_ in deps:
-            name = nameForNoun(child, entities)
+            name = name_for_noun(child, entities)
 
             if name:
                 return name
 
         if child.dep_ == "prep":
-            name = depArgViaPrep(child, entities, deps)
+            name = dep_arg_via_prep(child, entities, deps)
 
             if name:
                 return name
@@ -148,54 +148,54 @@ def depArg(token, entities, deps: frozenset[str]) -> str:
     return ""
 
 
-def isNegated(token) -> bool:
+def is_negated(token) -> bool:
     return any(c.dep_ == "neg" for c in token.children)
 
 
-def emitSpanActions(ent, entities, actors, objects, emitFn) -> None:
+def emit_span_actions(ent, entities, actors, objects, emit_fn) -> None:
     """Pass 1 helper: emit actions for a single EntityRuler span."""
     if not ent.label_.startswith("VOCAB_ACT:"):
         return
 
     at = ent.label_.split(":", 1)[1]
 
-    if isNegated(ent.root):
+    if is_negated(ent.root):
         return
 
     adef = ACTIONS.get(at)
     head = ent.root
-    subjects = depSubjects(head, entities) or (actors[:1] if actors else [""])
-    target = depArg(head, entities, OBJ_DEPS) or (
-        objects[0] if adef and adef.requiresTarget and objects else ""
+    subjects = dep_subjects(head, entities) or (actors[:1] if actors else [""])
+    target = dep_arg(head, entities, OBJ_DEPS) or (
+        objects[0] if adef and adef.requires_target and objects else ""
     )
 
     for actor in subjects:
-        emitFn(at, actor, target)
+        emit_fn(at, actor, target)
 
 
-def emitTokenActions(token, entities, actors, objects, emitFn) -> None:
+def emit_token_actions(token, entities, actors, objects, emit_fn) -> None:
     """Pass 2 helper: emit actions for a single verb token."""
-    if token.pos_ != "VERB" or isNegated(token):
+    if token.pos_ != "VERB" or is_negated(token):
         return
 
-    at = resolveVerb(token.lemma_, token.text)
+    at = resolve_verb(token.lemma_, token.text)
 
     if at is None:
         return
 
     adef = ACTIONS.get(at)
-    subjects = depSubjects(token, entities) or (actors[:1] if actors else [""])
-    target = depArg(token, entities, OBJ_DEPS) or (
-        objects[0] if adef and adef.requiresTarget and objects else ""
+    subjects = dep_subjects(token, entities) or (actors[:1] if actors else [""])
+    target = dep_arg(token, entities, OBJ_DEPS) or (
+        objects[0] if adef and adef.requires_target and objects else ""
     )
 
     for actor in subjects:
-        emitFn(at, actor, target)
+        emit_fn(at, actor, target)
 
 
-def extractActions(doc, entities, order, duration, modifier, clauseText) -> list[ParsedAction]:
-    actors = [e.name for e in entities if e.isActor]
-    objects = [e.name for e in entities if not e.isActor]
+def extract_actions(doc, entities, order, duration, modifier, clause_text) -> list[ParsedAction]:
+    actors = [e.name for e in entities if e.is_actor]
+    objects = [e.name for e in entities if not e.is_actor]
     result: list[ParsedAction] = []
     seen: set[tuple[str, str]] = set()
 
@@ -208,10 +208,10 @@ def extractActions(doc, entities, order, duration, modifier, clauseText) -> list
         seen.add(key)
         result.append(
             ParsedAction(
-                actionType=at,
+                action_type=at,
                 actor=actor,
                 target=target,
-                rawText=clauseText.strip(),
+                raw_text=clause_text.strip(),
                 order=order,
                 duration=duration,
                 modifier=modifier,
@@ -219,15 +219,15 @@ def extractActions(doc, entities, order, duration, modifier, clauseText) -> list
         )
 
     for ent in doc.ents:
-        emitSpanActions(ent, entities, actors, objects, emit)
+        emit_span_actions(ent, entities, actors, objects, emit)
 
     for token in doc:
-        emitTokenActions(token, entities, actors, objects, emit)
+        emit_token_actions(token, entities, actors, objects, emit)
 
     return result
 
 
-def extractDuration(text: str) -> float | None:
+def extract_duration(text: str) -> float | None:
     m = DURATION_RE.search(text)
 
     if not m:
@@ -241,7 +241,7 @@ def extractDuration(text: str) -> float | None:
     return val
 
 
-def extractModifier(text: str) -> str:
+def extract_modifier(text: str) -> str:
     # sorted() gives deterministic order; join all matches so none are lost
     words = set(re.findall(r"[a-z]+", text.lower()))
     matches = sorted(w for w in words if w in MODIFIER_WORDS)
@@ -249,20 +249,20 @@ def extractModifier(text: str) -> str:
     return " ".join(matches)
 
 
-def backfillActorTargets(actions: list[ParsedAction], entities: list[ParsedEntity]) -> None:
-    actors = [e.name for e in entities if e.isActor]
-    objects = [e.name for e in entities if not e.isActor]
+def backfill_actor_targets(actions: list[ParsedAction], entities: list[ParsedEntity]) -> None:
+    actors = [e.name for e in entities if e.is_actor]
+    objects = [e.name for e in entities if not e.is_actor]
 
     for a in actions:
         if not a.actor and actors:
             a.actor = actors[0]
-        adef = ACTIONS.get(a.actionType)
+        adef = ACTIONS.get(a.action_type)
 
-        if not a.target and adef and adef.requiresTarget and objects:
+        if not a.target and adef and adef.requires_target and objects:
             a.target = objects[0]
 
 
-def propagateRename(actions: list[ParsedAction], old: str, new: str) -> None:
+def propagate_rename(actions: list[ParsedAction], old: str, new: str) -> None:
     """Update actor/target references after an entity is renamed (e.g. humanoid -> humanoid_1)."""
     for a in actions:
         if a.actor == old:
@@ -272,7 +272,7 @@ def propagateRename(actions: list[ParsedAction], old: str, new: str) -> None:
             a.target = new
 
 
-def computeSceneDuration(actions: list[ParsedAction]) -> tuple[float, bool]:
+def compute_scene_duration(actions: list[ParsedAction]) -> tuple[float, bool]:
     """Return (total_duration, duration_explicit) from per-action slot durations."""
     if not any(a.duration is not None for a in actions):
         return 5.0, False

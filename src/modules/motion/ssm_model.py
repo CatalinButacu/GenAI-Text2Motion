@@ -11,37 +11,37 @@ from src.modules.motion.config import TrainingConfig
 from src.modules.motion.nn_models import TextToMotionSSM
 from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
 from src.shared.tokenizer import tokenize
-from src.utils.mem_profile import profileMemory
+from src.utils.mem_profile import profile_memory
 
 from .models import MotionClip, MotionSource
 
 log = logging.getLogger(__name__)
 
 
-def sampleIndices(
+def sample_indices(
     logits: torch.Tensor,
     temperature: float = 1.0,
-    topP: float = 1.0,
+    top_p: float = 1.0,
 ) -> torch.Tensor:
     """Sample token indices from (B, T', K, V) logits.
 
-    temperature=1.0 and topP=1.0 is identical to argmax (greedy/deterministic).
-    temperature>1 diversifies output; topP<1 applies nucleus (top-p) filtering.
+    temperature=1.0 and top_p=1.0 is identical to argmax (greedy/deterministic).
+    temperature>1 diversifies output; top_p<1 applies nucleus (top-p) filtering.
     """
-    if temperature <= 0.0 or (temperature == 1.0 and topP >= 1.0):
+    if temperature <= 0.0 or (temperature == 1.0 and top_p >= 1.0):
         return logits.argmax(dim=-1)
 
     B, T, K, V = logits.shape
     scaled = logits / temperature
 
-    if topP < 1.0:
+    if top_p < 1.0:
         probs = F.softmax(scaled, dim=-1)
-        sortedProbs, sorted_idx = probs.sort(dim=-1, descending=True)
-        cumprobs = sortedProbs.cumsum(dim=-1)
+        sorted_probs, sorted_idx = probs.sort(dim=-1, descending=True)
+        cumprobs = sorted_probs.cumsum(dim=-1)
         # Zero out tokens beyond the top-p nucleus (keep at least 1 token per position)
-        remove = (cumprobs - sortedProbs) >= topP
-        sortedProbs = sortedProbs.masked_fill(remove, 0.0)
-        probs.scatter_(-1, sorted_idx, sortedProbs)
+        remove = (cumprobs - sorted_probs) >= top_p
+        sorted_probs = sorted_probs.masked_fill(remove, 0.0)
+        probs.scatter_(-1, sorted_idx, sorted_probs)
         flat = probs.reshape(B * T * K, V)
     else:
         flat = F.softmax(scaled.reshape(B * T * K, V), dim=-1)
@@ -50,71 +50,71 @@ def sampleIndices(
     return indices.reshape(B, T, K)
 
 
-def coerceConfig(raw) -> TrainingConfig:
+def coerce_config(raw) -> TrainingConfig:
     if isinstance(raw, TrainingConfig):
         return raw
-    fieldVals = {f.name: getattr(raw, f.name) for f in dc_fields(raw)}
-    return TrainingConfig(**fieldVals)
+    field_vals = {f.name: getattr(raw, f.name) for f in dc_fields(raw)}
+    return TrainingConfig(**field_vals)
 
 
 class SSMMotionModel:
     def __init__(
         self,
-        checkpointPath: str = "checkpoints/motion_ssm/best_model.pt",
-        rvqCheckpointPath: str = "checkpoints/rvq_tokenizer/best_model.pt",
-        dataDir: str = "data/AMASS",
+        checkpoint_path: str = "checkpoints/motion_ssm/best_model.pt",
+        rvq_checkpoint_path: str = "checkpoints/rvq_tokenizer/best_model.pt",
+        data_dir: str = "data/AMASS",
     ) -> None:
-        if not os.path.exists(checkpointPath):
+        if not os.path.exists(checkpoint_path):
             raise FileNotFoundError(
-                f"[SSM] checkpoint not found: {checkpointPath!r}. "
+                f"[SSM] checkpoint not found: {checkpoint_path!r}. "
                 "Train one via `python scripts/training/train_motion_ssm.py`."
             )
-        if not os.path.exists(rvqCheckpointPath):
+        if not os.path.exists(rvq_checkpoint_path):
             raise FileNotFoundError(
-                f"[SSM] RVQ tokenizer not found: {rvqCheckpointPath!r}. "
+                f"[SSM] RVQ tokenizer not found: {rvq_checkpoint_path!r}. "
                 "Train one via `python scripts/training/train_rvq_tokenizer.py`."
             )
 
-        self.checkpointPath = checkpointPath
-        self.rvqCheckpointPath = rvqCheckpointPath
-        self.dataDir = dataDir
+        self.checkpoint_path = checkpoint_path
+        self.rvq_checkpoint_path = rvq_checkpoint_path
+        self.data_dir = data_dir
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        ck = torch.load(checkpointPath, map_location=self.device, weights_only=False)
+        ck = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
         self.vocab: dict = ck["vocab"]
-        cfg = coerceConfig(ck["config"])
+        cfg = coerce_config(ck["config"])
         self.model = TextToMotionSSM(cfg).to(self.device)
         self.model.load_state_dict(ck["model_state_dict"])
         self.model.eval()
 
-        rvqCk = torch.load(rvqCheckpointPath, map_location=self.device, weights_only=False)
+        rvq_ck = torch.load(rvq_checkpoint_path, map_location=self.device, weights_only=False)
         self.tokenizer = MotionRVQTokenizer(
-            motionDim=cfg.motionDim,
-            latentDim=cfg.rvqLatentDim,
-            nCodebooks=cfg.rvqNCodebooks,
-            codebookSize=cfg.rvqCodebookSize,
-            downT=cfg.rvqDownT,
+            motion_dim=cfg.motion_dim,
+            latent_dim=cfg.rvq_latent_dim,
+            n_codebooks=cfg.rvq_n_codebooks,
+            codebook_size=cfg.rvq_codebook_size,
+            down_t=cfg.rvq_down_t,
         ).to(self.device)
-        self.tokenizer.load_state_dict(rvqCk["model_state_dict"])
+        self.tokenizer.load_state_dict(rvq_ck["model_state_dict"])
         self.tokenizer.eval()
 
         log.info(
-            "[SSM] loaded %s (valLoss=%s) + rvq %s (val_loss=%s)",
-            checkpointPath,
-            ck.get("valLoss", ck.get("val_loss", "N/A")),
-            rvqCheckpointPath,
-            rvqCk.get("val_loss", "N/A"),
+            "[SSM] loaded %s (val_loss=%s) + rvq %s (val_loss=%s)",
+            checkpoint_path,
+            ck.get("val_loss", ck.get("val_loss", "N/A")),
+            rvq_checkpoint_path,
+            rvq_ck.get("val_loss", "N/A"),
         )
 
-    @profileMemory
-    def generateFromTextTokens(
+    @profile_memory
+    def generate_from_text_tokens(
         self,
         text: str,
-        numFrames: int = 100,
+        num_frames: int = 100,
         temperature: float = 1.0,
-        topP: float = 1.0,
+        top_p: float = 1.0,
     ) -> MotionClip:
-        if getattr(self.model.config, "useSbert", False):
+        if getattr(self.model.config, "use_sbert", False):
             inputs = [text]
         else:
             inputs = (
@@ -124,13 +124,13 @@ class SSMMotionModel:
             )
 
         with torch.no_grad():
-            logits, _ = self.model(inputs, numFrames)  # (B, T', K, V)
-            indices = sampleIndices(logits, temperature, topP)  # (B, T', K)
+            logits, _ = self.model(inputs, num_frames)  # (B, T', K, V)
+            indices = sample_indices(logits, temperature, top_p)  # (B, T', K)
             motion = self.tokenizer.decode(indices)  # (B, T, motion_dim)
-            motion = motion[:, :numFrames]  # trim to requested length
+            motion = motion[:, :num_frames]  # trim to requested length
             motion = motion.cpu().numpy()[0]
 
-        return MotionClip(action=text, smplxParams=motion, source=MotionSource.SSM)
+        return MotionClip(action=text, smplx_params=motion, source=MotionSource.SSM)
 
-    def invoke(self, text: str, durationS: float = 3.0) -> MotionClip:
-        return self.generateFromTextTokens(text, int(durationS * 30))
+    def invoke(self, text: str, duration_s: float = 3.0) -> MotionClip:
+        return self.generate_from_text_tokens(text, int(duration_s * 30))

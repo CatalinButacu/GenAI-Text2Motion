@@ -22,33 +22,33 @@ import sys
 
 import numpy as np
 
-from src.data.augmentation import detectTpose, qualityFilter, resampleToFps
-from src.data.dataset_cache import INGEST_MAX_LENGTH, loadOrBuildCache
-from src.data.unified import buildSourcesBuffer
+from src.data.augmentation import detect_tpose, quality_filter, resample_to_fps
+from src.data.dataset_cache import INGEST_MAX_LENGTH, load_or_build_cache
+from src.data.unified import build_sources_buffer
 from src.data.unified_dataset import SourceConfig, UnifiedConfig
 
 log = logging.getLogger(__name__)
 
-def computeTranslationStats(samples: list[dict]) -> tuple[np.ndarray, np.ndarray]:
+def compute_translation_stats(samples: list[dict]) -> tuple[np.ndarray, np.ndarray]:
     """Return (mean, std) over channels 3:6 across all frames in samples."""
-    transFrames = np.concatenate(
+    trans_frames = np.concatenate(
         [s["motion"][:, 3:6] for s in samples if s["motion"].shape[0] > 0], axis=0,
     )
-    mean = transFrames.mean(axis=0)
-    std = transFrames.std(axis=0)
+    mean = trans_frames.mean(axis=0)
+    std = trans_frames.std(axis=0)
     std = np.where(std < 1e-6, 1.0, std)
 
     return mean.astype(np.float32), std.astype(np.float32)
 
-def computeForSource(label: str, cfg: UnifiedConfig) -> tuple[np.ndarray, np.ndarray]:
-    samples = buildSourcesBuffer(cfg, 30, resampleToFps, qualityFilter, detectTpose,
-                                  maxLength=INGEST_MAX_LENGTH)
+def compute_for_source(label: str, cfg: UnifiedConfig) -> tuple[np.ndarray, np.ndarray]:
+    samples = build_sources_buffer(cfg, 30, resample_to_fps, quality_filter, detect_tpose,
+                                  max_length=INGEST_MAX_LENGTH)
 
     if not samples:
         log.warning("[trans-stats] %s: 0 samples — falling back to (0, 1) stats", label)
 
         return np.zeros(3, dtype=np.float32), np.ones(3, dtype=np.float32)
-    mean, std = computeTranslationStats(samples)
+    mean, std = compute_translation_stats(samples)
     log.info("[trans-stats]   %s mean|.|=%.4f  std|.|=%.4f  N=%d",
              label, float(np.abs(mean).mean()), float(np.abs(std).mean()), len(samples))
 
@@ -56,11 +56,11 @@ def computeForSource(label: str, cfg: UnifiedConfig) -> tuple[np.ndarray, np.nda
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", default="data/AMASS", dest="dataDir")
-    parser.add_argument("--humanml3d-dir", default="data/humanml3d", dest="humanml3dDir")
-    parser.add_argument("--arctic-dir", default="data/arctic/unpack", dest="arcticDir")
-    parser.add_argument("--interx-dir", default="data/inter-x", dest="interxDir")
-    parser.add_argument("--include-extras", action="store_true", dest="includeExtras",
+    parser.add_argument("--data-dir", default="data/AMASS", dest="data_dir")
+    parser.add_argument("--humanml3d-dir", default="data/humanml3d", dest="humanml3d_dir")
+    parser.add_argument("--arctic-dir", default="data/arctic/unpack", dest="arctic_dir")
+    parser.add_argument("--interx-dir", default="data/inter-x", dest="interx_dir")
+    parser.add_argument("--include-extras", action="store_true", dest="include_extras",
                         help="Also compute ARCTIC + InterX stats for --data mega runs.")
     parser.add_argument("--output", default="data/stats/translation_per_source.npz")
     args = parser.parse_args()
@@ -70,48 +70,48 @@ def main() -> int:
                         datefmt="%H:%M:%S")
 
     log.info("[trans-stats] AMASS source")
-    amassSamples, _ = loadOrBuildCache(args.dataDir, INGEST_MAX_LENGTH, None)
-    amassMean, amassStd = computeTranslationStats(amassSamples)
+    amass_samples, _ = load_or_build_cache(args.data_dir, INGEST_MAX_LENGTH, None)
+    amass_mean, amass_std = compute_translation_stats(amass_samples)
     log.info("[trans-stats]   amass mean|.|=%.4f  std|.|=%.4f  N=%d",
-             float(np.abs(amassMean).mean()), float(np.abs(amassStd).mean()), len(amassSamples))
+             float(np.abs(amass_mean).mean()), float(np.abs(amass_std).mean()), len(amass_samples))
 
     log.info("[trans-stats] HumanML3D source")
-    humanCfg = UnifiedConfig(
+    human_cfg = UnifiedConfig(
         amass=SourceConfig(enabled=False),
         arctic=SourceConfig(enabled=False),
-        humanml3d=SourceConfig(enabled=True, dataDir=args.humanml3dDir, amassDir=args.dataDir),
+        humanml3d=SourceConfig(enabled=True, data_dir=args.humanml3d_dir, amass_dir=args.data_dir),
     )
-    humanMean, humanStd = computeForSource("humanml3d", humanCfg)
+    human_mean, human_std = compute_for_source("humanml3d", human_cfg)
 
     out: dict[str, np.ndarray] = {
-        "amass_mean": amassMean, "amass_std": amassStd,
-        "humanml3d_mean": humanMean, "humanml3d_std": humanStd,
+        "amass_mean": amass_mean, "amass_std": amass_std,
+        "humanml3d_mean": human_mean, "humanml3d_std": human_std,
     }
 
-    if args.includeExtras:
+    if args.include_extras:
         log.info("[trans-stats] ARCTIC source")
-        arcticCfg = UnifiedConfig(
+        arctic_cfg = UnifiedConfig(
             amass=SourceConfig(enabled=False),
-            arctic=SourceConfig(enabled=True, dataDir=args.arcticDir),
+            arctic=SourceConfig(enabled=True, data_dir=args.arctic_dir),
             humanml3d=SourceConfig(enabled=False),
         )
-        arcticMean, arcticStd = computeForSource("arctic", arcticCfg)
-        out["arctic_mean"] = arcticMean
-        out["arctic_std"] = arcticStd
+        arctic_mean, arctic_std = compute_for_source("arctic", arctic_cfg)
+        out["arctic_mean"] = arctic_mean
+        out["arctic_std"] = arctic_std
 
         log.info("[trans-stats] InterX source")
-        ixCfg = UnifiedConfig(
+        ix_cfg = UnifiedConfig(
             amass=SourceConfig(enabled=False),
             arctic=SourceConfig(enabled=False),
             humanml3d=SourceConfig(enabled=False),
-            interx=SourceConfig(enabled=True, dataDir=args.interxDir),
+            interx=SourceConfig(enabled=True, data_dir=args.interx_dir),
         )
-        ixMean, ixStd = computeForSource("interx", ixCfg)
-        out["interx_mean"] = ixMean
-        out["interx_std"] = ixStd
+        ix_mean, ix_std = compute_for_source("interx", ix_cfg)
+        out["interx_mean"] = ix_mean
+        out["interx_std"] = ix_std
 
-    log.info("[trans-stats] amass std (m): %s", amassStd.tolist())
-    log.info("[trans-stats] humanml3d std (m): %s", humanStd.tolist())
+    log.info("[trans-stats] amass std (m): %s", amass_std.tolist())
+    log.info("[trans-stats] humanml3d std (m): %s", human_std.tolist())
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     np.savez(args.output, **out)

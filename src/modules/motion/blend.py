@@ -9,7 +9,7 @@ ROTATION_SLICES = [slice(0, 3)] + [
 TRANSLATION_SLICE = slice(3, 6)
 
 
-def slerpBlendFrames(a: np.ndarray, b: np.ndarray, alpha: np.ndarray) -> np.ndarray:
+def slerp_blend_frames(a: np.ndarray, b: np.ndarray, alpha: np.ndarray) -> np.ndarray:
     """Per-frame SLERP blend of two SMPL-X 168-dim pose arrays weighted by alpha."""
     N = a.shape[0]
     result = np.empty_like(a)

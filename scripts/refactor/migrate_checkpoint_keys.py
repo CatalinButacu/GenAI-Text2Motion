@@ -40,7 +40,7 @@ KEY_PREFIX_MAP = {
 }
 
 
-def renameKey(key: str) -> str:
+def rename_key(key: str) -> str:
     parts = key.split(".")
     out = []
     for p in parts:
@@ -49,23 +49,23 @@ def renameKey(key: str) -> str:
     return ".".join(out)
 
 
-def migrateOne(ckpt: Path, apply: bool, inPlace: bool) -> int:
+def migrate_one(ckpt: Path, apply: bool, inPlace: bool) -> int:
     obj = torch.load(ckpt, map_location="cpu", weights_only=False)
     if not isinstance(obj, dict):
         print(f"  SKIP  {ckpt.name}: not a dict checkpoint")
 
         return 0
 
-    sdKey = next((k for k in ("model_state_dict", "state_dict", "model") if k in obj), None)
-    if sdKey is None:
+    sd_key = next((k for k in ("model_state_dict", "state_dict", "model") if k in obj), None)
+    if sd_key is None:
         print(f"  SKIP  {ckpt.name}: no state_dict-like key")
 
         return 0
 
-    sd = obj[sdKey]
+    sd = obj[sd_key]
     rewrites = {}
     for k in list(sd.keys()):
-        new = renameKey(k)
+        new = rename_key(k)
         if new != k:
             rewrites[k] = new
 
@@ -82,8 +82,8 @@ def migrateOne(ckpt: Path, apply: bool, inPlace: bool) -> int:
     if not apply:
         return len(rewrites)
 
-    newSd = {rewrites.get(k, k): v for k, v in sd.items()}
-    obj[sdKey] = newSd
+    new_sd = {rewrites.get(k, k): v for k, v in sd.items()}
+    obj[sd_key] = new_sd
 
     if inPlace:
         bak = ckpt.with_suffix(ckpt.suffix + ".bak")
@@ -114,7 +114,7 @@ def main() -> int:
     for ckpt in sorted(CKPT_DIR.rglob("*.pt")):
         if ckpt.name.endswith(".bak.pt") or ckpt.name.endswith(".migrated.pt"):
             continue
-        total += migrateOne(ckpt, args.apply, args.inPlace)
+        total += migrate_one(ckpt, args.apply, args.inPlace)
 
     if args.apply:
         print(f"\nMigrated {total} keys total")

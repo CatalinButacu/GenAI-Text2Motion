@@ -11,7 +11,7 @@ import json, uuid
 
 OUT = "D:/Facultate/dissertation/scripts/cloud/colab/train_colab.ipynb"
 
-cellsSrc = [
+cells_src = [
 
 #  0. GPU check
 r"""#  0. GPU check + logging setup
@@ -376,7 +376,7 @@ nb = {
     "cells": []
 }
 
-for i, src in enumerate(cellsSrc):
+for i, src in enumerate(cells_src):
     nb["cells"].append({
         "cell_type": "code",
         "id": "col" + str(i) + "-" + uuid.uuid4().hex[:6],

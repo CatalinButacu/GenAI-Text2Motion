@@ -21,7 +21,7 @@ class SemanticActionResolver:
         self.built = False
 
     @classmethod
-    def getInstance(cls) -> SemanticActionResolver:
+    def get_instance(cls) -> SemanticActionResolver:
         if cls.instance is None:
             cls.instance = cls()
 
