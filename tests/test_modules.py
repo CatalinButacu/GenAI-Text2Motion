@@ -361,9 +361,10 @@ class TestSBERTTextEncoder(unittest.TestCase):
         from src.modules.motion.nn_models import SBERTTextEncoder
 
         enc = SBERTTextEncoder(d_model=64)
-        # The projection linear layer should be (384, 64)
+        # Probed dim for all-MiniLM-L6-v2 is 384; projection is (384 -> 64).
         proj_linear = enc.proj[0]  # first element in Sequential
-        self.assertEqual(proj_linear.in_features, SBERTTextEncoder.SBERT_DIM)
+        self.assertEqual(proj_linear.in_features, enc.encoder_dim)
+        self.assertEqual(enc.encoder_dim, 384)
         self.assertEqual(proj_linear.out_features, 64)
 
     def test_forward_raises_without_sbert(self):

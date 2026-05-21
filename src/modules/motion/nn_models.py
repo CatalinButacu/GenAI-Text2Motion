@@ -30,19 +30,37 @@ class SimpleTextEncoder(nn.Module):
         return self.encoder(x).mean(dim=1)
 
 
-class SBERTTextEncoder(nn.Module):
-    SBERT_DIM = 384  # fixed by all-MiniLM-L6-v2
+class PretrainedTextEncoder(nn.Module):
+    """Wraps any sentence-transformers model and projects its output to d_model.
+
+    Works with SBERT variants (all-MiniLM-L6-v2 -> 384-d, all-mpnet-base-v2 -> 768-d)
+    AND CLIP text encoders (clip-ViT-B-32 -> 512-d, clip-ViT-L-14 -> 768-d).
+
+    The encoder is loaded by `model_name`; output dim is probed at construction
+    rather than hardcoded. Frozen by default -- the motion training treats the
+    pretrained semantic prior as a fixed feature extractor.
+    """
 
     def __init__(self, d_model: int, model_name: str = "all-MiniLM-L6-v2", freeze: bool = True):
         super().__init__()
+        self.model_name = model_name
         self.sbert = SentenceTransformer(model_name)
 
         if freeze:
             for param in self.sbert.parameters():
                 param.requires_grad = False
+        # Probe the actual embedding dim. sentence-transformers'
+        # get_sentence_embedding_dimension() returns None for CLIP wrappers,
+        # so encode a one-token string and read the output shape instead.
+        with torch.no_grad():
+            probe = self.sbert.encode(["x"], convert_to_tensor=True, show_progress_bar=False)
+            self.encoder_dim = int(probe.shape[-1])
         self.available = True
-        log.info("SBERTTextEncoder: loaded %s (frozen=%s)", model_name, freeze)
-        self.proj = nn.Sequential(nn.Linear(self.SBERT_DIM, d_model), nn.LayerNorm(d_model))
+        log.info(
+            "PretrainedTextEncoder: %s (dim=%d, frozen=%s)",
+            model_name, self.encoder_dim, freeze,
+        )
+        self.proj = nn.Sequential(nn.Linear(self.encoder_dim, d_model), nn.LayerNorm(d_model))
 
     def forward(self, texts: list[str]) -> torch.Tensor:
         device = next(self.proj.parameters()).device
@@ -59,6 +77,11 @@ class SBERTTextEncoder(nn.Module):
             )
 
         return self.proj(emb)
+
+
+# Backward-compat alias. Old checkpoints and code that imported the SBERT-specific
+# name still work; new code should use PretrainedTextEncoder.
+SBERTTextEncoder = PretrainedTextEncoder
 
 
 class FiLM(nn.Module):
@@ -123,7 +146,7 @@ class TextToMotionSSM(nn.Module):
         self.config = config
 
         if config.use_sbert:
-            self.text_encoder = SBERTTextEncoder(
+            self.text_encoder = PretrainedTextEncoder(
                 d_model=config.d_model,
                 model_name=config.sbert_model,
                 freeze=config.freeze_sbert,

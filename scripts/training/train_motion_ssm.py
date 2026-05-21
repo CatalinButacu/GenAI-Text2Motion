@@ -134,6 +134,12 @@ def main():
         help="With --resume: load model weights only, skip optimizer/scheduler/epoch state. "
              "Use to change LR or other hyperparams while keeping pretrained weights.",
     )
+    parser.add_argument(
+        "--compile", action="store_true", dest="compile_model",
+        help=("Wrap the model in torch.compile(mode='reduce-overhead', dynamic=False). "
+              "Expected 3-5x training throughput on GPU; ignored on CPU. First batch "
+              "compiles for 30-90s; amortizes after ~3 epochs."),
+    )
     parser.add_argument("--d-model", type=int, default=SSM_D_MODEL, dest="d_model")
     parser.add_argument("--d-state", type=int, default=SSM_D_STATE, dest="d_state")
     parser.add_argument("--n-layers", type=int, default=SSM_N_LAYERS, dest="n_layers")
@@ -155,8 +161,25 @@ def main():
         "--sbert-model",
         type=str,
         default="all-MiniLM-L6-v2",
-        help="HuggingFace model name for SBERT encoder",
+        help=(
+            "sentence-transformers model name for the text encoder. "
+            "Convenience aliases via --text-encoder override this."
+        ),
     dest="sbert_model")
+    parser.add_argument(
+        "--text-encoder",
+        type=str,
+        default=None,
+        choices=[None, "sbert-small", "sbert-mpnet", "clip-b", "clip-l"],
+        help=(
+            "Convenience alias for --sbert-model. Maps:\n"
+            "  sbert-small  -> all-MiniLM-L6-v2  (384-d, 22M params, baseline)\n"
+            "  sbert-mpnet  -> all-mpnet-base-v2 (768-d, 110M)\n"
+            "  clip-b       -> clip-ViT-B-32     (512-d, OpenAI CLIP; best for motion verbs)\n"
+            "  clip-l       -> clip-ViT-L-14     (768-d, larger CLIP)"
+        ),
+        dest="text_encoder",
+    )
     parser.add_argument(
         "--no-freeze-sbert",
         action="store_true",
@@ -221,6 +244,15 @@ def main():
     args = parser.parse_args()
 
     # Resolve defaults
+    # --text-encoder alias overrides --sbert-model if both supplied.
+    TEXT_ENCODER_ALIASES = {
+        "sbert-small": "all-MiniLM-L6-v2",
+        "sbert-mpnet": "all-mpnet-base-v2",
+        "clip-b":      "clip-ViT-B-32",
+        "clip-l":      "clip-ViT-L-14",
+    }
+    if args.text_encoder is not None:
+        args.sbert_model = TEXT_ENCODER_ALIASES[args.text_encoder]
     if args.data_dir is None:
         args.data_dir = "data/humanml3d" if args.data_source == "humanml3d" else "data/AMASS"
     if args.checkpoint_dir is None:
@@ -276,6 +308,7 @@ def main():
         max_samples=args.max_samples,
         rvq_checkpoint_path=args.rvq_checkpoint,
         warm_start=args.warm_start,
+        compile_model=args.compile_model,
     )
     if args.sources is not None and args.data_source == "unified":
         config.unified_sources = args.sources

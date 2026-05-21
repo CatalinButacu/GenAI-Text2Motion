@@ -91,3 +91,8 @@ class TrainingConfig(ModelConfig, DataConfig):
     keep_last_checkpoints: int = 5
     cfg_dropout_prob: float = 0.1  # prob of dropping text conditioning at train time (CFG)
     use_amp: bool = True  # mixed precision on CUDA
+    # Wrap the model in torch.compile(mode="reduce-overhead", dynamic=False).
+    # Expected 3-5x training throughput on GPU; first batch eats 30-90s of compile.
+    # CPU benchmarks show compile is usually slower due to dispatch overhead,
+    # so this stays opt-in and gated on CUDA in the trainer.
+    compile_model: bool = False
