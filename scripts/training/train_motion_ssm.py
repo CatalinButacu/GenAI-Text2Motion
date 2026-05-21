@@ -140,6 +140,14 @@ def main():
               "Expected 3-5x training throughput on GPU; ignored on CPU. First batch "
               "compiles for 30-90s; amortizes after ~3 epochs."),
     )
+    parser.add_argument(
+        "--ar-k-head", action="store_true", dest="ar_k_head",
+        help=("Use the autoregressive K-codebook head (ResidualKHead) instead of "
+              "the legacy independent K-classifier head (RVQMotionDecoder). "
+              "Each codebook conditions on the embedded sum of prior-codebook "
+              "tokens, restoring the residual structure of RVQ. Requires training "
+              "from scratch -- old checkpoints have the independent head's weights."),
+    )
     parser.add_argument("--d-model", type=int, default=SSM_D_MODEL, dest="d_model")
     parser.add_argument("--d-state", type=int, default=SSM_D_STATE, dest="d_state")
     parser.add_argument("--n-layers", type=int, default=SSM_N_LAYERS, dest="n_layers")
@@ -309,6 +317,7 @@ def main():
         rvq_checkpoint_path=args.rvq_checkpoint,
         warm_start=args.warm_start,
         compile_model=args.compile_model,
+        arch="residual_k" if args.ar_k_head else "independent",
     )
     if args.sources is not None and args.data_source == "unified":
         config.unified_sources = args.sources

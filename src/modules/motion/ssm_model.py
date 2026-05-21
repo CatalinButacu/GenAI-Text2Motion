@@ -50,6 +50,88 @@ def sample_indices(
     return indices.reshape(B, T, K)
 
 
+def sample_one_codebook(
+    logits: torch.Tensor,
+    temperature: float = 1.0,
+    top_p: float = 1.0,
+) -> torch.Tensor:
+    """Sample one (B, T, V) logits tensor into (B, T) indices, with the same
+    temperature / top-p semantics as sample_indices."""
+    if temperature <= 0.0 or (temperature == 1.0 and top_p >= 1.0):
+        return logits.argmax(dim=-1)
+    B, T, V = logits.shape
+    scaled = logits / temperature
+
+    if top_p < 1.0:
+        probs = F.softmax(scaled, dim=-1)
+        sorted_probs, sorted_idx = probs.sort(dim=-1, descending=True)
+        cumprobs = sorted_probs.cumsum(dim=-1)
+        remove = (cumprobs - sorted_probs) >= top_p
+        sorted_probs = sorted_probs.masked_fill(remove, 0.0)
+        probs.scatter_(-1, sorted_idx, sorted_probs)
+        flat = probs.reshape(B * T, V)
+    else:
+        flat = F.softmax(scaled.reshape(B * T, V), dim=-1)
+    idx = torch.multinomial(flat, num_samples=1).squeeze(-1)
+    return idx.reshape(B, T)
+
+
+def sample_ar_k(
+    model,
+    inputs,
+    motion_length: int,
+    temperature: float = 1.0,
+    top_p: float = 1.0,
+    cfg_scale: float = 1.0,
+    uncond_inputs=None,
+) -> torch.Tensor:
+    """Autoregressive sampling across K codebooks for a model with the
+    ResidualKHead arch.
+
+    For each latent frame, samples codebook 0, embeds the chosen token via
+    decoder.token_embeds[0], adds it to the residual conditioning signal,
+    then samples codebook 1, and so on. This matches the RVQ residual
+    structure that the head was trained against (vs. naive independent
+    sampling across K).
+
+    Returns: (B, T', K) codebook indices ready for tokenizer.decode.
+
+    cfg_scale > 1.0 + uncond_inputs not None applies CFG to each codebook's
+    logits independently: guided = uncond + cfg * (cond - uncond).
+    """
+    use_cfg = cfg_scale > 1.0 and uncond_inputs is not None
+    features, _ = model.forward_features(inputs, motion_length)
+    feat_unc = None
+
+    if use_cfg:
+        feat_unc, _ = model.forward_features(uncond_inputs, motion_length)
+    head = model.decoder  # ResidualKHead
+    K = head.n_codebooks
+    running = torch.zeros_like(features)
+    running_unc = torch.zeros_like(feat_unc) if use_cfg else None
+    all_tokens: list[torch.Tensor] = []
+
+    for k in range(K):
+        logits_k = head.head_for_codebook(features, running, k)
+
+        if use_cfg:
+            assert feat_unc is not None and running_unc is not None
+            uncond_logits_k = head.head_for_codebook(feat_unc, running_unc, k)
+            logits_k = uncond_logits_k + cfg_scale * (logits_k - uncond_logits_k)
+        tok_k = sample_one_codebook(logits_k, temperature, top_p)  # (B, T')
+        all_tokens.append(tok_k)
+
+        if k < K - 1:
+            running = running + head.embed_token(tok_k, k)
+
+            if use_cfg:
+                # Use the same chosen token for the uncond running embed.
+                # The uncond pathway sees what the conditional path committed
+                # to -- this is the standard CFG-with-AR formulation.
+                running_unc = running_unc + head.embed_token(tok_k, k)  # type: ignore[operator]
+    return torch.stack(all_tokens, dim=-1)  # (B, T', K)
+
+
 def coerce_config(raw) -> TrainingConfig:
     if isinstance(raw, TrainingConfig):
         return raw
@@ -140,14 +222,27 @@ class SSMMotionModel:
                 .to(self.device)
             )
 
-        with torch.no_grad():
-            logits, _ = self.model(inputs, num_frames)  # (B, T', K, V)
+        # AR head models sample sequentially across K codebooks; independent
+        # head models sample all K positions in parallel via sample_indices.
+        arch = getattr(self.model, "arch", getattr(self.model.config, "arch", "independent"))
+        use_ar = arch == "residual_k"
 
-            if use_cfg and uncond_inputs is not None:
-                uncond_logits, _ = self.model(uncond_inputs, num_frames)
-                # guided = uncond + scale * (cond - uncond)
-                logits = uncond_logits + cfg_scale * (logits - uncond_logits)
-            indices = sample_indices(logits, temperature, top_p)  # (B, T', K)
+        with torch.no_grad():
+            if use_ar:
+                indices = sample_ar_k(
+                    self.model, inputs, num_frames,
+                    temperature=temperature, top_p=top_p,
+                    cfg_scale=cfg_scale if use_cfg else 1.0,
+                    uncond_inputs=uncond_inputs if use_cfg else None,
+                )
+            else:
+                logits, _ = self.model(inputs, num_frames)  # (B, T', K, V)
+
+                if use_cfg and uncond_inputs is not None:
+                    uncond_logits, _ = self.model(uncond_inputs, num_frames)
+                    # guided = uncond + scale * (cond - uncond)
+                    logits = uncond_logits + cfg_scale * (logits - uncond_logits)
+                indices = sample_indices(logits, temperature, top_p)  # (B, T', K)
             motion = self.tokenizer.decode(indices)  # (B, T, motion_dim)
             motion = motion[:, :num_frames]  # trim to requested length
             motion = motion.cpu().numpy()[0]

@@ -22,11 +22,13 @@ class TestCfgBlendMath(unittest.TestCase):
     """Verify the logit-blending math in isolation, independent of the model."""
 
     def test_cfg_scale_one_is_identity(self):
+        torch.manual_seed(0)
         cond = torch.randn(2, 4, 3, 8)
         unc = torch.randn(2, 4, 3, 8)
         blended = unc + 1.0 * (cond - unc)
-        # scale=1 -> just the conditional logits.
-        self.assertTrue(torch.allclose(blended, cond))
+        # scale=1 -> mathematically equals cond, but `unc + (cond - unc)` does
+        # NOT exactly equal `cond` in fp32 due to round-off. Generous atol.
+        self.assertTrue(torch.allclose(blended, cond, atol=1e-5))
 
     def test_cfg_scale_zero_is_unconditional(self):
         cond = torch.randn(2, 4, 3, 8)

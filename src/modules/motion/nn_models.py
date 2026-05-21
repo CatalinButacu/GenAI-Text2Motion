@@ -113,6 +113,11 @@ class RVQMotionDecoder(nn.Module):
 
     The SSM trunk emits (B, T', d_model) features, where T' = max_motion_length // down_t.
     Per latent frame, one classifier per codebook emits logits over V entries.
+
+    Limitation: the K classifiers are independent given the features. RVQ is a
+    *residual* code (codebook k quantizes the residual after codebooks 0..k-1),
+    but this head ignores that structure at both train and inference time. The
+    ResidualKHead below restores it; pick which one via ModelConfig.arch.
     """
 
     def __init__(
@@ -131,13 +136,110 @@ class RVQMotionDecoder(nn.Module):
             [nn.Linear(d_model, codebook_size) for _ in range(n_codebooks)]
         )
 
-    def forward(self, features: torch.Tensor, condition: torch.Tensor) -> tuple:
+    def forward(
+        self,
+        features: torch.Tensor,
+        condition: torch.Tensor,
+        target_tokens: torch.Tensor | None = None,  # noqa: ARG002 -- ignored; matches ResidualKHead signature
+    ) -> tuple:
         # features: (B, T', d_model), condition: (B, d_model)
         # returns: logits (B, T', K, V), length_pred (B,)
         logits = torch.stack([head(features) for head in self.token_heads], dim=2)
         length_pred = torch.sigmoid(self.length_head(condition)).squeeze(-1) * self.max_length
 
         return logits, length_pred
+
+
+class ResidualKHead(nn.Module):
+    """Autoregressive K-codebook head: each codebook's classifier sees the SSM
+    features PLUS the sum of embedded prior-codebook tokens.
+
+    Training (when target_tokens is passed):
+        codebook 0:  logits_0 = head_0(features)
+                     -> sample/argmax/teacher-force token t_0
+                     -> running = embed_0(t_0)
+        codebook k:  logits_k = head_k(features + running)
+                     -> running = running + embed_k(t_k)
+        Output: stacked logits (B, T', K, V)
+
+    Inference:
+        Use sample_ar_k() in ssm_model.py for proper sequential sampling
+        with temperature / top-p / CFG support. Calling forward() without
+        target_tokens at inference does argmax-self-feed, which is a
+        debug/reference path -- temperature won't take effect.
+
+    Param overhead vs RVQMotionDecoder: ~K * codebook_size * d_model extra
+    (~1M params at K=6, V=512, d_model=384). Tiny relative to the SSM trunk.
+
+    Restoring the residual structure is the only known architectural defect
+    in the previous head; expected ~0.1-0.3 nat gain on token CE per the
+    2026-05 technique audit. Requires retraining -- the legacy
+    RVQMotionDecoder weights cannot map onto this layer set.
+    """
+
+    def __init__(
+        self,
+        d_model: int,
+        n_codebooks: int,
+        codebook_size: int,
+        max_length: int,
+    ):
+        super().__init__()
+        self.d_model = d_model
+        self.n_codebooks = n_codebooks
+        self.codebook_size = codebook_size
+        self.max_length = max_length
+        self.length_head = nn.Linear(d_model, 1)
+        self.token_heads = nn.ModuleList(
+            [nn.Linear(d_model, codebook_size) for _ in range(n_codebooks)]
+        )
+        # One embedding per codebook to project its chosen token back into
+        # d_model space; summed cumulatively into the conditioning signal.
+        self.token_embeds = nn.ModuleList(
+            [nn.Embedding(codebook_size, d_model) for _ in range(n_codebooks)]
+        )
+        # Initialise embeddings small so codebook-0's prediction is unchanged
+        # at the start of training (the AR head behaves like the independent
+        # head until gradients accumulate).
+        for emb in self.token_embeds:
+            nn.init.normal_(emb.weight, mean=0.0, std=0.02)
+
+    def head_for_codebook(
+        self, features: torch.Tensor, running_embed: torch.Tensor, k: int,
+    ) -> torch.Tensor:
+        """Per-codebook logits computation, exposed so the inference sampler
+        can call it one codebook at a time."""
+        return self.token_heads[k](features + running_embed)
+
+    def embed_token(self, token: torch.Tensor, k: int) -> torch.Tensor:
+        return self.token_embeds[k](token)
+
+    def length_pred(self, condition: torch.Tensor) -> torch.Tensor:
+        return torch.sigmoid(self.length_head(condition)).squeeze(-1) * self.max_length
+
+    def forward(
+        self,
+        features: torch.Tensor,
+        condition: torch.Tensor,
+        target_tokens: torch.Tensor | None = None,
+    ) -> tuple:
+        # features: (B, T', d_model), condition: (B, d_model)
+        # target_tokens: (B, T', K) or None (teacher forcing vs greedy self-feed)
+        running_embed = torch.zeros_like(features)
+        all_logits: list[torch.Tensor] = []
+
+        for k in range(self.n_codebooks):
+            logits_k = self.head_for_codebook(features, running_embed, k)
+            all_logits.append(logits_k)
+
+            if k < self.n_codebooks - 1:
+                if target_tokens is not None:
+                    tok = target_tokens[:, :, k]
+                else:
+                    tok = logits_k.argmax(dim=-1)
+                running_embed = running_embed + self.embed_token(tok, k)
+        logits = torch.stack(all_logits, dim=2)  # (B, T', K, V)
+        return logits, self.length_pred(condition)
 
 
 class TextToMotionSSM(nn.Module):
@@ -184,28 +286,24 @@ class TextToMotionSSM(nn.Module):
             self.norms = nn.ModuleList(
                 [nn.LayerNorm(config.d_model) for _ in range(config.n_layers)]
             )
-        self.decoder = RVQMotionDecoder(
+        arch = getattr(config, "arch", "independent")
+        decoder_cls = ResidualKHead if arch == "residual_k" else RVQMotionDecoder
+        self.decoder = decoder_cls(
             d_model=config.d_model,
             n_codebooks=config.rvq_n_codebooks,
             codebook_size=config.rvq_codebook_size,
             max_length=config.max_motion_length,
         )
+        self.arch = arch
 
-    def forward(
+    def forward_features(
         self,
         inputs: torch.Tensor | list[str],
         motion_length: int | None = None,
     ) -> tuple:
-        """Parallel forward pass over latent (downsampled) frames.
-
-        Args:
-            inputs: token ids (B, S) or list of text strings.
-            motion_length: target output motion length in raw frames. Internally
-                           converted to latent frames via rvq_down_t stride.
-
-        Returns:
-            logits: (B, T', K, V) -- per latent frame, per codebook, token distribution
-            length_pred: (B,) predicted length in raw frames
+        """Run the SSM trunk only, returning (features, cond) without the
+        decoder head. Used by the AR sampler so it can call decoder.head_for_codebook
+        one codebook at a time.
         """
         cond = self.condition_proj(self.text_encoder(inputs))
 
@@ -222,5 +320,27 @@ class TextToMotionSSM(nn.Module):
         else:
             for layer, norm in zip(self.layers, self.norms):
                 x = x + layer(norm(x))
+        return x, cond
 
-        return self.decoder(x, cond)
+    def forward(
+        self,
+        inputs: torch.Tensor | list[str],
+        motion_length: int | None = None,
+        target_tokens: torch.Tensor | None = None,
+    ) -> tuple:
+        """Parallel forward pass over latent (downsampled) frames.
+
+        Args:
+            inputs: token ids (B, S) or list of text strings.
+            motion_length: target output motion length in raw frames. Internally
+                           converted to latent frames via rvq_down_t stride.
+            target_tokens: ground-truth (B, T', K) codebook indices for
+                           teacher-forced training of the ResidualKHead arch.
+                           Ignored by the legacy independent head.
+
+        Returns:
+            logits: (B, T', K, V) -- per latent frame, per codebook, token distribution
+            length_pred: (B,) predicted length in raw frames
+        """
+        x, cond = self.forward_features(inputs, motion_length)
+        return self.decoder(x, cond, target_tokens=target_tokens)

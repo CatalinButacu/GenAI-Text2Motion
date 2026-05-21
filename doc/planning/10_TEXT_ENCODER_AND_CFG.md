@@ -80,6 +80,43 @@ showed CLIP-b ahead of SBERT by 0.05 nats — small (5-epoch noise floor is
 large) but directionally consistent with the literature. A defensible
 ablation needs full HumanML3D with 3+ seeds and ~50–100 epochs.
 
+## Autoregressive K-head (--ar-k-head)
+
+Item 2b from the technique audit. Addresses the only known architectural
+defect in the previous inference path: the RVQ codebooks are **residual**
+during training (codebook k quantizes the residual after codebooks 0..k-1)
+but the previous inference sampler sampled all K codebooks **independently**.
+The training signal and inference behaviour disagree.
+
+The new `ResidualKHead` (in `src/modules/motion/nn_models.py`) restores the
+structure end-to-end:
+
+- At training (teacher-forced): codebook k's classifier sees the SSM features
+  PLUS the sum of `token_embeds[0..k-1](target_tokens[..., 0..k-1])`.
+- At inference (sequential): the `sample_ar_k` function in
+  `src/modules/motion/ssm_model.py` samples codebook 0, embeds the chosen
+  token, conditions codebook 1's logits on it, etc. CFG is applied
+  per-codebook when `cfg_scale > 1.0`.
+
+Selection:
+
+```bash
+# Default: legacy independent K-classifier head (RVQMotionDecoder).
+# Backward-compatible with every existing checkpoint.
+python scripts/training/train_motion_ssm.py ...
+
+# Opt-in: autoregressive K-codebook head (ResidualKHead).
+# Different layer set -- requires retraining from scratch.
+python scripts/training/train_motion_ssm.py --ar-k-head ...
+```
+
+Parameter overhead: ~K × codebook_size × d_model extra (1.18M at K=6, V=512,
+d_model=384). Tiny relative to the SSM trunk.
+
+Expected gain at scale: 0.1–0.3 nats on token CE per the 2026-05 audit's
+reading of MoMask / Mogo ablations. **Cannot be confirmed without a real
+training run** -- the AR head needs to be trained from scratch.
+
 ## What's NOT yet ported from the local-WIP stash
 
 The pre-snake_case-migration stash on the main checkout

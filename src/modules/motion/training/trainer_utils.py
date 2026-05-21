@@ -262,9 +262,14 @@ def run_train_epoch(
         # Token encoding stays in fp32 (frozen tokenizer) for stable VQ distances
         target_tokens = encode_motion_to_tokens(tokenizer, mgt)  # (B, T', K)
         latent_mask = build_latent_mask(mask, down_t)
+        # Teacher-force target tokens through the model only when the AR
+        # head needs them; the legacy independent head ignores the kwarg.
+        ar_targets = (
+            target_tokens if getattr(config, "arch", "independent") == "residual_k" else None
+        )
 
         with torch.amp.autocast(device_type="cuda", enabled=amp_active):  # type: ignore[attr-defined]
-            logits, length_pred = model(inputs, mgt.shape[1])  # (B, T', K, V), (B,)
+            logits, length_pred = model(inputs, mgt.shape[1], target_tokens=ar_targets)
             # Align logits and targets on T' in case of odd trimming
             t_len = min(logits.shape[1], target_tokens.shape[1])
             logits = logits[:, :t_len]
@@ -314,8 +319,14 @@ def eval_loop(model, tokenizer, loader, device, config) -> tuple[float, float, f
 
         target_tokens = encode_motion_to_tokens(tokenizer, mgt)
         latent_mask = build_latent_mask(mask, down_t)
+        # Teacher-force AR head during validation too -- keeps val_ce curves
+        # directly comparable to train_ce. Inference uses the AR sampler
+        # in ssm_model.py, not this code path.
+        ar_targets = (
+            target_tokens if getattr(config, "arch", "independent") == "residual_k" else None
+        )
 
-        logits, _ = model(inputs, mgt.shape[1])
+        logits, _ = model(inputs, mgt.shape[1], target_tokens=ar_targets)
         t_len = min(logits.shape[1], target_tokens.shape[1])
         logits = logits[:, :t_len]
         target_tokens = target_tokens[:, :t_len]

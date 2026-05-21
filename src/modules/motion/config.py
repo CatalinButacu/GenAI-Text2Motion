@@ -49,6 +49,15 @@ class ModelConfig:
     bidirectional: bool = True
     gradient_checkpointing: bool = False
     use_film: bool = True
+    # Decoder architecture:
+    #   "independent" -- legacy K-classifier head (RVQMotionDecoder). All K
+    #                    codebooks predicted independently from SSM features.
+    #                    Backward-compatible with existing checkpoints.
+    #   "residual_k"  -- autoregressive across K (ResidualKHead). Each codebook
+    #                    conditions on the embedded sum of prior-codebook
+    #                    tokens. Restores RVQ residual structure at inference.
+    #                    REQUIRES RETRAINING -- different param set.
+    arch: str = "independent"
 
     # --- RVQ head (Mogo/MoMask-style discrete token prediction) ---
     rvq_latent_dim: int = 128
