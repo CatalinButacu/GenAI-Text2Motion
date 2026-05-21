@@ -1,3 +1,5 @@
+[![Tests](https://github.com/CatalinButacu/GenAI-Text2Motion/actions/workflows/test.yml/badge.svg)](https://github.com/CatalinButacu/GenAI-Text2Motion/actions/workflows/test.yml)
+
 # Text-to-Motion Video Generation
 
 Dissertation project — turn a natural-language prompt into an MP4 of an SMPL-X
@@ -12,7 +14,8 @@ trained on HumanML3D / AMASS.
 ## Quick Start
 
 ```bash
-# Recommended: uv (fast, hash-pinned, reproducible)
+
+# uv (fast, hash-pinned, reproducible)
 uv sync
 uv run python -m spacy download en_core_web_sm
 uv run python main.py "a person walks forward"
@@ -26,7 +29,6 @@ uv sync --extra dev
 # Or with pip
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
-python main.py "a person walks forward"
 ```
 
 ## Pipeline
@@ -36,7 +38,7 @@ Text Prompt
   → M1  Scene Understanding   spaCy parser → entities + actions
   → M2  Scene Planner         L-BFGS-B spatial layout (objects in 3D)
   → M4  Motion Generator      TextToMotionSSM: SBERT → BiMamba×4 → RVQ tokens
-  → M6  Render Engine         SMPL-X mesh renderer (OpenCV) → MP4
+  → M6  Render Engine         SMPL-X mesh renderer (aitviewer headless) → MP4
 ```
 
 `src/pipeline.py` is a ~40 LOC orchestrator that calls `invoke()` on each stage.
@@ -116,36 +118,102 @@ tests/
 └── benchmarks/                  # benchmark_m2.py, benchmark_m4.py
 ```
 
-## Training
+## Data Preparation
 
-See [TRAINING.md](TRAINING.md) for the full procedure. Short version:
+The model trains on AMASS (raw SMPL-X) and HumanML3D (text-paired AMASS subset).
+Neither is bundled; both must be downloaded under their own licenses.
 
 ```bash
-# M4 step 1 — RVQ tokenizer on AMASS / HumanML3D
-python scripts/training/train_rvq_tokenizer.py
+# HumanML3D (text-paired) — primary training corpus
+python scripts/data/download_humanml3d.py
 
-# M4 step 2 — MotionSSM with the frozen RVQ codebook
-python scripts/training/train_motion_ssm.py
+# Inter-X (multi-person AMASS extension) — optional, for the unified pipeline
+python scripts/data/download_interx.py
 
-# M1 (optional) — T5 scene parser
-python scripts/training/train_m1_t5.py
+# Pre-compute per-channel normalization stats from your downloaded AMASS
+python scripts/training/precompute_stats.py
+
+# Quality audit (T-pose detection, velocity outliers, NaN frames)
+python scripts/data/quality_stats.py
+
+# Build the unified multi-source preprocessing cache (warms ~/.cache for training)
+python scripts/data/prebuild_unified_cache.py
 ```
 
-Checkpoints land under `checkpoints/{rvq_tokenizer,motion_ssm,understanding}/`.
+Expected layout after preparation:
+```
+data/
+├── AMASS/                  # raw .npz from amass-data.is.tue.mpg.de
+├── humanml3d/              # text + index files
+├── inter-x/                # optional multi-person dataset
+├── stats/                  # precomputed normalization .npz
+├── vocabulary/             # actions.yaml, objects.yaml (tracked in git)
+└── .cache/                 # joblib dataset caches (gitignored)
+```
+
+## Training
+
+See [TRAINING.md](TRAINING.md) for the full procedure (loss curves, ablations,
+cloud / Terraform setup). Short version:
+
+```bash
+# Step 1 — RVQ tokenizer on AMASS / HumanML3D (frozen during step 2)
+python scripts/training/train_rvq_tokenizer.py --data-dir data/AMASS
+
+# Step 2 — MotionSSM on the tokenized motion (the headline result)
+python scripts/training/train_motion_ssm.py --data-source amass \
+                                            --use-sbert --bidirectional --use-film
+```
+
+Checkpoints land under `checkpoints/{rvq_tokenizer,motion_ssm}/`.
 Both the RVQ tokenizer and MotionSSM checkpoints are required for inference;
 missing files fail loudly at construction (no silent fallbacks).
+
+## Evaluation
+
+```bash
+# FID against held-out HumanML3D test split
+python scripts/evaluation/compute_fid.py \
+    --checkpoint checkpoints/motion_ssm/best_model.pt
+
+# Batch metrics: FID + diversity + multimodality
+python scripts/evaluation/compute_metrics.py
+
+# Ablation sweep (uses currently-trained checkpoints)
+python scripts/evaluation/evaluate_ablation.py
+
+# RVQ tokenizer reconstruction quality + codebook analysis
+python scripts/evaluation/eval_rvq.py \
+    --checkpoint checkpoints/rvq_tokenizer/best_model.pt
+```
+
+## Results
+
+Current numbers on the HumanML3D held-out test split (work in progress; these
+will be replaced with publication-final values once the next training pass
+completes).
+
+| Model | val_ce ↓ | top1 acc ↑ | FID ↓ | Notes |
+|---|---|---|---|---|
+| MotionSSM (current) | 4.60 | 12.4 % | — | Plateaued; undertrained vs MoMask baseline |
+| MoMask (reference)  | ~3.5 | ~25 %  | 0.08 | Published baseline (CVPR 2024) |
+
+See [doc/planning/](doc/planning/) for the audit and improvement plan that
+followed the plateau finding (2026-05-12).
 
 ## Testing & Benchmarks
 
 ```bash
-pytest tests/                    # full suite
-pytest tests/ -m "not slow"      # skip integration tests
-pytest tests/test_pipeline.py
+pytest tests/                    # full suite (242+ tests)
+pytest tests/ -m "not slow"      # fast subset, skips integration
+pytest tests/test_pipeline.py    # one-file selection
 
 python tests/benchmarks/benchmark_m2.py
 python tests/benchmarks/benchmark_m4.py
 python tests/benchmarks/run_all_benchmarks.py
 ```
+
+CI runs the fast suite + ruff on every push to main and every pull request.
 
 ## Requirements
 
@@ -159,6 +227,21 @@ The project follows CRISP-DM (Business Understanding → Data Understanding →
 Data Preparation → Modeling → Evaluation → Deployment). Iterations on poor
 metrics loop back to data preparation or modeling, not to deployment.
 
+## Citation
+
+If this work is useful in your research, please cite:
+
+```bibtex
+@mastersthesis{butacu2026text2motion,
+  author  = {Butacu, Catalin},
+  title   = {Text-to-Motion Video Generation with State-Space Models and
+             RVQ-Tokenized Pose Output},
+  school  = {Politehnica University of Bucharest},
+  year    = {2026},
+  url     = {https://github.com/CatalinButacu/GenAI-Text2Motion}
+}
+```
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE) for the full text.

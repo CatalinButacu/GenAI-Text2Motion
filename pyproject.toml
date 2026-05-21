@@ -57,7 +57,10 @@ default-groups = []
 addopts = "-s"
 log_cli = true
 log_cli_level = "INFO"
-markers = ["slow: marks tests as slow (deselect with '-m not slow')"]
+markers = [
+  "slow: marks tests as slow (deselect with '-m not slow') -- requires checkpoints / ffmpeg / aitviewer",
+  "gpu: marks tests that require a CUDA device (deselect with '-m not gpu')",
+]
 
 [tool.ruff]
 line-length = 100

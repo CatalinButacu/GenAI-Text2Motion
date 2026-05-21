@@ -31,8 +31,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.decomposition import PCA
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 from src.data.augmentation import detectTpose, qualityFilter, resampleToFps
 from src.data.dataset_cache import INGEST_MAX_LENGTH, loadOrBuildCache
 from src.data.motion_normalize import MotionStats, normalize
@@ -54,7 +52,6 @@ BODY_BLOCK_START = 6
 BODY_LR_PAIRS = ((0, 1), (3, 4), (6, 7), (9, 10), (12, 13), (15, 16), (17, 18), (19, 20))
 LR_NAMES = ["hip", "knee", "ankle", "foot", "collar", "shoulder", "elbow", "wrist"]
 FPS = 30.0
-
 
 def loadSamples(source: str, dataDir: str, humanml3dDir: str) -> tuple[list[dict], str]:
     """Return (samples, descriptor) for the chosen --source."""
@@ -81,7 +78,6 @@ def loadSamples(source: str, dataDir: str, humanml3dDir: str) -> tuple[list[dict
                                  maxLength=INGEST_MAX_LENGTH)
 
     return samples, descriptor
-
 
 def lengthDistribution(samples: list[dict], outDir: str) -> dict:
     lengths = np.array([s["motion"].shape[0] for s in samples])
@@ -111,7 +107,6 @@ def lengthDistribution(samples: list[dict], outDir: str) -> dict:
     plt.close(fig)
 
     return summary
-
 
 def sourceBreakdown(samples: list[dict], outDir: str, source: str) -> dict:
     """For AMASS, parse the subset prefix from sample_id. For unified, count by 'source'."""
@@ -145,7 +140,6 @@ def sourceBreakdown(samples: list[dict], outDir: str, source: str) -> dict:
 
     return {"counts": counts, "top5": items[:5]}
 
-
 def channelStdAnalysis(allFrames: np.ndarray, outDir: str) -> dict:
     chStd = allFrames.std(axis=0)
     deadIdx = np.where(chStd < 1e-3)[0].tolist()
@@ -174,7 +168,6 @@ def channelStdAnalysis(allFrames: np.ndarray, outDir: str) -> dict:
 
     return {"dead_channels": deadIdx, "block_stats": blockStats}
 
-
 def pcaAnalysis(framesNorm: np.ndarray, outDir: str, nComponents: int = 50) -> dict:
     sub = framesNorm[::10]
     pca = PCA(n_components=nComponents)
@@ -201,7 +194,6 @@ def pcaAnalysis(framesNorm: np.ndarray, outDir: str, nComponents: int = 50) -> d
     plt.close(fig)
 
     return knees
-
 
 def symmetricCorrelations(allFrames: np.ndarray, outDir: str) -> dict:
     correlations = {}
@@ -234,7 +226,6 @@ def symmetricCorrelations(allFrames: np.ndarray, outDir: str) -> dict:
     plt.close(fig)
 
     return correlations
-
 
 def varianceDecomposition(samples: list[dict], outDir: str) -> dict:
     perClipMeans = []
@@ -278,7 +269,6 @@ def varianceDecomposition(samples: list[dict], outDir: str) -> dict:
         "mean_cross_std": float(crossStd.mean()),
         "mean_ratio": float(finiteRatio.mean()) if len(finiteRatio) else 0.0,
     }
-
 
 def writeReport(outDir: str, source: str, n: int, length: dict, breakdown: dict,
                 channelStd: dict, pca: dict, corr: dict, varDecomp: dict) -> None:
@@ -350,7 +340,6 @@ def writeReport(outDir: str, source: str, n: int, length: dict, breakdown: dict,
     with open(os.path.join(outDir, "report.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", default="amass", choices=["amass", "humanml3d", "all"],
@@ -405,7 +394,6 @@ def main() -> int:
     log.info("[eda] DONE — outputs in %s", outDir)
 
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

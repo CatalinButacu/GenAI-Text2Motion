@@ -21,6 +21,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Cache spaCy + huggingface + sentence_transformers models
+        # Big downloads we hit every run; keyed on a manifest under .github/cache-manifest.txt
+        # so future model bumps invalidate the cache deliberately rather than silently.
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/torch/sentence_transformers
+            ~/.cache/spacy
+          key: models-${{ runner.os }}-${{ hashFiles('.github/cache-manifest.txt') }}
+          restore-keys: |
+            models-${{ runner.os }}-
 
       - name: Install OpenGL/EGL system libs (for aitviewer headless import)
         run: |
@@ -36,7 +51,7 @@ jobs:
 
       - name: Run fast tests (no GPU, no checkpoints, no aitviewer)
         run: |
-          pytest tests/ -m "not slow" --tb=short -q
+          pytest tests/ -m "not slow and not gpu" --tb=short -q
         timeout-minutes: 15
 
       - name: Lint (ruff)

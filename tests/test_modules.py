@@ -11,16 +11,12 @@ Run with: pytest tests/test_modules.py -v
 Or: python tests/test_modules.py
 """
 
-import os
-import sys
 import unittest
 
 import numpy as np
 import pytest
 
 # Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from src.modules.motion import MotionGenerator, SSMMotionModel
 from src.modules.motion.ssm import getSsmInfo
 from src.modules.planner import ScenePlanner
@@ -76,7 +72,6 @@ class TestSharedVocabulary(unittest.TestCase):
         assert fall is not None
         self.assertFalse(fall.requiresTarget)  # pyright: ignore[reportAttributeAccessIssue]
 
-
 class TestSpacyParser(unittest.TestCase):
     """Tests for Module 1: SpacyParser."""
 
@@ -110,7 +105,6 @@ class TestSpacyParser(unittest.TestCase):
         result = self.parser.parse("A red ball and a blue cube")
 
         self.assertGreaterEqual(len(result.entities), 2)
-
 
 class TestParsedEntity(unittest.TestCase):
     """Unit tests for the ParsedEntity dataclass."""
@@ -161,7 +155,6 @@ class TestParsedEntity(unittest.TestCase):
         scene = parser.parse("a person walks")
         actors = [e for e in scene.entities if e.isActor]
         self.assertGreater(len(actors), 0)
-
 
 class TestSpatialRelation(unittest.TestCase):
     """Unit tests for the SpatialRelation dataclass."""
@@ -225,7 +218,6 @@ class TestSpatialRelation(unittest.TestCase):
         # ON constraint: ball should be above cube
         self.assertGreater(positions["ball"][2], positions["cube"][2])
 
-
 class TestScenePlanner(unittest.TestCase):
     """Tests for Module 2: Scene Planner."""
 
@@ -260,7 +252,6 @@ class TestScenePlanner(unittest.TestCase):
         max_z = max(e.position.z for e in planned.entities)
         self.assertGreater(max_z, 0.30)
 
-
 class TestMotionGenerator(unittest.TestCase):
     """Tests for Module 4: Motion Generator."""
 
@@ -287,7 +278,6 @@ class TestMotionGenerator(unittest.TestCase):
         self.assertIsNotNone(clip.source)
         self.assertEqual(clip.source, MotionSource.RETRIEVAL)
 
-
 class TestSSMMotionGenerator(unittest.TestCase):
     """Tests for SSM-enhanced Motion Generator."""
 
@@ -311,7 +301,6 @@ class TestSSMMotionGenerator(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             SSMMotionModel(checkpointPath="nonexistent/path.pt")
 
-
 class TestSSMCore(unittest.TestCase):
     """Tests for SSM module core components."""
 
@@ -323,7 +312,6 @@ class TestSSMCore(unittest.TestCase):
         self.assertIn("layers", info)
         self.assertIn("references", info)
         self.assertIn("novel_contribution", info)
-
 
 class TestBiMambaLayer(unittest.TestCase):
     """Tests for the BiMambaLayer bidirectional Mamba wrapper."""
@@ -364,13 +352,11 @@ class TestBiMambaLayer(unittest.TestCase):
             torch.allclose(fwd, bwd), "Forward and backward scans are identical --likely a bug"
         )
 
-
 class TestSBERTTextEncoder(unittest.TestCase):
     """Tests for SBERTTextEncoder - validates fallback when SBERT not installed."""
 
     def test_proj_layer_shape(self):
         """Projection layer has correct input/output dimensions regardless of SBERT."""
-        import torch
 
         from src.modules.motion.nn_models import SBERTTextEncoder
 
@@ -391,7 +377,6 @@ class TestSBERTTextEncoder(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             enc(["a person walks"])
 
-
 class TestSMPLXConstants(unittest.TestCase):
     """Tests the self-consistency of SMPL-X architectural constants."""
 
@@ -408,7 +393,6 @@ class TestSMPLXConstants(unittest.TestCase):
 
         computed = 3 + 3 + 63 + 45 + 45 + 3 + 6
         self.assertEqual(MOTION_DIM, computed)
-
 
 class TestFIDEvaluator(unittest.TestCase):
     """Tests for the T2M FID + R-Precision evaluation pipeline."""
@@ -491,7 +475,6 @@ class TestFIDEvaluator(unittest.TestCase):
         d = computeDiversity(feats, nPairs=20)
         self.assertGreaterEqual(d, 0.0)
 
-
 class TestPipelineIntegration(unittest.TestCase):
     """Integration tests for full pipeline (requires all modules + PyBullet)."""
 
@@ -517,7 +500,6 @@ class TestPipelineIntegration(unittest.TestCase):
         result = pipeline.run("A ball falls", outputName="test_integration")
 
         self.assertIsInstance(result, dict)
-
 
 # =============================================================================
 # RUN TESTS

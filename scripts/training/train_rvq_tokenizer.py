@@ -25,13 +25,9 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-from src.data.augmentation import detectTpose, qualityFilter, resampleToFps
-from src.data.dataset_cache import INGEST_MAX_LENGTH
 from src.data.motion_dataset import MotionDataset
 from src.data.motion_normalize import MotionStats
-from src.data.unified import buildOrLoadUnifiedBuffer, buildSourcesBuffer
+from src.data.unified import buildOrLoadUnifiedBuffer
 from src.data.unified_dataset import SourceConfig, UnifiedConfig, UnifiedMotionDataset
 from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
 from src.shared.constants import MOTION_DIM
@@ -45,7 +41,6 @@ from src.shared.run_ctx import (
 )
 
 log = logging.getLogger(__name__)
-
 
 def computeTokenizerLoss(
     recon: torch.Tensor,
@@ -75,7 +70,6 @@ def computeTokenizerLoss(
         "vel": velLoss.detach(),
         "commit": commitLoss.detach(),
     }
-
 
 def trainEpoch(
     model: MotionRVQTokenizer,
@@ -109,7 +103,6 @@ def trainEpoch(
 
     return {k: v / max(n, 1) for k, v in total.items()}
 
-
 @torch.no_grad()
 def validate(
     model: MotionRVQTokenizer, loader: DataLoader, device: torch.device
@@ -126,7 +119,6 @@ def validate(
 
     util = model.codebookUtilization()
     return totalRecon / max(n, 1), util
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -427,7 +419,6 @@ def main() -> int:
 
     wandbFinish()
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

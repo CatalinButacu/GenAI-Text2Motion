@@ -18,7 +18,14 @@ demo:
 	$(PY) main.py "a person jumps"                      --name jump        --duration 3
 
 test:
-	$(PY) -m pytest -m "not slow"
+	$(PY) -m pytest -m "not slow and not gpu"
+
+# pytest-xdist is available but `-n auto` is currently slower for us than
+# sequential because each worker re-imports torch+spacy (heavy cold start)
+# and most tests finish in under 100ms. Re-evaluate this default when the
+# suite grows past ~500 tests or a single slow test dominates wallclock.
+test-parallel:
+	$(PY) -m pytest -m "not slow and not gpu" -n auto
 
 smoke:
 	$(PY) -m pytest tests/test_smoke.py::test_pipeline_runs -v

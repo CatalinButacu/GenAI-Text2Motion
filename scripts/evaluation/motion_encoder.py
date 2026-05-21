@@ -58,7 +58,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.shared.constants import MOTION_DIM, MOTION_FPS
+from src.shared.constants import MOTION_DIM
 
 log = logging.getLogger(__name__)
 

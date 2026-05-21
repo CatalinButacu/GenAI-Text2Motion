@@ -11,16 +11,12 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import sys
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.data.unified_dataset import SourceConfig, UnifiedConfig
 from src.modules.motion.training.trainer import buildUnifiedBuf
 
 log = logging.getLogger(__name__)
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -50,7 +46,6 @@ def main() -> int:
     log.info("[prebuild] DONE: %d samples", len(buf))
 
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

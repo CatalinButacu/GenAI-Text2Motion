@@ -90,8 +90,6 @@ else:
     log('Pulled.')
 
 os.chdir(REPO_DIR)
-sys.path.insert(0, REPO_DIR)
-
 required = [
     'scripts/training/train_motion_ssm.py',
     'src/modules/motion/training/trainer.py',

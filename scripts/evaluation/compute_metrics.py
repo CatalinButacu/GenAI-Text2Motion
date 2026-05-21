@@ -39,14 +39,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
-import sys
 from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.shared.constants import (
     MOTION_DIM,
@@ -76,7 +72,6 @@ PELVIS_HEIGHT_IDX: int = SMPLX_TRANSL_Z_IDX - 3
 # AMASS is ~0.95 m; 1.1 m adds 15 cm tolerance for crouching and heel lifts.
 FOOT_VEL_THRESH: float = 0.15
 PELVIS_CONTACT_HEIGHT: float = 1.1
-
 
 class ClipMetrics(NamedTuple):
     """Per-clip evaluation metrics.
@@ -112,9 +107,7 @@ class ClipMetrics(NamedTuple):
     jointAngleMean: np.ndarray
     jointAngleCovDiag: np.ndarray
 
-
 #  Per-clip metrics
-
 
 def contactMask(params: np.ndarray) -> np.ndarray:
     """Heuristic contact mask: foot is in contact when pelvis height is low
@@ -139,7 +132,6 @@ def contactMask(params: np.ndarray) -> np.ndarray:
 
     lowPelvis = pelvisH < PELVIS_CONTACT_HEIGHT
     return footSlow & lowPelvis
-
 
 def footSliding(params: np.ndarray) -> float:
     """Mean ankle angular velocity (rad/s) of the slower foot during contact frames.
@@ -169,7 +161,6 @@ def footSliding(params: np.ndarray) -> float:
         return float("nan")
     return float(footVel[contactVel].mean())
 
-
 def groundPenetrationCm(params: np.ndarray) -> float:
     """Mean pelvis depth below ground (cm) across all frames."""
     trans = params[:, TRANS_SLICE]
@@ -177,14 +168,12 @@ def groundPenetrationCm(params: np.ndarray) -> float:
     below = np.maximum(-pelvisH, 0.0)  # depth below z=0
     return float(below.mean() * 100.0)  # -> cm
 
-
 def isValid(params: np.ndarray) -> bool:
     """Clip is valid: no NaN/Inf, joint angles within [-pi, pi]."""
     if not np.isfinite(params).all():
         return False
     body = params[:, BODY_SLICE]
     return bool(np.abs(body).max() < np.pi)
-
 
 def computeClipMetrics(clipId: str, params: np.ndarray) -> ClipMetrics:
     """Compute all per-clip metrics for one (T, 168) array."""
@@ -201,9 +190,7 @@ def computeClipMetrics(clipId: str, params: np.ndarray) -> ClipMetrics:
         jointAngleCovDiag=params.var(axis=0),
     )
 
-
 #  Frechet Inception Distance (joint-angle space)
-
 
 def gaussianFID(
     mu1: np.ndarray, sigma1: np.ndarray, mu2: np.ndarray, sigma2: np.ndarray
@@ -217,7 +204,6 @@ def gaussianFID(
     diff = mu1 - mu2
     covmean = np.sqrt(np.maximum(sigma1 * sigma2, 0.0))
     return float(np.dot(diff, diff) + (sigma1 + sigma2 - 2 * covmean).sum())
-
 
 def jointAngleFID(genClips: list[ClipMetrics], refClips: list[ClipMetrics]) -> float:
     """FID between generated and reference joint-angle distributions."""
@@ -243,9 +229,7 @@ def jointAngleFID(genClips: list[ClipMetrics], refClips: list[ClipMetrics]) -> f
     mu_r, var_r = pool(refClips)
     return gaussianFID(mu_g, var_g, mu_r, var_r)
 
-
 #  Load clips from directory
-
 
 def loadClips(clipDir: str) -> list[ClipMetrics]:
     """Load all *.npy files from a directory as ClipMetrics."""
@@ -266,9 +250,7 @@ def loadClips(clipDir: str) -> list[ClipMetrics]:
     log.info("Loaded %d clips from %s", len(metrics), clipDir)
     return metrics
 
-
 #  Summary statistics
-
 
 def summarise(metrics: list[ClipMetrics], label: str) -> dict:
     """Aggregate per-clip metrics into mean +/- std summary dict."""
@@ -287,9 +269,7 @@ def summarise(metrics: list[ClipMetrics], label: str) -> dict:
         "ground_penetration_std_cm": float(gp.std()),
     }
 
-
 #  Main
-
 
 def run(clipsDir: str, referenceDir: str | None, output: str, label: str) -> dict:
     genMetrics = loadClips(clipsDir)
@@ -328,7 +308,6 @@ def run(clipsDir: str, referenceDir: str | None, output: str, label: str) -> dic
     log.info("Metrics saved to %s", output)
     return summary
 
-
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     p = argparse.ArgumentParser(description="Compute thesis evaluation metrics")
@@ -341,7 +320,6 @@ def main():
     p.add_argument("--label", default="generated", help="Label for this config")
     args = p.parse_args()
     run(args.clipsDir, args.referenceDir, args.output, args.label)
-
 
 if __name__ == "__main__":
     main()

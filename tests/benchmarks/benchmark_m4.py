@@ -7,9 +7,6 @@ Skips gracefully when the trained checkpoint is missing.
 """
 
 import os
-import sys
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import numpy as np
 
@@ -19,7 +16,6 @@ from src.shared.constants import MOTION_DIM, MOTION_FPS
 GEN_NOT_READY = "Generator not ready"
 TEST_WALK_RUN = "10. Walk != Run (Semantic)"
 TEST_KICK_JUMP = "11. Kick != Jump (Semantic)"
-
 
 class M4Benchmark:
     def __init__(self):
@@ -150,7 +146,6 @@ class M4Benchmark:
         print("=" * 70)
 
         return self.passed >= max(1, total - 5)
-
 
 if __name__ == "__main__":
     benchmark = M4Benchmark()

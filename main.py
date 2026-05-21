@@ -1,11 +1,7 @@
 import argparse
 import logging
-import os
-import sys
 
 import torch
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.pipeline import Pipeline
 from src.shared.config import PipelineConfig
@@ -15,7 +11,6 @@ logging.basicConfig(
     format="%(asctime)s  %(levelname)-8s  %(message)s",
     datefmt="%H:%M:%S",
 )
-
 
 def parseArgs() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Physics-Constrained Video Generation")
@@ -47,7 +42,6 @@ def parseArgs() -> argparse.Namespace:
 
     return p.parse_args()
 
-
 def main() -> None:
     args = parseArgs()
 
@@ -70,7 +64,6 @@ def main() -> None:
     if parsed:
         print(f"entities: {[e.name for e in parsed.entities]}")
         print(f"actions : {[a.actionType for a in parsed.actions]}")
-
 
 if __name__ == "__main__":
     main()

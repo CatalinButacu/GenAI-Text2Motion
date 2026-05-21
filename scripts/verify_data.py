@@ -12,13 +12,10 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from src.shared.run_ctx import dataFingerprint
 
 DATA_ROOTS = ["data/AMASS", "data/humanml3d", "data/arctic/unpack"]
 BASELINE = Path("data/.cache/data_fingerprint.json")
-
 
 def compute() -> dict[str, str]:
     result = {}
@@ -31,7 +28,6 @@ def compute() -> dict[str, str]:
             print(f"  {r:30s}  (missing)")
 
     return result
-
 
 def main() -> None:
     p = argparse.ArgumentParser()
@@ -59,7 +55,6 @@ def main() -> None:
         BASELINE.parent.mkdir(parents=True, exist_ok=True)
         BASELINE.write_text(json.dumps(current, indent=2))
         print(f"[verify_data] baseline written -> {BASELINE}")
-
 
 if __name__ == "__main__":
     main()
