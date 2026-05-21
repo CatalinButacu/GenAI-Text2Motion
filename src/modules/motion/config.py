@@ -24,6 +24,11 @@ class MotionConfig:
     # Raise temperature or lower top_p to explore diverse motions.
     temperature: float = 1.0
     top_p: float = 1.0
+    # Classifier-free guidance scale at inference. 1.0 = off (vanilla conditional).
+    # 2-4 typical for text-conditioned motion; higher = stronger text adherence,
+    # lower diversity. Requires the SSM to have been trained with cfg_dropout_prob > 0
+    # AND use_sbert=True (CFG needs the uncond text-encoder path).
+    cfg_scale: float = 1.0
 
 
 @dataclass

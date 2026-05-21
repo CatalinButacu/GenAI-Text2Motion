@@ -9,7 +9,7 @@ A real ablation needs ~50-100 epochs on full HumanML3D and 3+ seeds.
 Run from repo root (point at a precomputed RVQ checkpoint and AMASS root):
     python scripts/maintenance/validate_clip_swap.py \\
         --data-dir D:/Facultate/dissertation/data/AMASS \\
-        --rvq-checkpoint D:/Facultate/dissertation/checkpoints/rvq_tokenizer/20260430-210604-amass1st/best_model.pt \\
+        --rvq-checkpoint <RVQ_CKPT_ROOT>/best_model.pt \\
         --epochs 5 --max-samples 200
 """
 

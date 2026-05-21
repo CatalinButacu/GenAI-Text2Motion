@@ -32,6 +32,7 @@ def get_generator(cfg: MotionConfig) -> MotionGenerator:
     else:
         GENERATOR.temperature = cfg.temperature
         GENERATOR.top_p = cfg.top_p
+        GENERATOR.cfg_scale = cfg.cfg_scale
 
     return GENERATOR
 

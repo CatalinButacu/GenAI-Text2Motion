@@ -110,10 +110,11 @@ class TestMotionGenerator(unittest.TestCase):
         gen.backend = instance
         gen.temperature = 1.0
         gen.top_p = 1.0
+        gen.cfg_scale = 1.0
         result = gen.generate("a person walks", num_frames=30)
         self.assertIsInstance(result, MotionClip)
         instance.generate_from_text_tokens.assert_called_once_with(
-            "a person walks", 30, temperature=1.0, top_p=1.0
+            "a person walks", 30, temperature=1.0, top_p=1.0, cfg_scale=1.0
         )
 
 

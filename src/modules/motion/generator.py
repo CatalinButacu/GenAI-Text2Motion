@@ -23,6 +23,7 @@ class MotionGenerator:
         )
         self.temperature = cfg.temperature
         self.top_p = cfg.top_p
+        self.cfg_scale = cfg.cfg_scale
 
     def generate(
         self,
@@ -32,11 +33,14 @@ class MotionGenerator:
         blend_frames: int = 10,
     ) -> MotionClip:
         log.info(
-            "[MotionGen] generate(%r, n=%d, temp=%.2f, top_p=%.2f)",
-            text, num_frames, self.temperature, self.top_p,
+            "[MotionGen] generate(%r, n=%d, temp=%.2f, top_p=%.2f, cfg=%.2f)",
+            text, num_frames, self.temperature, self.top_p, self.cfg_scale,
         )
         clip = self.backend.generate_from_text_tokens(
-            text, num_frames, temperature=self.temperature, top_p=self.top_p
+            text, num_frames,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            cfg_scale=self.cfg_scale,
         )
         return blend_init_pose(clip, init_pose, blend_frames)
 

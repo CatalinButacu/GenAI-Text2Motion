@@ -39,6 +39,12 @@ def parse_args() -> argparse.Namespace:
              "1.0=off. "
              "0.9 keeps top tokens whose cumulative probability sums to 0.9.",
     )
+    p.add_argument(
+        "--cfg-scale", type=float, default=1.0, dest="cfg_scale",
+        help="Classifier-free guidance scale. 1.0=off (vanilla conditional). "
+             "2-4 typical; higher = stronger text adherence, less diversity. "
+             "Requires the SSM trained with cfg_dropout_prob > 0 and use_sbert=True.",
+    )
 
     return p.parse_args()
 
@@ -54,6 +60,7 @@ def main() -> None:
     config.planner.random_layout = args.use_random_layout
     config.motion.temperature = args.temperature
     config.motion.top_p = args.top_p
+    config.motion.cfg_scale = args.cfg_scale
 
     result = Pipeline(config).run(args.prompt, output_name=args.output_name)
 

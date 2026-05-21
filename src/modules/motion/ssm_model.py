@@ -113,9 +113,26 @@ class SSMMotionModel:
         num_frames: int = 100,
         temperature: float = 1.0,
         top_p: float = 1.0,
+        cfg_scale: float = 1.0,
     ) -> MotionClip:
-        if getattr(self.model.config, "use_sbert", False):
+        """Sample motion from text.
+
+        cfg_scale > 1.0 enables Classifier-Free Guidance: blend conditional and
+        unconditional logits as `unc + cfg_scale * (cond - unc)`. Strengthens
+        text adherence at the cost of diversity. Requires use_sbert=True (the
+        encoder needs to embed the empty prompt) AND the model was trained
+        with cfg_dropout_prob > 0 so the empty path is meaningful.
+        """
+        use_sbert = getattr(self.model.config, "use_sbert", False)
+        # CFG only meaningful for SBERT/CLIP-conditioned models. For the
+        # legacy token-id path, fall back to vanilla sampling.
+        use_cfg = cfg_scale > 1.0 and use_sbert
+        uncond_inputs: list[str] | None = None
+
+        if use_sbert:
             inputs = [text]
+            if use_cfg:
+                uncond_inputs = [""]
         else:
             inputs = (
                 torch.tensor(tokenize(text, self.vocab), dtype=torch.long)
@@ -125,6 +142,11 @@ class SSMMotionModel:
 
         with torch.no_grad():
             logits, _ = self.model(inputs, num_frames)  # (B, T', K, V)
+
+            if use_cfg and uncond_inputs is not None:
+                uncond_logits, _ = self.model(uncond_inputs, num_frames)
+                # guided = uncond + scale * (cond - uncond)
+                logits = uncond_logits + cfg_scale * (logits - uncond_logits)
             indices = sample_indices(logits, temperature, top_p)  # (B, T', K)
             motion = self.tokenizer.decode(indices)  # (B, T, motion_dim)
             motion = motion[:, :num_frames]  # trim to requested length
