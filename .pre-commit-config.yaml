@@ -19,3 +19,12 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=500]
       - id: debug-statements
+
+  - repo: local
+    hooks:
+      - id: pytest-fast
+        name: pytest (fast tests)
+        entry: python -m pytest -m "not slow" -q --tb=short
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

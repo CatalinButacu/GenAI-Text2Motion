@@ -21,17 +21,31 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install CI dependencies (CPU-only, no display required)
+      - name: Install OpenGL/EGL system libs (for aitviewer headless import)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libglx-mesa0 libosmesa6
+
+      - name: Install CI dependencies (CPU-only, headless)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-ci.txt
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+                      -r requirements-ci.txt
+          python -m spacy download en_core_web_sm
 
-      - name: Run fast tests (no GPU, no data files)
+      - name: Run fast tests (no GPU, no checkpoints, no aitviewer)
         run: |
-          pytest tests/test_augmentation.py \
-                 tests/test_physics_engine.py \
-                 tests/test_body_model.py \
-                 tests/test_rendering.py \
-                 tests/test_model_generator.py \
+          pytest tests/test_logic.py \
+                 tests/test_modules.py \
+                 tests/test_motion.py \
+                 tests/test_pipeline.py \
+                 tests/test_planner.py \
+                 tests/test_style_rules.py \
+                 tests/test_understanding.py \
                  -m "not slow" --tb=short -q
-        timeout-minutes: 10
+        timeout-minutes: 15
+
+      - name: Lint (ruff)
+        run: |
+          pip install ruff
+          ruff check src tests scripts
