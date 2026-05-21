@@ -69,9 +69,15 @@ def make_trainer(device_type: str = "cuda") -> BaseSSMTrainer:
 
 
 def fake_finalize_just_wrap(trainer, config) -> None:
-    """Reproduce the wrap logic from finalize_init without dataset/optimizer."""
+    """Reproduce the wrap logic from finalize_init without dataset/optimizer.
+
+    Builds the model on CPU unconditionally -- the decision branch below only
+    needs `trainer.device.type` (a string), never the tensor placement. This
+    keeps the test runnable on CPU-only CI without compiled-CUDA PyTorch while
+    still exercising the cuda-device-type branches.
+    """
     from src.modules.motion.nn_models import TextToMotionSSM
-    trainer.model = TextToMotionSSM(config).to(trainer.device)
+    trainer.model = TextToMotionSSM(config).to("cpu")
     n_gpus = (
         torch.cuda.device_count() if trainer.device.type == "cuda" else 0
     )
