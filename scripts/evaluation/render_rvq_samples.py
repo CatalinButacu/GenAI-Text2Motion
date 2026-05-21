@@ -30,11 +30,17 @@ from torch.utils.data import DataLoader
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from scripts.evaluation.eval_rvq import (
-    actionLabel, amassSubset, buildTestDataset, loadCheckpoint,
+    actionLabel,
+    amassSubset,
+    buildTestDataset,
+    loadCheckpoint,
 )
 from src.data.motion_normalize import MotionStats, denormalize
 from src.modules.render.smplx_render import (
-    configureRenderer, getRenderer, resetScene, smplxParams2Sequence,
+    configureRenderer,
+    getRenderer,
+    resetScene,
+    smplxParams2Sequence,
 )
 
 log = logging.getLogger(__name__)
@@ -202,7 +208,9 @@ def main() -> int:
     reportLines.append(f"\n**Checkpoint:** `{args.checkpoint}`")
     reportLines.append(f"**Stats:** `{args.statsPath}`")
     reportLines.append(f"**N per pick:** {args.nSamples}\n")
-    reportLines.append("| pick | clip idx | MSE | T frames | label / source | orig.mp4 | recon.mp4 |")
+    reportLines.append(
+        "| pick | clip idx | MSE | T frames | label / source | orig.mp4 | recon.mp4 |"
+    )
     reportLines.append("|---|---|---|---|---|---|---|")
 
     for kind, indices in picksByKind.items():

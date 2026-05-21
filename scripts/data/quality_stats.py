@@ -47,6 +47,8 @@ from src.data.augmentation import detectTpose, resampleToFps
 from src.data.dataset_cache import DEFAULT_FILTER_KWARGS
 from src.data.humanml3d import (
     DEFAULT_DIR as HML3D_DIR,
+)
+from src.data.humanml3d import (
     HumanML3DLoader,
     buildNormMap,
     parseIndexCsv,
@@ -263,7 +265,7 @@ def printReport(label: str, stats: dict, fkw: dict) -> None:
         print(f"  Preload failures    : {stats['preloadBad']}")
     print(f"  Elapsed             : {stats.get('elapsedSec', 0)} s")
     print()
-    print(f"  Reason             Count  % of rejected  % of total")
+    print("  Reason             Count  % of rejected  % of total")
     print(f"  {'-' * 56}")
     for reason in REASONS:
         n = stats["perReason"].get(reason, 0)

@@ -243,7 +243,8 @@ def collectLatents(model: MotionRVQTokenizer, dataset, device: torch.device,
         if maxClips is not None and n >= maxClips:
             break
 
-    return np.concatenate(latents, axis=0)[:maxClips or n], texts[:maxClips or n], sources[:maxClips or n]
+    limit = maxClips or n
+    return np.concatenate(latents, axis=0)[:limit], texts[:limit], sources[:limit]
 
 
 def plotMseHist(perClipMse: list[float], outDir: str, title: str) -> None:
@@ -333,7 +334,7 @@ def plotTsneClusters(latents: np.ndarray, labels: list, outDir: str, title: str,
 def writeReport(outDir: str, ckPath: str, cfg: dict, recon: dict, cbStats: dict,
                 clusterCounts: dict, labelKind: str) -> None:
     lines: list[str] = []
-    lines.append(f"# RVQ tokenizer evaluation\n")
+    lines.append("# RVQ tokenizer evaluation\n")
     lines.append(f"**Checkpoint:** `{ckPath}`")
     lines.append(f"**Source:** {cfg.get('dataSource', 'amass')}")
     lines.append(f"**Latent dim:** {cfg['latentDim']}, **codebooks:** {cfg['nCodebooks']}, "

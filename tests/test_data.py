@@ -11,8 +11,8 @@ import unittest
 import numpy as np
 
 from src.data.augmentation import (
-    AugmentationPipeline,
     LR_SWAP,
+    AugmentationPipeline,
     addNoise,
     mirrorFlip,
     mirrorFlipText,

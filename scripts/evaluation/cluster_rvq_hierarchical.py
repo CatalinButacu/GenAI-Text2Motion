@@ -32,7 +32,11 @@ from sklearn.manifold import TSNE
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from scripts.evaluation.eval_rvq import (
-    ACTION_PATTERNS, actionLabel, amassSubset, buildTestDataset, collectLatents,
+    ACTION_PATTERNS,
+    actionLabel,
+    amassSubset,
+    buildTestDataset,
+    collectLatents,
     loadCheckpoint,
 )
 
