@@ -7,7 +7,7 @@ are needed. Verifies the stage execution order and data passing.
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
 import numpy as np
 

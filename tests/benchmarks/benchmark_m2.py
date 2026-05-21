@@ -4,16 +4,11 @@ Tests positioning, layout, and scene construction. Run:
     py tests/benchmarks/benchmark_m2.py
 """
 
-import os
-import sys
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.modules.planner import PlannedScene, Position3D, ScenePlanner
 from src.modules.understanding import SpacyParser
 
 A_BALL = "A ball"
-
 
 class M2Benchmark:
     def __init__(self):
@@ -187,7 +182,6 @@ class M2Benchmark:
         print("=" * 70)
 
         return self.passed >= 25
-
 
 if __name__ == "__main__":
     benchmark = M2Benchmark()

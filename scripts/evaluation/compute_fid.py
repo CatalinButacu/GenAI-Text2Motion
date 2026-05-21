@@ -48,7 +48,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import random
 import sys
 import time
@@ -58,8 +57,6 @@ from pathlib import Path
 import numpy as np
 import torch
 from scipy.linalg import sqrtm
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from scripts.evaluation.motion_encoder import (
     encodeTextsT2M,
@@ -90,9 +87,7 @@ RPREC_POOL_SIZE: int = 32  # 31 distractors + 1 GT (T2M standard)
 FEAT_DIM: int = 512  # T2MMotionEncoder output dim
 MIN_FULL_FID: int = 512  # minimum samples for full (non-diagonal) FID
 
-
 #  Data structures
-
 
 @dataclass
 class EvalSample:
@@ -100,7 +95,6 @@ class EvalSample:
     gtMotion: np.ndarray  # (T, 168) ground-truth motion
     genMotion: np.ndarray  # (T, 168) generated motion
     clipId: str
-
 
 @dataclass
 class EvalResults:
@@ -147,9 +141,7 @@ class EvalResults:
         print(f"{'=' * 60}")
         print()
 
-
 #  FID computation
-
 
 def frechetDistance(
     mu1: np.ndarray, sigma1: np.ndarray, mu2: np.ndarray, sigma2: np.ndarray
@@ -181,13 +173,11 @@ def frechetDistance(
     traceTerm = float(np.trace(sigma1 + sigma2 - 2 * covmean))
     return meanTerm + traceTerm
 
-
 def diagonalFID(mu1: np.ndarray, var1: np.ndarray, mu2: np.ndarray, var2: np.ndarray) -> float:
     """Diagonal-covariance FID (used when N < _MIN_FULL_FID)."""
     diff = mu1 - mu2
     covmean = np.sqrt(np.maximum(var1 * var2, 0.0))
     return float(diff @ diff + (var1 + var2 - 2 * covmean).sum())
-
 
 def computeFID(genFeats: np.ndarray, realFeats: np.ndarray) -> float:
     """Compute FID between generated and real motion feature distributions.
@@ -221,9 +211,7 @@ def computeFID(genFeats: np.ndarray, realFeats: np.ndarray) -> float:
     )
     return diagonalFID(muG, genFeats.var(axis=0), muR, realFeats.var(axis=0))
 
-
 #  R-Precision
-
 
 def computeTextFeatures(
     texts: list[str],
@@ -251,7 +239,6 @@ def computeTextFeatures(
             rng2 = np.random.default_rng(seed=h)
             feats.append(rng2.standard_normal(384).astype(np.float32))
         return np.stack(feats)
-
 
 def computePrecisionR(
     samples: list[EvalSample],
@@ -346,9 +333,7 @@ def computePrecisionR(
 
     return top1Hits / N, top2Hits / N, top3Hits / N
 
-
 #  Diversity and Multimodality
-
 
 def computeDiversity(feats: np.ndarray, nPairs: int = 300, seed: int = 42) -> float:
     """Average pairwise L2 distance between motion features (random sample of pairs).
@@ -363,7 +348,6 @@ def computeDiversity(feats: np.ndarray, nPairs: int = 300, seed: int = 42) -> fl
     pairs = rng.choice(N, size=(min(nPairs, N * (N - 1) // 2), 2), replace=False)
     dists = [float(np.linalg.norm(feats[a] - feats[b])) for a, b in pairs]
     return float(np.mean(dists))
-
 
 def computeMultimodality(
     promptToFeats: dict[str, list[np.ndarray]],
@@ -393,9 +377,7 @@ def computeMultimodality(
         return 0.0
     return float(np.mean(perPromptDists))
 
-
 #  Data loading
-
 
 def loadTestSamples(
     dataDir: str,
@@ -446,9 +428,7 @@ def loadTestSamples(
     log.info("[Eval] %d samples loaded from %s", len(samples), split)
     return samples
 
-
 #  Generator
-
 
 def loadFrozenTokenizer(
     cfg: TrainingConfig, device: str
@@ -473,7 +453,6 @@ def loadFrozenTokenizer(
     tokenizer.eval()
     log.info("[Eval] frozen RVQ tokenizer loaded from %s", path)
     return tokenizer
-
 
 def generateMotions(
     checkpoint: str,
@@ -577,9 +556,7 @@ def generateMotions(
     log.info("[Eval] generation complete: %d samples in %.1fs", len(evalSamples), time.time() - t0)
     return evalSamples, motionStats
 
-
 #  Main computation
-
 
 def runEvaluation(
     checkpoint: str,
@@ -677,9 +654,7 @@ def runEvaluation(
 
     return results
 
-
 #  CLI
-
 
 def main() -> None:
     logging.basicConfig(
@@ -742,7 +717,6 @@ def main() -> None:
         refCheckpoint=args.refCheckpoint,
     )
     results.printTable()
-
 
 if __name__ == "__main__":
     main()

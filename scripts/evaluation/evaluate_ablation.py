@@ -19,15 +19,12 @@ import csv
 import json
 import logging
 import os
-import sys
 import time
 import traceback
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from scripts.evaluation.compute_metrics import computeClipMetrics, summarise
 from src.pipeline import Pipeline
@@ -132,11 +129,9 @@ OOD_PROMPTS: list[str] = [
 
 assert len(OOD_PROMPTS) == 19, f"Expected 19 OOD prompts, got {len(OOD_PROMPTS)}"
 
-
 #  Config definitions
 
 ALL_CONFIGS = ["full", "no_m2"]
-
 
 def pipelineConfigFor(configName: str, outputDir: str, duration: float = 3.0,
                       fps: int = 24, device: str = "cpu"):
@@ -153,9 +148,7 @@ def pipelineConfigFor(configName: str, outputDir: str, duration: float = 3.0,
 
     return cfg
 
-
 #  Per-run result
-
 
 @dataclass
 class RunResult:
@@ -173,7 +166,6 @@ class RunResult:
     # Entity / action parsing metrics
     nEntities: int = 0
     nActions: int = 0
-
 
 def extractMotionMetrics(result: dict) -> dict:
     """Pull motion quality metrics from a pipeline result dict."""
@@ -206,7 +198,6 @@ def extractMotionMetrics(result: dict) -> dict:
         "ground_pen_cm": summary["ground_penetration_mean_cm"],
         "validity": summary["validity_rate"] > 0.5,
     }
-
 
 def runSingle(
     prompt: str, configName: str, outputDir: str, duration: float, fps: int,
@@ -249,9 +240,7 @@ def runSingle(
 
     return run
 
-
 #  Aggregation
-
 
 def aggregate(results: list[RunResult]) -> dict:
     """Compute mean +/- std for all numeric metrics across a list of results."""
@@ -282,9 +271,7 @@ def aggregate(results: list[RunResult]) -> dict:
         "mean_latency_s": latency_mean,
     }
 
-
 #  Save helpers
-
 
 def saveCsv(allResults: list[RunResult], path: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -295,13 +282,11 @@ def saveCsv(allResults: list[RunResult], path: str) -> None:
             writer.writerow(asdict(r))
     log.info("CSV saved to %s", path)
 
-
 def saveSummary(summaryByConfig: dict, path: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         json.dump(summaryByConfig, f, indent=2)
     log.info("Summary JSON saved to %s", path)
-
 
 def printTable(summaryByConfig: dict) -> None:
     header = (
@@ -323,9 +308,7 @@ def printTable(summaryByConfig: dict) -> None:
         )
     print(f"{'' * len(header)}\n")
 
-
 #  Main
-
 
 def main():
     logging.basicConfig(
@@ -410,7 +393,6 @@ def main():
     printTable(summary)
 
     log.info("Ablation complete. Results in %s", args.output)
-
 
 if __name__ == "__main__":
     main()

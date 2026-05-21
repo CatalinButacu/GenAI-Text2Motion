@@ -19,7 +19,6 @@ What it does
 
 from __future__ import annotations
 
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -27,13 +26,10 @@ from pathlib import Path
 import numpy as np
 import torch  # noqa: F401  (loaded for side effects when motion_encoder imports torch)
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 from scripts.evaluation.motion_encoder import extractFeatures, loadEncoder
 
 SRC = Path("data/t2m_download/extracted/t2m/text_mot_match/model/finest.tar")
 DEST = Path("data/t2m/text_mot_match/model/finest.tar")
-
 
 def setup() -> bool:
     if DEST.exists():
@@ -84,7 +80,6 @@ def setup() -> bool:
         return False
 
     return True
-
 
 if __name__ == "__main__":
     success = setup()

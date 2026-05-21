@@ -27,14 +27,11 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 from scripts.evaluation.eval_rvq import buildTestDataset, loadCheckpoint
 from scripts.evaluation.render_rvq_samples import renderSmplxToGif
 from src.data.motion_normalize import MotionStats, denormalize
 
 log = logging.getLogger(__name__)
-
 
 @torch.no_grad()
 def encodeAll(model, dataset, device, batchSize: int):
@@ -75,7 +72,6 @@ def encodeAll(model, dataset, device, batchSize: int):
         texts,
     )
 
-
 def topEntriesByFrequency(indices: torch.Tensor, mask: torch.Tensor,
                           codebook: int, topK: int) -> list[tuple[int, int]]:
     flatIdx = indices[..., codebook]
@@ -84,7 +80,6 @@ def topEntriesByFrequency(indices: torch.Tensor, mask: torch.Tensor,
     order = np.argsort(bins)[::-1]
 
     return [(int(e), int(bins[e])) for e in order[:topK] if bins[e] > 0]
-
 
 def pickPrototypes(indices: torch.Tensor, mask: torch.Tensor, codebook: int,
                    entry: int, nProto: int) -> list[tuple[int, int]]:
@@ -112,7 +107,6 @@ def pickPrototypes(indices: torch.Tensor, mask: torch.Tensor, codebook: int,
 
     return out
 
-
 def renderPrototype(motion: torch.Tensor, frameLat: int, downT: int,
                     windowFrames: int, stats: MotionStats, outPath: str,
                     fps: int) -> int:
@@ -126,7 +120,6 @@ def renderPrototype(motion: torch.Tensor, frameLat: int, downT: int,
     renderSmplxToGif(smplx, outPath, fps=fps)
 
     return end - start
-
 
 def topTextSnippets(indices: torch.Tensor, mask: torch.Tensor, codebook: int,
                     entry: int, texts: list[str], maxSnippets: int = 5) -> list[str]:
@@ -150,7 +143,6 @@ def topTextSnippets(indices: torch.Tensor, mask: torch.Tensor, codebook: int,
             break
 
     return out
-
 
 def writeReadme(outDir: str, runId: str, codebook: int, nEntries: int) -> None:
     text = f"""# Codebook labeling — `{runId}` codebook {codebook}
@@ -180,7 +172,6 @@ to test compound-text decomposition (e.g. "walk then sit" -> token sequence).
 """
     with open(os.path.join(outDir, "README.md"), "w", encoding="utf-8") as f:
         f.write(text)
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -287,7 +278,6 @@ def main() -> int:
              csvPath, len(rows))
 
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

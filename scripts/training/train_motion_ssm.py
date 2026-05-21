@@ -30,13 +30,10 @@ SSMMotionGenerator.load_checkpoint() for inference.
 
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
 
 import torch
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.modules.motion.config import TrainingConfig
 from src.modules.motion.training import trainAmass, trainHumanml3d, trainUnified
@@ -49,7 +46,6 @@ from src.shared.run_ctx import initWandb, logGpuSanity, makeRunDir, snapshotConf
 
 NPZ = "*.npz"
 
-
 def checkPrereqsAmass(d: Path) -> None:
     npz = list(d.rglob(NPZ)) if d.exists() else []
     print(f"[INFO] AMASS: {len(npz)} .npz files at {d}")
@@ -60,7 +56,6 @@ def checkPrereqsAmass(d: Path) -> None:
         print("[INFO] Run 'python scripts/data/download_humanml3d.py' for text enrichment")
     if not npz:
         print("[WARNING] No .npz files found --training will use synthetic data.")
-
 
 def checkPrereqsUnified() -> None:
     cfg = TrainingConfig()
@@ -74,7 +69,6 @@ def checkPrereqsUnified() -> None:
             print(f"[INFO] {name}: {p} ({n} files)")
         else:
             print(f"[WARNING] {name} directory not found at {p} -- will be skipped")
-
 
 def checkPrereqsHumanml3d(d: Path) -> None:
     texts = d / "texts"
@@ -104,7 +98,6 @@ def checkPrereqsHumanml3d(d: Path) -> None:
     print(f"[INFO] HumanML3D annotations: {nT} text files, index={indexCsv}")
     print(f"[INFO] AMASS backing store: {len(amassNpz)} .npz files at {amassDir}")
 
-
 def checkPrereqs(source: str, dataDir: str) -> None:
     d = Path(dataDir)
     if source == "amass":
@@ -113,7 +106,6 @@ def checkPrereqs(source: str, dataDir: str) -> None:
         checkPrereqsUnified()
     else:
         checkPrereqsHumanml3d(d)
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -320,7 +312,6 @@ def main():
         best,
         args.checkpointDir,
     )
-
 
 if __name__ == "__main__":
     main()

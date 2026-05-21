@@ -17,14 +17,11 @@ each number as more files are renamed to camelCase / underscore-free style.
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-
 from scripts.validation.check_style import StyleReport, run
 
 SCAN_TARGETS = [ROOT / "src", ROOT / "main.py"]
@@ -39,11 +36,9 @@ BASELINE: dict[int, int] = {
 
 HARD_ZERO_RULES: set[int] = {4, 6}
 
-
 @pytest.fixture(scope="module")
 def styleReport() -> StyleReport:
     return run(targets=SCAN_TARGETS)
-
 
 def test_rule4_no_inline_imports(styleReport: StyleReport) -> None:
     """Rule 4: no imports inside functions or class bodies."""
@@ -51,13 +46,11 @@ def test_rule4_no_inline_imports(styleReport: StyleReport) -> None:
     msgs = "\n".join(str(v) for v in violations)
     assert len(violations) == 0, f"Rule 4 violations (must be zero):\n{msgs}"
 
-
 def test_rule6_no_silent_exceptions(styleReport: StyleReport) -> None:
     """Rule 6: no broad try/except that silently swallows exceptions."""
     violations = [v for v in styleReport.violations if v.rule == 6]
     msgs = "\n".join(str(v) for v in violations)
     assert len(violations) == 0, f"Rule 6 violations (must be zero):\n{msgs}"
-
 
 def test_rule1_underscore_not_increasing(styleReport: StyleReport) -> None:
     """Rule 1: underscore-prefixed names must not increase beyond baseline."""
@@ -74,7 +67,6 @@ def test_rule1_underscore_not_increasing(styleReport: StyleReport) -> None:
             f"Rule 1 improved: {count} violations < baseline {baseline}. "
             f"Update BASELINE[1] = {count} in this file."
         )
-
 
 def test_rule2_snakecase_not_increasing(styleReport: StyleReport) -> None:
     """Rule 2: snake_case names must not increase beyond baseline."""

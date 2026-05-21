@@ -31,15 +31,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 import time
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.data.amass import AMASSLoader
 from src.data.aug_quality import geodesicJointVel
@@ -57,7 +54,6 @@ from src.data.humanml3d import (
 
 log = logging.getLogger(__name__)
 
-
 REASONS: tuple[str, ...] = (
     "tooShort",        # T < minFrames
     "nanInf",          # any NaN/Inf in the pose tensor
@@ -69,7 +65,6 @@ REASONS: tuple[str, ...] = (
     "loadFail",        # could not load the file at all (IO, missing keys, NaN raw)
     "tooShortRaw",     # raw shape[0] < 4 frames before any processing
 )
-
 
 def diagnoseClip(motion: np.ndarray, fps: float, fkw: dict) -> list[str]:
     """Return the list of criteria the clip violates (empty -> passes).
@@ -113,7 +108,6 @@ def diagnoseClip(motion: np.ndarray, fps: float, fkw: dict) -> list[str]:
             fails.append("jointSnap")
 
     return fails
-
 
 def runAmass(dataDir: str, fkw: dict, maxSamples: int | None) -> dict:
     loader = AMASSLoader(dataDir)
@@ -173,7 +167,6 @@ def runAmass(dataDir: str, fkw: dict, maxSamples: int | None) -> dict:
     counts["perReason"] = dict(perReason)
     counts["elapsedSec"] = round(time.time() - t0, 1)
     return counts
-
 
 def runHumanml3d(hmlDir: str, amassDir: str, fkw: dict, maxSamples: int | None) -> dict:
     loader = HumanML3DLoader(hmlDir)
@@ -241,7 +234,6 @@ def runHumanml3d(hmlDir: str, amassDir: str, fkw: dict, maxSamples: int | None) 
     counts["elapsedSec"] = round(time.time() - t0, 1)
     return counts
 
-
 def printReport(label: str, stats: dict, fkw: dict) -> None:
     total = stats["total"]
     passed = stats.get("passed", 0)
@@ -278,7 +270,6 @@ def printReport(label: str, stats: dict, fkw: dict) -> None:
     if multi:
         print(f"  (clips failing >1 criterion: {multi})")
     print(f"{'=' * 72}")
-
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Per-criterion data-quality rejection stats")
@@ -332,7 +323,6 @@ def main() -> int:
         log.info("Report written to %s", args.output)
 
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

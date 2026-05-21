@@ -28,8 +28,6 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 from src.data.augmentation import detectTpose, qualityFilter, resampleToFps
 from src.data.dataset_cache import INGEST_MAX_LENGTH, loadOrBuildCache
 from src.data.motion_normalize import computeMotionStats
@@ -37,7 +35,6 @@ from src.data.unified import buildSourcesBuffer
 from src.data.unified_dataset import SourceConfig, UnifiedConfig
 
 log = logging.getLogger(__name__)
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -76,7 +73,6 @@ def main() -> int:
              args.output, float(np.abs(stats.mean).mean()), float(np.abs(stats.std).mean()))
 
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -17,10 +17,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import sys
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.modules.motion.codebook_vocab import CodebookVocab
 
@@ -33,7 +30,6 @@ DEMO_PROMPTS = [
     "kick a ball and then run away",
     "wave the right hand",
 ]
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -58,7 +54,6 @@ def main() -> int:
             log.info("[compose]   -> %-24s  (sim=%.3f)", label, score)
 
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

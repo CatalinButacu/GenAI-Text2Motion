@@ -15,7 +15,6 @@ can generate motion from text without further setup.
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 import zipfile

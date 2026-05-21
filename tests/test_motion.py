@@ -7,7 +7,7 @@ SSM architecture tests verify shapes only (forward pass with random weights).
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import torch
@@ -104,7 +104,6 @@ class TestMotionGenerator(unittest.TestCase):
         instance = MockModel.return_value
         instance.generateFromTextTokens.return_value = dummy_clip
 
-        from src.modules.motion.config import MotionConfig
         from src.modules.motion.generator import MotionGenerator
 
         gen = MotionGenerator.__new__(MotionGenerator)
