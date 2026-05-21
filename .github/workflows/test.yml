@@ -36,7 +36,7 @@ jobs:
 
       - name: Run fast tests (no GPU, no checkpoints, no aitviewer)
         run: |
-          pytest tests/ -m "not slow" --tb=short -q
+          pytest tests/ -m "not slow and not gpu" --tb=short -q
         timeout-minutes: 15
 
       - name: Lint (ruff)
