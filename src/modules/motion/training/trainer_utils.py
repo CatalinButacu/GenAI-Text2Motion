@@ -20,10 +20,11 @@ import random
 import re
 from typing import Any
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+
+from src.shared.seed import seedAll
 
 log = logging.getLogger(__name__)
 
@@ -65,14 +66,8 @@ def loadCompatible(module: torch.nn.Module, stateDict: dict, name: str) -> bool:
 
 
 def lockSeed(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    """Backward-compat alias. Prefer ``from src.shared.seed import seedAll`` directly."""
+    seedAll(seed, deterministic=False)
 
 
 def saveCkpt(path: str, payload: dict) -> None:
