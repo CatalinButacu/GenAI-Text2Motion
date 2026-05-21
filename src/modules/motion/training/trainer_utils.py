@@ -130,15 +130,36 @@ def restore_checkpoint(trainer, path: str, warm_start: bool = False) -> None:
     load_compatible(trainer.model, ck["model_state_dict"], "model")
 
     if not warm_start:
-        for key, obj in (
-            ("optimizer_state_dict", trainer.optimizer),
-            ("scheduler_state_dict", trainer.scheduler),
-        ):
-            if key in ck:
+        # Optimizer state restore: safe; carries running averages.
+        if "optimizer_state_dict" in ck:
+            try:
+                trainer.optimizer.load_state_dict(ck["optimizer_state_dict"])
+            except (ValueError, RuntimeError, KeyError):
+                log.warning("[BaseTrainer] could not restore optimizer_state_dict")
+
+        # Scheduler state restore: ONLY when the new run targets the same
+        # total_steps. OneCycleLR raises if its loaded counter exceeds the
+        # newly-constructed total_steps (e.g. resume with --epochs N where
+        # N doesn't add new steps beyond what was already taken). In that
+        # case keep the freshly-built scheduler -- LR continues from the
+        # new schedule's current position, which is the safer default.
+        if "scheduler_state_dict" in ck:
+            saved_state = ck["scheduler_state_dict"]
+            new_total = getattr(trainer.scheduler, "total_steps", None)
+            saved_total = saved_state.get("total_steps")
+
+            if (new_total is None or saved_total is None
+                    or new_total == saved_total):
                 try:
-                    obj.load_state_dict(ck[key])
+                    trainer.scheduler.load_state_dict(saved_state)
                 except (ValueError, RuntimeError, KeyError):
-                    log.warning("[BaseTrainer] could not restore %s", key)
+                    log.warning("[BaseTrainer] could not restore scheduler_state_dict")
+            else:
+                log.warning(
+                    "[BaseTrainer] scheduler total_steps changed (%s -> %s); "
+                    "keeping freshly-built scheduler",
+                    saved_total, new_total,
+                )
         trainer.step = ck.get("global_step", 0)
         trainer.start_epoch = ck.get("epoch", 0) + 1
     # best_loss is inherited in both modes so warm-start runs only save a "best"

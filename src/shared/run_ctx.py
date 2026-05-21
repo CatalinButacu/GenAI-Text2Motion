@@ -85,8 +85,17 @@ def snapshot_config(run_dir: Path, cfg: Any) -> None:
 def init_wandb(
     project: str, run_id: str, run_dir: Path, config: Any, tags: list[str] | None = None,
 ):
-    """Init wandb in offline mode. Run data lives in run_dir/wandb/ -- no network needed."""
-    os.environ.setdefault("WANDB_MODE", "offline")
+    """Init wandb. Online when WANDB_API_KEY is set (cloud), offline otherwise.
+
+    Bug fixed 2026-05-22: the previous unconditional
+    `setdefault("WANDB_MODE", "offline")` forced offline mode even when
+    the cloud startup script had exported a valid WANDB_API_KEY. Online
+    runs were silently downgraded to offline.
+    """
+    # Default to offline ONLY when there's no API key. With a key + no explicit
+    # WANDB_MODE override, wandb's own default behavior (online) takes over.
+    if "WANDB_API_KEY" not in os.environ:
+        os.environ.setdefault("WANDB_MODE", "offline")
     os.environ["WANDB_DIR"] = str(run_dir)
     os.environ["WANDB_SILENT"] = "true"
 
