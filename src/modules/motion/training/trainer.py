@@ -138,7 +138,7 @@ def amassFactory(config: TrainingConfig, maxSamples):
 
 
 def humanml3dFactory(config: TrainingConfig, maxSamples):
-    amassDir = getattr(config, "amass_dir", "data/AMASS")
+    amassDir = getattr(config, "amassDir", "data/AMASS")
     train = HumanML3DMotionDataset(
         dataDir=config.dataDir, amassDir=amassDir,
         split="train", maxMotionLength=config.maxMotionLength,

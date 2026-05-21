@@ -18,12 +18,20 @@ GENERATOR_CKPT: str | None = None
 
 
 def getGenerator(cfg: MotionConfig) -> MotionGenerator:
-    """Cache a MotionGenerator keyed on checkpoint path -- rebuild if the user swaps checkpoints."""
+    """Cache a MotionGenerator keyed on checkpoint path.
+
+    Only the heavy weight-loading step is cached. Cheap per-call sampling
+    params (temperature, topP) are refreshed on every call so config changes
+    across pipeline.run() invocations within the same process are honored.
+    """
     global GENERATOR, GENERATOR_CKPT
 
     if GENERATOR is None or GENERATOR_CKPT != cfg.checkpointPath:
         GENERATOR = MotionGenerator(cfg)
         GENERATOR_CKPT = cfg.checkpointPath
+    else:
+        GENERATOR.temperature = cfg.temperature
+        GENERATOR.topP = cfg.topP
 
     return GENERATOR
 

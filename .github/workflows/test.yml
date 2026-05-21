@@ -8,18 +8,19 @@ on:
 
 jobs:
   test:
+    # Single Python version: matches the dev environment (3.12). Adding a
+    # second version doubles CI time and the older Pythons aren't dev or
+    # deploy targets. If we ever need forward-compat insurance, switch to
+    # an upcoming release (3.13) rather than an older one.
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
       - name: Install OpenGL/EGL system libs (for aitviewer headless import)
         run: |
@@ -35,14 +36,7 @@ jobs:
 
       - name: Run fast tests (no GPU, no checkpoints, no aitviewer)
         run: |
-          pytest tests/test_logic.py \
-                 tests/test_modules.py \
-                 tests/test_motion.py \
-                 tests/test_pipeline.py \
-                 tests/test_planner.py \
-                 tests/test_style_rules.py \
-                 tests/test_understanding.py \
-                 -m "not slow" --tb=short -q
+          pytest tests/ -m "not slow" --tb=short -q
         timeout-minutes: 15
 
       - name: Lint (ruff)
