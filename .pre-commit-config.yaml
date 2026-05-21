@@ -2,10 +2,14 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.4.4
     hooks:
+      # Fail loudly on commit — never auto-fix silently.
+      # If a violation is reported, run `ruff check --fix` yourself, inspect the
+      # change, then re-commit. CI runs the same strict check, so anything that
+      # passes here passes there.
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
         exclude: ^(doc/|scripts/cloud/)
       - id: ruff-format
+        args: [--check]
         exclude: ^(doc/|scripts/cloud/)
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -22,6 +26,12 @@ repos:
 
   - repo: local
     hooks:
+      - id: ruff-strict-prepush
+        name: ruff check (strict, matches CI)
+        entry: python -m ruff check src tests scripts
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
       - id: pytest-fast
         name: pytest (fast tests)
         entry: python -m pytest -m "not slow" -q --tb=short

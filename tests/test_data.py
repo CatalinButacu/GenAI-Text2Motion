@@ -9,6 +9,7 @@ from __future__ import annotations
 import unittest
 
 import numpy as np
+import pytest
 
 from src.data.augmentation import (
     LR_SWAP,
@@ -16,6 +17,7 @@ from src.data.augmentation import (
     addNoise,
     mirrorFlip,
     mirrorFlipText,
+    resampleToFps,
     speedPerturbation,
     temporalCrop,
 )
@@ -165,6 +167,79 @@ class TestAugmentationPipeline(unittest.TestCase):
         a = pipeline(m.copy())
         b = AugmentationPipeline(seed=99).invoke(m.copy())
         np.testing.assert_array_equal(a, b)
+
+
+@pytest.mark.parametrize("frames", [1, 4, 30, 100, 300])
+@pytest.mark.parametrize("motionDim", [6, 168])
+def test_property_mirrorflip_shape_preserved(frames: int, motionDim: int) -> None:
+    """mirrorFlip must never alter the input shape regardless of size."""
+    rng = np.random.default_rng(frames * motionDim)
+    m = rng.standard_normal((frames, motionDim)).astype(np.float32) * 0.1
+    out = mirrorFlip(m)
+    assert out.shape == m.shape
+
+
+@pytest.mark.parametrize("seed", [0, 1, 7, 42, 99])
+def test_property_mirrorflip_full_smplx_is_involutive(seed: int) -> None:
+    """For full 168-d SMPL-X poses, applying mirrorFlip twice recovers the input."""
+    rng = np.random.default_rng(seed)
+    m = rng.standard_normal((20, 168)).astype(np.float32) * 0.1
+    twice = mirrorFlip(mirrorFlip(m))
+    np.testing.assert_allclose(twice, m, atol=1e-5)
+
+
+@pytest.mark.parametrize("frames,srcFps,tgtFps", [
+    (60, 30.0, 60.0),
+    (60, 60.0, 30.0),
+    (100, 120.0, 30.0),
+    (45, 24.0, 30.0),
+])
+def test_property_resample_changes_duration_consistently(frames: int, srcFps: float,
+                                                          tgtFps: float) -> None:
+    """Resampling preserves wall-clock duration to within one frame."""
+    m = np.zeros((frames, 168), dtype=np.float32)
+    out = resampleToFps(m, srcFps=srcFps, tgtFps=tgtFps)
+    expected = round((frames / srcFps) * tgtFps)
+    assert abs(out.shape[0] - expected) <= 1, (
+        f"resample {srcFps}->{tgtFps}: got {out.shape[0]} frames, "
+        f"expected ~{expected}"
+    )
+
+
+@pytest.mark.parametrize("badFps", [0.0, 0.5, 1.0, -10.0, float("nan"), float("inf")])
+def test_property_resample_rejects_degenerate_fps(badFps: float) -> None:
+    """Degenerate src fps must return input unchanged — never crash, never NaN out."""
+    m = np.ones((50, 168), dtype=np.float32)
+    out = resampleToFps(m, srcFps=badFps, tgtFps=30.0)
+    assert out.shape == m.shape
+    assert np.isfinite(out).all()
+
+
+@pytest.mark.parametrize("sigma", [0.0, 1e-4, 0.01, 0.1, 1.0])
+def test_property_noise_preserves_shape_and_finiteness(sigma: float) -> None:
+    """addNoise must never alter shape or introduce NaN, across sigma magnitudes."""
+    rng = np.random.default_rng(0)
+    m = np.ones((30, 168), dtype=np.float32)
+    out = addNoise(m, sigma=sigma, rng=rng)
+    assert out.shape == m.shape
+    assert np.isfinite(out).all()
+
+
+@pytest.mark.parametrize("speedFactor,inputFrames", [
+    (0.5, 100),   # 2x slower
+    (1.0, 100),   # no change
+    (1.5, 100),
+    (2.0, 100),   # 2x faster
+    (0.5, 1),     # degenerate input — must not crash
+    (2.0, 2),
+])
+def test_property_speed_perturb_never_crashes_or_nans(speedFactor: float,
+                                                       inputFrames: int) -> None:
+    rng = np.random.default_rng(0)
+    m = np.zeros((inputFrames, 168), dtype=np.float32)
+    out = speedPerturbation(m, rng, speedRange=(speedFactor, speedFactor))
+    assert np.isfinite(out).all()
+    assert out.shape[1] == 168
 
 
 if __name__ == "__main__":

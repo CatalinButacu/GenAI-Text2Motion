@@ -181,6 +181,12 @@ def speedPerturbation(
         return motion
 
     T = motion.shape[0]
+
+    # Resampling a 0- or 1-frame clip is ill-defined (interp1d needs >=2 anchors).
+    # Return as-is so the caller's quality filter can drop it.
+    if T <= 1:
+        return motion
+
     T_new = max(1, int(round(T / factor)))
     srcT = np.linspace(0, 1, T)
     tgtT = np.linspace(0, 1, T_new)
