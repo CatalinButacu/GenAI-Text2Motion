@@ -144,6 +144,9 @@ resource "aws_instance" "training_vm" {
     epochs_ssm    = var.epochs_ssm
     batch_size    = var.batch_size
     wandb_api_key = var.wandb_api_key
+    text_encoder  = var.text_encoder
+    ar_k_head     = var.ar_k_head ? "true" : ""
+    compile_model = var.compile_model ? "true" : ""
   })
 
   tags = {

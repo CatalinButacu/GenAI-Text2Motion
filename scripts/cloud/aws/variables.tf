@@ -87,3 +87,45 @@ variable "wandb_api_key" {
   sensitive = true
   default   = ""
 }
+
+# --- Text-encoder choice (see doc/planning/10_TEXT_ENCODER_AND_CFG.md) ---
+variable "text_encoder" {
+  description = <<-EOT
+    Which text encoder to use (snake-case alias, passed to --text-encoder).
+    Empty string keeps the script's default (currently sbert-small).
+      sbert-small  -> all-MiniLM-L6-v2  (384-d, 22M params, historical baseline)
+      sbert-mpnet  -> all-mpnet-base-v2 (768-d, 110M)
+      clip-b       -> clip-ViT-B-32     (512-d, OpenAI CLIP -- best motion verbs)
+      clip-l       -> clip-ViT-L-14     (768-d, larger CLIP)
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = contains(["", "sbert-small", "sbert-mpnet", "clip-b", "clip-l"], var.text_encoder)
+    error_message = "text_encoder must be one of sbert-small|sbert-mpnet|clip-b|clip-l or empty."
+  }
+}
+
+# --- Decoder architecture (see doc/planning/10_TEXT_ENCODER_AND_CFG.md) ---
+variable "ar_k_head" {
+  description = <<-EOT
+    Use the autoregressive K-codebook head (ResidualKHead). Forces training
+    from scratch -- the legacy independent-head checkpoints cannot be loaded
+    onto this layer set. Expected +0.1-0.3 nats on token CE per the 2026-05
+    technique audit (MoMask/Mogo reading).
+  EOT
+  type        = bool
+  default     = false
+}
+
+# --- Speed flag ---
+variable "compile_model" {
+  description = <<-EOT
+    Wrap the model in torch.compile(mode='reduce-overhead', dynamic=False).
+    Expected 3-5x training throughput on GPU; first batch compiles for 30-90s.
+    Ignored on CPU. NOT YET BENCHMARKED at scale on g4dn.xlarge / T4.
+  EOT
+  type        = bool
+  default     = false
+}

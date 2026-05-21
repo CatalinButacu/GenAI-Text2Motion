@@ -25,6 +25,9 @@ DATA_SOURCE="${data_source}"          # 'unified' (uses pre-built cache)
 EPOCHS_RVQ="${epochs_rvq}"            # ignored if S3 already has best_model.pt
 EPOCHS_SSM="${epochs_ssm}"            # how long to train SSM (typically 200)
 BATCH_SIZE="${batch_size}"            # depends on GPU VRAM; 64 for T4 16GB
+TEXT_ENCODER="${text_encoder}"        # '' (default) or sbert-small|sbert-mpnet|clip-b|clip-l
+AR_K_HEAD="${ar_k_head}"              # 'true' to enable autoregressive K-head, else ''
+COMPILE_MODEL="${compile_model}"      # 'true' to enable torch.compile, else ''
 
 # -----------------------------------------------------------------------------
 # W&B mode selection.
@@ -259,6 +262,14 @@ chown -R ubuntu:ubuntu "$REPO_DIR/checkpoints"
 #   --bidirectional     fwd+bwd Mamba scan (Motion Mamba ECCV 2024 style)
 #   --use-film          inject text at every layer (FiLM)
 #   --gradient-checkpointing  trade compute for VRAM (lets us use bigger batches)
+# Conditional flags from terraform vars:
+#   --text-encoder $TEXT_ENCODER  if set (sbert-small|sbert-mpnet|clip-b|clip-l)
+#   --ar-k-head                   if AR_K_HEAD='true'
+#   --compile                     if COMPILE_MODEL='true'
+EXTRA_FLAGS=""
+[ -n "$TEXT_ENCODER" ] && EXTRA_FLAGS="$EXTRA_FLAGS --text-encoder $TEXT_ENCODER"
+[ "$AR_K_HEAD" = "true" ] && EXTRA_FLAGS="$EXTRA_FLAGS --ar-k-head"
+[ "$COMPILE_MODEL" = "true" ] && EXTRA_FLAGS="$EXTRA_FLAGS --compile"
 sudo -u ubuntu $SUDO_KEEP_WANDB bash -c "
   source /opt/pytorch/bin/activate
   cd $REPO_DIR
@@ -280,6 +291,7 @@ sudo -u ubuntu $SUDO_KEEP_WANDB bash -c "
     --checkpoint-dir           checkpoints/motion_ssm \
     --rvq-checkpoint           checkpoints/rvq_tokenizer/best_model.pt \
     --device                   cuda \
+    $EXTRA_FLAGS \
     $RESUME_FLAG
 "
 echo "=== MotionSSM training done: $(date) ==="
