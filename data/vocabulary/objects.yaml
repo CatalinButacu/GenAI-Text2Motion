@@ -1,0 +1,676 @@
+# Object vocabulary for the M1 scene parser.
+#
+# EDITING GUIDE
+# -------------
+# - `keywords` lists ONLY base/singular forms.
+#   Plurals (balls, cubes, ...) are resolved automatically at runtime via
+#   WordNet morphy. Keep irregular plurals or domain-specific terms explicit.
+# - `default_shape` maps to the PyBullet collision shape: sphere | box | cylinder | humanoid | urdf
+#   When `default_shape: urdf`, set `urdf_path` to a path relative to pybullet_data root.
+# - `default_size` units: metres.  sphere/cylinder first entry = radius; cylinder second = height.
+# - `default_mass` in kg. 0.0 = static/immovable.
+# - `can_be_grasped` whether a humanoid can pick this object up.
+# - `mesh_prompt` optional text prompt for Shap-E / TripoSR mesh generation.
+# - `urdf_path` path relative to pybullet_data root (only if default_shape: urdf).
+# - `category` must be one of:
+#     PRIMITIVE, FURNITURE, SPORTS, CONTAINER, HUMANOID,
+#     KITCHEN, FOOD, TOOL, ELECTRONICS, VEHICLE
+
+sphere:
+  category: PRIMITIVE
+  keywords: [sphere, ball, orb, globe]
+  default_shape: sphere
+  default_size: [0.1]
+  default_mass: 0.5
+  can_be_grasped: true
+  mesh_prompt: null
+
+cube:
+  category: PRIMITIVE
+  keywords: [cube, box, block, crate]
+  default_shape: box
+  default_size: [0.1, 0.1, 0.1]
+  default_mass: 1.0
+  can_be_grasped: true
+  mesh_prompt: null
+
+cylinder:
+  category: PRIMITIVE
+  keywords: [cylinder, tube, pipe, rod, pillar, pole, post]
+  default_shape: cylinder
+  default_size: [0.05, 0.2]
+  default_mass: 0.8
+  can_be_grasped: true
+  mesh_prompt: null
+
+torus:
+  category: PRIMITIVE
+  keywords: [torus, ring, donut, doughnut, hoop, loop]
+  default_shape: urdf
+  default_size: [0.1, 0.1, 0.03]
+  default_mass: 0.2
+  can_be_grasped: true
+  urdf_path: torus_deform.urdf
+  mesh_prompt: null
+
+table:
+  category: PROP
+  keywords: [table, desk, surface, countertop, workbench]
+  default_shape: urdf
+  default_size: [0.8, 0.5, 0.02]
+  default_mass: 0.0
+  can_be_grasped: false
+  urdf_path: table/table.urdf
+  mesh_prompt: null
+
+table_square:
+  category: PROP
+  keywords: ["square table", "coffee table", "side table", "end table"]
+  default_shape: urdf
+  default_size: [0.5, 0.5, 0.02]
+  default_mass: 0.0
+  can_be_grasped: false
+  urdf_path: table_square/table_square.urdf
+  mesh_prompt: null
+
+wall:
+  category: PROP
+  keywords: [wall, barrier, fence]
+  default_shape: box
+  default_size: [2.0, 0.1, 1.5]
+  default_mass: 0.0
+  can_be_grasped: false
+  mesh_prompt: null
+
+floor:
+  category: PROP
+  keywords: [floor, ground, pavement, "ground plane"]
+  default_shape: box
+  default_size: [4.0, 4.0, 0.02]
+  default_mass: 0.0
+  can_be_grasped: false
+  mesh_prompt: null
+
+platform:
+  category: PROP
+  keywords: [platform, pedestal, podium, stage, stand]
+  default_shape: box
+  default_size: [0.5, 0.5, 0.2]
+  default_mass: 0.0
+  can_be_grasped: false
+  mesh_prompt: null
+
+chair:
+  category: PROP
+  keywords: [chair, seat, stool, bench, sofa, couch, armchair]
+  default_shape: box
+  default_size: [0.5, 0.5, 0.9]
+  default_mass: 0.0
+  can_be_grasped: false
+  mesh_prompt: null
+
+stairs:
+  category: PROP
+  keywords: [stairs, steps, staircase, ramp, incline]
+  default_shape: box
+  default_size: [1.0, 0.3, 0.6]
+  default_mass: 0.0
+  can_be_grasped: false
+  mesh_prompt: null
+
+ladder:
+  category: PROP
+  keywords: [ladder, stepladder, "step ladder"]
+  default_shape: box
+  default_size: [0.5, 0.05, 2.0]
+  default_mass: 5.0
+  can_be_grasped: false
+  mesh_prompt: null
+
+door:
+  category: PROP
+  keywords: [door, gate, entrance, exit, hatch]
+  default_shape: urdf
+  default_size: [0.05, 0.8, 2.0]
+  default_mass: 0.0
+  can_be_grasped: false
+  urdf_path: door.urdf
+  mesh_prompt: null
+
+tray:
+  category: PROP
+  keywords: [tray, platter, serving, pallet]
+  default_shape: urdf
+  default_size: [0.3, 0.2, 0.03]
+  default_mass: 0.5
+  can_be_grasped: true
+  urdf_path: tray/tray_textured2.urdf
+  mesh_prompt: null
+
+shelf:
+  category: PROP
+  keywords: [shelf, rack, "storage shelf", bookshelf]
+  default_shape: urdf
+  default_size: [0.9, 0.35, 1.8]
+  default_mass: 0.0
+  can_be_grasped: false
+  urdf_path: kiva_shelf/model.sdf
+  mesh_prompt: null
+
+football:
+  category: OBJECT
+  # soccerball.urdf has the actual FIFA geometry
+  keywords: [football, "soccer ball", "soccer", "soccer ball"]
+  default_shape: urdf
+  default_size: [0.11]
+  default_mass: 0.43
+  can_be_grasped: true
+  urdf_path: soccerball.urdf
+  mesh_prompt: a white and black soccer football
+
+basketball:
+  category: OBJECT
+  keywords: [basketball, "basket ball", "hoop ball"]
+  default_shape: sphere
+  default_size: [0.12]
+  default_mass: 0.62
+  can_be_grasped: true
+  mesh_prompt: an orange basketball
+
+baseball:
+  category: OBJECT
+  keywords: [baseball, "base ball", softball]
+  default_shape: sphere
+  default_size: [0.037]
+  default_mass: 0.145
+  can_be_grasped: true
+  mesh_prompt: a white baseball
+
+tennis_ball:
+  category: OBJECT
+  keywords: ["tennis ball", "rubber ball", "small ball"]
+  default_shape: sphere
+  default_size: [0.033]
+  default_mass: 0.058
+  can_be_grasped: true
+  mesh_prompt: a yellow tennis ball
+
+golf_ball:
+  category: OBJECT
+  keywords: ["golf ball", "mini ball", "small sphere"]
+  default_shape: sphere
+  default_size: [0.021]
+  default_mass: 0.046
+  can_be_grasped: true
+  mesh_prompt: a white golf ball
+
+volleyball:
+  category: OBJECT
+  keywords: [volleyball, "volley ball"]
+  default_shape: sphere
+  default_size: [0.105]
+  default_mass: 0.27
+  can_be_grasped: true
+  mesh_prompt: a volleyball
+
+yoga_ball:
+  category: OBJECT
+  # Large exercise / balance ball (from PAHOI dataset)
+  keywords: ["yoga ball", "exercise ball", "balance ball", "fitness ball", "gym ball"]
+  default_shape: sphere
+  default_size: [0.35]
+  default_mass: 1.0
+  can_be_grasped: false
+  mesh_prompt: a large blue exercise ball
+
+bat:
+  category: OBJECT
+  keywords: [bat, "baseball bat", "cricket bat", club, stick, baton]
+  default_shape: cylinder
+  default_size: [0.03, 0.85]
+  default_mass: 0.9
+  can_be_grasped: true
+  mesh_prompt: a wooden baseball bat
+
+racket:
+  category: OBJECT
+  keywords: [racket, "tennis racket", paddle, "ping pong", "badminton racket"]
+  default_shape: box
+  default_size: [0.30, 0.25, 0.02]
+  default_mass: 0.3
+  can_be_grasped: true
+  mesh_prompt: a tennis racket
+
+sword:
+  category: OBJECT
+  keywords: [sword, blade, saber, katana, knife, dagger, foil, rapier]
+  default_shape: cylinder
+  default_size: [0.02, 0.9]
+  default_mass: 1.1
+  can_be_grasped: true
+  mesh_prompt: a steel sword
+
+barbell:
+  category: OBJECT
+  # From PAHOI: barbell, size=large, weight=heavy
+  keywords: [barbell, dumbbell, weight, "free weight", kettlebell, "weight plate"]
+  default_shape: cylinder
+  default_size: [0.06, 0.6]
+  default_mass: 20.0
+  can_be_grasped: true
+  mesh_prompt: a barbell weight
+
+dumbbell:
+  category: OBJECT
+  # Lighter hand weight (from PAHOI: dumbbell, medium, heavy)
+  keywords: ["hand weight", "small dumbbell", "dumbbell pair"]
+  default_shape: cylinder
+  default_size: [0.04, 0.3]
+  default_mass: 5.0
+  can_be_grasped: true
+  mesh_prompt: a dumbbell
+
+jenga:
+  category: OBJECT
+  # Jenga wooden block -- pybullet_data has full URDF
+  keywords: [jenga, "wooden block", "wood block", "block tower", "stacking block"]
+  default_shape: urdf
+  default_size: [0.075, 0.025, 0.015]
+  default_mass: 0.08
+  can_be_grasped: true
+  urdf_path: jenga/jenga.urdf
+  mesh_prompt: a wooden jenga block
+
+lego:
+  category: OBJECT
+  # LEGO brick -- pybullet_data has URDF
+  keywords: [lego, "lego brick", "building block", "toy brick"]
+  default_shape: urdf
+  default_size: [0.032, 0.016, 0.011]
+  default_mass: 0.01
+  can_be_grasped: true
+  urdf_path: lego/lego.urdf
+  mesh_prompt: a red lego brick
+
+bottle:
+  category: OBJECT
+  keywords: [bottle, flask, canteen, jug, vial, flask]
+  default_shape: cylinder
+  default_size: [0.04, 0.25]
+  default_mass: 0.5
+  can_be_grasped: true
+  mesh_prompt: null
+
+ketchup:
+  category: OBJECT
+  # From ARCTIC dataset (articulated ketchup squeeze bottle)
+  keywords: [ketchup, "sauce bottle", "squeeze bottle", "condiment bottle"]
+  default_shape: cylinder
+  default_size: [0.04, 0.22]
+  default_mass: 0.55
+  can_be_grasped: true
+  mesh_prompt: a red ketchup bottle
+
+thermos:
+  category: OBJECT
+  # From PAHOI dataset: thermos, small, medium weight, cylinder
+  keywords: [thermos, "vacuum flask", "insulated bottle", "coffee thermos"]
+  default_shape: cylinder
+  default_size: [0.04, 0.22]
+  default_mass: 0.5
+  can_be_grasped: true
+  mesh_prompt: a stainless thermos
+
+can:
+  category: OBJECT
+  # Tin/aluminium can -- YCB food category
+  keywords: [can, "tin can", "soup can", "soda can", "beer can", "food can", tin]
+  default_shape: cylinder
+  default_size: [0.035, 0.12]
+  default_mass: 0.4
+  can_be_grasped: true
+  mesh_prompt: a tin soup can
+
+jar:
+  category: OBJECT
+  # From PAHOI and YCB: jar, small, light, cylinder
+  keywords: [jar, "glass jar", "mason jar", yogurt]
+  default_shape: cylinder
+  default_size: [0.04, 0.10]
+  default_mass: 0.25
+  can_be_grasped: true
+  mesh_prompt: a glass jar
+
+bag:
+  category: OBJECT
+  keywords: [bag, backpack, sack, briefcase, purse, "carry-on"]
+  default_shape: box
+  default_size: [0.3, 0.15, 0.4]
+  default_mass: 2.0
+  can_be_grasped: true
+  mesh_prompt: null
+
+luggage:
+  category: OBJECT
+  # From PAHOI: luggage, large, heavy, cuboid
+  keywords: [luggage, suitcase, "travel bag", "rolling suitcase", valise]
+  default_shape: box
+  default_size: [0.55, 0.25, 0.75]
+  default_mass: 8.0
+  can_be_grasped: false
+  mesh_prompt: a rolling suitcase
+
+bucket:
+  category: OBJECT
+  # From PAHOI: bucket (full) and empty bucket
+  keywords: [bucket, pail, "water bucket", bin]
+  default_shape: cylinder
+  default_size: [0.15, 0.30]
+  default_mass: 2.0
+  can_be_grasped: true
+  mesh_prompt: null
+
+mug:
+  category: OBJECT
+  # pybullet_data has objects/mug.urdf -- actual mesh geometry
+  keywords: [mug, "coffee mug", "tea mug", "beer mug", cup, "drinking cup"]
+  default_shape: urdf
+  default_size: [0.04, 0.1]
+  default_mass: 0.3
+  can_be_grasped: true
+  urdf_path: objects/mug.urdf
+  mesh_prompt: a ceramic coffee mug
+
+box:
+  category: OBJECT
+  # Generic cardboard / storage box -- distinct from "cube" primitive
+  keywords: ["cardboard box", "storage box", carton, "shipping box", "delivery box", parcel]
+  default_shape: box
+  default_size: [0.3, 0.3, 0.3]
+  default_mass: 2.0
+  can_be_grasped: true
+  mesh_prompt: null
+
+rope:
+  category: OBJECT
+  keywords: [rope, cord, cable, wire, string, lasso, chain]
+  default_shape: cylinder
+  default_size: [0.01, 2.0]
+  default_mass: 0.3
+  can_be_grasped: true
+  mesh_prompt: null
+
+balloon:
+  category: OBJECT
+  # From PAHOI: balloon, medium, light, sphere
+  keywords: [balloon, "inflated ball", bubble]
+  default_shape: sphere
+  default_size: [0.15]
+  default_mass: 0.01
+  can_be_grasped: true
+  mesh_prompt: null
+
+
+bowl:
+  category: OBJECT
+  keywords: [bowl, "soup bowl", "salad bowl", basin]
+  default_shape: cylinder
+  default_size: [0.1, 0.07]
+  default_mass: 0.4
+  can_be_grasped: true
+  mesh_prompt: a ceramic bowl
+
+plate:
+  category: OBJECT
+  keywords: [plate, dish, platter, saucer]
+  default_shape: cylinder
+  default_size: [0.12, 0.02]
+  default_mass: 0.35
+  can_be_grasped: true
+  mesh_prompt: a round white plate
+
+pan:
+  category: OBJECT
+  # From YCB kitchen items / PAHOI: pot, cylinder, medium
+  keywords: [pan, "frying pan", skillet, wok]
+  default_shape: cylinder
+  default_size: [0.14, 0.05]
+  default_mass: 1.0
+  can_be_grasped: true
+  mesh_prompt: a frying pan
+
+pot:
+  category: OBJECT
+  # From PAHOI: big pot / small pot, cylinder
+  keywords: [pot, saucepan, "cooking pot", "soup pot", casserole]
+  default_shape: cylinder
+  default_size: [0.12, 0.12]
+  default_mass: 1.2
+  can_be_grasped: true
+  mesh_prompt: a metal pot
+
+knife:
+  category: OBJECT
+  keywords: [knife, "chef knife", "bread knife", blade, cleaver]
+  default_shape: box
+  default_size: [0.20, 0.02, 0.005]
+  default_mass: 0.1
+  can_be_grasped: true
+  mesh_prompt: a kitchen knife
+
+fork:
+  category: OBJECT
+  keywords: [fork, "dinner fork", "salad fork", utensil]
+  default_shape: box
+  default_size: [0.18, 0.02, 0.005]
+  default_mass: 0.08
+  can_be_grasped: true
+  mesh_prompt: null
+
+spoon:
+  category: OBJECT
+  keywords: [spoon, "tablespoon", ladle, "wooden spoon"]
+  default_shape: box
+  default_size: [0.17, 0.04, 0.01]
+  default_mass: 0.06
+  can_be_grasped: true
+  mesh_prompt: null
+
+glass:
+  category: OBJECT
+  keywords: [glass, "drinking glass", "wine glass", "water glass", tumbler, cup]
+  default_shape: cylinder
+  default_size: [0.04, 0.14]
+  default_mass: 0.2
+  can_be_grasped: true
+  mesh_prompt: a drinking glass
+
+pitcher:
+  category: OBJECT
+  # From YCB kitchen items
+  keywords: [pitcher, jug, "water jug", carafe, teapot, kettle]
+  default_shape: cylinder
+  default_size: [0.07, 0.22]
+  default_mass: 0.6
+  can_be_grasped: true
+  mesh_prompt: null
+
+apple:
+  category: OBJECT
+  keywords: [apple, "red apple", "green apple", "fruit ball"]
+  default_shape: sphere
+  default_size: [0.04]
+  default_mass: 0.15
+  can_be_grasped: true
+  mesh_prompt: a red apple
+
+orange:
+  category: OBJECT
+  keywords: [orange, "citrus fruit", tangerine, clementine]
+  default_shape: sphere
+  default_size: [0.04]
+  default_mass: 0.17
+  can_be_grasped: true
+  mesh_prompt: an orange fruit
+
+banana:
+  category: OBJECT
+  # From YCB / pybullet_data (banana.obj exists in bullet3/data)
+  keywords: [banana, "yellow banana"]
+  default_shape: box
+  default_size: [0.08, 0.035, 0.035]
+  default_mass: 0.12
+  can_be_grasped: true
+  mesh_prompt: a yellow banana
+
+bread:
+  category: OBJECT
+  # pybullet bullet3/data has bread.vtk
+  keywords: [bread, loaf, "bread loaf", "slice of bread", sandwich]
+  default_shape: box
+  default_size: [0.1, 0.07, 0.05]
+  default_mass: 0.2
+  can_be_grasped: true
+  mesh_prompt: a loaf of bread
+
+scissors:
+  category: OBJECT
+  # From ARCTIC dataset (articulated scissors with real SMPL-X interaction data)
+  keywords: [scissors, shears, "garden shears", clippers]
+  default_shape: box
+  default_size: [0.20, 0.07, 0.01]
+  default_mass: 0.08
+  can_be_grasped: true
+  mesh_prompt: a pair of scissors
+
+hammer:
+  category: OBJECT
+  # From YCB tool items
+  keywords: [hammer, mallet, "sledgehammer", maul]
+  default_shape: box
+  default_size: [0.30, 0.05, 0.04]
+  default_mass: 0.5
+  can_be_grasped: true
+  mesh_prompt: a claw hammer
+
+screwdriver:
+  category: OBJECT
+  # From YCB tool items
+  keywords: [screwdriver, "screw driver", "flat-head", "phillips head"]
+  default_shape: cylinder
+  default_size: [0.01, 0.20]
+  default_mass: 0.15
+  can_be_grasped: true
+  mesh_prompt: null
+
+wrench:
+  category: OBJECT
+  # From YCB tool items
+  keywords: [wrench, spanner, "adjustable wrench", "monkey wrench"]
+  default_shape: box
+  default_size: [0.25, 0.05, 0.015]
+  default_mass: 0.4
+  can_be_grasped: true
+  mesh_prompt: null
+
+drill:
+  category: OBJECT
+  # From YCB tool items (power drill)
+  keywords: [drill, "power drill", "electric drill", "hand drill"]
+  default_shape: box
+  default_size: [0.25, 0.08, 0.20]
+  default_mass: 1.5
+  can_be_grasped: true
+  mesh_prompt: a power drill
+
+shovel:
+  category: OBJECT
+  keywords: [shovel, spade, "garden shovel", "snow shovel"]
+  default_shape: box
+  default_size: [0.25, 0.20, 0.03]
+  default_mass: 2.0
+  can_be_grasped: true
+  mesh_prompt: null
+
+umbrella:
+  category: OBJECT
+  keywords: [umbrella, parasol]
+  default_shape: cylinder
+  default_size: [0.03, 0.9]
+  default_mass: 0.3
+  can_be_grasped: true
+  mesh_prompt: null
+
+book:
+  category: OBJECT
+  # From PAHOI: Oxford dictionary + thin book; ARCTIC: notebook
+  keywords: [book, notebook, "text book", diary, journal, dictionary, magazine]
+  default_shape: box
+  default_size: [0.21, 0.15, 0.03]
+  default_mass: 0.4
+  can_be_grasped: true
+  mesh_prompt: a paperback book
+
+laptop:
+  category: OBJECT
+  # From ARCTIC dataset (articulated laptop with joint state data)
+  keywords: [laptop, "laptop computer", notebook, "computer screen", "pc screen"]
+  default_shape: box
+  default_size: [0.33, 0.24, 0.02]
+  default_mass: 1.5
+  can_be_grasped: true
+  mesh_prompt: an open laptop computer
+
+phone:
+  category: OBJECT
+  keywords: [phone, smartphone, cellphone, "mobile phone", "cell phone", iphone]
+  default_shape: box
+  default_size: [0.075, 0.155, 0.008]
+  default_mass: 0.18
+  can_be_grasped: true
+  mesh_prompt: a smartphone
+
+remote:
+  category: OBJECT
+  keywords: [remote, "remote control", "tv remote", "game controller", controller]
+  default_shape: box
+  default_size: [0.05, 0.17, 0.015]
+  default_mass: 0.1
+  can_be_grasped: true
+  mesh_prompt: null
+
+bicycle:
+  category: OBJECT
+  # From BEHAVE dataset (20 objects)
+  keywords: [bicycle, bike, "mountain bike", "road bike", cycle]
+  default_shape: box
+  default_size: [1.70, 0.50, 1.10]
+  default_mass: 10.0
+  can_be_grasped: false
+  mesh_prompt: a bicycle
+
+humanoid:
+  category: HUMANOID
+  # "humans" kept explicit -- WordNet doesn't lemmatise it to "human" as a noun
+  keywords: [humanoid, person, people, human, humans, man, men, woman, women,
+             character, robot, figure, agent, actor, player, athlete,
+             kid, child, guy, girl, boy, soldier, fighter, dancer]
+  default_shape: humanoid
+  default_size: [1.7]
+  default_mass: 70.0
+  can_be_grasped: false
+  mesh_prompt: null
+
+#
+# EDITING GUIDE
+# -------------
+# - `keywords` lists ONLY base/singular forms.
+#   Plurals (balls, cubes, ...) are resolved automatically at runtime via
+#   WordNet morphy. Keep irregular plurals or domain-specific terms explicit.
+# - `default_shape` maps to the PyBullet collision shape: sphere | box | cylinder | humanoid
+# - `default_size` units: metres.  sphere -> [radius], cylinder -> [radius, height].
+# - `default_mass` in kg. 0.0 = static/immovable.
+# - `can_be_grasped` whether a humanoid can pick this object up.
+# - `mesh_prompt` optional text prompt for Shap-E / TripoSR mesh generation.
+# - `category` must be one of: PRIMITIVE, FURNITURE, SPORTS, CONTAINER, HUMANOID
+

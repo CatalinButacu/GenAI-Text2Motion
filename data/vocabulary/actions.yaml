@@ -1,0 +1,690 @@
+# Action vocabulary for the M1 scene parser.
+#
+# EDITING GUIDE
+# -------------
+# - `keywords` lists ONLY base/canonical forms.
+#   Inflected forms (walking, walks, kicked, ...) are resolved automatically
+#   at runtime via WordNet morphy lemmatisation.
+# - Add domain-specific synonyms that WordNet may not know (e.g. "tip over").
+# - `requires_target: true`  means the action always involves a second entity.
+# - `motion_clip` is the canonical SSM query string used when raw_text is missing.
+# - `category` must be one of: LOCOMOTION, MANIPULATION, INTERACTION,
+#                               GESTURE, POSE, PHYSICS, EMOTION, ATHLETICS
+
+#  Locomotion 
+walk:
+  category: LOCOMOTION
+  keywords: [walk, stroll, move, wander, step]
+  requires_target: false
+  motion_clip: walk forward
+
+run:
+  category: LOCOMOTION
+  keywords: [run, sprint, dash, rush, jog]
+  requires_target: false
+  motion_clip: run forward
+
+jump:
+  category: LOCOMOTION
+  keywords: [jump, leap, hop]
+  requires_target: false
+  motion_clip: jump in place
+
+crawl:
+  category: LOCOMOTION
+  keywords: [crawl, creep]
+  requires_target: false
+  motion_clip: crawl on floor
+
+crouch:
+  category: LOCOMOTION
+  # "duck walk" and "crouch walk" are multi-word; keep them explicit
+  keywords: [crouch, duck, "crouch walk", "duck walk"]
+  requires_target: false
+  motion_clip: crouch down
+
+climb:
+  category: LOCOMOTION
+  keywords: [climb, scale, ascend]
+  requires_target: false
+  motion_clip: climb up
+
+sneak:
+  category: LOCOMOTION
+  keywords: [sneak, tiptoe, "tip toe"]
+  requires_target: false
+  motion_clip: sneak walk
+
+limp:
+  category: LOCOMOTION
+  keywords: [limp, hobble]
+  requires_target: false
+  motion_clip: limp walk
+
+march:
+  category: LOCOMOTION
+  keywords: [march]
+  requires_target: false
+  motion_clip: march forward
+
+skip:
+  category: LOCOMOTION
+  keywords: [skip]
+  requires_target: false
+  motion_clip: skip forward
+
+shuffle:
+  category: LOCOMOTION
+  keywords: [shuffle, shamble]
+  requires_target: false
+  motion_clip: shuffle steps
+
+stumble:
+  category: LOCOMOTION
+  keywords: [stumble, stagger]
+  requires_target: false
+  motion_clip: stumble walk
+
+turn:
+  category: LOCOMOTION
+  keywords: [turn, "spin around", rotate]
+  requires_target: false
+  motion_clip: turn around
+
+sidestep:
+  category: LOCOMOTION
+  keywords: [sidestep, "side step", "dodge side", evade]
+  requires_target: false
+  motion_clip: sidestep
+
+step_back:
+  category: LOCOMOTION
+  # multi-word phrases kept explicit; morphy won't lemmatise them
+  keywords: ["step back", "back up", retreat]
+  requires_target: false
+  motion_clip: step backward
+
+moonwalk:
+  category: LOCOMOTION
+  keywords: [moonwalk]
+  requires_target: false
+  motion_clip: moonwalk backward
+
+swim:
+  category: LOCOMOTION
+  keywords: [swim, paddle, stroke, backstroke, breaststroke]
+  requires_target: false
+  motion_clip: swim forward
+
+skate:
+  category: LOCOMOTION
+  keywords: [skate, "roller skate", rollerskate, glide]
+  requires_target: false
+  motion_clip: skate forward
+
+hop:
+  category: LOCOMOTION
+  keywords: [hop, "hop on one foot", bunny]
+  requires_target: false
+  motion_clip: hop forward
+
+strafe:
+  category: LOCOMOTION
+  keywords: [strafe, "move sideways", "side walk"]
+  requires_target: false
+  motion_clip: strafe right
+
+wade:
+  category: LOCOMOTION
+  keywords: [wade, trudge]
+  requires_target: false
+  motion_clip: walk slow
+
+gallop:
+  category: LOCOMOTION
+  keywords: [gallop, canter, prance]
+  requires_target: false
+  motion_clip: run forward
+
+#  Pose / idle 
+stand:
+  category: POSE
+  keywords: [stand, stop, halt, wait, idle, rest]
+  requires_target: false
+  motion_clip: idle stand
+
+sit:
+  category: POSE
+  keywords: [sit, seat, "sit down"]
+  requires_target: false
+  motion_clip: sit down
+
+lie:
+  category: POSE
+  keywords: [lie, lay, "lie down"]
+  requires_target: false
+  motion_clip: lie down
+
+kneel:
+  category: POSE
+  keywords: [kneel, "kneel down"]
+  requires_target: false
+  motion_clip: kneel down
+
+squat:
+  category: POSE
+  keywords: [squat, "squat down"]
+  requires_target: false
+  motion_clip: squat down
+
+lean:
+  category: POSE
+  keywords: [lean, "lean forward", "lean back"]
+  requires_target: false
+  motion_clip: lean forward
+
+bend:
+  category: POSE
+  keywords: [bend, "bend over", "bend down", "lean over", hunch, stoop]
+  requires_target: false
+  motion_clip: bend forward
+
+lower:
+  category: POSE
+  keywords: [lower, "lower arm", "put down arm", "bring down"]
+  requires_target: false
+  motion_clip: lower arms
+
+raise:
+  category: POSE
+  keywords: [raise, "raise arm", "raise leg", "lift arm", "put up"]
+  requires_target: false
+  motion_clip: raise arms
+
+stretch:
+  category: POSE
+  keywords: [stretch, "extend arms"]
+  requires_target: false
+  motion_clip: stretch arms
+
+balance:
+  category: POSE
+  keywords: [balance, "stand on one leg"]
+  requires_target: false
+  motion_clip: balance pose
+
+hang:
+  category: POSE
+  keywords: [hang, dangle, "hang from"]
+  requires_target: false
+  motion_clip: hang arms down
+
+pray:
+  category: POSE
+  keywords: [pray, "clasp hands", kneel]
+  requires_target: false
+  motion_clip: pray kneel
+
+meditate:
+  category: POSE
+  keywords: [meditate, "sit still", relax, "cross-legged"]
+  requires_target: false
+  motion_clip: meditate sit
+
+#  Manipulation 
+pick_up:
+  category: MANIPULATION
+  keywords: [pick, "pick up", take, lift, grasp]
+  requires_target: true
+  motion_clip: pick up object
+
+throw:
+  category: MANIPULATION
+  keywords: [throw, toss, hurl, fling]
+  requires_target: true
+  motion_clip: throw object
+
+place:
+  category: MANIPULATION
+  keywords: [place, put, "put down", set, drop, release, "set down"]
+  requires_target: true
+  motion_clip: place object
+
+carry:
+  category: MANIPULATION
+  keywords: [carry, transport, "hold and walk"]
+  requires_target: true
+  motion_clip: carry object
+
+hold:
+  category: MANIPULATION
+  keywords: [hold, grip]
+  requires_target: true
+  motion_clip: hold object
+
+pull:
+  category: MANIPULATION
+  keywords: [pull, tug, drag, yank]
+  requires_target: true
+  motion_clip: pull object
+
+reach:
+  category: MANIPULATION
+  keywords: [reach, "reach out", "extend hand", touch]
+  requires_target: true
+  motion_clip: reach forward
+
+shake:
+  category: MANIPULATION
+  keywords: [shake, "shake object"]
+  requires_target: true
+  motion_clip: shake object
+
+pour:
+  category: MANIPULATION
+  keywords: [pour, "pour into", "fill up"]
+  requires_target: true
+  motion_clip: pour liquid
+
+eat:
+  category: MANIPULATION
+  keywords: [eat, bite, chew, taste, consume, feed]
+  requires_target: true
+  motion_clip: eat food
+
+drink:
+  category: MANIPULATION
+  keywords: [drink, sip, "take a sip", swallow]
+  requires_target: true
+  motion_clip: drink water
+
+press:
+  category: MANIPULATION
+  keywords: [press, tap, push, "press button", dial]
+  requires_target: true
+  motion_clip: press button
+
+stir:
+  category: MANIPULATION
+  keywords: [stir, mix, blend, "stir with hand"]
+  requires_target: true
+  motion_clip: stir motion
+
+swing:
+  category: MANIPULATION
+  keywords: [swing, "swing arm"]
+  requires_target: true
+  motion_clip: swing arm
+
+open:
+  category: MANIPULATION
+  keywords: [open]
+  requires_target: true
+  motion_clip: open door
+
+close:
+  category: MANIPULATION
+  keywords: [close, shut]
+  requires_target: true
+  motion_clip: close door
+
+#  Interaction / combat 
+kick:
+  category: INTERACTION
+  # boot/punt: morphy handles "boots"->"boot" and "punts"->"punt" automatically
+  keywords: [kick, boot, punt]
+  requires_target: true
+  motion_clip: kick object
+
+push:
+  category: INTERACTION
+  keywords: [push, shove]
+  requires_target: true
+  motion_clip: push object
+
+fight:
+  category: INTERACTION
+  keywords: [fight, brawl, wrestle, spar, combat, struggle, grapple]
+  requires_target: false
+  motion_clip: fighting
+
+punch:
+  category: INTERACTION
+  keywords: [punch, hit, strike]
+  requires_target: true
+  motion_clip: punch forward
+
+dodge:
+  category: INTERACTION
+  keywords: [dodge, evade, "duck under"]
+  requires_target: false
+  motion_clip: dodge sidestep
+
+block:
+  category: INTERACTION
+  keywords: [block, deflect, parry]
+  requires_target: false
+  motion_clip: block stance
+
+catch:
+  category: INTERACTION
+  keywords: [catch, intercept]
+  requires_target: true
+  motion_clip: catch object
+
+hug:
+  category: INTERACTION
+  keywords: [hug, embrace, cuddle]
+  requires_target: false
+  motion_clip: hug motion
+
+tackle:
+  category: INTERACTION
+  keywords: [tackle, charge, "ram into"]
+  requires_target: true
+  motion_clip: tackle run
+
+grab:
+  category: INTERACTION
+  keywords: [grab, snatch, seize, clutch]
+  requires_target: true
+  motion_clip: grab object
+
+#  Gesture / social 
+wave:
+  category: GESTURE
+  keywords: [wave, greet, hello]
+  requires_target: false
+  motion_clip: wave hand
+
+salute:
+  category: GESTURE
+  keywords: [salute, "hand salute"]
+  requires_target: false
+  motion_clip: salute
+
+shrug:
+  category: GESTURE
+  keywords: [shrug, "raise shoulders", "i don't know"]
+  requires_target: false
+  motion_clip: shrug shoulders
+
+fist_pump:
+  category: GESTURE
+  keywords: ["fist pump", "pump fist", "pump arm"]
+  requires_target: false
+  motion_clip: fist pump
+
+shake_head:
+  category: GESTURE
+  keywords: ["shake head", "nod no", "head shake"]
+  requires_target: false
+  motion_clip: shake head
+
+thumbs_up:
+  category: GESTURE
+  keywords: ["thumbs up", "thumbs down", "thumb up", "thumb down"]
+  requires_target: false
+  motion_clip: thumbs up
+
+stomp:
+  category: GESTURE
+  keywords: [stomp, "stomp foot", "stamp foot"]
+  requires_target: false
+  motion_clip: stomp foot
+
+clap:
+  category: GESTURE
+  keywords: [clap, applaud]
+  requires_target: false
+  motion_clip: clap hands
+
+bow:
+  category: GESTURE
+  keywords: [bow, "bow down"]
+  requires_target: false
+  motion_clip: bow forward
+
+nod:
+  category: GESTURE
+  keywords: [nod]
+  requires_target: false
+  motion_clip: nod head
+
+point:
+  category: GESTURE
+  keywords: [point]
+  requires_target: true
+  motion_clip: point forward
+
+look:
+  category: GESTURE
+  keywords: [look, gaze, watch]
+  requires_target: false
+  motion_clip: look at target
+
+look_around:
+  category: GESTURE
+  keywords: ["look around", "glance around", survey, scan]
+  requires_target: false
+  motion_clip: look around
+
+raise_hand:
+  category: GESTURE
+  keywords: ["raise hand", "raise arm"]
+  requires_target: false
+  motion_clip: raise hand
+
+cross_arms:
+  category: GESTURE
+  keywords: ["cross arms", "fold arms", "arms crossed"]
+  requires_target: false
+  motion_clip: cross arms
+
+scratch:
+  category: GESTURE
+  keywords: [scratch, "scratch head"]
+  requires_target: false
+  motion_clip: scratch head
+
+think:
+  category: GESTURE
+  keywords: [think, ponder]
+  requires_target: false
+  motion_clip: thinking pose
+
+#  Emotion / expressive 
+dance:
+  category: EMOTION
+  keywords: [dance, sway, groove, "move to music"]
+  requires_target: false
+  motion_clip: dance
+
+celebrate:
+  category: EMOTION
+  keywords: [celebrate, cheer, rejoice]
+  requires_target: false
+  motion_clip: celebrate arms up
+
+panic:
+  category: EMOTION
+  keywords: [panic, "freak out", "frightened run"]
+  requires_target: false
+  motion_clip: panic run
+
+fear:
+  category: EMOTION
+  keywords: [fear, scared, frightened, terrified, cower]
+  requires_target: false
+  motion_clip: fear crouch
+
+laugh:
+  category: EMOTION
+  keywords: [laugh, giggle]
+  requires_target: false
+  motion_clip: laugh
+
+cry:
+  category: EMOTION
+  keywords: [cry, sob, weep]
+  requires_target: false
+  motion_clip: cry
+
+angry:
+  category: EMOTION
+  keywords: [angry, rage, furious, stomp]
+  requires_target: false
+  motion_clip: angry stomp
+
+happy:
+  category: EMOTION
+  keywords: [happy, joyful, excited]
+  requires_target: false
+  motion_clip: happy walk
+
+tired:
+  category: EMOTION
+  keywords: [tired, exhausted, sluggish, weary]
+  requires_target: false
+  motion_clip: tired walk
+
+stressed:
+  category: EMOTION
+  keywords: [stressed, anxious, nervous, tense, pacing]
+  requires_target: false
+  motion_clip: stressed pace
+
+hesitate:
+  category: EMOTION
+  keywords: [hesitate, pause, unsure]
+  requires_target: false
+  motion_clip: hesitate idle
+
+#  Athletics 
+lunge:
+  category: ATHLETICS
+  keywords: [lunge, "forward lunge"]
+  requires_target: false
+  motion_clip: forward lunge
+
+flip:
+  category: ATHLETICS
+  keywords: [flip, backflip, frontflip, somersault, "back flip", "front flip"]
+  requires_target: false
+  motion_clip: backflip
+
+handstand:
+  category: ATHLETICS
+  keywords: [handstand, "hand stand"]
+  requires_target: false
+  motion_clip: handstand
+
+dive:
+  category: ATHLETICS
+  keywords: [dive, "dive forward", plunge]
+  requires_target: false
+  motion_clip: dive forward
+
+jump_rope:
+  category: ATHLETICS
+  keywords: ["jump rope", "skip rope", "rope jump"]
+  requires_target: false
+  motion_clip: jump rope
+
+squat_jump:
+  category: ATHLETICS
+  keywords: ["squat jump", "jump squat", "jumping squat"]
+  requires_target: false
+  motion_clip: squat then jump
+
+lunge_kick:
+  category: ATHLETICS
+  keywords: ["lunge kick", "step kick"]
+  requires_target: false
+  motion_clip: lunge then kick
+
+dribble:
+  category: ATHLETICS
+  keywords: [dribble, "bounce ball"]
+  requires_target: true
+  motion_clip: dribble basketball
+
+spin:
+  category: ATHLETICS
+  keywords: [spin, pirouette]
+  requires_target: false
+  motion_clip: spin 360
+
+kick_high:
+  category: ATHLETICS
+  keywords: ["high kick", roundhouse, "flying kick"]
+  requires_target: false
+  motion_clip: high kick
+
+cartwheel:
+  category: ATHLETICS
+  keywords: [cartwheel]
+  requires_target: false
+  motion_clip: cartwheel
+
+#  Physics 
+fall:
+  category: PHYSICS
+  keywords: [fall, topple]
+  requires_target: false
+  motion_clip: fall down
+
+roll:
+  category: PHYSICS
+  keywords: [roll]
+  requires_target: false
+  motion_clip: roll on floor
+
+bounce:
+  category: PHYSICS
+  keywords: [bounce, rebound]
+  requires_target: false
+  motion_clip: bounce
+
+slide:
+  category: PHYSICS
+  keywords: [slide, glide]
+  requires_target: false
+  motion_clip: slide forward
+
+collide:
+  category: PHYSICS
+  keywords: [collide, crash, impact, smash, slam, bump]
+  requires_target: false
+  motion_clip: collision impact
+
+tip_over:
+  category: PHYSICS
+  # multi-word; morphy won't handle these -- keep them explicit
+  keywords: ["tip over", "topple over", "fall over"]
+  requires_target: false
+  motion_clip: tip over fall
+
+spin_roll:
+  category: PHYSICS
+  keywords: ["spin roll", "rolling spin", "tumble roll"]
+  requires_target: false
+  motion_clip: roll forward
+
+trip:
+  category: PHYSICS
+  keywords: [trip, "trip over", stumble]
+  requires_target: false
+  motion_clip: trip fall
+
+explode:
+  category: PHYSICS
+  keywords: [explode, blast, "blow up", burst]
+  requires_target: false
+  motion_clip: fall down
+
+crush:
+  category: PHYSICS
+  keywords: [crush, "get crushed", squash, flatten]
+  requires_target: false
+  motion_clip: collision impact
