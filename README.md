@@ -12,9 +12,20 @@ trained on HumanML3D / AMASS.
 ## Quick Start
 
 ```bash
+# Recommended: uv (fast, hash-pinned, reproducible)
+uv sync
+uv run python -m spacy download en_core_web_sm
+uv run python main.py "a person walks forward"
+
+# Headless rendering needs the optional viewer extras (~1 GB)
+uv sync --extra viewer
+
+# Dev install (lint + tests + pre-commit)
+uv sync --extra dev
+
+# Or with pip
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
-
 python main.py "a person walks forward"
 ```
 
@@ -138,7 +149,7 @@ python tests/benchmarks/run_all_benchmarks.py
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.12 (single supported version; CI tests this exclusively)
 - CUDA GPU recommended for M4 training and inference
 - CPU is sufficient for M1, M2, and rendering
 
