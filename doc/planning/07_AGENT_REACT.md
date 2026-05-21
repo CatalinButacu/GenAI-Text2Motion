@@ -2,6 +2,8 @@
 
 Status: **draft, not yet implemented**. Authored 2026-05-21.
 
+Related reading: [11_REFERENCES.md](11_REFERENCES.md) §3 (Motion-Agent, Iterative Motion Editing), §8 (Lilian Weng's agent survey).
+
 ## Why this doc exists
 
 The long-term product (see [project_chat_product_vision.md] in memory) is a continuous chat over motion scenes: user types, the system parses → plans → generates → renders, but persistently — multi-turn edits, multi-actor, scene state held across turns. This doc evaluates whether the canonical "ReAct + Planning + Memory" agent pattern is the right wrapper around our existing pipeline, and sketches a minimal first slice.

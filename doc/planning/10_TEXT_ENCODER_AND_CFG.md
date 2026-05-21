@@ -2,6 +2,8 @@
 
 Status: **active**. Last reviewed 2026-05-22.
 
+Related reading: [11_REFERENCES.md](11_REFERENCES.md) §4 (text encoders), §5 (CFG).
+
 ## What's in the code right now
 
 Two text encoders are wired in and selectable at runtime via the same CLI flag.

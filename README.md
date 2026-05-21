@@ -232,6 +232,13 @@ The project follows CRISP-DM (Business Understanding → Data Understanding →
 Data Preparation → Modeling → Evaluation → Deployment). Iterations on poor
 metrics loop back to data preparation or modeling, not to deployment.
 
+## Further reading
+
+See [doc/planning/11_REFERENCES.md](doc/planning/11_REFERENCES.md) for the
+curated bibliography (Mamba/SSM, RVQ, motion generation, CLIP, training
+tricks, evaluation, visual guides). Start with the visual guides if any of
+the architecture choices are unclear.
+
 ## Citation
 
 If this work is useful in your research, please cite:

@@ -5,6 +5,9 @@ Q# Physics-Constrained Video Generation -- Master Plan
 **Date**: March 2026  
 **Architecture**: 7 modules, 4 pipeline stages  
 
+**See also**: [11_REFERENCES.md](11_REFERENCES.md) for the curated reading list
+(papers, code repos, visual guides) backing the choices in this plan.
+
 ---
 
 ## 1. Problem & Solution
