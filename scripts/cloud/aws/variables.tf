@@ -129,3 +129,16 @@ variable "compile_model" {
   type        = bool
   default     = false
 }
+
+# --- Multi-GPU control ---
+variable "single_gpu" {
+  description = <<-EOT
+    Force single-GPU training even on instances with multiple GPUs visible
+    (debugging, baselining). When false (default), the trainer auto-wraps in
+    nn.DataParallel across torch.cuda.device_count() devices. Set true only
+    when you intentionally want to bypass DP on a multi-GPU box.
+    Note: --compile and DP are incompatible; --compile is auto-skipped under DP.
+  EOT
+  type        = bool
+  default     = false
+}

@@ -110,3 +110,7 @@ class TrainingConfig(ModelConfig, DataConfig):
     # CPU benchmarks show compile is usually slower due to dispatch overhead,
     # so this stays opt-in and gated on CUDA in the trainer.
     compile_model: bool = False
+    # When False (default), the trainer auto-wraps in nn.DataParallel across all
+    # visible CUDA devices. Set True to force single-GPU even with multiple
+    # devices available (debugging, single-GPU baselining).
+    single_gpu: bool = False

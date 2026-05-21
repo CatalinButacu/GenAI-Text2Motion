@@ -147,6 +147,7 @@ resource "aws_instance" "training_vm" {
     text_encoder  = var.text_encoder
     ar_k_head     = var.ar_k_head ? "true" : ""
     compile_model = var.compile_model ? "true" : ""
+    single_gpu    = var.single_gpu ? "true" : ""
   })
 
   tags = {

@@ -25,9 +25,11 @@ DATA_SOURCE="${data_source}"          # 'unified' (uses pre-built cache)
 EPOCHS_RVQ="${epochs_rvq}"            # ignored if S3 already has best_model.pt
 EPOCHS_SSM="${epochs_ssm}"            # how long to train SSM (typically 200)
 BATCH_SIZE="${batch_size}"            # depends on GPU VRAM; 64 for T4 16GB
-TEXT_ENCODER="${text_encoder}"        # '' (default) or sbert-small|sbert-mpnet|clip-b|clip-l
-AR_K_HEAD="${ar_k_head}"              # 'true' to enable autoregressive K-head, else ''
-COMPILE_MODEL="${compile_model}"      # 'true' to enable torch.compile, else ''
+TEXT_ENCODER="${text_encoder}"        # sbert-small|sbert-mpnet|clip-b|clip-l or ''
+AR_K_HEAD="${ar_k_head}"              # 'true' for AR K-head
+COMPILE_MODEL="${compile_model}"      # 'true' for torch.compile
+SINGLE_GPU="${single_gpu}"            # 'true' to skip nn.DataParallel auto-wrap
+MAX_RUN_HOURS=3                       # wallclock failsafe (hours)
 
 # -----------------------------------------------------------------------------
 # W&B mode selection.
@@ -73,6 +75,13 @@ cleanupOnExit() {
   fi
 }
 trap cleanupOnExit EXIT
+
+# Wallclock failsafe: background timer hard-poweroffs after MAX_RUN_HOURS even
+# if the main process wedges (hung NCCL, S3 sync, dataloader). cleanupOnExit
+# trap may not fire on hangs; this does. shutdown -h stops billing.
+( sleep $((MAX_RUN_HOURS * 3600)) && shutdown -h now ) &
+disown
+echo "=== Wallclock failsafe armed: ${MAX_RUN_HOURS}h ==="
 
 # -----------------------------------------------------------------------------
 # Step 1: activate the Python environment that has PyTorch installed
@@ -257,19 +266,13 @@ fi
 # sync so it covers everything root just touched.
 chown -R ubuntu:ubuntu "$REPO_DIR/checkpoints"
 
-# Architecture flags chosen based on what we smoke-tested locally:
-#   --use-sbert         use SentenceTransformer for text (frozen)
-#   --bidirectional     fwd+bwd Mamba scan (Motion Mamba ECCV 2024 style)
-#   --use-film          inject text at every layer (FiLM)
-#   --gradient-checkpointing  trade compute for VRAM (lets us use bigger batches)
-# Conditional flags from terraform vars:
-#   --text-encoder $TEXT_ENCODER  if set (sbert-small|sbert-mpnet|clip-b|clip-l)
-#   --ar-k-head                   if AR_K_HEAD='true'
-#   --compile                     if COMPILE_MODEL='true'
+# Static flags below; conditional flags from terraform vars in EXTRA_FLAGS:
+#   --text-encoder <x>  if TEXT_ENCODER set, --ar-k-head, --compile, --single-gpu
 EXTRA_FLAGS=""
 [ -n "$TEXT_ENCODER" ] && EXTRA_FLAGS="$EXTRA_FLAGS --text-encoder $TEXT_ENCODER"
 [ "$AR_K_HEAD" = "true" ] && EXTRA_FLAGS="$EXTRA_FLAGS --ar-k-head"
 [ "$COMPILE_MODEL" = "true" ] && EXTRA_FLAGS="$EXTRA_FLAGS --compile"
+[ "$SINGLE_GPU" = "true" ] && EXTRA_FLAGS="$EXTRA_FLAGS --single-gpu"
 sudo -u ubuntu $SUDO_KEEP_WANDB bash -c "
   source /opt/pytorch/bin/activate
   cd $REPO_DIR

@@ -141,6 +141,13 @@ def main():
               "compiles for 30-90s; amortizes after ~3 epochs."),
     )
     parser.add_argument(
+        "--single-gpu", action="store_true", dest="single_gpu",
+        help=("Force single-GPU training even when torch.cuda.device_count() > 1. "
+              "Default behaviour auto-wraps the model in nn.DataParallel across all "
+              "visible CUDA devices. Use this flag for single-GPU debugging or when "
+              "you want to compare wall-time against a multi-GPU baseline."),
+    )
+    parser.add_argument(
         "--ar-k-head", action="store_true", dest="ar_k_head",
         help=("Use the autoregressive K-codebook head (ResidualKHead) instead of "
               "the legacy independent K-classifier head (RVQMotionDecoder). "
@@ -317,6 +324,7 @@ def main():
         rvq_checkpoint_path=args.rvq_checkpoint,
         warm_start=args.warm_start,
         compile_model=args.compile_model,
+        single_gpu=args.single_gpu,
         arch="residual_k" if args.ar_k_head else "independent",
     )
     if args.sources is not None and args.data_source == "unified":

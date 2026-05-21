@@ -84,15 +84,41 @@ class BaseSSMTrainer:
         """Shared last step of __init__: build loaders, tokenizer, optimizer, restore ckpt."""
         self.model = TextToMotionSSM(config).to(self.device)
 
+        # Multi-GPU auto-wrap: nn.DataParallel splits each batch across all
+        # visible CUDA devices. `self.model` stays the UNWRAPPED reference so
+        # checkpoint save/load and attribute access (`self.model.config` etc)
+        # keep working; `self.train_model` is the wrapped variant that the
+        # train/val loops call.
+        single_gpu = getattr(config, "single_gpu", False)
+        n_gpus = torch.cuda.device_count() if self.device.type == "cuda" else 0
+
+        if n_gpus > 1 and not single_gpu:
+            log.info("[BaseTrainer] nn.DataParallel across %d GPUs", n_gpus)
+            self.train_model = torch.nn.DataParallel(self.model)
+            self.n_train_gpus = n_gpus
+        else:
+            self.train_model = self.model
+            self.n_train_gpus = max(n_gpus, 1)
+
         # Opt-in torch.compile for ~3-5x training throughput on GPU.
         # First batch eats 30-90s of compile time; amortizes after ~3 epochs.
         # Use dynamic=False because the dataloader pads to max_motion_length
         # so the input shape is static across batches.
+        # Skip compile when DataParallel is active -- the interaction is
+        # fragile and gives no extra speedup (DP already uses all GPUs).
         if getattr(config, "compile_model", False) and self.device.type == "cuda":
-            log.info("[BaseTrainer] torch.compile(model, mode='reduce-overhead', dynamic=False)")
-            self.model = torch.compile(
-                self.model, mode="reduce-overhead", dynamic=False,
-            )  # type: ignore[assignment]
+            if self.n_train_gpus > 1:
+                log.warning(
+                    "[BaseTrainer] --compile + multi-GPU DataParallel is unsupported; "
+                    "skipping compile. Use single-GPU + --compile if you need both."
+                )
+            else:
+                log.info(
+                    "[BaseTrainer] torch.compile(model, mode='reduce-overhead', dynamic=False)"
+                )
+                self.train_model = torch.compile(
+                    self.train_model, mode="reduce-overhead", dynamic=False,
+                )  # type: ignore[assignment]
         self.tokenizer = self.load_frozen_tokenizer(config)
 
         pin = config.num_workers > 0 and self.device.type == "cuda"
@@ -145,8 +171,12 @@ class BaseSSMTrainer:
         return False
 
     def train_epoch(self, epoch: int) -> tuple:
+        # self.train_model is the DP-wrapped (or compile-wrapped) model;
+        # the underlying parameters live on self.model. Either works here
+        # because DataParallel exposes the same forward signature, but the
+        # wrapped variant is what scatters across GPUs.
         results, n_steps = run_train_epoch(
-            self.model,
+            self.train_model,
             self.tokenizer,
             self.train_loader,
             self.optimizer,
@@ -161,13 +191,17 @@ class BaseSSMTrainer:
         return results
 
     def validate(self) -> tuple:
-        return run_validate(self.model, self.tokenizer, self.val_loader, self.device, self.config)
+        return run_validate(
+            self.train_model, self.tokenizer, self.val_loader, self.device, self.config,
+        )
 
     def run_final_test(self) -> dict:
         if self.test_loader is None:
             log.warning("[BaseTrainer] no test loader -- skipping final test evaluation")
             return {}
-        metrics = run_test(self.model, self.tokenizer, self.test_loader, self.device, self.config)
+        metrics = run_test(
+            self.train_model, self.tokenizer, self.test_loader, self.device, self.config,
+        )
         log.info(
             "[BaseTrainer] TEST  ce=%.4f  top1=%.3f  per_cb_acc=%.3f",
             metrics["test/ce"], metrics["test/top1_acc"], metrics["test/per_cb_acc"],
