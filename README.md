@@ -14,12 +14,21 @@ trained on HumanML3D / AMASS.
 ## Quick Start
 
 ```bash
-# Install (Python 3.12)
+
+# uv (fast, hash-pinned, reproducible)
+uv sync
+uv run python -m spacy download en_core_web_sm
+uv run python main.py "a person walks forward"
+
+# Headless rendering needs the optional viewer extras (~1 GB)
+uv sync --extra viewer
+
+# Dev install (lint + tests + pre-commit)
+uv sync --extra dev
+
+# Or with pip
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
-
-# Inference
-python main.py "a person walks forward"
 ```
 
 ## Pipeline

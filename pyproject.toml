@@ -1,7 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "physics-constrained-video-gen"
 version = "0.1.0"
-requires-python = ">=3.10"
+description = "Text-to-motion generation: SpaCy parsing -> scene planning -> SSM with RVQ tokenizer -> SMPL-X rendering"
+requires-python = ">=3.12"
+readme = "README.md"
+authors = [
+  { name = "Catalin Butacu", email = "butacu.catalin@yahoo.com" },
+]
+
+dependencies = [
+  "beartype>=0.18.0",
+  "gdown>=4.7.0",
+  "huggingface_hub>=0.20.0",
+  "joblib>=1.3.0",
+  "memory-profiler>=0.61.0",
+  "nltk>=3.8.0",
+  "numpy>=1.24.0",
+  "pyyaml>=6.0",
+  "requests>=2.31.0",
+  "rouge-score>=0.1.2",
+  "scipy>=1.11.0",
+  "sentence-transformers>=2.2.0",
+  "spacy>=3.7.0",
+  "torch>=2.0.0",
+  "tqdm>=4.65.0",
+  "wandb>=0.15.0",
+]
+
+[project.optional-dependencies]
+# Headless SMPL-X rendering. Heavy OpenGL/EGL deps; not needed for CI or unit tests.
+viewer = [
+  "aitviewer>=0.9.0",
+]
+# Local development: linting, type checking, tests.
+dev = [
+  "pre-commit>=3.5.0",
+  "pyright>=1.1.400",
+  "pytest>=7.4.0",
+  "pytest-cov>=4.1.0",
+  "ruff>=0.4.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+# uv-specific: prefer pre-built CPU torch wheels in dev; users with CUDA
+# install torch from the pytorch index after `uv sync`.
+[tool.uv]
+default-groups = []
 
 [tool.pytest.ini_options]
 addopts = "-s"
@@ -14,7 +64,7 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py312"
 exclude = ["doc/", "scripts/cloud/", "*.ipynb"]
 
 [tool.ruff.lint]

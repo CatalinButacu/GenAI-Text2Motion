@@ -30,6 +30,7 @@
 !/requirements.txt
 !/requirements.lock.txt
 !/requirements-ci.txt
+!/uv.lock
 !/TRAINING.md
 
 # ─── Inside allowed dirs: still exclude common cruft ──────────────────────────
