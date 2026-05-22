@@ -1,0 +1,90 @@
+{
+  "device": "cuda",
+  "rows": [
+    {
+      "latent_len": 50,
+      "parallel": {
+        "ok": true,
+        "elapsed_s": 0.39178339999944,
+        "peak_mem_mb": 97.299456,
+        "throughput_steps_per_s": 127.62153781929369
+      },
+      "streaming": {
+        "ok": true,
+        "elapsed_s": 6.696402099999432,
+        "peak_mem_mb": 68.93056,
+        "median_step_mem_mb": 68.93056,
+        "throughput_steps_per_s": 7.466696183015092
+      },
+      "mem_ratio_parallel_over_stream": 1.4115576023174627
+    },
+    {
+      "latent_len": 250,
+      "parallel": {
+        "ok": true,
+        "elapsed_s": 0.38610499999958847,
+        "peak_mem_mb": 219.072,
+        "throughput_steps_per_s": 647.4922624681536
+      },
+      "streaming": {
+        "ok": true,
+        "elapsed_s": 33.59622880000006,
+        "peak_mem_mb": 68.93056,
+        "median_step_mem_mb": 68.93056,
+        "throughput_steps_per_s": 7.4413113890925615
+      },
+      "mem_ratio_parallel_over_stream": 3.178154943177598
+    },
+    {
+      "latent_len": 1000,
+      "parallel": {
+        "ok": true,
+        "elapsed_s": 1.7002443000001222,
+        "peak_mem_mb": 677.293056,
+        "throughput_steps_per_s": 588.150773391758
+      },
+      "streaming": {
+        "ok": true,
+        "elapsed_s": 137.9027763999993,
+        "peak_mem_mb": 68.93056,
+        "median_step_mem_mb": 68.93056,
+        "throughput_steps_per_s": 7.251485619835606
+      },
+      "mem_ratio_parallel_over_stream": 9.825729777909826
+    },
+    {
+      "latent_len": 2000,
+      "parallel": {
+        "ok": true,
+        "elapsed_s": 3.230654699999832,
+        "peak_mem_mb": 1287.729664,
+        "throughput_steps_per_s": 619.0695650637327
+      },
+      "streaming": {
+        "ok": true,
+        "elapsed_s": 274.1188967999997,
+        "peak_mem_mb": 68.93056,
+        "median_step_mem_mb": 68.93056,
+        "throughput_steps_per_s": 7.296104075083971
+      },
+      "mem_ratio_parallel_over_stream": 18.681549431775977
+    },
+    {
+      "latent_len": 4000,
+      "parallel": {
+        "ok": true,
+        "elapsed_s": 7.667813199999728,
+        "peak_mem_mb": 2503.82848,
+        "throughput_steps_per_s": 521.6611171487774
+      },
+      "streaming": {
+        "ok": true,
+        "elapsed_s": 564.0378178999999,
+        "peak_mem_mb": 68.93056,
+        "median_step_mem_mb": 68.93056,
+        "throughput_steps_per_s": 7.09172306015334
+      },
+      "mem_ratio_parallel_over_stream": 36.323924831018346
+    }
+  ]
+}
