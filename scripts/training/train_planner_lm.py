@@ -129,6 +129,10 @@ def main() -> int:
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=5e-5)
     parser.add_argument("--max-length", type=int, default=256)
+    parser.add_argument("--max-train", type=int, default=None,
+                        help="If set, truncate train.jsonl to first N examples (fast smoke)")
+    parser.add_argument("--max-val", type=int, default=None,
+                        help="If set, truncate val.jsonl to first N examples (fast smoke)")
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
     parser.add_argument("--log-every", type=int, default=50)
     args = parser.parse_args()
@@ -151,6 +155,12 @@ def main() -> int:
     ds_dir = Path(args.dataset)
     train_ds = PlannerDataset(ds_dir / "train.jsonl", tokenizer, args.max_length)
     val_ds = PlannerDataset(ds_dir / "val.jsonl", tokenizer, args.max_length)
+
+    if args.max_train is not None:
+        train_ds.examples = train_ds.examples[: args.max_train]
+
+    if args.max_val is not None:
+        val_ds.examples = val_ds.examples[: args.max_val]
     log.info("Train: %d examples  Val: %d examples", len(train_ds), len(val_ds))
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
