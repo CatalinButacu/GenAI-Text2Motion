@@ -301,10 +301,19 @@ class TextToMotionSSM(nn.Module):
         self,
         inputs: torch.Tensor | list[str],
         motion_length: int | None = None,
+        seed_latent: torch.Tensor | None = None,
     ) -> tuple:
         """Run the SSM trunk only, returning (features, cond) without the
-        decoder head. Used by the AR sampler so it can call decoder.head_for_codebook
-        one codebook at a time.
+        decoder head. Used by the AR sampler so it can call
+        decoder.head_for_codebook one codebook at a time.
+
+        ``seed_latent``: optional ``(B, P', d_model)`` pose-prefix conditioning.
+        When provided, those P' latent steps are prepended to the SSM input so
+        the recurrent state advances through them before producing the new
+        prediction. The seed portion is *dropped* from the returned features,
+        so the output shape is unchanged from the no-seed path. This is the
+        training-time pose-prefix curriculum hook and the offline analogue of
+        :meth:`stream_step`'s hidden-state carryover.
         """
         cond = self.condition_proj(self.text_encoder(inputs))
 
@@ -312,8 +321,23 @@ class TextToMotionSSM(nn.Module):
             motion_length = self.config.max_motion_length
         assert isinstance(motion_length, int)
         latent_len = max(1, motion_length // self.config.rvq_down_t)
-        pos = self.pos_embed(self.motion_pos_ids[:latent_len])  # type: ignore[index]
-        x = cond.unsqueeze(1) + pos.unsqueeze(0)  # (B, T', d_model)
+        seed_len = 0 if seed_latent is None else seed_latent.shape[1]
+        total_len = seed_len + latent_len
+
+        if total_len > self.latent_length:
+            raise ValueError(
+                f"seed_latent ({seed_len}) + prediction ({latent_len}) exceeds "
+                f"max latent length {self.latent_length}; lower motion_length "
+                "or shorten the seed prefix"
+            )
+        pos = self.pos_embed(self.motion_pos_ids[:total_len])  # type: ignore[index]
+        x_pred = cond.unsqueeze(1) + pos[seed_len:].unsqueeze(0)  # (B, latent_len, d_model)
+
+        if seed_latent is not None:
+            x_seed = seed_latent + pos[:seed_len].unsqueeze(0)  # (B, seed_len, d_model)
+            x = torch.cat([x_seed, x_pred], dim=1)  # (B, total_len, d_model)
+        else:
+            x = x_pred
 
         if self.use_film:
             for layer, film in zip(self.layers, self.films):
@@ -321,6 +345,12 @@ class TextToMotionSSM(nn.Module):
         else:
             for layer, norm in zip(self.layers, self.norms):
                 x = x + layer(norm(x))
+        # Drop the seed portion so the prediction-only shape is preserved
+        # for the decoder head.
+
+        if seed_latent is not None:
+            x = x[:, seed_len:]
+
         return x, cond
 
     def forward(
@@ -328,6 +358,7 @@ class TextToMotionSSM(nn.Module):
         inputs: torch.Tensor | list[str],
         motion_length: int | None = None,
         target_tokens: torch.Tensor | None = None,
+        seed_latent: torch.Tensor | None = None,
     ) -> tuple:
         """Parallel forward pass over latent (downsampled) frames.
 
@@ -338,12 +369,14 @@ class TextToMotionSSM(nn.Module):
             target_tokens: ground-truth (B, T', K) codebook indices for
                            teacher-forced training of the ResidualKHead arch.
                            Ignored by the legacy independent head.
+            seed_latent: optional (B, P', d_model) pose-prefix conditioning;
+                         see :meth:`forward_features` for semantics.
 
         Returns:
             logits: (B, T', K, V) -- per latent frame, per codebook, token distribution
             length_pred: (B,) predicted length in raw frames
         """
-        x, cond = self.forward_features(inputs, motion_length)
+        x, cond = self.forward_features(inputs, motion_length, seed_latent=seed_latent)
         return self.decoder(x, cond, target_tokens=target_tokens)
 
     # ------------------------------------------------------------------ #

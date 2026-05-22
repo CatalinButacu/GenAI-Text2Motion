@@ -187,8 +187,41 @@ class ResidualVectorQuantizer(nn.Module):
         return counts
 
 
+class CausalConv1d(nn.Conv1d):
+    """1D conv with left-only padding so output[t] depends on input[:t+1] only.
+
+    Drop-in replacement for ``nn.Conv1d(..., padding='same')`` in causal decoders.
+    Preserves the temporal length (input T == output T) without any future-frame
+    leakage. The cost is one ``F.pad`` per layer; negligible vs the conv itself.
+    """
+
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int) -> None:
+        super().__init__(in_channels, out_channels, kernel_size, padding=0)
+        self._left_pad = kernel_size - 1
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+        return super().forward(F.pad(x, (self._left_pad, 0)))
+
+
+class CausalUpsample2x(nn.Module):
+    """Nearest-neighbor 2x upsample. Causal-safe because every output frame
+    inherits from a single past input frame; no future leakage."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.interpolate(x, scale_factor=2, mode="nearest")
+
+
 class MotionRVQTokenizer(nn.Module):
-    """End-to-end motion VQ-VAE: encode 168-d pose sequences to K-codebook indices."""
+    """End-to-end motion VQ-VAE: encode 168-d pose sequences to K-codebook indices.
+
+    The decoder defaults to the symmetric-padded variant (``causal_decoder=False``)
+    so existing checkpoints load unchanged. Streaming inference requires a causal
+    decoder (``causal_decoder=True``) which uses :class:`CausalConv1d` plus
+    nearest-neighbor upsampling so output frame ``t`` only depends on latent
+    tokens up to ``ceil(t / down_t)``. Training the decoder with the causal flag
+    requires a fresh decoder run (encoder + codebooks can stay frozen) since
+    the receptive-field alignment changes.
+    """
 
     def __init__(
         self,
@@ -197,16 +230,22 @@ class MotionRVQTokenizer(nn.Module):
         n_codebooks: int = 6,
         codebook_size: int = 512,
         down_t: int = 4,
+        causal_decoder: bool = False,
     ):
         super().__init__()
         assert down_t in (1, 2, 4, 8), "down_t must be power of 2"
         self.motion_dim = motion_dim
         self.latent_dim = latent_dim
         self.down_t = down_t
+        self.causal_decoder = causal_decoder
 
         self.encoder = self.build_encoder(motion_dim, latent_dim, down_t)
         self.rvq = ResidualVectorQuantizer(n_codebooks, codebook_size, latent_dim)
-        self.decoder = self.build_decoder(latent_dim, motion_dim, down_t)
+
+        if causal_decoder:
+            self.decoder = self.build_causal_decoder(latent_dim, motion_dim, down_t)
+        else:
+            self.decoder = self.build_decoder(latent_dim, motion_dim, down_t)
 
     @staticmethod
     def build_encoder(in_dim: int, latent_dim: int, down_t: int) -> nn.Sequential:
@@ -244,6 +283,38 @@ class MotionRVQTokenizer(nn.Module):
                 nn.SiLU(),
             ]
         layers.append(nn.Conv1d(hidden, out_dim, kernel_size=3, padding=1))
+
+        return nn.Sequential(*layers)
+
+    @staticmethod
+    def build_causal_decoder(latent_dim: int, out_dim: int, down_t: int) -> nn.Sequential:
+        """Causal counterpart of :meth:`build_decoder`.
+
+        Replaces ``ConvTranspose1d`` (which mixes future frames when its kernel
+        spans both sides of the upsample boundary) with nearest-neighbor
+        upsampling followed by a causally-padded ``CausalConv1d``. Same channel
+        widths, same depth, same receptive-field count -- but output frame ``t``
+        depends only on latent tokens ``0..ceil(t / down_t)``.
+
+        Verified by ``tests/test_causal_rvq_decoder.py``: zeroing latents
+        past index ``t / down_t`` must not change output frames ``0..t``.
+        """
+        n_stride = {1: 0, 2: 1, 4: 2, 8: 3}[down_t]
+        hidden = latent_dim
+        layers: list[nn.Module] = [
+            CausalConv1d(latent_dim, hidden, kernel_size=3),
+            nn.SiLU(),
+        ]
+
+        for _ in range(n_stride):
+            layers += [
+                CausalUpsample2x(),
+                CausalConv1d(hidden, hidden, kernel_size=4),
+                nn.SiLU(),
+                CausalConv1d(hidden, hidden, kernel_size=3),
+                nn.SiLU(),
+            ]
+        layers.append(CausalConv1d(hidden, out_dim, kernel_size=3))
 
         return nn.Sequential(*layers)
 
