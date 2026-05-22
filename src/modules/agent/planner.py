@@ -18,12 +18,11 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from .conditions import ParsedCondition, parse_condition
-
-if TYPE_CHECKING:
-    import torch
 
 log = logging.getLogger(__name__)
 
@@ -58,9 +57,6 @@ class ActionPlanner:
         max_new_tokens: int = 256,
         temperature: float = 0.3,
     ) -> None:
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        import torch
         path = Path(checkpoint_dir)
 
         if not path.exists():
@@ -87,13 +83,12 @@ class ActionPlanner:
         bubble up so the demo doesn't run garbage past the renderer.
         """
         prompt = PROMPT_TEMPLATE.format(instruction=instruction)
-        completion = self._generate(prompt)
+        completion = self.generate_completion(prompt)
 
-        return self._parse(completion)
+        return self.parse_completion(completion)
 
-    def _generate(self, prompt: str) -> str:
+    def generate_completion(self, prompt: str) -> str:
         """Run the LM on the prompt and return only the completion portion."""
-        import torch
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
         prompt_len = inputs["input_ids"].shape[1]
 
@@ -111,7 +106,7 @@ class ActionPlanner:
 
         return completion
 
-    def _parse(self, completion: str) -> list[PlannedAction]:
+    def parse_completion(self, completion: str) -> list[PlannedAction]:
         """Parse the JSON action list out of the LM's completion + validate
         every ``until`` field against the runtime grammar.
         """

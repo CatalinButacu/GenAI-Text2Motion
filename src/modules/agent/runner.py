@@ -107,9 +107,9 @@ class StreamingRunner:
                 state.carry_over(new_cond)
             assert state is not None
             self.world.reset_for_new_action()
-            yield from self._run_action(action, state)
+            yield from self.run_one_action(action, state)
 
-    def _run_action(
+    def run_one_action(
         self, action: PlannedAction, state
     ) -> Iterator[np.ndarray]:
         """Yield frames for one action until its termination predicate fires

@@ -49,11 +49,11 @@ class ParsedCondition:
 # Compiled regexes for each grammar variant. Order matters when multiple
 # patterns could match (e.g. distance with < vs >); we test most specific
 # patterns first.
-_DURATION_RE = re.compile(r"^duration\(\s*(\d+(?:\.\d+)?)\s*\)$")
-_DIST_LT_RE = re.compile(r"^distance\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)\s*<\s*(\d+(?:\.\d+)?)$")
-_DIST_GT_RE = re.compile(r"^distance\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)\s*>\s*(\d+(?:\.\d+)?)$")
-_ROTATED_RE = re.compile(r"^rotated\(\s*(\d+(?:\.\d+)?)\s*\)$")
-_COMPLETED_RE = re.compile(r"^completed$")
+DURATION_RE = re.compile(r"^duration\(\s*(\d+(?:\.\d+)?)\s*\)$")
+DIST_LT_RE = re.compile(r"^distance\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)\s*<\s*(\d+(?:\.\d+)?)$")
+DIST_GT_RE = re.compile(r"^distance\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)\s*>\s*(\d+(?:\.\d+)?)$")
+ROTATED_RE = re.compile(r"^rotated\(\s*(\d+(?:\.\d+)?)\s*\)$")
+COMPLETED_RE = re.compile(r"^completed$")
 
 
 def parse_condition(source: str) -> ParsedCondition:
@@ -64,24 +64,24 @@ def parse_condition(source: str) -> ParsedCondition:
     """
     s = source.strip()
 
-    if (m := _COMPLETED_RE.match(s)):
-        return ParsedCondition(source=s, callable_=_make_completed())
+    if (m := COMPLETED_RE.match(s)):
+        return ParsedCondition(source=s, callable_=make_completed())
 
-    if (m := _DURATION_RE.match(s)):
+    if (m := DURATION_RE.match(s)):
         n = float(m.group(1))
-        return ParsedCondition(source=s, callable_=_make_duration(n))
+        return ParsedCondition(source=s, callable_=make_duration(n))
 
-    if (m := _DIST_LT_RE.match(s)):
+    if (m := DIST_LT_RE.match(s)):
         obj, threshold = m.group(1), float(m.group(2))
-        return ParsedCondition(source=s, callable_=_make_distance_lt(obj, threshold))
+        return ParsedCondition(source=s, callable_=make_distance_lt(obj, threshold))
 
-    if (m := _DIST_GT_RE.match(s)):
+    if (m := DIST_GT_RE.match(s)):
         obj, threshold = m.group(1), float(m.group(2))
-        return ParsedCondition(source=s, callable_=_make_distance_gt(obj, threshold))
+        return ParsedCondition(source=s, callable_=make_distance_gt(obj, threshold))
 
-    if (m := _ROTATED_RE.match(s)):
+    if (m := ROTATED_RE.match(s)):
         deg = float(m.group(1))
-        return ParsedCondition(source=s, callable_=_make_rotated(deg))
+        return ParsedCondition(source=s, callable_=make_rotated(deg))
     raise ValueError(
         f"unrecognised termination condition: {source!r}. "
         "Grammar: duration(N) | distance(obj) (< | >) D | rotated(D) | completed"
@@ -95,43 +95,43 @@ def parse_condition(source: str) -> ParsedCondition:
 # ---------------------------------------------------------------------- #
 
 
-def _make_completed() -> Predicate:
+def make_completed() -> Predicate:
     """One-shot fire: always returns True. The runner expects this when the
     planner emits an atomic action (wave, kick, etc.) -- the action runs
     once and the runner advances.
     """
 
-    def _p(world: WorldState) -> bool:
+    def predicate(world: WorldState) -> bool:
         return True
 
-    return _p
+    return predicate
 
 
-def _make_duration(n: float) -> Predicate:
+def make_duration(n: float) -> Predicate:
     threshold = int(round(n))
 
-    def _p(world: WorldState) -> bool:
+    def predicate(world: WorldState) -> bool:
         return world.frames_in_action >= threshold
 
-    return _p
+    return predicate
 
 
-def _make_distance_lt(obj: str, threshold: float) -> Predicate:
-    def _p(world: WorldState) -> bool:
+def make_distance_lt(obj: str, threshold: float) -> Predicate:
+    def predicate(world: WorldState) -> bool:
         return world.distance_to(obj) < threshold
 
-    return _p
+    return predicate
 
 
-def _make_distance_gt(obj: str, threshold: float) -> Predicate:
-    def _p(world: WorldState) -> bool:
+def make_distance_gt(obj: str, threshold: float) -> Predicate:
+    def predicate(world: WorldState) -> bool:
         return world.distance_to(obj) > threshold
 
-    return _p
+    return predicate
 
 
-def _make_rotated(deg: float) -> Predicate:
-    def _p(world: WorldState) -> bool:
+def make_rotated(deg: float) -> Predicate:
+    def predicate(world: WorldState) -> bool:
         return world.rotated_since_start_deg() >= deg
 
-    return _p
+    return predicate
