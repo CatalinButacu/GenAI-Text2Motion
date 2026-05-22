@@ -43,3 +43,11 @@ training:
   keep_last_checkpoints: 5
   seed: 42
   single_gpu: false
+  # Pose-prefix curriculum (decision #11/#15). 0.5 = recommended for the
+  # streaming-headline run; 0.0 keeps the cold-start-only behaviour.
+  pose_prefix_prob: 0.5
+  # Causal RVQ decoder (decision #10). Must MATCH the tokenizer's training
+  # flag -- if the RVQ checkpoint was trained with --causal-decoder, this
+  # must also be true at SSM training time, otherwise the latent → motion
+  # decode signal won't align with what the streaming inference path uses.
+  causal_decoder: true

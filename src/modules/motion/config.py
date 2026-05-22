@@ -139,6 +139,20 @@ class TrainingConfig(ModelConfig, DataConfig):
     # visible CUDA devices. Set True to force single-GPU even with multiple
     # devices available (debugging, single-GPU baselining).
     single_gpu: bool = False
+    # Pose-prefix curriculum (decision #11/#15). With this probability per
+    # batch, the trainer splits each clip into (prefix, suffix), encodes the
+    # prefix through the frozen tokenizer, projects via model.seed_from_latent,
+    # and supervises prediction of the suffix only. Default 0.0 keeps the
+    # cold-start training behaviour untouched. 0.5 is the recommended value
+    # for the streaming-headline run (matches the action-transition rate the
+    # demo will exercise at inference).
+    pose_prefix_prob: float = 0.0
+    # When True, the RVQ tokenizer trainer (NOT this script -- see
+    # train_rvq_tokenizer.py) builds a causal decoder using CausalConv1d +
+    # nearest-neighbor upsampling instead of ConvTranspose1d. Required for
+    # streaming-mode inference; default False keeps existing checkpoints
+    # bit-compatible.
+    causal_decoder: bool = False
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "TrainingConfig":

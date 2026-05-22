@@ -161,6 +161,12 @@ def main() -> int:
     parser.add_argument("--resume", type=str, default=None,
                         help=("Path to checkpoint .pt to resume training from "
                               "(model+optimizer+scheduler+epoch)"))
+    parser.add_argument("--causal-decoder", action="store_true", dest="causal_decoder",
+                        help=("Build the decoder with CausalConv1d + nearest-neighbor "
+                              "upsampling instead of ConvTranspose1d. Required for "
+                              "streaming-mode inference (output frame t depends only "
+                              "on latent tokens up to ceil(t / down_t)). Default off "
+                              "preserves bit-compatibility with existing checkpoints."))
     parser.add_argument("--data", default="amass",
                         choices=["amass", "humanml3d", "all", "mega"], dest="data_source",
                         help=("Which corpus to train on: amass (default), humanml3d, "
@@ -316,6 +322,7 @@ def main() -> int:
         n_codebooks=args.n_codebooks,
         codebook_size=args.codebook_size,
         down_t=args.down_t,
+        causal_decoder=args.causal_decoder,
     ).to(device)
     log.info("[rvq] params: %d", sum(p.numel() for p in model.parameters()))
 

@@ -296,6 +296,21 @@ class TextToMotionSSM(nn.Module):
             max_length=config.max_motion_length,
         )
         self.arch = arch
+        # Projects tokenizer latent (rvq_latent_dim) up to d_model so the
+        # trainer-side pose-prefix curriculum can feed prior-action context
+        # as a seed_latent. Untrained / unused when pose_prefix_prob = 0.
+        self.seed_projector = nn.Linear(config.rvq_latent_dim, config.d_model)
+
+    def seed_from_latent(self, latent: torch.Tensor) -> torch.Tensor:
+        """Project tokenizer-encoded latent (B, P, rvq_latent_dim) up to (B, P, d_model).
+
+        Used by the trainer-side pose-prefix curriculum: encode the prefix of
+        a motion clip through the frozen tokenizer's RVQ decode path to get
+        (B, P, rvq_latent_dim), then call this method to produce a seed_latent
+        suitable for :meth:`forward`. The projection is part of the model's
+        parameter set so it co-trains with the SSM trunk.
+        """
+        return self.seed_projector(latent)
 
     def forward_features(
         self,

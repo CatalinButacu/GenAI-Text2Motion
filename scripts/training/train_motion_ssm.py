@@ -141,6 +141,15 @@ def main():
               "compiles for 30-90s; amortizes after ~3 epochs."),
     )
     parser.add_argument(
+        "--pose-prefix-prob", type=float, default=0.0, dest="pose_prefix_prob",
+        help=("Probability per batch to run the pose-prefix curriculum: split "
+              "each clip into (prefix, suffix), encode the prefix through the "
+              "frozen tokenizer + model.seed_from_latent, supervise prediction "
+              "of the suffix only. 0.0 = cold-start only (default). 0.5 = the "
+              "recommended value for the streaming headline run -- teaches the "
+              "model to continue smoothly across action transitions."),
+    )
+    parser.add_argument(
         "--single-gpu", action="store_true", dest="single_gpu",
         help=("Force single-GPU training even when torch.cuda.device_count() > 1. "
               "Default behaviour auto-wraps the model in nn.DataParallel across all "
@@ -326,6 +335,7 @@ def main():
         compile_model=args.compile_model,
         single_gpu=args.single_gpu,
         arch="residual_k" if args.ar_k_head else "independent",
+        pose_prefix_prob=args.pose_prefix_prob,
     )
     if args.sources is not None and args.data_source == "unified":
         config.unified_sources = args.sources
