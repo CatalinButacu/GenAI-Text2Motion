@@ -52,7 +52,7 @@ class StreamingState:
     latent_step: int = 0
     max_steps: int = 0
 
-    def carry_over(self, new_cond: torch.Tensor) -> "StreamingState":
+    def carry_over(self, new_cond: torch.Tensor) -> StreamingState:
         """Begin a new action, keeping the SSM hidden state from the previous one.
 
         Updates ``cond`` to the new action's text condition but preserves

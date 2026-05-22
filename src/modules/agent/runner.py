@@ -117,7 +117,6 @@ class StreamingRunner:
         """
         tokens_buf: list[torch.Tensor] = []
         last_emitted_idx = 0
-        down_t = self.tokenizer.down_t
         cap = self.max_action_latents or state.max_steps
 
         while state.latent_step < min(state.max_steps, cap):

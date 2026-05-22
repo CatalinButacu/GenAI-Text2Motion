@@ -63,7 +63,7 @@ def main() -> int:
 
     held_out = []
 
-    with open(args.held_out, "r", encoding="utf-8") as f:
+    with open(args.held_out, encoding="utf-8") as f:
         for line in f:
             held_out.append(json.loads(line))
     log.info("Loaded %d held-out instructions", len(held_out))

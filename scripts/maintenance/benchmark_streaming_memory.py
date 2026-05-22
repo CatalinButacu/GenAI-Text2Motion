@@ -159,7 +159,10 @@ def main() -> int:
     print(f"Model: d_model={cfg.d_model} n_layers={cfg.n_layers} params={n_params / 1e6:.1f}M")
     print(f"Sweeping latent_len in {args.ts}")
     print()
-    print(f"{'T':>6}  {'parallel_mem':>14}  {'parallel_s':>11}  {'stream_mem':>12}  {'stream_s':>10}  {'mem_ratio':>10}")
+    print(
+        f"{'T':>6}  {'parallel_mem':>14}  {'parallel_s':>11}  "
+        f"{'stream_mem':>12}  {'stream_s':>10}  {'mem_ratio':>10}"
+    )
     print("-" * 80)
     results = []
 
@@ -179,8 +182,14 @@ def main() -> int:
                 f"{ratio:>9.2f}x"
             )
         else:
-            par_str = f"{par.get('peak_mem_mb', 0):>11.1f} MB" if par.get("ok") else "        OOM "
-            stream_str = f"{stream.get('peak_mem_mb', 0):>9.1f} MB" if stream.get("ok") else "      OOM "
+            par_str = (
+                f"{par.get('peak_mem_mb', 0):>11.1f} MB"
+                if par.get("ok") else "        OOM "
+            )
+            stream_str = (
+                f"{stream.get('peak_mem_mb', 0):>9.1f} MB"
+                if stream.get("ok") else "      OOM "
+            )
             print(f"{T:>6}  {par_str}  {'-':>10}  {stream_str}  {'-':>9}  {'-':>9}")
         results.append(row)
     out = Path(args.output)
@@ -198,7 +207,10 @@ def main() -> int:
         ref = min(stream_mems)
         rel = spread / max(ref, 1e-6)
         print()
-        print(f"Streaming memory spread across T: {spread:.1f} MB ({rel * 100:.1f}% of min={ref:.1f} MB)")
+        print(
+            f"Streaming memory spread across T: {spread:.1f} MB "
+            f"({rel * 100:.1f}% of min={ref:.1f} MB)"
+        )
 
         if rel < 0.5:
             print("VERDICT: streaming memory ~constant across T -- O(1) claim supported.")

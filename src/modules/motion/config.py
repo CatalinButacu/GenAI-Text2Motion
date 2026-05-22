@@ -155,7 +155,7 @@ class TrainingConfig(ModelConfig, DataConfig):
     causal_decoder: bool = False
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "TrainingConfig":
+    def from_yaml(cls, path: str | Path) -> TrainingConfig:
         """Build a TrainingConfig from configs/motion_ssm.yaml (or a smoke variant).
 
         Only keys that name an existing field are consumed; unknown keys are
