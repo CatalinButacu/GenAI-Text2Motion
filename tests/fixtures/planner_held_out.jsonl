@@ -1,0 +1,25 @@
+{"instruction": "the avatar takes a stroll across the room", "expected_min_actions": 1, "expected_canonical_contains": ["strolls"]}
+{"instruction": "make the character jog in place for a while", "expected_min_actions": 1, "expected_canonical_contains": ["jogs"]}
+{"instruction": "have the figure go forward and then sit", "expected_min_actions": 2, "expected_canonical_contains": ["walks", "sits down"]}
+{"instruction": "the person should head straight toward the ball", "expected_min_actions": 1, "expected_canonical_contains": ["walks"]}
+{"instruction": "first the avatar dashes ahead, then it halts", "expected_min_actions": 2, "expected_canonical_contains": ["runs", "stops"]}
+{"instruction": "have the human rotate fully around", "expected_min_actions": 1, "expected_canonical_contains": ["turns", "rotates", "spins"]}
+{"instruction": "the character should saunter toward the chair until close to it", "expected_min_actions": 1, "expected_canonical_contains": ["strolls", "walks"]}
+{"instruction": "make the figure wave hello then take a bow", "expected_min_actions": 2, "expected_canonical_contains": ["waves", "bows"]}
+{"instruction": "the avatar leaps forward three times", "expected_min_actions": 1, "expected_canonical_contains": ["jumps", "leaps"]}
+{"instruction": "have the person march in place", "expected_min_actions": 1, "expected_canonical_contains": ["marches"]}
+{"instruction": "the figure should pivot 90 degrees to the left", "expected_min_actions": 1, "expected_canonical_contains": ["turns", "rotates"]}
+{"instruction": "tiptoe across the room then freeze", "expected_min_actions": 2, "expected_canonical_contains": ["tiptoes", "pauses", "stops"]}
+{"instruction": "the character does a quick spin, then waves a hand", "expected_min_actions": 2, "expected_canonical_contains": ["spins", "waves"]}
+{"instruction": "have the avatar approach the tree slowly until very close", "expected_min_actions": 1, "expected_canonical_contains": ["walks", "strolls"]}
+{"instruction": "the person extends their arms outward", "expected_min_actions": 1, "expected_canonical_contains": ["stretches", "raises arms"]}
+{"instruction": "make the figure fold their arms across their chest", "expected_min_actions": 1, "expected_canonical_contains": ["crosses arms"]}
+{"instruction": "the avatar moves backward away from the wall", "expected_min_actions": 1, "expected_canonical_contains": ["walks"]}
+{"instruction": "have the human pick something up, then put it down", "expected_min_actions": 2, "expected_canonical_contains": ["picks up an object", "drops an object"]}
+{"instruction": "first stand, then sit, then stand again", "expected_min_actions": 2, "expected_canonical_contains": ["stands up", "sits down"]}
+{"instruction": "the character runs in a circle until tired", "expected_min_actions": 1, "expected_canonical_contains": ["runs"]}
+{"instruction": "applaud loudly then bow once", "expected_min_actions": 2, "expected_canonical_contains": ["claps", "bows"]}
+{"instruction": "the figure should turn right ninety degrees, then walk straight ahead", "expected_min_actions": 2, "expected_canonical_contains": ["turns", "walks"]}
+{"instruction": "have the avatar dance for a moment", "expected_min_actions": 1, "expected_canonical_contains": ["dances"]}
+{"instruction": "the person throws a single punch", "expected_min_actions": 1, "expected_canonical_contains": ["punches"]}
+{"instruction": "make the character kick once with the right foot", "expected_min_actions": 1, "expected_canonical_contains": ["kicks"]}
