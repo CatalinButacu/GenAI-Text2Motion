@@ -463,6 +463,14 @@ class TextToMotionSSM(nn.Module):
                 f"stream_step() past max_steps={state.max_steps}; "
                 "begin a new action via carry_over() or stream_begin()"
             )
+
+        if len(state.layer_h) != len(self.layers):
+            raise RuntimeError(
+                f"stream_step(): state has {len(state.layer_h)} layer hidden "
+                f"states but model has {len(self.layers)} layers -- the state "
+                "was probably built from a different model. Re-init via "
+                "stream_begin() on THIS model."
+            )
         pos_id = self.motion_pos_ids[t : t + 1]  # type: ignore[index]
         pos = self.pos_embed(pos_id)  # (1, d_model)
         # initial latent for this step: cond + positional embedding

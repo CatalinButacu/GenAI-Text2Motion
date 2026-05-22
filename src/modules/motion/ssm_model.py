@@ -222,7 +222,7 @@ class SSMMotionModel:
         log.info(
             "[SSM] loaded %s (val_loss=%s) + rvq %s (val_loss=%s)",
             checkpoint_path,
-            ck.get("val_loss", ck.get("val_loss", "N/A")),
+            ck.get("val_loss", "N/A"),
             rvq_checkpoint_path,
             rvq_ck.get("val_loss", "N/A"),
         )

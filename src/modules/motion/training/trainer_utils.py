@@ -164,7 +164,7 @@ def restore_checkpoint(trainer, path: str, warm_start: bool = False) -> None:
         trainer.start_epoch = ck.get("epoch", 0) + 1
     # best_loss is inherited in both modes so warm-start runs only save a "best"
     # checkpoint when they actually beat the prior baseline.
-    trainer.best_loss = ck.get("val_loss", ck.get("val_loss", float("inf")))
+    trainer.best_loss = ck.get("val_loss", float("inf"))
 
     if "vocab" in ck and hasattr(trainer, "train_ds"):
         trainer.train_ds.vocab = ck["vocab"]
