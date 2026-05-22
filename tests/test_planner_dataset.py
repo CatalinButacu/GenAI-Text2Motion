@@ -40,7 +40,7 @@ class TestPlannerDatasetSchema(unittest.TestCase):
         spec.loader.exec_module(mod)
         import random as _stdlib_random
         rng = _stdlib_random.Random(0)
-        self.examples = [mod._sample_example(rng) for _ in range(200)]
+        self.examples = [mod.sample_example(rng) for _ in range(200)]
 
     def test_schema_shape(self):
         for ex in self.examples:
