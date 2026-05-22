@@ -18,9 +18,11 @@ BOS_TOKEN_ID: int = 2
 EOS_TOKEN_ID: int = 3
 SPECIAL_TOKENS: dict[str, int] = {"<PAD>": 0, "<UNK>": 1, "<BOS>": 2, "<EOS>": 3}
 
-SSM_D_MODEL: int = 256
-SSM_D_STATE: int = 32
-SSM_N_LAYERS: int = 4
+# Defaults match configs/motion_ssm.yaml (the cloud headline run).
+# tests/test_config_drift.py asserts these stay in lockstep with the YAML.
+SSM_D_MODEL: int = 384
+SSM_D_STATE: int = 64
+SSM_N_LAYERS: int = 6
 
 # --- Rendering / scene colours ---
 SCENE_COLORS: dict[str, tuple[float, float, float, float]] = {

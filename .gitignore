@@ -6,6 +6,7 @@
 
 # ─── Allowed top-level directories ────────────────────────────────────────────
 !/.github/
+!/configs/
 !/data/
 !/doc/
 !/notebooks/

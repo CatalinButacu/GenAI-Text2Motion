@@ -1,0 +1,42 @@
+# Tiny smoke configuration for local CPU/3GB-VRAM smoke tests.
+# Architecture is intentionally undersized; do NOT use for measurements.
+
+architecture:
+  d_model: 128
+  d_state: 16
+  n_layers: 2
+  motion_dim: 168
+  text_embed_dim: 128
+  max_motion_length: 64
+  max_text_length: 32
+  vocab_size: 1000
+  bidirectional: false           # unidirectional for streaming smoke
+  use_film: true
+  arch: independent
+  use_sbert: false               # avoid heavyweight SBERT/CLIP download in smoke
+  sbert_model: all-MiniLM-L6-v2
+  freeze_sbert: true
+  gradient_checkpointing: false
+
+rvq:
+  rvq_latent_dim: 32
+  rvq_n_codebooks: 2
+  rvq_codebook_size: 32
+  rvq_down_t: 4
+
+training:
+  batch_size: 4
+  learning_rate: 5.0e-4
+  weight_decay: 0.0
+  num_epochs: 2
+  warmup_steps: 10
+  grad_clip: 1.0
+  length_loss_weight: 0.1
+  cfg_dropout_prob: 0.0
+  use_amp: false
+  compile_model: false
+  early_stop_patience: 0
+  save_every: 100
+  keep_last_checkpoints: 1
+  seed: 42
+  single_gpu: true

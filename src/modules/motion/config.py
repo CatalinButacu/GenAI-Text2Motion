@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
+from pathlib import Path
 
 import torch
+import yaml
 
 from src.shared.constants import (
     MOTION_DIM,
@@ -10,6 +12,29 @@ from src.shared.constants import (
     SSM_D_STATE,
     SSM_N_LAYERS,
 )
+
+
+def load_yaml_config(path: str | Path) -> dict:
+    """Load a motion_ssm YAML and flatten its `architecture/rvq/training` sections.
+
+    The YAML is grouped into sections for human readability; the loader returns
+    a single flat dict that maps directly onto :class:`TrainingConfig` kwargs.
+    Unknown keys are dropped silently so that adding new YAML knobs in the
+    future does not break older code paths that don't recognise them.
+    """
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+
+    if not isinstance(data, dict):
+        raise ValueError(f"YAML at {path} did not parse as a dict")
+    flat: dict = {}
+
+    for section, body in data.items():
+        if isinstance(body, dict):
+            flat.update(body)
+        else:
+            flat[section] = body
+
+    return flat
 
 
 @dataclass
@@ -114,3 +139,18 @@ class TrainingConfig(ModelConfig, DataConfig):
     # visible CUDA devices. Set True to force single-GPU even with multiple
     # devices available (debugging, single-GPU baselining).
     single_gpu: bool = False
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> "TrainingConfig":
+        """Build a TrainingConfig from configs/motion_ssm.yaml (or a smoke variant).
+
+        Only keys that name an existing field are consumed; unknown keys are
+        ignored so the YAML can carry forward-looking knobs without crashing
+        older code. CLI flags should override the resulting config explicitly
+        in the caller (the YAML is the *base*, not the final word).
+        """
+        flat = load_yaml_config(path)
+        valid = {f.name for f in fields(cls)}
+        consumed = {k: v for k, v in flat.items() if k in valid}
+
+        return cls(**consumed)

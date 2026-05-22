@@ -7,6 +7,7 @@ import torch.nn as nn
 from sentence_transformers import SentenceTransformer
 
 from src.modules.motion.ssm import BiMambaLayer, MambaLayer, SSMConfig
+from src.modules.motion.streaming import StreamingState
 
 log = logging.getLogger(__name__)
 
@@ -344,3 +345,104 @@ class TextToMotionSSM(nn.Module):
         """
         x, cond = self.forward_features(inputs, motion_length)
         return self.decoder(x, cond, target_tokens=target_tokens)
+
+    # ------------------------------------------------------------------ #
+    # Streaming inference: one latent step at a time, constant memory.    #
+    # See src/modules/motion/streaming.py for StreamingState docs.        #
+    # Requires ``config.bidirectional=False`` -- BiMambaLayer has no      #
+    # causal step path so streaming is unidirectional-only.               #
+    # ------------------------------------------------------------------ #
+    def stream_begin(
+        self, inputs: torch.Tensor | list[str]
+    ) -> StreamingState:
+        """Initialise streaming state for a new action.
+
+        Encodes the text once and allocates zero-initialised SSM hidden
+        states for every Mamba layer. The returned state is mutated in
+        place by :func:`stream_step`. To continue an existing action with a
+        new instruction (action-to-action transition), call
+        :meth:`StreamingState.carry_over` on the returned state instead of
+        re-calling ``stream_begin``.
+        """
+        if self.bidirectional:
+            raise RuntimeError(
+                "stream_begin() requires config.bidirectional=False; "
+                "BiMambaLayer has no causal single-step inference path"
+            )
+        cond = self.condition_proj(self.text_encoder(inputs))
+        d_inner = self.ssm_cfg.d_inner
+        d_state = self.ssm_cfg.d_state
+        batch = cond.shape[0]
+        device = cond.device
+        dtype = cond.dtype
+        h0 = [
+            torch.zeros(batch, d_inner, d_state, device=device, dtype=dtype)
+            for _ in self.layers
+        ]
+
+        return StreamingState(
+            cond=cond,
+            layer_h=h0,
+            layer_conv=[None] * len(self.layers),
+            latent_step=0,
+            max_steps=self.latent_length,
+        )
+
+    def stream_step(
+        self, state: StreamingState, target_tokens: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor, StreamingState]:
+        """Emit ONE latent step.
+
+        Args:
+            state: persistent streaming state from :meth:`stream_begin`.
+            target_tokens: per-step ``(B, 1, K)`` teacher-forced tokens for
+                the AR K-head; ignored by the independent head. Streaming
+                inference normally passes ``None`` and samples from the
+                emitted logits separately.
+
+        Returns:
+            logits: ``(B, 1, K, V)`` codebook distribution for this step.
+            length_pred: ``(B,)`` predicted length in raw frames (decoder
+                emits this on every step; caller usually keeps only the
+                last one).
+            state: mutated state with ``latent_step`` incremented by 1 and
+                the per-layer SSM state advanced.
+        """
+        t = state.latent_step
+
+        if t >= state.max_steps:
+            raise RuntimeError(
+                f"stream_step() past max_steps={state.max_steps}; "
+                "begin a new action via carry_over() or stream_begin()"
+            )
+        pos_id = self.motion_pos_ids[t : t + 1]  # type: ignore[index]
+        pos = self.pos_embed(pos_id)  # (1, d_model)
+        # initial latent for this step: cond + positional embedding
+        x = state.cond + pos  # (B, d_model)
+
+        for i, layer in enumerate(self.layers):
+            if not isinstance(layer, MambaLayer):  # safety net
+                raise RuntimeError(
+                    "stream_step requires MambaLayer; got "
+                    f"{type(layer).__name__} at layer {i}"
+                )
+
+            if self.use_film:
+                x_norm = self.films[i](x.unsqueeze(1), state.cond).squeeze(1)
+            else:
+                x_norm = self.norms[i](x)
+            out_t, h_new, conv_buf_new = layer.step(
+                x_norm, state.layer_h[i], state.layer_conv[i]
+            )
+            state.layer_h[i] = h_new
+            state.layer_conv[i] = conv_buf_new
+            x = x + out_t  # residual connection mirrors the parallel forward
+
+        # Decoder expects (B, T'=1, d_model); cond stays the same shape it
+        # had in the parallel path. Independent head ignores target_tokens.
+        logits, length_pred = self.decoder(
+            x.unsqueeze(1), state.cond, target_tokens=target_tokens,
+        )
+        state.latent_step = t + 1
+
+        return logits, length_pred, state

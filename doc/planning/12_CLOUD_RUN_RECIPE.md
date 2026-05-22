@@ -1,6 +1,6 @@
-# 12 — Cloud-run recipe: validating CLIP / CFG / AR-K-head on AWS
+# 12 — Cloud-run recipe: the single headline run + free CFG sweep
 
-Status: **draft**. Authored 2026-05-22.
+Status: **revised 2026-05-22**. Strategy shifted from "cloud experiments" to "local development + one cloud shot for the headline number." The Tier A/B/C/D/E nomenclature is retired; runs are now named by what they do.
 
 Related reading: [11_REFERENCES.md](11_REFERENCES.md), [10_TEXT_ENCODER_AND_CFG.md](10_TEXT_ENCODER_AND_CFG.md).
 
@@ -8,7 +8,8 @@ Related reading: [11_REFERENCES.md](11_REFERENCES.md), [10_TEXT_ENCODER_AND_CFG.
 
 - **Account state**: clean. ~$0.05 spend over 90 days (S3 only). No active EC2.
 - **Pre-warmed assets**: RVQ tokenizer + unified buffer cache + prior MotionSSM checkpoints already in `s3://dissertation-motion-cache-91340264/`.
-- **Recommended first run**: **Tier B** below (CLIP-b encoder, 20 epochs on humanml3d). Estimated wall ~12 hr on g4dn.xlarge on-demand, cost ~$6.40. Lowest-risk attack on the val_ce 4.60 plateau.
+- **Strategy**: develop the streaming code locally at tiny scale (configs/smoke_tiny.yaml). When the architecture is locked, fire ONE cloud run with `configs/motion_ssm.yaml` for the headline number.
+- **Free CFG sweep first**: pull a prior best_model.pt from S3 and sweep cfg_scale at inference. Costs $0, may improve the FID number we report without retraining anything.
 - **Before launching**: create a $20 monthly budget alarm so a forgotten instance can't burn the month silently.
 
 ## Pre-flight: $20 budget alarm
@@ -45,9 +46,11 @@ So **a 20-epoch HumanML3D run on g4dn.xlarge runs you about $5-7**. Same hyperpa
 
 The previous "aborted at epoch 4 = $6.95" incident (per memory file) suggests the cost model was off in that earlier run — likely an unrelated config bloated the build. With the current `startup.sh` + self-terminate trap, the cost is predictable.
 
-## Three tiers, ranked by cost
+## Runs, ranked by cost
 
-### Tier A — Zero-cost first pass: CFG sweep on an existing checkpoint
+### CFG inference sweep — $0, do this first
+
+(Formerly "Tier A".)
 
 You already have MotionSSM checkpoints with `cfg_dropout_prob=0.1` (the trainer's default). CFG at inference is **training-free**. Use it.
 
@@ -67,9 +70,9 @@ Run `scripts/evaluation/compute_fid.py` once per scale for each prompt; pick the
 
 Cost: $0.
 
-### Tier B — Single-variable: swap SBERT → CLIP-b, 20 epochs (recommended)
+### Headline run — the single cloud shot
 
-Highest expected-impact change per the technique audit. Same architecture, only the text encoder differs vs. your prior runs. ~$6.40 budget.
+(Formerly "Tier B + C + D" rolled into one.) Strategy: every architectural ablation (CLIP swap, AR-K-head, optionally compile) runs locally at tiny scale first. When the streaming code + chosen config are locked, fire ONE g5.xlarge run with `configs/motion_ssm.yaml`. ~$10-15 budget for 30 epochs.
 
 Edit `scripts/cloud/aws/terraform.tfvars` to:
 
@@ -97,7 +100,9 @@ Decision signal: by epoch 5-8 you should see val_ce trending toward < SBERT-base
 aws ec2 terminate-instances --instance-ids $(terraform output -raw instance_id)
 ```
 
-### Tier C — Two-variable: CLIP-b + AR-K-head, 30 epochs (~$10-13)
+### CLIP + AR-K-head retraining (deprecated as standalone)
+
+(Formerly "Tier C".) Merged into the headline run above — running two confounded variables as a separate experiment is no longer worth the burn. Kept for historical reference.
 
 Stacks both architectural changes the audit recommended. Higher expected gain, but two confounded variables — if it wins vs Tier B, you can't attribute. Run only after Tier B has shown CLIP wins.
 
@@ -114,11 +119,15 @@ The AR-K-head requires training from scratch (the legacy head's weights don't ma
 
 Estimated wall: 18-25 hr at 1× throughput. If `torch.compile` delivers the 3-5× the research predicted, more like 6-12 hr. Cost worst case ~$13, best case ~$3.50.
 
-### Tier D — Belt-and-suspenders 50-epoch run
+### 50-epoch belt-and-suspenders run (deferred)
+
+(Formerly "Tier D".)
 
 Don't do this yet. Tier B + Tier C give you the data to pick the right config. **Then** do a full 50-epoch run with the winning config + foot-skating metric + a real FID number for the dissertation table. That's ~$15-25 and worth the headline.
 
-### Tier E — 4× A10G speed-run on g5.12xlarge (~$9-12, ~1.5 hr wall)
+### 4×A10G multi-GPU speed run (only if wallclock matters)
+
+(Formerly "Tier E".)
 
 When you have the right config and want **headline-fast** turnaround. The trainer auto-wraps in `nn.DataParallel` across all visible CUDA devices when `torch.cuda.device_count() > 1`. No code change needed at the call site.
 
@@ -196,13 +205,13 @@ After each run, before walking away:
 - [ ] Checkpoints + training.log present in S3 under `checkpoints/motion_ssm/`
 - [ ] W&B run marked `finished` (not `running` or `crashed`)
 
-## Decision: which tier should you run first
+## Decision: what to run first
 
-**Run Tier A first.** Zero cost, answers a discrete question (does CFG help) and gives you a CFG-tuned baseline FID on the dissertation's current best checkpoint.
+1. **CFG inference sweep on the existing best_model.pt** — $0, today. Answers whether CFG improves FID. If yes, the headline run inherits the winning cfg_scale.
+2. **Lock the streaming code locally** via `configs/smoke_tiny.yaml` + `tests/test_streaming_equivalence.py`. No cloud cost.
+3. **Fire ONE headline run** with `configs/motion_ssm.yaml` (CLIP + AR-K-head bundled). $10-15. Single shot, on-demand, NOT spot.
 
-**Then Tier B.** ~$6 to find out whether the CLIP swap moves val_ce off 4.60. If it does — even by 0.2 nats — that's a clear paper-worthy result and justifies a Tier D headline run later.
-
-**Save Tier C for after B.** Confounded variables aren't useful until you've isolated the one you care about most.
+Everything else in this document is historical reference for what NOT to do — running 3-4 confounded cloud experiments is how the May 13 run burned $6.95 on a 4-epoch abort.
 
 ## Open question
 
