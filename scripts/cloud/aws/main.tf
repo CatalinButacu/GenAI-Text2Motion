@@ -134,7 +134,7 @@ resource "aws_instance" "training_vm" {
     }
   }
 
-  user_data = templatefile("${path.module}/startup.sh", {
+  user_data = base64gzip(templatefile("${path.module}/startup.sh", {
     s3_bucket     = var.s3_bucket
     s3_cache_uri  = var.s3_cache_uri
     region        = var.region
