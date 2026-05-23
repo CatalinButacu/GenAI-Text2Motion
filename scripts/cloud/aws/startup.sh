@@ -138,6 +138,11 @@ python -m spacy download en_core_web_sm --quiet
 git clone --depth=1 "$REPO_URL" "$REPO_DIR"
 cd "$REPO_DIR"
 
+# Install the repo itself as an editable package so `import src.*` works.
+# pyproject.toml declares packages = ["src"], so pip install -e . puts src
+# on sys.path without copying files. Must run AFTER clone, BEFORE training.
+pip install --quiet -e .
+
 # -----------------------------------------------------------------------------
 # Step 4: download our prebuilt training data cache from S3
 #
