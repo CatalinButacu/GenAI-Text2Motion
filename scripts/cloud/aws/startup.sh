@@ -81,7 +81,7 @@ trap cleanupOnExit EXIT
 # trap may not fire on hangs; this does. shutdown -h stops billing.
 ( sleep $((MAX_RUN_HOURS * 3600)) && shutdown -h now ) &
 disown
-echo "=== Wallclock failsafe armed: ${MAX_RUN_HOURS}h ==="
+echo "=== Wallclock failsafe armed: $${MAX_RUN_HOURS}h ==="
 
 # -----------------------------------------------------------------------------
 # Step 1: activate the Python environment that has PyTorch installed
