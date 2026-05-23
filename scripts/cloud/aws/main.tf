@@ -148,7 +148,7 @@ resource "aws_instance" "training_vm" {
     ar_k_head     = var.ar_k_head ? "true" : ""
     compile_model = var.compile_model ? "true" : ""
     single_gpu    = var.single_gpu ? "true" : ""
-  })
+  }))
 
   tags = {
     Name    = "dissertation-training"
