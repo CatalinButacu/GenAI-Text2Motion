@@ -29,7 +29,7 @@ TEXT_ENCODER="${text_encoder}"        # sbert-small|sbert-mpnet|clip-b|clip-l or
 AR_K_HEAD="${ar_k_head}"              # 'true' for AR K-head
 COMPILE_MODEL="${compile_model}"      # 'true' for torch.compile
 SINGLE_GPU="${single_gpu}"            # 'true' to skip nn.DataParallel auto-wrap
-MAX_RUN_HOURS=3                       # wallclock failsafe (hours)
+MAX_RUN_HOURS=12                      # wallclock failsafe (hours); 30 epochs ~6h on T4
 
 # -----------------------------------------------------------------------------
 # W&B mode selection.
@@ -79,7 +79,20 @@ trap cleanupOnExit EXIT
 # Wallclock failsafe: background timer hard-poweroffs after MAX_RUN_HOURS even
 # if the main process wedges (hung NCCL, S3 sync, dataloader). cleanupOnExit
 # trap may not fire on hangs; this does. shutdown -h stops billing.
-( sleep $((MAX_RUN_HOURS * 3600)) && shutdown -h now ) &
+# Wallclock failsafe: if the main process wedges for MAX_RUN_HOURS, sync
+# whatever checkpoints exist to S3, then terminate the instance to stop billing.
+# Uses `shutdown -h now` as a final backstop after the API call so the OS
+# shuts down even if terminate-instances is slow.
+( sleep $((MAX_RUN_HOURS * 3600)) && \
+    echo "=== Wallclock failsafe triggered at $(date) ===" >> /var/log/user-data.log && \
+    ( [ -d "$REPO_DIR/checkpoints" ] && \
+      aws s3 sync "$REPO_DIR/checkpoints" "s3://$S3_BUCKET/checkpoints" \
+        --storage-class STANDARD_IA >> /var/log/user-data.log 2>&1 || true ) && \
+    FAILSAFE_IID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null || echo "") && \
+    ( [ -n "$FAILSAFE_IID" ] && \
+      aws ec2 terminate-instances --instance-ids "$FAILSAFE_IID" --region "$REGION" \
+        >> /var/log/user-data.log 2>&1 || true ) && \
+    shutdown -h now ) &
 disown
 echo "=== Wallclock failsafe armed: $${MAX_RUN_HOURS}h ==="
 
