@@ -55,6 +55,11 @@ def parse_args() -> argparse.Namespace:
         help="Open interactive aitviewer window instead of saving to MP4.",
     )
     p.add_argument(
+        "--chat", action="store_true",
+        help="Open the chat viewer: a window with a prompt bar that re-runs the "
+             "pipeline live whenever you type a new prompt.",
+    )
+    p.add_argument(
         "--ssm-checkpoint", dest="ssm_checkpoint", default=None,
         help="Path to a MotionSSM best_model.pt (overrides the default in MotionConfig).",
     )
@@ -77,6 +82,10 @@ def main() -> None:
     if args.ssm_checkpoint:
         config.motion.checkpoint_path = args.ssm_checkpoint
 
+    if args.chat:
+        run_chat(config, initial_prompt=args.prompt, stream=args.stream)
+        return
+
     result = Pipeline(config).run(
         args.prompt,
         output_name=args.output_name,
@@ -91,6 +100,54 @@ def main() -> None:
     if parsed:
         print(f"entities: {[e.name for e in parsed.entities]}")
         print(f"actions : {[a.action_type for a in parsed.actions]}")
+
+
+def run_chat(config: PipelineConfig, initial_prompt: str, stream: bool) -> None:
+    """Build the pipeline once, then open the chat viewer.
+
+    The pipeline modules (text encoder, RVQ, SSM) load only once; subsequent
+    prompts reuse the same model in memory.
+    """
+    from src.modules import motion, planner, understanding
+    from src.modules.render.chat_viewer import ChatViewer
+
+    pipe = Pipeline(config)
+    # Warm-load the heavy modules so the first chat prompt isn't slow.
+    log.info("[chat] warming up pipeline modules ...")
+    initial = pipe.run(initial_prompt, output_name="chat_initial", stream=stream, viewer=False) \
+        if initial_prompt else None
+
+    def runner(prompt: str) -> dict | None:
+        parsed = understanding.invoke(prompt, config.understanding)
+        planned = planner.invoke(parsed, config.planner)
+        clips = motion.invoke(planned, config.motion)
+        if not clips:
+            return None
+        clip = next(iter(clips.values()))
+        return {
+            "smplx_params": clip.smplx_params,
+            "betas": clip.betas,
+            "gender": config.render.gender,
+            "input_coord_system": config.render.input_coord_system,
+        }
+
+    initial_clip = None
+    if initial and initial.get("motion_clips"):
+        c = next(iter(initial["motion_clips"].values()))
+        initial_clip = {
+            "smplx_params": c.smplx_params,
+            "betas": c.betas,
+            "gender": config.render.gender,
+            "input_coord_system": config.render.input_coord_system,
+        }
+
+    log.info("[chat] opening window. Type prompts at the bottom of the screen.")
+    viewer = ChatViewer(
+        pipeline_runner=runner,
+        initial_clip=initial_clip,
+        fps=config.fps,
+    )
+    viewer.run()
 
 if __name__ == "__main__":
     main()
