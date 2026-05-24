@@ -48,16 +48,11 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--stream", action="store_true",
-        help="Print a live stage-by-stage breakdown with timings to stdout.",
-    )
-    p.add_argument(
-        "--viewer", action="store_true",
-        help="Open interactive aitviewer window instead of saving to MP4.",
+        help="Open the interactive Text-to-Motion window (chat bar + 3D avatar).",
     )
     p.add_argument(
         "--chat", action="store_true",
-        help="Open the chat viewer: a window with a prompt bar that re-runs the "
-             "pipeline live whenever you type a new prompt.",
+        help="Alias for --stream (kept for compatibility).",
     )
     p.add_argument(
         "--ssm-checkpoint", dest="ssm_checkpoint", default=None,
@@ -82,14 +77,13 @@ def main() -> None:
     if args.ssm_checkpoint:
         config.motion.checkpoint_path = args.ssm_checkpoint
 
-    if args.chat:
+    if args.stream or args.chat:
         run_chat(config)
         return
 
     result = Pipeline(config).run(
         args.prompt,
         output_name=args.output_name,
-        stream=args.stream,
         viewer=args.viewer,
     )
 
