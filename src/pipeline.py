@@ -17,7 +17,7 @@ class Pipeline:
         self.config = config or PipelineConfig()
         log.info("Pipeline ready (device=%s)", self.config.device)
 
-    def run(self, prompt: str, output_name: str = "output", stream: bool = False) -> dict[str, Any]:
+    def run(self, prompt: str, output_name: str = "output", stream: bool = False, viewer: bool = False) -> dict[str, Any]:
         prompt = (prompt or "").strip()[: self.config.prompt_max_chars]
 
         if not prompt:
@@ -61,9 +61,15 @@ class Pipeline:
                 print(f"       {actor!r}: action={c.action!r}  frames={frames}", flush=True)
         t = tick("motion done", t)
 
-        video = render.invoke(clips, cfg.video_path(output_name), cfg.render)
-        if stream:
-            print(f"\n[4/4] Render -> {video}", flush=True)
+        if viewer:
+            if stream:
+                print(f"\n[4/4] Viewer  (interactive — close window to exit)", flush=True)
+            render.view_interactive(clips, cfg.render)
+            video = ""
+        else:
+            video = render.invoke(clips, cfg.video_path(output_name), cfg.render)
+            if stream:
+                print(f"\n[4/4] Render -> {video}", flush=True)
         tick("render done", t)
 
         total = time.time() - t0

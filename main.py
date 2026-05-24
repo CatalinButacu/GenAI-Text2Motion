@@ -51,6 +51,10 @@ def parse_args() -> argparse.Namespace:
         help="Print a live stage-by-stage breakdown with timings to stdout.",
     )
     p.add_argument(
+        "--viewer", action="store_true",
+        help="Open interactive aitviewer window instead of saving to MP4.",
+    )
+    p.add_argument(
         "--ssm-checkpoint", dest="ssm_checkpoint", default=None,
         help="Path to a MotionSSM best_model.pt (overrides the default in MotionConfig).",
     )
@@ -77,6 +81,7 @@ def main() -> None:
         args.prompt,
         output_name=args.output_name,
         stream=args.stream,
+        viewer=args.viewer,
     )
 
     video = result.get("video_path", "")

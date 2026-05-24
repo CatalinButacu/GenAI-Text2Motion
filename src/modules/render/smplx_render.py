@@ -154,3 +154,47 @@ def render_smplx2_video(
     renderer.save_video(video_dir=str(out), output_fps=fps)
 
     log.info("[M6] video -> %s", output_path)
+
+
+def view_smplx_interactive(
+    smplx_params: np.ndarray,
+    title: str = "Motion Preview",
+    fps: int = 30,
+    betas: np.ndarray | None = None,
+    gender: str = "neutral",
+    width: int = 1280,
+    height: int = 720,
+    input_coord_system: str = "yup",
+) -> None:
+    """Open an interactive aitviewer window to preview the motion in real-time.
+
+    Controls: space=play/pause, left/right arrows=scrub, scroll=zoom,
+    left-drag=orbit, right-drag=pan.
+    """
+    from aitviewer.viewer import Viewer
+
+    C.update_conf({"window_width": width, "window_height": height})  # type: ignore[union-attr]
+
+    seq = smplx_params2_sequence(smplx_params, betas=betas, gender=gender,
+                                 input_coord_system=input_coord_system)
+    log.info("[M6] opening interactive viewer: %d frames @ %d fps", len(smplx_params), fps)
+
+    v = Viewer(title=title, size=(width, height))
+    v.scene.fps = fps
+    v.playback_fps = fps
+    v.scene.background_color = [0.85, 0.87, 0.90, 1.0]
+
+    if v.scene.floor is not None:
+        v.scene.remove(v.scene.floor)
+
+    floor = ChessboardPlane(100.0, 200, (0.82, 0.83, 0.84, 1.0), (0.80, 0.81, 0.82, 1.0), "xz")
+    v.scene.floor = floor
+    v.scene.add(floor)
+    v.scene.add(seq)
+
+    cam = v.scene.camera
+    if cam is not None:
+        cam.position = np.array([0.0, 1.5, 4.5])
+        cam.target = np.array([0.0, 1.0, 0.0])
+
+    v.run()
