@@ -250,6 +250,91 @@ def apply_cfg_dropout(inputs, config, device):
     return inputs
 
 
+def soft_decode_logits(logits: torch.Tensor, tokenizer) -> torch.Tensor:
+    """Differentiable soft codebook lookup + RVQ decode.
+
+    logits:   (B, T', K, V) raw model output over codebook entries
+    returns:  (B, T, motion_dim) motion-space prediction whose gradient
+              flows back to ``logits`` through the (frozen) decoder.
+
+    Replaces the standard ``tokenizer.decode(argmax(logits))`` path -- which
+    is wrapped in ``@torch.no_grad`` and uses a non-differentiable argmax --
+    with a softmax-weighted sum over codebook embeddings. The tokenizer's
+    decoder weights are frozen but still differentiable forward; gradients
+    pass through them to the SSM logits without updating the decoder.
+    """
+    probs = F.softmax(logits, dim=-1)  # (B, T', K, V)
+
+    soft_z = None
+    for k, cb_module in enumerate(tokenizer.rvq.codebooks):
+        # cb_module.codebook: (V, latent_dim) -- nn.Parameter, frozen by tokenizer.eval()
+        # but still part of the autograd graph for incoming activations.
+        embedding = cb_module.codebook  # (V, D)
+        # (B, T', V) @ (V, D) -> (B, T', D); sum across K residual layers
+        contribution = probs[..., k, :] @ embedding
+        soft_z = contribution if soft_z is None else soft_z + contribution
+
+    # decoder expects (B, D, T'); returns (B, motion_dim, T)
+    motion_pred = tokenizer.decoder(soft_z.transpose(1, 2)).transpose(1, 2)
+
+    return motion_pred
+
+
+def geometric_losses(
+    logits: torch.Tensor,
+    gt_motion: torch.Tensor,
+    frame_mask: torch.Tensor,
+    tokenizer,
+) -> dict[str, torch.Tensor]:
+    """MDM-family geometric losses on motion-space (the 'physics-constrained' signal).
+
+    Returns a dict with three terms; the caller multiplies each by its weight.
+
+    * ``recon``       -- L1(soft_motion, gt_motion), masked by frame_mask.
+    * ``velocity``    -- L1(diff_t(soft_motion), diff_t(gt_motion)). Penalises
+                          jitter; implicit smoothness/physics signal.
+    * ``root_height`` -- L1 on channel 5 (transl_z, vertical translation).
+                          Cheap surrogate for foot-contact without requiring
+                          SMPL-X forward kinematics in the training loop.
+
+    All three are scalar tensors that participate in autograd. Returning
+    zeros (not None) when the sequence is too short keeps the graph
+    well-formed under masking edge-cases.
+    """
+    soft_motion = soft_decode_logits(logits, tokenizer)
+
+    # Align T (the decoder may emit a slightly different T than gt_motion):
+    T = min(soft_motion.shape[1], gt_motion.shape[1], frame_mask.shape[1])
+    soft_motion = soft_motion[:, :T]
+    gt_motion = gt_motion[:, :T]
+    mask = frame_mask[:, :T].unsqueeze(-1)  # (B, T, 1) broadcast over motion_dim
+
+    # ---- Reconstruction (L1, masked-mean) ----
+    abs_err = (soft_motion - gt_motion).abs() * mask
+    denom = mask.sum().clamp(min=1) * soft_motion.shape[-1]
+    recon = abs_err.sum() / denom
+
+    # ---- Velocity smoothness (L1 on temporal diff) ----
+    if T >= 2:
+        vel_pred = soft_motion[:, 1:] - soft_motion[:, :-1]
+        vel_gt = gt_motion[:, 1:] - gt_motion[:, :-1]
+        vel_mask = mask[:, 1:] * mask[:, :-1]  # both endpoints valid
+        v_err = (vel_pred - vel_gt).abs() * vel_mask
+        v_denom = vel_mask.sum().clamp(min=1) * soft_motion.shape[-1]
+        velocity = v_err.sum() / v_denom
+    else:
+        velocity = soft_motion.new_zeros(())
+
+    # ---- Root vertical drift (channel 5 = transl_z; see src/shared/constants.py) ----
+    root_z_pred = soft_motion[..., 5:6]
+    root_z_gt = gt_motion[..., 5:6]
+    rh_err = (root_z_pred - root_z_gt).abs() * mask[..., :1]
+    rh_denom = mask[..., :1].sum().clamp(min=1)
+    root_height = rh_err.sum() / rh_denom
+
+    return {"recon": recon, "velocity": velocity, "root_height": root_height}
+
+
 def run_train_epoch(
     model,
     tokenizer,
@@ -269,10 +354,16 @@ def run_train_epoch(
     """
     model.train()
     total_loss = total_token_loss = total_length = 0.0
+    total_recon = total_velocity = total_root_h = 0.0
     n_steps = 0
     pbar = tqdm(loader, desc=f"Epoch {epoch}", leave=True)
     down_t = config.rvq_down_t
     amp_active = scaler is not None
+    # Geometric-loss weights (default 0.0 for back-compat with old configs)
+    w_recon = float(getattr(config, "recon_loss_weight", 0.0))
+    w_vel = float(getattr(config, "velocity_loss_weight", 0.0))
+    w_rh = float(getattr(config, "root_height_loss_weight", 0.0))
+    use_geom = (w_recon + w_vel + w_rh) > 0.0
 
     for batch in pbar:
         inputs = batch_inputs(batch, config, device)
@@ -301,6 +392,18 @@ def run_train_epoch(
             len_loss = F.mse_loss(length_pred, batch["length"].float().to(device))
             loss = tok_loss + config.length_loss_weight * len_loss
 
+            if use_geom:
+                geom = geometric_losses(logits, mgt, mask, tokenizer)
+                loss = (
+                    loss
+                    + w_recon * geom["recon"]
+                    + w_vel * geom["velocity"]
+                    + w_rh * geom["root_height"]
+                )
+                total_recon += geom["recon"].item()
+                total_velocity += geom["velocity"].item()
+                total_root_h += geom["root_height"].item()
+
         optimizer.zero_grad()
 
         if amp_active:
@@ -319,7 +422,11 @@ def run_train_epoch(
         total_token_loss += tok_loss.item()
         total_length += len_loss.item()
         n_steps += 1
-        pbar.set_postfix({"loss": f"{loss.item():.4f}", "tok_ce": f"{tok_loss.item():.4f}"})
+        postfix = {"loss": f"{loss.item():.4f}", "tok_ce": f"{tok_loss.item():.4f}"}
+        if use_geom:
+            postfix["recon"] = f"{total_recon / n_steps:.3f}"
+            postfix["vel"] = f"{total_velocity / n_steps:.3f}"
+        pbar.set_postfix(postfix)
 
     n = max(len(loader), 1)
     return (total_loss / n, total_token_loss / n, total_length / n), n_steps

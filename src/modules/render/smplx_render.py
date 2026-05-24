@@ -10,6 +10,7 @@ from aitviewer.headless import HeadlessRenderer
 from aitviewer.models.smpl import SMPLLayer
 from aitviewer.renderables.plane import ChessboardPlane
 from aitviewer.renderables.smpl import SMPLSequence
+from aitviewer.viewer import Viewer
 from scipy.spatial.transform import Rotation
 
 # SMPL-X parameters from HumanML3D are already Y-up (matches aitviewer).
@@ -171,8 +172,6 @@ def view_smplx_interactive(
     Controls: space=play/pause, left/right arrows=scrub, scroll=zoom,
     left-drag=orbit, right-drag=pan.
     """
-    from aitviewer.viewer import Viewer
-
     C.update_conf({"window_width": width, "window_height": height})  # type: ignore[union-attr]
 
     seq = smplx_params2_sequence(smplx_params, betas=betas, gender=gender,

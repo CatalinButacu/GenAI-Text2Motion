@@ -115,6 +115,13 @@ class TrainingConfig(ModelConfig, DataConfig):
     warmup_steps: int = 1000
     grad_clip: float = 1.0
     length_loss_weight: float = 0.1
+    # ---- Geometric losses (MDM-family-A "physics-constrained" signal) ----
+    # Decode softmax over codebook -> motion-space and compare with GT.
+    # Differentiable through the (frozen) RVQ decoder; gradients reach
+    # the SSM logits. Set all three to 0.0 to disable (back-compat).
+    recon_loss_weight: float = 0.5         # L1 motion-space reconstruction
+    velocity_loss_weight: float = 0.3      # L1 temporal-difference smoothness
+    root_height_loss_weight: float = 0.3   # L1 on transl_z (channel 5)
     checkpoint_dir: str = "checkpoints/motion_ssm"
     rvq_checkpoint_path: str = "checkpoints/rvq_tokenizer/best_model.pt"
     save_every: int = 10

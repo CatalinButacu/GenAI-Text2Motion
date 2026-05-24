@@ -3,6 +3,8 @@ import logging
 
 import torch
 
+from src.modules import motion, planner, understanding
+from src.modules.render.chat_viewer import ChatViewer
 from src.pipeline import Pipeline
 from src.shared.config import PipelineConfig
 
@@ -102,8 +104,6 @@ def main() -> None:
 
 def run_chat(config: PipelineConfig) -> None:
     """Open the chat viewer. User types all prompts inside the window."""
-    from src.modules import motion, planner, understanding
-    from src.modules.render.chat_viewer import ChatViewer
 
     def run_stages(prompt: str) -> dict | None:
         parsed = understanding.invoke(prompt, config.understanding)

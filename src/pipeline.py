@@ -39,14 +39,14 @@ class Pipeline:
         t = time.time()
         parsed = understanding.invoke(prompt, cfg.understanding)
         if stream:
-            print(f"\n[1/4] Understanding", flush=True)
+            print("\n[1/4] Understanding", flush=True)
             print(f"       entities : {[e.name for e in parsed.entities]}", flush=True)
             print(f"       actions  : {[a.action_type for a in parsed.actions]}", flush=True)
         t = tick("understanding done", t)
 
         planned = planner.invoke(parsed, cfg.planner)
         if stream:
-            print(f"\n[2/4] Planner", flush=True)
+            print("\n[2/4] Planner", flush=True)
             for a in planned.actions:
                 dur = getattr(a, "duration", None)
                 dur_str = f"{dur:.1f}s" if dur is not None else "?"
@@ -63,7 +63,7 @@ class Pipeline:
 
         if viewer:
             if stream:
-                print(f"\n[4/4] Viewer  (interactive — close window to exit)", flush=True)
+                print("\n[4/4] Viewer  (interactive — close window to exit)", flush=True)
             render.view_interactive(clips, cfg.render)
             video = ""
         else:

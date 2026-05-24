@@ -99,6 +99,47 @@ loss = tok_loss + 0.05*recon_loss + 0.1*foot_contact_loss + 0.1*len_loss
 
 This is the **MDM recipe** (Tevet et al., 2022) and is the lowest-risk way to add real physics signal to our current architecture.
 
+### Implemented (2026-05-24)
+
+Geometric losses are now wired into `trainer_utils.run_train_epoch` via a
+new helper `geometric_losses(logits, gt_motion, frame_mask, tokenizer)`
+that returns three differentiable scalar terms:
+
+| Term         | Definition                                                  | Default weight |
+|--------------|-------------------------------------------------------------|---------------:|
+| `recon`      | L1 between **soft-decoded** predicted motion and GT motion  | 0.5            |
+| `velocity`   | L1 between predicted and GT first-order temporal differences| 0.3            |
+| `root_height`| L1 on channel 5 (`transl_z`) — vertical drift / floor-keep  | 0.3            |
+
+**Differentiability trick.** `tokenizer.decode()` is wrapped in
+`@torch.no_grad`, so we can't use it for a backward-able loss. Instead,
+`soft_decode_logits()` does a softmax-weighted sum over each codebook's
+embedding table and runs the result through `tokenizer.decoder` with
+gradients enabled. The decoder's weights are frozen (not in the optimizer's
+param list) but they remain differentiable forward — gradients reach the
+SSM logits without ever updating the tokenizer.
+
+**Files:**
+- `src/modules/motion/training/trainer_utils.py` — `soft_decode_logits()`,
+  `geometric_losses()`, and the `run_train_epoch` integration.
+- `src/modules/motion/config.py` — `recon_loss_weight`,
+  `velocity_loss_weight`, `root_height_loss_weight` (defaults 0.5/0.3/0.3).
+- `configs/motion_ssm.yaml` — weights set; `num_epochs: 30 → 60` to give
+  resume runs headroom.
+- `tests/test_geometric_losses.py` — 6 tests covering shape, grad flow,
+  masking, numerical sanity.
+
+**Disabling.** Set all three weights to 0.0 in the config to recover the
+old token-CE-only objective (back-compat path).
+
+**Note on foot-contact specifically.** The pseudo-code above uses
+SMPL-X joint *positions* (which need a forward-kinematics call). Our
+implementation uses `transl_z` (axis-angle root translation) as a cheap
+floor-contact surrogate, avoiding the SMPL-X layer call in the training
+loop. True per-foot contact via FK is a future-work item; the current
+proxy already gives meaningful physics signal.
+
+
 ---
 
 ## 3. Literature review — what works, what failed

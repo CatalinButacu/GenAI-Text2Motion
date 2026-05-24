@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from array import array
 
 import imgui
 import numpy as np
@@ -36,19 +37,19 @@ MAX_INPUT_LEN = 256
 
 # Left panel column width (pixels)
 
-_LEFT_W = 270
+LEFT_W = 270
 
 # aitviewer main menu bar height (pixels)
 
-_MENU_H = 22
+MENU_H = 22
 
 # Playback panel height (left column, bottom)
 
-_PLAYBACK_H = 158
+PLAYBACK_H = 158
 
 # Chat panel height — 50px taller than Playback
 
-_CHAT_H = 208
+CHAT_H = 208
 
 
 
@@ -90,9 +91,9 @@ class ChatViewer(Viewer):
     def gui_scene(self) -> None:
         """Editor panel: left column, top — starts below menu bar."""
         h = self.window_size[1]
-        editor_h = h - _MENU_H - _CHAT_H - 10  # gap between editor and playback
-        imgui.set_next_window_position(10, _MENU_H + 3, imgui.ALWAYS)
-        imgui.set_next_window_size(_LEFT_W, editor_h, imgui.ALWAYS)
+        editor_h = h - MENU_H - CHAT_H - 10  # gap between editor and playback
+        imgui.set_next_window_position(10, MENU_H + 3, imgui.ALWAYS)
+        imgui.set_next_window_size(LEFT_W, editor_h, imgui.ALWAYS)
         expanded, _ = imgui.begin("Editor", None)
         if expanded:
             self.scene.gui_editor(imgui, self.viewports, self.viewport_mode)
@@ -101,28 +102,26 @@ class ChatViewer(Viewer):
     def gui_playback(self) -> None:
         """Playback panel: left column, bottom — top/bottom aligned with Chat."""
         h = self.window_size[1]
-        y = h - _CHAT_H - 5          # same top edge as Chat
+        y = h - CHAT_H - 5          # same top edge as Chat
         imgui.set_next_window_position(10, y, imgui.ALWAYS)
-        imgui.set_next_window_size(_LEFT_W, _CHAT_H, imgui.ALWAYS)
+        imgui.set_next_window_size(LEFT_W, CHAT_H, imgui.ALWAYS)
         expanded, _ = imgui.begin("Playback", None)
         if expanded:
             u, run_anim = imgui.checkbox(
-                "Run animations [{}]".format(self._shortcut_names[self._pause_key]),
+                f"Run animations [{self._shortcut_names[self._pause_key]}]",
                 self.run_animations,
             )
             if u:
                 self.toggle_animation(run_anim)
 
-            from array import array as _array
-            import numpy as _np
-            frametime_avg = _np.mean(self._past_frametimes[self._past_frametimes > 0.0])
+            frametime_avg = np.mean(self._past_frametimes[self._past_frametimes > 0.0])
             fps_avg = 1 / frametime_avg
             ms_avg = frametime_avg * 1000.0
             ms_last = self._past_frametimes[-1] * 1000.0
             imgui.plot_lines(
-                "Internal {:.1f} fps @ {:.2f} ms [{:.2f}ms]".format(fps_avg, ms_avg, ms_last),
-                _array("f", (1.0 / self._past_frametimes).tolist()),
-                scale_min=0, scale_max=100.0, graph_size=(_LEFT_W - 20, 20),
+                f"Internal {fps_avg:.1f} fps @ {ms_avg:.2f} ms [{ms_last:.2f}ms]",
+                array("f", (1.0 / self._past_frametimes).tolist()),
+                scale_min=0, scale_max=100.0, graph_size=(LEFT_W - 20, 20),
             )
             _, self.playback_fps = imgui.drag_float(
                 "Playback fps", self.playback_fps, 0.1,
@@ -145,12 +144,12 @@ class ChatViewer(Viewer):
     def gui_chat(self) -> None:
         """Chat panel: bottom-right, same y/height as Playback so bottoms align."""
         w, h = self.window_size
-        chat_w = w - _LEFT_W - 20
-        x = _LEFT_W + 10
-        y = h - _CHAT_H - 5
+        chat_w = w - LEFT_W - 20
+        x = LEFT_W + 10
+        y = h - CHAT_H - 5
 
         imgui.set_next_window_position(x, y, imgui.ALWAYS)
-        imgui.set_next_window_size(chat_w, _CHAT_H, imgui.ALWAYS)
+        imgui.set_next_window_size(chat_w, CHAT_H, imgui.ALWAYS)
         imgui.set_next_window_bg_alpha(0.88)
 
         opened, _ = imgui.begin("Text-to-Motion Chat", None, imgui.WINDOW_NO_COLLAPSE)
@@ -159,7 +158,7 @@ class ChatViewer(Viewer):
             return
 
         # History strip — shrink a bit to fit export button row
-        hist_h = _CHAT_H - 72
+        hist_h = CHAT_H - 72
         imgui.begin_child("##chat-hist", height=hist_h, border=False)
         for prompt, status in self.history:
             color = (

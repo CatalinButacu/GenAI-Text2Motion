@@ -31,10 +31,14 @@ training:
   batch_size: 64
   learning_rate: 1.0e-4
   weight_decay: 0.01
-  num_epochs: 30
+  num_epochs: 60
   warmup_steps: 1000
   grad_clip: 1.0
   length_loss_weight: 0.1
+  # Geometric losses (MDM family-A). Set to 0.0 to disable.
+  recon_loss_weight: 0.5
+  velocity_loss_weight: 0.3
+  root_height_loss_weight: 0.3
   cfg_dropout_prob: 0.1
   use_amp: true
   compile_model: false
