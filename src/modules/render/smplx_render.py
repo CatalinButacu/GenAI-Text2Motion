@@ -32,6 +32,11 @@ log = logging.getLogger(__name__)
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 SMPLX_DIR = os.path.join(ROOT, "data", "arctic", "unpack", "models")
 
+# Apply the local model path immediately at import time so that SMPLLayer
+# (which reads C.smplx_models in its constructor) always sees the right path,
+# regardless of call order inside render_smplx2_video.
+C.update_conf({"smplx_models": SMPLX_DIR})  # type: ignore[union-attr]
+
 RENDERER: HeadlessRenderer | None = None
 RENDERER_KEY: tuple[int, int] | None = None
 
@@ -42,7 +47,7 @@ def get_renderer(width: int, height: int) -> HeadlessRenderer:
     key = (width, height)
 
     if RENDERER is None or RENDERER_KEY != key:
-        C.update_conf({"smplx_models": SMPLX_DIR, "window_width": width, "window_height": height})  # type: ignore[union-attr]
+        C.update_conf({"window_width": width, "window_height": height})  # type: ignore[union-attr]
         RENDERER = HeadlessRenderer()
         RENDERER_KEY = key
 

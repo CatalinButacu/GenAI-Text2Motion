@@ -115,4 +115,14 @@ class SpacyParser:
             entities = self.entities_for_clause(doc, clause, registry, actions)
             actions.extend(self.actions_for_clause(doc, entities, order, clause))
 
+        # If no entities were found but actions were (e.g. "jump three times then sit
+        # down" — imperative form, no explicit subject), default to one humanoid actor
+        # and assign all orphan actions to it.
+        if not registry and actions:
+            anon = make_anaphoric_humanoid()
+            register_entity(anon, registry)
+            for a in actions:
+                if not a.actor:
+                    a.actor = "humanoid"
+
         return self.build_scene(prompt, registry, actions)
