@@ -11,6 +11,7 @@ logging.basicConfig(
     format="%(asctime)s  %(levelname)-8s  %(message)s",
     datefmt="%H:%M:%S",
 )
+log = logging.getLogger(__name__)
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Physics-Constrained Video Generation")
@@ -45,6 +46,14 @@ def parse_args() -> argparse.Namespace:
              "2-4 typical; higher = stronger text adherence, less diversity. "
              "Requires the SSM trained with cfg_dropout_prob > 0 and use_sbert=True.",
     )
+    p.add_argument(
+        "--stream", action="store_true",
+        help="Print a live stage-by-stage breakdown with timings to stdout.",
+    )
+    p.add_argument(
+        "--ssm-checkpoint", dest="ssm_checkpoint", default=None,
+        help="Path to a MotionSSM best_model.pt (overrides the default in MotionConfig).",
+    )
 
     return p.parse_args()
 
@@ -61,8 +70,14 @@ def main() -> None:
     config.motion.temperature = args.temperature
     config.motion.top_p = args.top_p
     config.motion.cfg_scale = args.cfg_scale
+    if args.ssm_checkpoint:
+        config.motion.checkpoint_path = args.ssm_checkpoint
 
-    result = Pipeline(config).run(args.prompt, output_name=args.output_name)
+    result = Pipeline(config).run(
+        args.prompt,
+        output_name=args.output_name,
+        stream=args.stream,
+    )
 
     video = result.get("video_path", "")
     parsed = result.get("parsed_scene")
