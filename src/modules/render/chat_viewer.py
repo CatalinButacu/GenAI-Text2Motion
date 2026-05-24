@@ -35,11 +35,21 @@ MAX_HISTORY = 8
 MAX_INPUT_LEN = 256
 
 # Left panel column width (pixels)
+
 _LEFT_W = 270
-# aitviewer main menu bar height (pixels) — leave space so it doesn't cover the menu
+
+# aitviewer main menu bar height (pixels)
+
 _MENU_H = 22
-# Height shared by both Playback (left) and Chat (right) at the bottom
-_BOTTOM_H = 158
+
+# Playback panel height (left column, bottom)
+
+_PLAYBACK_H = 158
+
+# Chat panel height — 50px taller than Playback
+
+_CHAT_H = 208
+
 
 
 class ChatViewer(Viewer):
@@ -80,7 +90,7 @@ class ChatViewer(Viewer):
     def gui_scene(self) -> None:
         """Editor panel: left column, top — starts below menu bar."""
         h = self.window_size[1]
-        editor_h = h - _MENU_H - _BOTTOM_H - 10   # 10px gap between editor and playback
+        editor_h = h - _MENU_H - _PLAYBACK_H - 10  # gap between editor and playback
         imgui.set_next_window_position(10, _MENU_H + 3, imgui.ALWAYS)
         imgui.set_next_window_size(_LEFT_W, editor_h, imgui.ALWAYS)
         expanded, _ = imgui.begin("Editor", None)
@@ -91,9 +101,9 @@ class ChatViewer(Viewer):
     def gui_playback(self) -> None:
         """Playback panel: left column, bottom — same bottom edge as Chat."""
         h = self.window_size[1]
-        y = h - _BOTTOM_H - 5
+        y = h - _PLAYBACK_H - 5
         imgui.set_next_window_position(10, y, imgui.ALWAYS)
-        imgui.set_next_window_size(_LEFT_W, _BOTTOM_H, imgui.ALWAYS)
+        imgui.set_next_window_size(_LEFT_W, _PLAYBACK_H, imgui.ALWAYS)
         expanded, _ = imgui.begin("Playback", None)
         if expanded:
             u, run_anim = imgui.checkbox(
@@ -137,10 +147,10 @@ class ChatViewer(Viewer):
         w, h = self.window_size
         chat_w = w - _LEFT_W - 20
         x = _LEFT_W + 10
-        y = h - _BOTTOM_H - 5       # identical to gui_playback
+        y = h - _CHAT_H - 5
 
         imgui.set_next_window_position(x, y, imgui.ALWAYS)
-        imgui.set_next_window_size(chat_w, _BOTTOM_H, imgui.ALWAYS)
+        imgui.set_next_window_size(chat_w, _CHAT_H, imgui.ALWAYS)
         imgui.set_next_window_bg_alpha(0.88)
 
         opened, _ = imgui.begin("Text-to-Motion Chat", None, imgui.WINDOW_NO_COLLAPSE)
@@ -149,7 +159,7 @@ class ChatViewer(Viewer):
             return
 
         # History strip — shrink a bit to fit export button row
-        hist_h = _BOTTOM_H - 72
+        hist_h = _CHAT_H - 72
         imgui.begin_child("##chat-hist", height=hist_h, border=False)
         for prompt, status in self.history:
             color = (
