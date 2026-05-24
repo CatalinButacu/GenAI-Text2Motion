@@ -78,21 +78,20 @@ class ChatViewer(Viewer):
     def gui_scene(self) -> None:
         """Editor panel: left column, top."""
         h = self.window_size[1]
-        editor_h = h - 170  # leaves room for Playback below
-        imgui.set_next_window_position(10, 10, imgui.FIRST_USE_EVER)
-        imgui.set_next_window_size(_LEFT_W, editor_h, imgui.FIRST_USE_EVER)
+        editor_h = h - 175
+        imgui.set_next_window_position(10, 10, imgui.ALWAYS)
+        imgui.set_next_window_size(_LEFT_W, editor_h, imgui.ALWAYS)
         expanded, _ = imgui.begin("Editor", None)
         if expanded:
             self.scene.gui_editor(imgui, self.viewports, self.viewport_mode)
         imgui.end()
 
     def gui_playback(self) -> None:
-        """Playback panel: left column, directly below Editor — fully overridden to
-        prevent aitviewer's parent from resetting the position/size."""
+        """Playback panel: left column, directly below Editor."""
         h = self.window_size[1]
-        editor_h = h - 170
-        imgui.set_next_window_position(10, editor_h + 15, imgui.FIRST_USE_EVER)
-        imgui.set_next_window_size(_LEFT_W, 155, imgui.FIRST_USE_EVER)
+        editor_h = h - 175
+        imgui.set_next_window_position(10, editor_h + 15, imgui.ALWAYS)
+        imgui.set_next_window_size(_LEFT_W, 155, imgui.ALWAYS)
         expanded, _ = imgui.begin("Playback", None)
         if expanded:
             u, run_anim = imgui.checkbox(
@@ -138,8 +137,8 @@ class ChatViewer(Viewer):
         x = _LEFT_W + 10
         y = h - _CHAT_H - 10
 
-        imgui.set_next_window_position(x, y, imgui.FIRST_USE_EVER)
-        imgui.set_next_window_size(chat_w, _CHAT_H, imgui.FIRST_USE_EVER)
+        imgui.set_next_window_position(x, y, imgui.ALWAYS)
+        imgui.set_next_window_size(chat_w, _CHAT_H, imgui.ALWAYS)
         imgui.set_next_window_bg_alpha(0.88)
 
         flags = imgui.WINDOW_NO_COLLAPSE
