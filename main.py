@@ -105,19 +105,13 @@ def main() -> None:
 def run_chat(config: PipelineConfig, initial_prompt: str, stream: bool) -> None:
     """Build the pipeline once, then open the chat viewer.
 
-    The pipeline modules (text encoder, RVQ, SSM) load only once; subsequent
-    prompts reuse the same model in memory.
+    Stages 1-3 (understanding → planner → motion) run to get the initial clip.
+    No headless render is done before opening the window, avoiding GL context conflicts.
     """
     from src.modules import motion, planner, understanding
     from src.modules.render.chat_viewer import ChatViewer
 
-    pipe = Pipeline(config)
-    # Warm-load the heavy modules so the first chat prompt isn't slow.
-    log.info("[chat] warming up pipeline modules ...")
-    initial = pipe.run(initial_prompt, output_name="chat_initial", stream=stream, viewer=False) \
-        if initial_prompt else None
-
-    def runner(prompt: str) -> dict | None:
+    def run_stages(prompt: str) -> dict | None:
         parsed = understanding.invoke(prompt, config.understanding)
         planned = planner.invoke(parsed, config.planner)
         clips = motion.invoke(planned, config.motion)
@@ -132,18 +126,13 @@ def run_chat(config: PipelineConfig, initial_prompt: str, stream: bool) -> None:
         }
 
     initial_clip = None
-    if initial and initial.get("motion_clips"):
-        c = next(iter(initial["motion_clips"].values()))
-        initial_clip = {
-            "smplx_params": c.smplx_params,
-            "betas": c.betas,
-            "gender": config.render.gender,
-            "input_coord_system": config.render.input_coord_system,
-        }
+    if initial_prompt:
+        log.info("[chat] generating initial motion for %r ...", initial_prompt)
+        initial_clip = run_stages(initial_prompt)
 
     log.info("[chat] opening window. Type prompts at the bottom of the screen.")
     viewer = ChatViewer(
-        pipeline_runner=runner,
+        pipeline_runner=run_stages,
         initial_clip=initial_clip,
         fps=config.fps,
     )

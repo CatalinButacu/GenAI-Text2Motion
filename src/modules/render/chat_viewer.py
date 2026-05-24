@@ -15,7 +15,6 @@ from typing import Any
 import imgui
 import numpy as np
 from aitviewer.configuration import CONFIG as C
-from aitviewer.renderables.plane import ChessboardPlane
 from aitviewer.renderables.smpl import SMPLSequence
 from aitviewer.viewer import Viewer
 
@@ -51,13 +50,6 @@ class ChatViewer(Viewer):
 
         self.scene.fps = fps
         self.playback_fps = fps
-        self.scene.background_color = [0.85, 0.87, 0.90, 1.0]
-
-        if self.scene.floor is not None:
-            self.scene.remove(self.scene.floor)
-        floor = ChessboardPlane(100.0, 200, (0.82, 0.83, 0.84, 1.0), (0.80, 0.81, 0.82, 1.0), "xz")
-        self.scene.floor = floor
-        self.scene.add(floor)
 
         cam = self.scene.camera
         if cam is not None:
