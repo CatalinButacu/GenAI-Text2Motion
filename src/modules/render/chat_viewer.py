@@ -36,8 +36,10 @@ MAX_INPUT_LEN = 256
 
 # Left panel column width (pixels)
 _LEFT_W = 270
-# Chat panel height (pixels)
-_CHAT_H = 200
+# aitviewer main menu bar height (pixels) — leave space so it doesn't cover the menu
+_MENU_H = 22
+# Height shared by both Playback (left) and Chat (right) at the bottom
+_BOTTOM_H = 158
 
 
 class ChatViewer(Viewer):
@@ -76,10 +78,10 @@ class ChatViewer(Viewer):
     # ------------------------------------------------------------------
 
     def gui_scene(self) -> None:
-        """Editor panel: left column, top."""
+        """Editor panel: left column, top — starts below menu bar."""
         h = self.window_size[1]
-        editor_h = h - 175
-        imgui.set_next_window_position(10, 10, imgui.ALWAYS)
+        editor_h = h - _MENU_H - _BOTTOM_H - 10   # 10px gap between editor and playback
+        imgui.set_next_window_position(10, _MENU_H + 3, imgui.ALWAYS)
         imgui.set_next_window_size(_LEFT_W, editor_h, imgui.ALWAYS)
         expanded, _ = imgui.begin("Editor", None)
         if expanded:
@@ -87,11 +89,11 @@ class ChatViewer(Viewer):
         imgui.end()
 
     def gui_playback(self) -> None:
-        """Playback panel: left column, directly below Editor."""
+        """Playback panel: left column, bottom — same bottom edge as Chat."""
         h = self.window_size[1]
-        editor_h = h - 175
-        imgui.set_next_window_position(10, editor_h + 15, imgui.ALWAYS)
-        imgui.set_next_window_size(_LEFT_W, 155, imgui.ALWAYS)
+        y = h - _BOTTOM_H - 5
+        imgui.set_next_window_position(10, y, imgui.ALWAYS)
+        imgui.set_next_window_size(_LEFT_W, _BOTTOM_H, imgui.ALWAYS)
         expanded, _ = imgui.begin("Playback", None)
         if expanded:
             u, run_anim = imgui.checkbox(
@@ -131,24 +133,23 @@ class ChatViewer(Viewer):
         imgui.end()
 
     def gui_chat(self) -> None:
-        """Chat panel: bottom-right of viewport, starts where left column ends."""
+        """Chat panel: bottom-right, same y/height as Playback so bottoms align."""
         w, h = self.window_size
         chat_w = w - _LEFT_W - 20
         x = _LEFT_W + 10
-        y = h - _CHAT_H - 10
+        y = h - _BOTTOM_H - 5       # identical to gui_playback
 
         imgui.set_next_window_position(x, y, imgui.ALWAYS)
-        imgui.set_next_window_size(chat_w, _CHAT_H, imgui.ALWAYS)
+        imgui.set_next_window_size(chat_w, _BOTTOM_H, imgui.ALWAYS)
         imgui.set_next_window_bg_alpha(0.88)
 
-        flags = imgui.WINDOW_NO_COLLAPSE
-        opened, _ = imgui.begin("Text-to-Motion Chat", None, flags)
+        opened, _ = imgui.begin("Text-to-Motion Chat", None, imgui.WINDOW_NO_COLLAPSE)
         if not opened:
             imgui.end()
             return
 
-        # History strip
-        hist_h = _CHAT_H - 68
+        # History strip — shrink a bit to fit export button row
+        hist_h = _BOTTOM_H - 72
         imgui.begin_child("##chat-hist", height=hist_h, border=False)
         for prompt, status in self.history:
             color = (
@@ -167,8 +168,8 @@ class ChatViewer(Viewer):
 
         imgui.separator()
 
-        # Input + Send on one row
-        input_w = chat_w - 105
+        # Row 1: prompt input + Generate
+        input_w = chat_w - 110
         imgui.set_next_item_width(input_w)
         enter_pressed, self.input_buffer = imgui.input_text(
             "##prompt", self.input_buffer, MAX_INPUT_LEN,
@@ -177,11 +178,11 @@ class ChatViewer(Viewer):
         imgui.same_line()
         if self.busy:
             imgui.push_style_var(imgui.STYLE_ALPHA, 0.3)
-            imgui.button("Generate", width=85)
+            imgui.button("Generate", width=95)
             imgui.pop_style_var()
             send = False
         else:
-            send = imgui.button("Generate", width=85)
+            send = imgui.button("Generate", width=95)
 
         if (enter_pressed or send) and self.input_buffer.strip() and not self.busy:
             self.submit_prompt(self.input_buffer)
