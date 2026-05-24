@@ -77,8 +77,8 @@ class ChatViewer(Viewer):
 
     def gui_scene(self) -> None:
         """Editor panel: left column, top."""
-        w, h = self.window_size
-        editor_h = int(h * 0.72)
+        h = self.window_size[1]
+        editor_h = h - 170  # leaves room for Playback below
         imgui.set_next_window_position(10, 10, imgui.FIRST_USE_EVER)
         imgui.set_next_window_size(_LEFT_W, editor_h, imgui.FIRST_USE_EVER)
         expanded, _ = imgui.begin("Editor", None)
@@ -87,19 +87,54 @@ class ChatViewer(Viewer):
         imgui.end()
 
     def gui_playback(self) -> None:
-        """Playback panel: left column, directly below Editor."""
-        w, h = self.window_size
-        editor_h = int(h * 0.72)
-        playback_h = int(h * 0.175)
-        imgui.set_next_window_position(10, 10 + editor_h + 5, imgui.FIRST_USE_EVER)
-        imgui.set_next_window_size(_LEFT_W, playback_h, imgui.FIRST_USE_EVER)
-        # Delegate to parent implementation — it fills the window it finds open.
-        super().gui_playback()
+        """Playback panel: left column, directly below Editor — fully overridden to
+        prevent aitviewer's parent from resetting the position/size."""
+        h = self.window_size[1]
+        editor_h = h - 170
+        imgui.set_next_window_position(10, editor_h + 15, imgui.FIRST_USE_EVER)
+        imgui.set_next_window_size(_LEFT_W, 155, imgui.FIRST_USE_EVER)
+        expanded, _ = imgui.begin("Playback", None)
+        if expanded:
+            u, run_anim = imgui.checkbox(
+                "Run animations [{}]".format(self._shortcut_names[self._pause_key]),
+                self.run_animations,
+            )
+            if u:
+                self.toggle_animation(run_anim)
+
+            from array import array as _array
+            import numpy as _np
+            frametime_avg = _np.mean(self._past_frametimes[self._past_frametimes > 0.0])
+            fps_avg = 1 / frametime_avg
+            ms_avg = frametime_avg * 1000.0
+            ms_last = self._past_frametimes[-1] * 1000.0
+            imgui.plot_lines(
+                "Internal {:.1f} fps @ {:.2f} ms [{:.2f}ms]".format(fps_avg, ms_avg, ms_last),
+                _array("f", (1.0 / self._past_frametimes).tolist()),
+                scale_min=0, scale_max=100.0, graph_size=(_LEFT_W - 20, 20),
+            )
+            _, self.playback_fps = imgui.drag_float(
+                "Playback fps", self.playback_fps, 0.1,
+                min_value=1.0, max_value=120.0, format="%.1f",
+            )
+            imgui.same_line(spacing=10)
+            imgui.text(f"({self.playback_fps / self.scene.fps:.2f}x)")
+
+            n_frames = self.scene.n_frames
+            _, self.scene.current_frame_id = imgui.slider_int(
+                "Frame##seq", self.scene.current_frame_id, 0, n_frames - 1,
+            )
+            self.prevent_background_interactions()
+        if imgui.collapsing_header("Advanced options")[0]:
+            _, self.playback_without_skipping = imgui.checkbox(
+                "Playback without skipping", self.playback_without_skipping
+            )
+        imgui.end()
 
     def gui_chat(self) -> None:
-        """Chat panel: bottom-center, clear of the left column."""
+        """Chat panel: bottom-right of viewport, starts where left column ends."""
         w, h = self.window_size
-        chat_w = max(500, w - _LEFT_W - 30)
+        chat_w = w - _LEFT_W - 20
         x = _LEFT_W + 10
         y = h - _CHAT_H - 10
 
