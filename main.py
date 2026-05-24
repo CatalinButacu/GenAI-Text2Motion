@@ -55,6 +55,10 @@ def parse_args() -> argparse.Namespace:
         help="Alias for --stream (kept for compatibility).",
     )
     p.add_argument(
+        "--viewer", action="store_true",
+        help="Open static interactive aitviewer window (no chat bar).",
+    )
+    p.add_argument(
         "--ssm-checkpoint", dest="ssm_checkpoint", default=None,
         help="Path to a MotionSSM best_model.pt (overrides the default in MotionConfig).",
     )
@@ -97,7 +101,7 @@ def main() -> None:
 
 
 def run_chat(config: PipelineConfig) -> None:
-    """Open the chat viewer. No initial prompt — user types everything inside the window."""
+    """Open the chat viewer. User types all prompts inside the window."""
     from src.modules import motion, planner, understanding
     from src.modules.render.chat_viewer import ChatViewer
 
@@ -117,6 +121,7 @@ def run_chat(config: PipelineConfig) -> None:
 
     log.info("[chat] window open — type prompts in the chat bar at the bottom.")
     ChatViewer(pipeline_runner=run_stages, fps=config.fps).run()
+
 
 if __name__ == "__main__":
     main()
