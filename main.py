@@ -83,7 +83,7 @@ def main() -> None:
         config.motion.checkpoint_path = args.ssm_checkpoint
 
     if args.chat:
-        run_chat(config, initial_prompt=args.prompt, stream=args.stream)
+        run_chat(config)
         return
 
     result = Pipeline(config).run(
@@ -102,12 +102,8 @@ def main() -> None:
         print(f"actions : {[a.action_type for a in parsed.actions]}")
 
 
-def run_chat(config: PipelineConfig, initial_prompt: str, stream: bool) -> None:
-    """Build the pipeline once, then open the chat viewer.
-
-    Stages 1-3 (understanding → planner → motion) run to get the initial clip.
-    No headless render is done before opening the window, avoiding GL context conflicts.
-    """
+def run_chat(config: PipelineConfig) -> None:
+    """Open the chat viewer. No initial prompt — user types everything inside the window."""
     from src.modules import motion, planner, understanding
     from src.modules.render.chat_viewer import ChatViewer
 
@@ -125,18 +121,8 @@ def run_chat(config: PipelineConfig, initial_prompt: str, stream: bool) -> None:
             "input_coord_system": config.render.input_coord_system,
         }
 
-    initial_clip = None
-    if initial_prompt:
-        log.info("[chat] generating initial motion for %r ...", initial_prompt)
-        initial_clip = run_stages(initial_prompt)
-
-    log.info("[chat] opening window. Type prompts at the bottom of the screen.")
-    viewer = ChatViewer(
-        pipeline_runner=run_stages,
-        initial_clip=initial_clip,
-        fps=config.fps,
-    )
-    viewer.run()
+    log.info("[chat] window open — type prompts in the chat bar at the bottom.")
+    ChatViewer(pipeline_runner=run_stages, fps=config.fps).run()
 
 if __name__ == "__main__":
     main()

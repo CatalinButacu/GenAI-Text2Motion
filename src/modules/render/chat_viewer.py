@@ -32,7 +32,6 @@ class ChatViewer(Viewer):
     def __init__(
         self,
         pipeline_runner,
-        initial_clip: dict | None = None,
         fps: int = 30,
         title: str = "Text-to-Motion Chat",
         size: tuple[int, int] = (1280, 800),
@@ -42,7 +41,7 @@ class ChatViewer(Viewer):
         self.pipeline_runner = pipeline_runner
         self.fps = fps
         self.input_buffer = ""
-        self.history: list[tuple[str, str]] = []  # (prompt, status)
+        self.history: list[tuple[str, str]] = []
         self.busy = False
         self.busy_msg = ""
         self.pending_clip: dict | None = None
@@ -55,9 +54,6 @@ class ChatViewer(Viewer):
         if cam is not None:
             cam.position = np.array([0.0, 1.5, 4.5])
             cam.target = np.array([0.0, 1.0, 0.0])
-
-        if initial_clip is not None:
-            self.swap_clip(initial_clip)
 
         # Register the chat panel as an extra GUI control.
         self.gui_controls["chat"] = self.gui_chat
