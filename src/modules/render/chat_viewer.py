@@ -90,7 +90,7 @@ class ChatViewer(Viewer):
     def gui_scene(self) -> None:
         """Editor panel: left column, top — starts below menu bar."""
         h = self.window_size[1]
-        editor_h = h - _MENU_H - _PLAYBACK_H - 10  # gap between editor and playback
+        editor_h = h - _MENU_H - _CHAT_H - 10  # gap between editor and playback
         imgui.set_next_window_position(10, _MENU_H + 3, imgui.ALWAYS)
         imgui.set_next_window_size(_LEFT_W, editor_h, imgui.ALWAYS)
         expanded, _ = imgui.begin("Editor", None)
@@ -99,11 +99,11 @@ class ChatViewer(Viewer):
         imgui.end()
 
     def gui_playback(self) -> None:
-        """Playback panel: left column, bottom — same bottom edge as Chat."""
+        """Playback panel: left column, bottom — top/bottom aligned with Chat."""
         h = self.window_size[1]
-        y = h - _PLAYBACK_H - 5
+        y = h - _CHAT_H - 5          # same top edge as Chat
         imgui.set_next_window_position(10, y, imgui.ALWAYS)
-        imgui.set_next_window_size(_LEFT_W, _PLAYBACK_H, imgui.ALWAYS)
+        imgui.set_next_window_size(_LEFT_W, _CHAT_H, imgui.ALWAYS)
         expanded, _ = imgui.begin("Playback", None)
         if expanded:
             u, run_anim = imgui.checkbox(
