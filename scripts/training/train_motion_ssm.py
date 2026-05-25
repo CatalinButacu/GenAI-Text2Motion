@@ -265,6 +265,14 @@ def main():
                         dest="amass_dir",
                         help="AMASS backing store path (used as the motion source "
                              "for HumanML3D, and for unified mode amass)")
+    parser.add_argument(
+        "--model-dropout",
+        type=float,
+        default=0.0,
+        dest="model_dropout",
+        help="Inter-layer dropout probability in SSM trunk (0.0 = off). "
+             "Set 0.1 for regularisation when fine-tuning from a warm-start checkpoint.",
+    )
     args = parser.parse_args()
 
     # Resolve defaults
@@ -336,6 +344,7 @@ def main():
         single_gpu=args.single_gpu,
         arch="residual_k" if args.ar_k_head else "independent",
         pose_prefix_prob=args.pose_prefix_prob,
+        model_dropout=args.model_dropout,
     )
     if args.sources is not None and args.data_source == "unified":
         config.unified_sources = args.sources

@@ -306,7 +306,9 @@ sudo -u ubuntu $SUDO_KEEP_WANDB bash -c "
     --n-layers                 6 \
     --max-motion-length        200 \
     --batch-size               $BATCH_SIZE \
-    --lr                       1e-4 \
+    --lr                       3e-5 \
+    --model-dropout            0.1 \
+    --pose-prefix-prob         0.5 \
     --epochs                   $EPOCHS_SSM \
     --num-workers              4 \
     --checkpoint-dir           checkpoints/motion_ssm \
