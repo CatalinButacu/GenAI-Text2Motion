@@ -429,14 +429,28 @@ def run_train_epoch(
         pbar.set_postfix(postfix)
 
     n = max(len(loader), 1)
-    return (total_loss / n, total_token_loss / n, total_length / n), n_steps
+    results = (
+        total_loss / n,
+        total_token_loss / n,
+        total_length / n,
+        total_recon / n,
+        total_velocity / n,
+        total_root_h / n,
+    )
+    return results, n_steps
 
 
 @torch.no_grad()
-def eval_loop(model, tokenizer, loader, device, config) -> tuple[float, float, float]:
-    """Shared eval loop: token CE, top-1 accuracy, per-codebook top-1."""
+def eval_loop(
+    model, tokenizer, loader, device, config
+) -> tuple[float, float, float, float, float]:
+    """Shared eval loop: token CE, top-1/5/10 accuracy, per-codebook top-1.
+
+    Returns:
+        (ce, top1_acc, top5_acc, top10_acc, per_cb_top1_acc)
+    """
     model.eval()
-    total_loss = total_acc = total_per_cb_acc = 0.0
+    total_loss = total_top1 = total_top5 = total_top10 = total_per_cb_acc = 0.0
     n = 0
     down_t = config.rvq_down_t
 
@@ -447,9 +461,6 @@ def eval_loop(model, tokenizer, loader, device, config) -> tuple[float, float, f
 
         target_tokens = encode_motion_to_tokens(tokenizer, mgt)
         latent_mask = build_latent_mask(mask, down_t)
-        # Teacher-force AR head during validation too -- keeps val_ce curves
-        # directly comparable to train_ce. Inference uses the AR sampler
-        # in ssm_model.py, not this code path.
         ar_targets = (
             target_tokens if getattr(config, "arch", "independent") == "residual_k" else None
         )
@@ -462,37 +473,53 @@ def eval_loop(model, tokenizer, loader, device, config) -> tuple[float, float, f
 
         total_loss += token_ce_loss(logits, target_tokens, latent_mask).item()
 
-        pred = logits.argmax(dim=-1)  # (B, T', K)
-        correct = (pred == target_tokens).float()
-        # top-1 avg across all K codebooks
-        total_acc += (
-            (correct.mean(dim=-1) * latent_mask).sum().item()
-            / latent_mask.sum().clamp(min=1).item()
-        )
-        # per-codebook accuracy (mean across B,T)
+        # Top-k accuracy for k in {1, 5, 10} -- single topk(10) call for all three.
+        # logits: (B, T', K, V); target_tokens: (B, T', K)
+        k_max = min(10, logits.shape[-1])
+        topk_preds = logits.topk(k_max, dim=-1).indices  # (B, T', K, k_max)
+        target_exp = target_tokens.unsqueeze(-1)          # (B, T', K, 1)
+        valid_sum = latent_mask.sum().clamp(min=1).item()
+
+        for k, attr in zip((1, 5, 10), ("total_top1", "total_top5", "total_top10")):
+            if k > k_max:
+                break
+            hit = (topk_preds[..., :k] == target_exp).any(dim=-1).float()  # (B, T', K)
+            acc_k = (hit.mean(dim=-1) * latent_mask).sum().item() / valid_sum
+            if attr == "total_top1":
+                total_top1 += acc_k
+            elif attr == "total_top5":
+                total_top5 += acc_k
+            else:
+                total_top10 += acc_k
+
+        # per-codebook top-1
+        correct1 = (topk_preds[..., :1] == target_exp).any(dim=-1).float()  # (B, T', K)
         per_cb = (
-            (correct * latent_mask.unsqueeze(-1)).sum(dim=(0, 1))
+            (correct1 * latent_mask.unsqueeze(-1)).sum(dim=(0, 1))
             / latent_mask.sum().clamp(min=1)
         )
         total_per_cb_acc += per_cb.mean().item()
         n += 1
 
     n = max(n, 1)
-    return total_loss / n, total_acc / n, total_per_cb_acc / n
+    return total_loss / n, total_top1 / n, total_top5 / n, total_top10 / n, total_per_cb_acc / n
 
 
 @torch.no_grad()
 def run_validate(model, tokenizer, loader, device, config) -> tuple:
-    """Token cross-entropy + top-1 accuracy on validation set."""
-    ce, acc, _ = eval_loop(model, tokenizer, loader, device, config)
-    return ce, acc
+    """Token cross-entropy + top-1/5/10 accuracy on validation set."""
+    ce, top1, top5, top10, _ = eval_loop(model, tokenizer, loader, device, config)
+    return ce, top1, top5, top10
 
 
 @torch.no_grad()
 def run_test(model, tokenizer, loader, device, config) -> dict:
-    """Final held-out test evaluation — call once after training is complete.
-
-    Returns a dict suitable for JSON export and W&B logging.
-    """
-    ce, acc, cb_acc = eval_loop(model, tokenizer, loader, device, config)
-    return {"test/ce": ce, "test/top1_acc": acc, "test/per_cb_acc": cb_acc}
+    """Final held-out test evaluation — call once after training is complete."""
+    ce, top1, top5, top10, cb_acc = eval_loop(model, tokenizer, loader, device, config)
+    return {
+        "test/ce": ce,
+        "test/top1_acc": top1,
+        "test/top5_acc": top5,
+        "test/top10_acc": top10,
+        "test/per_cb_acc": cb_acc,
+    }

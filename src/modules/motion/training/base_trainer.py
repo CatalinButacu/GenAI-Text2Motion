@@ -203,23 +203,35 @@ class BaseSSMTrainer:
             self.train_model, self.tokenizer, self.test_loader, self.device, self.config,
         )
         log.info(
-            "[BaseTrainer] TEST  ce=%.4f  top1=%.3f  per_cb_acc=%.3f",
-            metrics["test/ce"], metrics["test/top1_acc"], metrics["test/per_cb_acc"],
+            "[BaseTrainer] TEST  ce=%.4f  top1=%.3f  top5=%.3f  top10=%.3f  per_cb_acc=%.3f",
+            metrics["test/ce"], metrics["test/top1_acc"],
+            metrics.get("test/top5_acc", 0.0), metrics.get("test/top10_acc", 0.0),
+            metrics["test/per_cb_acc"],
         )
         wandb_log(metrics)
         return metrics
 
     def log_epoch(self, epoch: int, tr: tuple, vr: tuple) -> None:
-        tl, tok_ce, len_l = tr
-        val_ce, val_acc = vr
+        # train tuple: (loss, tok_ce, len_loss[, recon, vel, rh]) — back-compat with 3-tuple
+        tr_ext = (*tr, 0.0, 0.0, 0.0)
+        tl, tok_ce, len_l, recon, vel, rh = tr_ext[0], tr_ext[1], tr_ext[2], tr_ext[3], tr_ext[4], tr_ext[5]
+        # val tuple: (ce, top1[, top5, top10]) — back-compat with 2-tuple
+        vr_ext = (*vr, 0.0, 0.0)
+        val_ce, val_top1, val_top5, val_top10 = vr_ext[0], vr_ext[1], vr_ext[2], vr_ext[3]
         lr = self.optimizer.param_groups[0]["lr"]
         log.info(
-            "epoch=%d/%d train=%.4f(ce=%.4f len=%.3f) val_ce=%.4f top1=%.3f lr=%.2e",
-            epoch, self.config.num_epochs, tl, tok_ce, len_l, val_ce, val_acc, lr,
+            "epoch=%d/%d train=%.4f(ce=%.4f len=%.3f recon=%.3f vel=%.3f rh=%.3f)"
+            " val_ce=%.4f top1=%.3f top5=%.3f top10=%.3f lr=%.2e",
+            epoch, self.config.num_epochs,
+            tl, tok_ce, len_l, recon, vel, rh,
+            val_ce, val_top1, val_top5, val_top10, lr,
         )
         wandb_log({
-            "epoch": epoch, "train/loss": tl, "train/tok_ce": tok_ce, "train/len_loss": len_l,
-            "val/ce": val_ce, "val/top1": val_acc, "lr": lr, "best_val_loss": self.best_loss,
+            "epoch": epoch,
+            "train/loss": tl, "train/tok_ce": tok_ce, "train/len_loss": len_l,
+            "train/recon": recon, "train/velocity": vel, "train/root_height": rh,
+            "val/ce": val_ce, "val/top1": val_top1, "val/top5": val_top5, "val/top10": val_top10,
+            "lr": lr, "best_val_loss": self.best_loss,
         }, step=epoch)
 
     def load_checkpoint(self, resume_from: str) -> None:
