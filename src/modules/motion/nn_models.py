@@ -275,6 +275,7 @@ class TextToMotionSSM(nn.Module):
             d_model=config.d_model, d_state=config.d_state, gradient_checkpointing=grad_ckpt
         )
         self.layers = nn.ModuleList([layer_cls(ssm_cfg) for _ in range(config.n_layers)])
+        self.dropout = nn.Dropout(getattr(config, "model_dropout", 0.0))
         self.use_film = use_film
         self.bidirectional = bidirectional
         self.ssm_cfg = ssm_cfg
@@ -356,10 +357,10 @@ class TextToMotionSSM(nn.Module):
 
         if self.use_film:
             for layer, film in zip(self.layers, self.films):
-                x = x + layer(film(x, cond))
+                x = x + self.dropout(layer(film(x, cond)))
         else:
             for layer, norm in zip(self.layers, self.norms):
-                x = x + layer(norm(x))
+                x = x + self.dropout(layer(norm(x)))
         # Drop the seed portion so the prediction-only shape is preserved
         # for the decoder head.
 

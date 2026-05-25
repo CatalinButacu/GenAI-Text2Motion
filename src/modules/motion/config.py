@@ -83,6 +83,7 @@ class ModelConfig:
     #                    tokens. Restores RVQ residual structure at inference.
     #                    REQUIRES RETRAINING -- different param set.
     arch: str = "independent"
+    model_dropout: float = 0.0  # inter-layer dropout; 0.0 = off (backward-compat default)
 
     # --- RVQ head (Mogo/MoMask-style discrete token prediction) ---
     rvq_latent_dim: int = 128
