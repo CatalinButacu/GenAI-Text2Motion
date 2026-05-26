@@ -29,7 +29,7 @@ TEXT_ENCODER="${text_encoder}"        # sbert-small|sbert-mpnet|clip-b|clip-l or
 AR_K_HEAD="${ar_k_head}"              # 'true' for AR K-head
 COMPILE_MODEL="${compile_model}"      # 'true' for torch.compile
 SINGLE_GPU="${single_gpu}"            # 'true' to skip nn.DataParallel auto-wrap
-MAX_RUN_HOURS=12                      # wallclock failsafe (hours); 30 epochs ~6h on T4
+MAX_RUN_HOURS=36                      # wallclock failsafe (hours); 60 epochs ~30h on T4
 
 # -----------------------------------------------------------------------------
 # W&B mode selection.
@@ -260,18 +260,23 @@ if [ -n "$LATEST_S3_RUN" ]; then
   mkdir -p "$SSM_CKPT_BASE/$LATEST_S3_RUN"
   aws s3 sync "s3://$S3_BUCKET/checkpoints/motion_ssm/$LATEST_S3_RUN" \
               "$SSM_CKPT_BASE/$LATEST_S3_RUN"
-  # Point at the prior run's best_model.pt explicitly. `--resume latest`
-  # only searches the trainer's own (freshly-created) run dir via
-  # resolveCkptPath, which is empty here, so it would silently start from
-  # random weights. Pass the explicit path so resolveCkptPath's
-  # os.path.exists branch picks it up. Path is relative to cwd
-  # (/home/ubuntu/repo where the python invocation runs).
-  #
-  # --warm-start: load model weights only. Without it, the resumed checkpoint's
-  # optimizer + OneCycleLR state override our --lr CLI flag (the scheduler keeps
-  # the prior peak max_lr internally), so changing LR for a continuation run is
-  # otherwise impossible. With warm start, --lr 1e-4 actually takes effect.
-  RESUME_FLAG="--resume checkpoints/motion_ssm/$LATEST_S3_RUN/best_model.pt --warm-start"
+  # Pick the best available checkpoint: prefer best_model.pt, then fall back
+  # to the latest checkpoint_epochXX.pt (for runs killed by wallclock timer
+  # before any epoch beat the warm-start baseline).
+  CKPT_PATH="$SSM_CKPT_BASE/$LATEST_S3_RUN/best_model.pt"
+  if [ ! -f "$CKPT_PATH" ]; then
+    CKPT_PATH=$(ls -v "$SSM_CKPT_BASE/$LATEST_S3_RUN"/checkpoint_epoch*.pt 2>/dev/null | tail -1 || true)
+    echo "No best_model.pt found — falling back to latest epoch checkpoint: $CKPT_PATH"
+  fi
+  if [ -n "$CKPT_PATH" ] && [ -f "$CKPT_PATH" ]; then
+    # Use relative path from repo root (where python runs)
+    CKPT_REL="checkpoints/motion_ssm/$LATEST_S3_RUN/$(basename $CKPT_PATH)"
+    RESUME_FLAG="--resume $CKPT_REL --warm-start"
+    echo "Warm-starting from: $CKPT_REL"
+  else
+    echo "WARNING: no checkpoint found in $LATEST_S3_RUN — starting fresh"
+    RESUME_FLAG=""
+  fi
 else
   echo "Fresh SSM training (no prior run in S3)"
   RESUME_FLAG=""
