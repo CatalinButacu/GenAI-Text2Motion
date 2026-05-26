@@ -204,18 +204,24 @@ def encode_motion_to_tokens(tokenizer, motion: torch.Tensor) -> torch.Tensor:
 
 
 def token_ce_loss(
-    logits: torch.Tensor, target_tokens: torch.Tensor, latent_mask: torch.Tensor
+    logits: torch.Tensor,
+    target_tokens: torch.Tensor,
+    latent_mask: torch.Tensor,
+    label_smoothing: float = 0.0,
 ) -> torch.Tensor:
     """Cross-entropy over K codebooks.
 
     logits:        (B, T', K, V)
     target_tokens: (B, T', K)
     latent_mask:   (B, T')  -- 1.0 where valid, 0.0 where padded
+    label_smoothing: float in [0, 1); standard LS as in T2M-GPT (0.1 recommended)
     """
     B, T, K, V = logits.shape
     flat_logits = logits.reshape(B * T * K, V)
     flat_targets = target_tokens.reshape(B * T * K)
-    per_token_loss = F.cross_entropy(flat_logits, flat_targets, reduction="none")
+    per_token_loss = F.cross_entropy(
+        flat_logits, flat_targets, reduction="none", label_smoothing=label_smoothing
+    )
     per_token_loss = per_token_loss.reshape(B, T, K).mean(dim=-1)  # avg across K codebooks
 
     return (per_token_loss * latent_mask).sum() / latent_mask.sum().clamp(min=1)
@@ -388,8 +394,22 @@ def run_train_epoch(
             target_tokens_cut = target_tokens[:, :t_len]
             latent_mask_cut = latent_mask[:, :t_len]
 
-            tok_loss = token_ce_loss(logits, target_tokens_cut, latent_mask_cut)
-            len_loss = F.mse_loss(length_pred, batch["length"].float().to(device))
+            tok_loss = token_ce_loss(
+                logits,
+                target_tokens_cut,
+                latent_mask_cut,
+                label_smoothing=float(getattr(config, "label_smoothing", 0.0)),
+            )
+            # Normalise length loss to [0,1] scale before weighting.  Raw MSE
+            # on frame counts (e.g. 50-200 frames) gives values ~50-100, which
+            # overwhelms the CE gradient.  Dividing by max_motion_length makes
+            # the loss dimensionless and O(1e-3), so the weight controls its
+            # relative contribution cleanly.
+            max_len = float(getattr(config, "max_motion_length", 200))
+            len_loss = F.mse_loss(
+                length_pred / max_len,
+                batch["length"].float().to(device) / max_len,
+            )
             loss = tok_loss + config.length_loss_weight * len_loss
 
             if use_geom:

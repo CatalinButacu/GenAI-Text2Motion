@@ -115,7 +115,9 @@ class TrainingConfig(ModelConfig, DataConfig):
     num_epochs: int = 200
     warmup_steps: int = 1000
     grad_clip: float = 1.0
-    length_loss_weight: float = 0.1
+    length_loss_weight: float = 10.0  # compensates for normalised len_loss ~1e-3 (raw ~54)
+    # Label smoothing for token CE (T2M-GPT style). Prevents overconfidence on VQ codes.
+    label_smoothing: float = 0.1
     # ---- Geometric losses (MDM-family-A "physics-constrained" signal) ----
     # Decode softmax over codebook -> motion-space and compare with GT.
     # Differentiable through the (frozen) RVQ decoder; gradients reach

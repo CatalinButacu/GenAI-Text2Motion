@@ -35,7 +35,12 @@ training:
   num_epochs: 60
   warmup_steps: 1000
   grad_clip: 1.0
-  length_loss_weight: 0.1
+  # Length loss: normalised to [0,1] by /max_motion_length (raw MSE ~50 → ~0.001).
+  # Weight 10.0 gives contribution ~0.01 vs CE ~4-5 (≈0.2% of total) -- secondary task.
+  length_loss_weight: 10.0
+  # Label smoothing (T2M-GPT style): prevents overconfidence on VQ-code targets.
+  # 0.1 is standard for discrete token generation.
+  label_smoothing: 0.1
   # Geometric losses (MDM family-A). Weights lowered to not overwhelm CE.
   recon_loss_weight: 0.1
   velocity_loss_weight: 0.1
