@@ -41,10 +41,13 @@ training:
   # Label smoothing (T2M-GPT style): prevents overconfidence on VQ-code targets.
   # 0.1 is standard for discrete token generation.
   label_smoothing: 0.1
-  # Geometric losses (MDM family-A). Weights lowered to not overwhelm CE.
-  recon_loss_weight: 0.1
-  velocity_loss_weight: 0.1
-  root_height_loss_weight: 0.1
+  # Geometric losses: DISABLED for the SSM generation model (T2M-GPT paradigm).
+  # Our SSM operates in token space -- geometry is already encoded in the RVQ codebook.
+  # MDM uses geometric losses because it operates in raw motion space; that does not
+  # apply here. Conflicting token-space CE vs motion-space L1 gradients hurt training.
+  recon_loss_weight: 0.0
+  velocity_loss_weight: 0.0
+  root_height_loss_weight: 0.0
   cfg_dropout_prob: 0.1
   use_amp: true
   compile_model: false
