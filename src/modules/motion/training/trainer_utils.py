@@ -176,9 +176,18 @@ def create_optimizer_and_scheduler(
     total_steps: int,
     warmup_steps: int,
     wd: float = 0.01,
+    skip_warmup: bool = False,
 ):
+    """Build AdamW + OneCycleLR scheduler.
+
+    When ``skip_warmup=True`` (used on warm-start / checkpoint resume) the
+    warmup phase is omitted so training begins immediately at peak LR and only
+    cosine-decays.  This avoids wasting epochs crawling up from near-zero LR
+    when the model weights are already well-initialised.
+    """
     optim = torch.optim.AdamW(params, lr=lr, weight_decay=wd)
-    warmup_pct = min(warmup_steps / max(total_steps, 1), 0.3)
+    # pct_start=0 → no warmup; phase-2 cosine decay starts at step 0 (max_lr).
+    warmup_pct = 0.0 if skip_warmup else min(warmup_steps / max(total_steps, 1), 0.3)
     sched = torch.optim.lr_scheduler.OneCycleLR(
         optim,
         max_lr=lr,

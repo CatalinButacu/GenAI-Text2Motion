@@ -144,6 +144,7 @@ class BaseSSMTrainer:
             total_steps,
             config.warmup_steps,
             config.weight_decay,
+            skip_warmup=bool(getattr(config, "warm_start", False)),
         )
         os.makedirs(config.checkpoint_dir, exist_ok=True)
         self.step = 0
