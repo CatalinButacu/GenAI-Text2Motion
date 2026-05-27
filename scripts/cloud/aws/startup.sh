@@ -245,40 +245,36 @@ chown -R ubuntu:ubuntu "$REPO_DIR/checkpoints"
 echo "=== MotionSSM training started: $(date) ==="
 SSM_CKPT_BASE="$REPO_DIR/checkpoints/motion_ssm"
 
-# Find the most recent SSM run dir in S3 (if any). Bash plumbing:
-#   `aws s3 ls`    -> lists immediate dir contents
-#   `grep PRE`     -> keep only "directory" entries (S3 marks them with PRE)
-#   `awk '{print $2}'`  -> extract the dir name (column 2)
-#   `sort | tail -1`    -> alphabetic sort, last = most recent (our IDs are
-#                          timestamped like 20260507-145715, so alpha = chrono)
-#   `tr -d '/'`    -> strip the trailing slash from the dir name
-LATEST_S3_RUN=$(aws s3 ls "s3://$S3_BUCKET/checkpoints/motion_ssm/" 2>/dev/null | \
-  grep PRE | awk '{print $2}' | sort | tail -1 | tr -d '/' || true)
+# Find the S3 run that has the best model checkpoint to warm-start from.
+# Strategy: walk ALL S3 runs newest-first and pick the first one that has a
+# best_model.pt.  This avoids accidentally warm-starting from a later run
+# that overfit and never saved a best_model.pt.
+ALL_S3_RUNS=$(aws s3 ls "s3://$S3_BUCKET/checkpoints/motion_ssm/" 2>/dev/null | \
+  grep PRE | awk '{print $2}' | sort -r | tr -d '/' || true)
 
-if [ -n "$LATEST_S3_RUN" ]; then
-  echo "Resuming from S3 run: $LATEST_S3_RUN"
-  mkdir -p "$SSM_CKPT_BASE/$LATEST_S3_RUN"
-  aws s3 sync "s3://$S3_BUCKET/checkpoints/motion_ssm/$LATEST_S3_RUN" \
-              "$SSM_CKPT_BASE/$LATEST_S3_RUN"
-  # Pick the best available checkpoint: prefer best_model.pt, then fall back
-  # to the latest checkpoint_epochXX.pt (for runs killed by wallclock timer
-  # before any epoch beat the warm-start baseline).
-  CKPT_PATH="$SSM_CKPT_BASE/$LATEST_S3_RUN/best_model.pt"
-  if [ ! -f "$CKPT_PATH" ]; then
-    CKPT_PATH=$(ls -v "$SSM_CKPT_BASE/$LATEST_S3_RUN"/checkpoint_epoch*.pt 2>/dev/null | tail -1 || true)
-    echo "No best_model.pt found — falling back to latest epoch checkpoint: $CKPT_PATH"
+RESUME_SOURCE_RUN=""
+for RUN_ID in $ALL_S3_RUNS; do
+  # Check whether this run has a best_model.pt in S3
+  HAS_BEST=$(aws s3 ls "s3://$S3_BUCKET/checkpoints/motion_ssm/$RUN_ID/best_model.pt" \
+    2>/dev/null | wc -l)
+  if [ "$HAS_BEST" -gt 0 ]; then
+    RESUME_SOURCE_RUN="$RUN_ID"
+    echo "Best checkpoint found in run: $RESUME_SOURCE_RUN"
+    break
   fi
-  if [ -n "$CKPT_PATH" ] && [ -f "$CKPT_PATH" ]; then
-    # Use relative path from repo root (where python runs)
-    CKPT_REL="checkpoints/motion_ssm/$LATEST_S3_RUN/$(basename $CKPT_PATH)"
-    RESUME_FLAG="--resume $CKPT_REL --warm-start"
-    echo "Warm-starting from: $CKPT_REL"
-  else
-    echo "WARNING: no checkpoint found in $LATEST_S3_RUN — starting fresh"
-    RESUME_FLAG=""
-  fi
+  echo "Run $RUN_ID has no best_model.pt — skipping"
+done
+
+if [ -n "$RESUME_SOURCE_RUN" ]; then
+  mkdir -p "$SSM_CKPT_BASE/$RESUME_SOURCE_RUN"
+  aws s3 sync "s3://$S3_BUCKET/checkpoints/motion_ssm/$RESUME_SOURCE_RUN" \
+              "$SSM_CKPT_BASE/$RESUME_SOURCE_RUN"
+  CKPT_PATH="$SSM_CKPT_BASE/$RESUME_SOURCE_RUN/best_model.pt"
+  CKPT_REL="checkpoints/motion_ssm/$RESUME_SOURCE_RUN/best_model.pt"
+  RESUME_FLAG="--resume $CKPT_REL --warm-start"
+  echo "Warm-starting from best_model.pt in: $RESUME_SOURCE_RUN"
 else
-  echo "Fresh SSM training (no prior run in S3)"
+  echo "No run with best_model.pt found — starting fresh"
   RESUME_FLAG=""
 fi
 
@@ -311,7 +307,7 @@ sudo -u ubuntu $SUDO_KEEP_WANDB bash -c "
     --n-layers                 6 \
     --max-motion-length        200 \
     --batch-size               $BATCH_SIZE \
-    --lr                       3e-5 \
+    --lr                       5e-6 \
     --model-dropout            0.1 \
     --pose-prefix-prob         0.5 \
     --epochs                   $EPOCHS_SSM \
