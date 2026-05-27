@@ -113,7 +113,7 @@ class TrainingConfig(ModelConfig, DataConfig):
     learning_rate: float = 1e-4
     weight_decay: float = 0.01
     num_epochs: int = 200
-    warmup_steps: int = 1000
+    warmup_steps: int = 200  # short warmup (~3 epochs at 72 steps/epoch); avoids 14-epoch ramp
     grad_clip: float = 1.0
     length_loss_weight: float = 10.0  # compensates for normalised len_loss ~1e-3 (raw ~54)
     # Label smoothing for token CE (T2M-GPT style). Prevents overconfidence on VQ codes.

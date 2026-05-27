@@ -33,7 +33,7 @@ training:
   learning_rate: 3.0e-5
   weight_decay: 0.01
   num_epochs: 60
-  warmup_steps: 1000
+  warmup_steps: 200  # short warmup (~3 epochs); full 1000-step ramp caused 14-epoch delay
   grad_clip: 1.0
   # Length loss: normalised to [0,1] by /max_motion_length (raw MSE ~50 → ~0.001).
   # Weight 10.0 gives contribution ~0.01 vs CE ~4-5 (≈0.2% of total) -- secondary task.
