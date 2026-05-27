@@ -255,8 +255,10 @@ ALL_S3_RUNS=$(aws s3 ls "s3://$S3_BUCKET/checkpoints/motion_ssm/" 2>/dev/null | 
 RESUME_SOURCE_RUN=""
 for RUN_ID in $ALL_S3_RUNS; do
   # Check whether this run has a best_model.pt in S3
+  # `aws s3 ls` exits 1 when object not found; `|| echo 0` prevents set -e from
+  # killing the script via pipefail on every run that has no best_model.pt.
   HAS_BEST=$(aws s3 ls "s3://$S3_BUCKET/checkpoints/motion_ssm/$RUN_ID/best_model.pt" \
-    2>/dev/null | wc -l)
+    2>/dev/null | wc -l || echo 0)
   if [ "$HAS_BEST" -gt 0 ]; then
     RESUME_SOURCE_RUN="$RUN_ID"
     echo "Best checkpoint found in run: $RESUME_SOURCE_RUN"
