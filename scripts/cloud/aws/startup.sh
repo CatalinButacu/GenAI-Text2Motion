@@ -245,40 +245,13 @@ chown -R ubuntu:ubuntu "$REPO_DIR/checkpoints"
 echo "=== MotionSSM training started: $(date) ==="
 SSM_CKPT_BASE="$REPO_DIR/checkpoints/motion_ssm"
 
-# Find the S3 run that has the best model checkpoint to warm-start from.
-# Strategy: walk ALL S3 runs newest-first and pick the first one that has a
-# best_model.pt.  This avoids accidentally warm-starting from a later run
-# that overfit and never saved a best_model.pt.
-ALL_S3_RUNS=$(aws s3 ls "s3://$S3_BUCKET/checkpoints/motion_ssm/" 2>/dev/null | \
-  grep PRE | awk '{print $2}' | sort -r | tr -d '/' || true)
-
-RESUME_SOURCE_RUN=""
-for RUN_ID in $ALL_S3_RUNS; do
-  # Check whether this run has a best_model.pt in S3
-  # `aws s3 ls` exits 1 when object not found; `|| echo 0` prevents set -e from
-  # killing the script via pipefail on every run that has no best_model.pt.
-  HAS_BEST=$(aws s3 ls "s3://$S3_BUCKET/checkpoints/motion_ssm/$RUN_ID/best_model.pt" \
-    2>/dev/null | wc -l || echo 0)
-  if [ "$HAS_BEST" -gt 0 ]; then
-    RESUME_SOURCE_RUN="$RUN_ID"
-    echo "Best checkpoint found in run: $RESUME_SOURCE_RUN"
-    break
-  fi
-  echo "Run $RUN_ID has no best_model.pt — skipping"
-done
-
-if [ -n "$RESUME_SOURCE_RUN" ]; then
-  mkdir -p "$SSM_CKPT_BASE/$RESUME_SOURCE_RUN"
-  aws s3 sync "s3://$S3_BUCKET/checkpoints/motion_ssm/$RESUME_SOURCE_RUN" \
-              "$SSM_CKPT_BASE/$RESUME_SOURCE_RUN"
-  CKPT_PATH="$SSM_CKPT_BASE/$RESUME_SOURCE_RUN/best_model.pt"
-  CKPT_REL="checkpoints/motion_ssm/$RESUME_SOURCE_RUN/best_model.pt"
-  RESUME_FLAG="--resume $CKPT_REL --warm-start"
-  echo "Warm-starting from best_model.pt in: $RESUME_SOURCE_RUN"
-else
-  echo "No run with best_model.pt found — starting fresh"
-  RESUME_FLAG=""
-fi
+# Fresh training from scratch — no warm-start.
+# The prior warm-start checkpoints were trained with geometric losses (recon+vel+rh).
+# Fine-tuning them with CE-only produces a representation mismatch that prevents
+# the model from improving below the warm-start baseline. Clean-slate training
+# with the current CE-only loss is the correct path.
+RESUME_FLAG=""
+echo "Training from scratch (no warm-start)"
 
 # The mkdir/sync above ran as root, so $SSM_CKPT_BASE and any resumed run dir
 # under it are now root-owned. The trainer below runs as ubuntu via sudo -u
@@ -309,7 +282,7 @@ sudo -u ubuntu $SUDO_KEEP_WANDB bash -c "
     --n-layers                 6 \
     --max-motion-length        200 \
     --batch-size               $BATCH_SIZE \
-    --lr                       5e-6 \
+    --lr                       3e-5 \
     --model-dropout            0.1 \
     --pose-prefix-prob         0.5 \
     --epochs                   $EPOCHS_SSM \
