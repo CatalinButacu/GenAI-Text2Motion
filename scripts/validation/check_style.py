@@ -15,14 +15,11 @@ violations are tracked by a frozen baseline that should only decrease.
 
 Usage
 -----
-  python scripts/validation/check_style.py          # check src/ + main.py
-  python scripts/validation/check_style.py --strict # non-zero exit on any violation
-  python scripts/validation/check_style.py --json   # machine-readable output
+  python scripts/validation/check_style.py                  # scan src/ + scripts/ + main.py
+  python scripts/validation/check_style.py path/to/file.py  # scan only the given path(s)
+  python scripts/validation/check_style.py --json           # machine-readable output
 
-Exit codes
-----------
-  0  no violations
-  1  violations found
+Exit code: 1 if any violation, else 0.
 """
 from __future__ import annotations
 
@@ -263,12 +260,13 @@ def run(targets: list[Path] | None = None, as_json: bool = False) -> StyleReport
 
 
 if __name__ == "__main__":
-    as_json = "--json" in sys.argv
-    is_strict = "--strict" in sys.argv
+    args = sys.argv[1:]
+    as_json = "--json" in args
+    paths = [Path(a).resolve() for a in args if not a.startswith("-")]
 
-    report = run(as_json=as_json)
+    report = run(targets=paths or None, as_json=as_json)
 
-    if report.count > 0:
-        if not as_json:
-            print(f"Total: {report.count} violation(s). Fix before committing.")
-        sys.exit(1)
+    if report.count and not as_json:
+        print(f"Total: {report.count} violation(s). Fix before committing.")
+
+    sys.exit(1 if report.count else 0)
