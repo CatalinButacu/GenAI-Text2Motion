@@ -148,7 +148,7 @@ python -m spacy download en_core_web_sm --quiet
 # Step 3: clone the code from GitHub
 # `--depth=1` = shallow clone, only the latest commit (faster, no history)
 # -----------------------------------------------------------------------------
-git clone --depth=1 --branch audit-main "$REPO_URL" "$REPO_DIR"
+git clone --depth=1 --branch main "$REPO_URL" "$REPO_DIR"
 cd "$REPO_DIR"
 
 # Install the repo itself as an editable package so `import src.*` works.
