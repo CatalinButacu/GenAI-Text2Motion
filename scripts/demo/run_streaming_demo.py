@@ -42,6 +42,11 @@ from pathlib import Path
 
 import numpy as np
 
+from src.modules.agent.planner import ActionPlanner
+from src.modules.agent.runner import StreamingRunner
+from src.modules.agent.world_state import WorldState
+from src.modules.motion.ssm_model import SSMMotionModel
+
 log = logging.getLogger(__name__)
 
 # Default named scene objects with placeholder positions. Real scenes
@@ -55,7 +60,7 @@ DEFAULT_SCENE = {
 }
 
 
-def _parse_scene_overrides(overrides: list[str] | None) -> dict[str, np.ndarray]:
+def parse_scene_overrides(overrides: list[str] | None) -> dict[str, np.ndarray]:
     """Convert --scene-object NAME=x,y,z entries into a position dict."""
     scene = {k: v.copy() for k, v in DEFAULT_SCENE.items()}
 
@@ -132,11 +137,6 @@ def main() -> int:
               file=sys.stderr)
 
         return 1
-    # ---------- imports (deferred so missing-checkpoint message is fast) ---------- #
-    from src.modules.agent.planner import ActionPlanner
-    from src.modules.agent.runner import StreamingRunner
-    from src.modules.agent.world_state import WorldState
-    from src.modules.motion.ssm_model import SSMMotionModel
     # ---------- build agent ---------- #
     log.info("Loading planner LM from %s", args.planner_ckpt)
     planner = ActionPlanner(args.planner_ckpt)
@@ -151,7 +151,7 @@ def main() -> int:
     tokenizer = motion.tokenizer
     world = WorldState()
 
-    for name, pos in _parse_scene_overrides(args.scene_object).items():
+    for name, pos in parse_scene_overrides(args.scene_object).items():
         world.add_scene_object(name, pos)
     log.info("Scene: %s", sorted(world.scene_objects.keys()))
     runner = StreamingRunner(

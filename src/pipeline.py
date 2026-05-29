@@ -17,7 +17,9 @@ class Pipeline:
         self.config = config or PipelineConfig()
         log.info("Pipeline ready (device=%s)", self.config.device)
 
-    def run(self, prompt: str, output_name: str = "output", stream: bool = False, viewer: bool = False) -> dict[str, Any]:
+    def run(
+        self, prompt: str, output_name: str = "output", stream: bool = False, viewer: bool = False
+    ) -> dict[str, Any]:
         prompt = (prompt or "").strip()[: self.config.prompt_max_chars]
 
         if not prompt:

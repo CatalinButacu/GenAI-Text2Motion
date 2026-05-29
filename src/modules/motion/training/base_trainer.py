@@ -214,10 +214,10 @@ class BaseSSMTrainer:
     def log_epoch(self, epoch: int, tr: tuple, vr: tuple) -> None:
         # train tuple: (loss, tok_ce, len_loss[, recon, vel, rh]) — back-compat with 3-tuple
         tr_ext = (*tr, 0.0, 0.0, 0.0)
-        tl, tok_ce, len_l, recon, vel, rh = tr_ext[0], tr_ext[1], tr_ext[2], tr_ext[3], tr_ext[4], tr_ext[5]
+        tl, tok_ce, len_l, recon, vel, rh = tr_ext[:6]
         # val tuple: (ce, top1[, top5, top10]) — back-compat with 2-tuple
         vr_ext = (*vr, 0.0, 0.0)
-        val_ce, val_top1, val_top5, val_top10 = vr_ext[0], vr_ext[1], vr_ext[2], vr_ext[3]
+        val_ce, val_top1, val_top5, val_top10 = vr_ext[:4]
         lr = self.optimizer.param_groups[0]["lr"]
         log.info(
             "epoch=%d/%d train=%.4f(ce=%.4f len=%.3f recon=%.3f vel=%.3f rh=%.3f)"

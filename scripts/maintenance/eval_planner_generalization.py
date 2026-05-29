@@ -34,6 +34,8 @@ import logging
 import time
 from pathlib import Path
 
+from src.modules.agent.planner import ActionPlanner
+
 log = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -56,7 +58,6 @@ def main() -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
-    from src.modules.agent.planner import ActionPlanner
 
     log.info("Loading planner from %s", args.checkpoint)
     planner = ActionPlanner(args.checkpoint, temperature=args.temperature)

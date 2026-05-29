@@ -37,6 +37,7 @@ import torch.nn as nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader, Dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 log = logging.getLogger(__name__)
 
@@ -143,8 +144,6 @@ def main() -> int:
         else "cpu",
     )
     log.info("Device: %s", device)
-    # Lazy-import so the dataset-only tests don't need transformers installed
-    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     log.info("Loading base model %s", args.base_model)
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)

@@ -32,6 +32,7 @@ import json
 import time
 from pathlib import Path
 
+import psutil
 import torch
 
 from src.modules.motion.nn_models import TextToMotionSSM
@@ -77,8 +78,6 @@ def peak_mem_mb(device: torch.device) -> float:
     if device.type == "cuda":
         return torch.cuda.max_memory_allocated() / 1e6
     # CPU: psutil RSS is the closest analogue
-    import psutil  # type: ignore
-
     return psutil.Process().memory_info().rss / 1e6
 
 
@@ -94,7 +93,7 @@ def bench_parallel(model: TextToMotionSSM, latent_len: int, device: torch.device
 
     try:
         with torch.no_grad():
-            _ = model(tokens, motion_length=motion_length)
+            model(tokens, motion_length=motion_length)
         elapsed = time.perf_counter() - t0
 
         return {

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -77,7 +78,6 @@ def parse_val_curve(run_dir: Path) -> list[float]:
         return []
     text = log_paths[0].read_text(encoding="utf-8", errors="ignore")
     curve: list[float] = []
-    import re
     for m in re.finditer(r"val_loss=([0-9]+\.[0-9]+)", text):
         curve.append(float(m.group(1)))
     return curve
