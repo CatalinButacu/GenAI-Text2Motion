@@ -48,6 +48,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import random
 import sys
 import time
@@ -64,17 +65,19 @@ from scripts.evaluation.motion_encoder import (
     load_encoder,
     load_text_encoder,
 )
+from src.architecture.nn_models import TextToMotionSSM
+from src.architecture.rvq_tokenizer import MotionRVQTokenizer
+from src.architecture.training.trainer_utils import load_strict
 from src.data.humanml3d_loader import HumanML3DMotionDataset
 from src.data.motion_normalize import MotionStats, normalize
-from src.modules.motion.config import TrainingConfig
-from src.modules.motion.nn_models import TextToMotionSSM
-from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
 from src.modules.motion.ssm_model import sample_indices
-from src.shared.constants import MOTION_DIM
+from src.shared.config import TrainingConfig
+from src.shared.constants import CONSTS, SMPLX
 from src.shared.tokenizer import tokenize as tok
 
 try:
     from sentence_transformers import SentenceTransformer
+
     SBERT_AVAILABLE = True
 except ImportError:
     SentenceTransformer = None
@@ -89,12 +92,14 @@ MIN_FULL_FID: int = 512  # minimum samples for full (non-diagonal) FID
 
 #  Data structures
 
+
 @dataclass
 class EvalSample:
     text: str  # text prompt
     gt_motion: np.ndarray  # (T, 168) ground-truth motion
     gen_motion: np.ndarray  # (T, 168) generated motion
     clip_id: str
+
 
 @dataclass
 class EvalResults:
@@ -141,7 +146,9 @@ class EvalResults:
         print(f"{'=' * 60}")
         print()
 
+
 #  FID computation
+
 
 def frechet_distance(
     mu1: np.ndarray, sigma1: np.ndarray, mu2: np.ndarray, sigma2: np.ndarray
@@ -173,11 +180,13 @@ def frechet_distance(
     trace_term = float(np.trace(sigma1 + sigma2 - 2 * covmean))
     return mean_term + trace_term
 
+
 def diagonal_fid(mu1: np.ndarray, var1: np.ndarray, mu2: np.ndarray, var2: np.ndarray) -> float:
     """Diagonal-covariance FID (used when N < _MIN_FULL_FID)."""
     diff = mu1 - mu2
     covmean = np.sqrt(np.maximum(var1 * var2, 0.0))
     return float(diff @ diff + (var1 + var2 - 2 * covmean).sum())
+
 
 def compute_fid(gen_feats: np.ndarray, real_feats: np.ndarray) -> float:
     """Compute FID between generated and real motion feature distributions.
@@ -211,7 +220,9 @@ def compute_fid(gen_feats: np.ndarray, real_feats: np.ndarray) -> float:
     )
     return diagonal_fid(mu_g, gen_feats.var(axis=0), mu_r, real_feats.var(axis=0))
 
+
 #  R-Precision
+
 
 def compute_text_features(
     texts: list[str],
@@ -239,6 +250,7 @@ def compute_text_features(
             rng2 = np.random.default_rng(seed=h)
             feats.append(rng2.standard_normal(384).astype(np.float32))
         return np.stack(feats)
+
 
 def compute_precision_r(
     samples: list[EvalSample],
@@ -279,7 +291,9 @@ def compute_precision_r(
             "Distractor sampling will draw duplicates of the GT text and "
             "the resulting R-Precision values are NOT comparable to T2M-protocol "
             "numbers. Use a larger eval set (>=%d unique prompts) or lower pool_size.",
-            n_unique, pool_size, pool_size,
+            n_unique,
+            pool_size,
+            pool_size,
         )
     rng = random.Random(rng_seed)
     all_texts = [s.text for s in samples]
@@ -343,7 +357,9 @@ def compute_precision_r(
 
     return top1_hits / N, top2_hits / N, top3_hits / N
 
+
 #  Diversity and Multimodality
+
 
 def compute_diversity(feats: np.ndarray, n_pairs: int = 300, seed: int = 42) -> float:
     """Average pairwise L2 distance between motion features (random sample of pairs).
@@ -358,6 +374,7 @@ def compute_diversity(feats: np.ndarray, n_pairs: int = 300, seed: int = 42) -> 
     pairs = rng.choice(N, size=(min(n_pairs, N * (N - 1) // 2), 2), replace=False)
     dists = [float(np.linalg.norm(feats[a] - feats[b])) for a, b in pairs]
     return float(np.mean(dists))
+
 
 def compute_multimodality(
     prompt_to_feats: dict[str, list[np.ndarray]],
@@ -387,7 +404,9 @@ def compute_multimodality(
         return 0.0
     return float(np.mean(per_prompt_dists))
 
+
 #  Data loading
+
 
 def load_test_samples(
     data_dir: str,
@@ -409,7 +428,7 @@ def load_test_samples(
             augment=False,
         )
     except FileNotFoundError as exc:
-        log.error("[Eval] %s", exc)
+        log.exception("[Eval] %s", exc)
         sys.exit(1)
 
     samples = []
@@ -438,11 +457,11 @@ def load_test_samples(
     log.info("[Eval] %d samples loaded from %s", len(samples), split)
     return samples
 
+
 #  Generator
 
-def load_frozen_tokenizer(
-    cfg: TrainingConfig, device: str
-) -> MotionRVQTokenizer:
+
+def load_frozen_tokenizer(cfg: TrainingConfig, device: str) -> MotionRVQTokenizer:
     """Load the same RVQ tokenizer the SSM was trained against, in eval mode."""
 
     path = cfg.rvq_checkpoint_path
@@ -458,11 +477,22 @@ def load_frozen_tokenizer(
         codebook_size=cfg.rvq_codebook_size,
         down_t=cfg.rvq_down_t,
     ).to(device)
-    rvq_ck = torch.load(path, map_location=device, weights_only=False)
+    rvq_ck = torch.load(path, map_location=device, weights_only=False)  # NOSONAR
     tokenizer.load_state_dict(rvq_ck["model_state_dict"])
     tokenizer.eval()
     log.info("[Eval] frozen RVQ tokenizer loaded from %s", path)
     return tokenizer
+
+
+def encodeTextInputs(text: str, use_sbert: bool, vocab: dict | None,
+                     cfg: TrainingConfig, device: str):
+    if use_sbert:
+        return [text]
+
+    v = vocab or {}
+    ids = tok(text, v, max_len=cfg.max_text_length)
+    return torch.tensor([ids], dtype=torch.long, device=device)
+
 
 def generate_motions(
     checkpoint: str,
@@ -470,6 +500,8 @@ def generate_motions(
     device: str,
     use_sbert: bool = False,
     multi_gen: int = 1,
+    temperature: float = 1.0,
+    top_p: float = 1.0,
 ) -> tuple[list[EvalSample], MotionStats | None]:
     """Generate motions for all test samples using a trained checkpoint.
 
@@ -488,7 +520,7 @@ def generate_motions(
     """
 
     log.info("[Eval] loading generator checkpoint: %s", checkpoint)
-    ck = torch.load(checkpoint, map_location=device, weights_only=False)
+    ck = torch.load(checkpoint, map_location=device, weights_only=False)  # NOSONAR
     cfg: TrainingConfig = ck.get("config", TrainingConfig())
     # Always respect the CLI override for encoder type
     cfg.use_sbert = use_sbert
@@ -500,14 +532,29 @@ def generate_motions(
 
     model = TextToMotionSSM(cfg).to(device)
 
-    # Load full model weights
+    # Load full model weights. Default = lenient; SSM_STRICT_LOAD=1 enforces strict.
     state_key = "model_state_dict" if "model_state_dict" in ck else "motion_ssm_state_dict"
-    model_sd = model.state_dict()
-    compat = {
-        k: v for k, v in ck[state_key].items() if k in model_sd and v.shape == model_sd[k].shape
-    }
-    model.load_state_dict(compat, strict=False)
-    log.info("[Eval] loaded %d/%d model weights", len(compat), len(ck[state_key]))
+    strict = os.environ.get("SSM_STRICT_LOAD", "").lower() in ("1", "true", "yes")
+
+    if strict:
+        load_strict(model, ck[state_key], "motion_ssm")
+    else:
+        model_sd = model.state_dict()
+        compat = {
+            k: v for k, v in ck[state_key].items()
+            if k in model_sd and v.shape == model_sd[k].shape
+        }
+        missed = len(ck[state_key]) - len(compat)
+
+        if missed:
+            log.error(
+                "[Eval] LENIENT LOAD: %d/%d checkpoint keys did NOT load (set "
+                "SSM_STRICT_LOAD=1 to fail loudly). FID numbers will reflect a "
+                "partially-trained model.",
+                missed, len(ck[state_key]),
+            )
+        model.load_state_dict(compat, strict=False)
+        log.info("[Eval] loaded %d/%d model weights", len(compat), len(ck[state_key]))
     model.eval()
 
     tokenizer = load_frozen_tokenizer(cfg, device)
@@ -535,18 +582,17 @@ def generate_motions(
                 else gt_motion[:num_frames]
             )
 
-            for gen in range(multi_gen):
-                # Encode text
-                if use_sbert:
-                    inputs = [text]
-                else:
-
-                    vocab = vocab or {}
-                    ids = tok(text, vocab, max_len=cfg.max_text_length)
-                    inputs = torch.tensor([ids], dtype=torch.long, device=device)
-
+            for _ in range(multi_gen):
+                inputs = encodeTextInputs(text, use_sbert, vocab, cfg, device)
                 logits, _ = model(inputs, num_frames)  # (1, T', K, V)
-                indices = sample_indices(logits)  # (1, T', K) — argmax for deterministic eval
+                # multi_gen > 1 with greedy sampling (temp=1.0+top_p=1.0) collapses
+                # to identical samples -> multimodality trivially 0. Auto-bump to
+                # mild stochastic sampling unless the caller explicitly overrode.
+                eff_temp, eff_top_p = temperature, top_p
+
+                if multi_gen > 1 and abs(temperature - 1.0) < 1e-9 and top_p >= 1.0 - 1e-9:
+                    eff_temp, eff_top_p = 1.1, 0.95
+                indices = sample_indices(logits, temperature=eff_temp, top_p=eff_top_p)
                 motion = tokenizer.decode(indices)  # (1, T, 168) in normalised space
                 gen_motion = motion[0, :num_frames].cpu().numpy()
 
@@ -566,7 +612,9 @@ def generate_motions(
     log.info("[Eval] generation complete: %d samples in %.1fs", len(eval_samples), time.time() - t0)
     return eval_samples, motion_stats
 
+
 #  Main computation
+
 
 def run_evaluation(
     checkpoint: str,
@@ -579,6 +627,8 @@ def run_evaluation(
     encoder_weights: str | None = None,
     output: str = "results/fid_report.json",
     ref_checkpoint: str | None = None,
+    temperature: float = 1.0,
+    top_p: float = 1.0,
 ) -> EvalResults:
     """Full evaluation pipeline: generate -> encode -> FID, R-Prec, Diversity."""
 
@@ -587,11 +637,17 @@ def run_evaluation(
 
     # 2. Generate motions
     eval_samples, _motionStats = generate_motions(
-        checkpoint, samples, device, use_sbert, multi_gen,
+        checkpoint,
+        samples,
+        device,
+        use_sbert,
+        multi_gen,
+        temperature=temperature,
+        top_p=top_p,
     )
 
     # 3. Load motion encoder
-    enc = load_encoder(input_dim=MOTION_DIM, weights_path=encoder_weights, device=device)
+    enc = load_encoder(input_dim=SMPLX.pose_dim, weights_path=encoder_weights, device=device)
     pretrained = getattr(enc, "_loaded_pretrained", False)
 
     # 3b. Load T2M text encoder from the same finest.tar for valid R-Precision
@@ -664,7 +720,9 @@ def run_evaluation(
 
     return results
 
+
 #  CLI
+
 
 def main() -> None:
     logging.basicConfig(
@@ -681,8 +739,9 @@ def main() -> None:
     p.add_argument(
         "--checkpoint", required=True, help="Path to trained TextToMotionSSM .pt checkpoint"
     )
-    p.add_argument("--data-dir", default="data/humanml3d",
-                   help="HumanML3D data directory", dest="data_dir")
+    p.add_argument(
+        "--data-dir", default="data/humanml3d", help="HumanML3D data directory", dest="data_dir"
+    )
     p.add_argument(
         "--split",
         default="test",
@@ -694,23 +753,43 @@ def main() -> None:
         type=int,
         default=None,
         help="Limit evaluation to N random samples (default: all)",
-    dest="max_samples")
+        dest="max_samples",
+    )
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument(
-        "--use-sbert", action="store_true", help="Use SBERT encoder (must match training config)"
-    , dest="use_sbert")
+        "--use-sbert",
+        action="store_true",
+        help="Use SBERT encoder (must match training config)",
+        dest="use_sbert",
+    )
     p.add_argument(
         "--multi-gen",
         type=int,
         default=1,
         help="Number of generations per prompt (used for multimodality)",
-    dest="multi_gen")
+        dest="multi_gen",
+    )
     p.add_argument(
-        "--encoder-weights", default=None, help="Path to T2M motion encoder .pt weights (optional)"
-    , dest="encoder_weights")
-    p.add_argument("--ref-checkpoint", default=None,
-                   help="Baseline checkpoint to compare against",
-                   dest="ref_checkpoint")
+        "--temperature", type=float, default=1.0,
+        help="Sampling temperature for the RVQ head; >1.0 diversifies. With --multi-gen>1, "
+             "defaults of 1.0/1.0 auto-bump to 1.1/0.95 so multimodality is not trivially 0.",
+    )
+    p.add_argument(
+        "--top-p", type=float, default=1.0, dest="top_p",
+        help="Nucleus filter for the RVQ head; <1.0 trims low-probability tails.",
+    )
+    p.add_argument(
+        "--encoder-weights",
+        default=None,
+        help="Path to T2M motion encoder .pt weights (optional)",
+        dest="encoder_weights",
+    )
+    p.add_argument(
+        "--ref-checkpoint",
+        default=None,
+        help="Baseline checkpoint to compare against",
+        dest="ref_checkpoint",
+    )
     p.add_argument("--output", default="results/fid_report.json", help="Output JSON path")
     args = p.parse_args()
 
@@ -725,8 +804,11 @@ def main() -> None:
         encoder_weights=args.encoder_weights,
         output=args.output,
         ref_checkpoint=args.ref_checkpoint,
+        temperature=args.temperature,
+        top_p=args.top_p,
     )
     results.print_table()
+
 
 if __name__ == "__main__":
     main()

@@ -17,7 +17,7 @@ import unittest
 import numpy as np
 import torch
 
-from src.modules.motion.ssm import BiMambaLayer, MambaLayer, SSMConfig
+from src.architecture.ssm import BiMambaLayer, MambaLayer, SSMConfig
 from src.modules.understanding.spacy import SpacyParser
 
 

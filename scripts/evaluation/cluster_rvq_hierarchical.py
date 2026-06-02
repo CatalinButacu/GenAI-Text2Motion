@@ -84,7 +84,7 @@ def top_words_per_cluster(texts: list[str], cluster_ids: np.ndarray,
     out: dict[int, list[str]] = {}
 
     for c in range(1, k + 1):
-        idx = np.where(cluster_ids == c)[0]
+        idx = np.nonzero(cluster_ids == c)[0]
 
         if len(idx) == 0:
             out[c] = []
@@ -100,7 +100,7 @@ def action_distribution(texts: list[str], cluster_ids: np.ndarray, k: int) -> di
     out: dict[int, dict[str, int]] = {}
 
     for c in range(1, k + 1):
-        idx = np.where(cluster_ids == c)[0]
+        idx = np.nonzero(cluster_ids == c)[0]
         counts: dict[str, int] = {}
 
         for i in idx:
@@ -114,7 +114,7 @@ def amass_distribution(samples: list, cluster_ids: np.ndarray, k: int) -> dict:
     out: dict[int, dict[str, int]] = {}
 
     for c in range(1, k + 1):
-        idx = np.where(cluster_ids == c)[0]
+        idx = np.nonzero(cluster_ids == c)[0]
         counts: dict[str, int] = {}
 
         for i in idx:
@@ -135,7 +135,7 @@ def plot_k_grid(coords: np.ndarray, cluster_map: dict[int, np.ndarray], out_dir:
         ax = axes[0, i]
 
         for c in range(1, k + 1):
-            idx = np.where(ids == c)[0]
+            idx = np.nonzero(ids == c)[0]
 
             if len(idx) == 0:
                 continue

@@ -23,16 +23,12 @@
 !/.gitattributes
 !/.pre-commit-config.yaml
 !/Dockerfile
-!/Makefile
 !/main.py
 !/pyproject.toml
 !/pyrightconfig.json
 !/README.md
-!/requirements.txt
-!/requirements.lock.txt
-!/requirements-ci.txt
 !/uv.lock
-!/TRAINING.md
+!/CLAUDE.md
 
 # ─── Inside allowed dirs: still exclude common cruft ──────────────────────────
 **/__pycache__/
@@ -80,6 +76,8 @@ scripts/validation/*.json
 # ─── Terraform: state, lock, real tfvars (only the .example is tracked) ───────
 **/*.tfstate
 **/*.tfstate.backup
+**/*.tfstate.*.backup
+**/*.err
 **/.terraform/
 **/.terraform.lock.hcl
 **/terraform.tfvars

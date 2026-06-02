@@ -4,6 +4,7 @@ The world-state object is the only mutable surface between the runner and
 the condition predicates. If pose extraction or per-action reset is wrong,
 every distance/rotation/duration check downstream is wrong with it.
 """
+
 from __future__ import annotations
 
 import unittest
@@ -11,19 +12,18 @@ import unittest
 import numpy as np
 
 from src.modules.agent.world_state import WorldState
-from src.shared.constants import MOTION_DIM
+from src.shared.constants import SMPLX
 
 
 def _make_frame(position: np.ndarray, yaw: float = 0.0) -> np.ndarray:
     """Build a fake 168-d SMPL-X frame with given root position + yaw proxy."""
-    frame = np.zeros(MOTION_DIM)
+    frame = np.zeros(SMPLX.pose_dim)
     frame[0:3] = [0.0, yaw, 0.0]  # axis-angle, yaw via y-axis (per our convention)
     frame[3:6] = position
     return frame
 
 
 class TestWorldStateUpdate(unittest.TestCase):
-
     def test_update_pulls_position_and_yaw(self):
         w = WorldState()
         frame = _make_frame(np.array([1.0, 2.0, 3.0]), yaw=0.5)

@@ -14,13 +14,8 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from src.modules.motion.config import TrainingConfig, load_yaml_config
-from src.shared.constants import (
-    MOTION_DIM,
-    SSM_D_MODEL,
-    SSM_D_STATE,
-    SSM_N_LAYERS,
-)
+from src.shared.config import SSM, TrainingConfig, load_yaml_config
+from src.shared.constants import SMPLX
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HEADLINE_YAML = REPO_ROOT / "configs" / "motion_ssm.yaml"
@@ -37,20 +32,20 @@ class TestConfigDrift(unittest.TestCase):
     def test_constants_match_yaml(self):
         flat = load_yaml_config(HEADLINE_YAML)
         self.assertEqual(
-            SSM_D_MODEL, flat["d_model"],
-            "src/shared/constants.SSM_D_MODEL != YAML architecture.d_model",
+            SSM.d_model, flat["d_model"],
+            "src/shared/nn_config.SSM.d_model != YAML architecture.d_model",
         )
         self.assertEqual(
-            SSM_D_STATE, flat["d_state"],
-            "src/shared/constants.SSM_D_STATE != YAML architecture.d_state",
+            SSM.d_state, flat["d_state"],
+            "src/shared/nn_config.SSM.d_state != YAML architecture.d_state",
         )
         self.assertEqual(
-            SSM_N_LAYERS, flat["n_layers"],
-            "src/shared/constants.SSM_N_LAYERS != YAML architecture.n_layers",
+            SSM.n_layers, flat["n_layers"],
+            "src/shared/nn_config.SSM.n_layers != YAML architecture.n_layers",
         )
         self.assertEqual(
-            MOTION_DIM, flat["motion_dim"],
-            "src/shared/constants.MOTION_DIM != YAML architecture.motion_dim",
+            SMPLX.pose_dim, flat["motion_dim"],
+            "src/shared/constants.SMPLX.pose_dim != YAML architecture.motion_dim",
         )
 
     def test_training_config_from_yaml_round_trip(self):

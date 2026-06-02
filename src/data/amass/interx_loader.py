@@ -7,12 +7,11 @@ from pathlib import Path
 
 import numpy as np
 
+from src.shared.constants import ACTION_CODE_RE, INTERX_FPS
+
 from .smplx_pack import SMPLXSample, pack_smplx_pose
 
 log = logging.getLogger(__name__)
-
-INTERX_FPS = 30.0
-ACTION_CODE_RE = re.compile(r"A(\d{3})")
 
 
 def load_action_map(repo_datasets_dir: Path) -> dict[str, str]:

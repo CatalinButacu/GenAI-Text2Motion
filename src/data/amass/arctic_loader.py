@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from src.shared.constants import MOTION_FPS
+from src.shared.constants import CONSTS
 
 from .smplx_pack import SMPLXSample, pack_smplx_pose
 
@@ -74,17 +74,18 @@ class ARCTICLoader:
 
         if obj_path.exists():
             obj_data = np.load(obj_path, allow_pickle=True)
-            obj_motion = (
-                (obj_data.item() if obj_data.dtype == object else obj_data).astype(np.float32)
-                if isinstance(obj_data, np.ndarray)
-                else None
-            )
+
+            if isinstance(obj_data, np.ndarray):
+                obj_array = obj_data.item() if obj_data.dtype == object else obj_data
+                obj_motion = obj_array.astype(np.float32)
+
         obj_name = seq_name.split("_")[0] if "_" in seq_name else seq_name
 
         return SMPLXSample(
             sample_id=f"arctic/{subject}/{seq_name}",
             motion=motion, betas=np.zeros(16, dtype=np.float32),
-            fps=30.0, duration=T / 30.0,
+            fps=float(CONSTS.runtime.motion_fps),
+            duration=T / float(CONSTS.runtime.motion_fps),
             text=f"person interacts with {obj_name}: {seq_name.replace('_', ' ')}",
             source="arctic", object_motion=obj_motion,
         )

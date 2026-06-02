@@ -18,13 +18,13 @@ import unittest
 
 import torch
 
-from src.modules.motion.config import TrainingConfig
-from src.modules.motion.nn_models import (
+from src.architecture.nn_models import (
     ResidualKHead,
     RVQMotionDecoder,
     TextToMotionSSM,
 )
 from src.modules.motion.ssm_model import sample_ar_k
+from src.shared.config import TrainingConfig
 
 
 def tiny_config(arch: str = "residual_k") -> TrainingConfig:

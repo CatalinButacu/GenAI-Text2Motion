@@ -19,7 +19,7 @@ import unittest
 
 import torch
 
-from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
+from src.architecture.rvq_tokenizer import MotionRVQTokenizer
 
 
 class TestCausalDecoder(unittest.TestCase):

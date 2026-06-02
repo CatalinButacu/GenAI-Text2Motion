@@ -1,0 +1,39 @@
+# Ablation matrix — one entry per config name.
+# Each entry documents the flags changed vs "full" and which thesis section it supports.
+# This file is read-only documentation; logic lives in evaluate_ablation.pipeline_config_for().
+
+configs:
+  full:
+    description: "Full pipeline — SpaCy + L-BFGS-B + BiMamba + FiLM + RVQ"
+    flags_changed: {}
+    thesis_section: "4.1 Baseline"
+
+  no_m2:
+    description: "Random spatial layout instead of L-BFGS-B constraint planner"
+    flags_changed:
+      planner.random_layout: true
+    thesis_section: "4.3 M2 Ablation"
+
+  no_film:
+    description: "FiLM conditioning disabled (text signal injected only via attention)"
+    flags_changed:
+      motion.use_film: false
+    thesis_section: "4.4 Conditioning Ablation"
+
+  no_bidirectional:
+    description: "Unidirectional (causal) Mamba instead of BiMamba"
+    flags_changed:
+      motion.bidirectional: false
+    thesis_section: "4.5 Architecture Ablation"
+
+  no_m1_spacy:
+    description: "Regex-only parser instead of SpaCy NLP understanding (M1 ablation)"
+    flags_changed:
+      understanding.use_spacy: false
+    thesis_section: "4.2 M1 Ablation"
+
+  cpu_baseline:
+    description: "Full config but forced to CPU — baseline for hardware-agnostic timing"
+    flags_changed:
+      device: cpu
+    thesis_section: "5.2 Performance Benchmarks"

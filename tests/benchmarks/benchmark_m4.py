@@ -11,11 +11,12 @@ import os
 import numpy as np
 
 from src.modules.motion import MotionGenerator
-from src.shared.constants import MOTION_DIM, MOTION_FPS
+from src.shared.constants import CONSTS, SMPLX
 
 GEN_NOT_READY = "Generator not ready"
 TEST_WALK_RUN = "10. Walk != Run (Semantic)"
 TEST_KICK_JUMP = "11. Kick != Jump (Semantic)"
+
 
 class M4Benchmark:
     def __init__(self):
@@ -38,21 +39,21 @@ class M4Benchmark:
         self.test("1. MotionGenerator import", True)
 
         try:
-            from src.modules.motion.ssm import MambaLayer  # noqa: F401
+            from src.architecture.ssm import MambaLayer  # noqa: F401
 
             self.test("2. SSM modules import", True)
         except ImportError as e:
             self.test("2. SSM modules import", False, str(e)[:30])
 
         try:
-            from src.modules.motion.training import SSMTrainer  # noqa: F401
+            from src.architecture.training import SSMTrainer  # noqa: F401
 
             self.test("3. Training module import", True)
         except ImportError as e:
             self.test("3. Training module import", False, str(e)[:30])
 
         try:
-            from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer  # noqa: F401
+            from src.architecture.rvq_tokenizer import MotionRVQTokenizer  # noqa: F401
 
             self.test("4. RVQ tokenizer import", True)
         except ImportError as e:
@@ -94,14 +95,17 @@ class M4Benchmark:
 
         try:
             clip = self.generator.generate("a person walks forward", num_frames=60)
-            self.test("8. Walk motion shape", clip.smplx_params.shape == (60, MOTION_DIM),
-                      f"shape={clip.smplx_params.shape}")
+            self.test(
+                "8. Walk motion shape",
+                clip.smplx_params.shape == (60, SMPLX.pose_dim),
+                f"shape={clip.smplx_params.shape}",
+            )
         except Exception as e:
             self.test("8. Walk motion shape", False, str(e)[:30])
 
         try:
             clip = self.generator.generate("a person runs", num_frames=60)
-            self.test("9. FPS preserved", clip.fps == MOTION_FPS, f"fps={clip.fps}")
+            self.test("9. FPS preserved", clip.fps == CONSTS.runtime.motion_fps, f"fps={clip.fps}")
         except Exception as e:
             self.test("9. FPS preserved", False, str(e)[:30])
 
@@ -146,6 +150,7 @@ class M4Benchmark:
         print("=" * 70)
 
         return self.passed >= max(1, total - 5)
+
 
 if __name__ == "__main__":
     benchmark = M4Benchmark()

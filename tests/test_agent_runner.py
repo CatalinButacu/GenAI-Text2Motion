@@ -24,12 +24,12 @@ from unittest.mock import MagicMock
 import numpy as np
 import torch
 
+from src.architecture.rvq_tokenizer import MotionRVQTokenizer
+from src.architecture.streaming import StreamingState
 from src.modules.agent.conditions import parse_condition
 from src.modules.agent.planner import PlannedAction
 from src.modules.agent.runner import StreamingRunner
 from src.modules.agent.world_state import WorldState
-from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
-from src.modules.motion.streaming import StreamingState
 
 D_MODEL = 64
 N_LAYERS = 2

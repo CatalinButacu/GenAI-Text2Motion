@@ -22,8 +22,8 @@ import time
 import torch
 import torch.nn.functional as F
 
-from src.modules.motion.config import TrainingConfig
-from src.modules.motion.nn_models import TextToMotionSSM
+from src.architecture.nn_models import TextToMotionSSM
+from src.shared.config import TrainingConfig
 
 
 def main() -> int:

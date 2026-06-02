@@ -25,12 +25,12 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+from src.architecture.rvq_tokenizer import MotionRVQTokenizer
 from src.data.motion_dataset import MotionDataset
 from src.data.motion_normalize import MotionStats
 from src.data.unified import build_or_load_unified_buffer
 from src.data.unified_dataset import SourceConfig, UnifiedConfig, UnifiedMotionDataset
-from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
-from src.shared.constants import MOTION_DIM
+from src.shared.constants import CONSTS
 from src.shared.run_ctx import (
     init_wandb,
     log_gpu_sanity,
@@ -41,6 +41,7 @@ from src.shared.run_ctx import (
 )
 
 log = logging.getLogger(__name__)
+
 
 def compute_tokenizer_loss(
     recon: torch.Tensor,
@@ -70,6 +71,7 @@ def compute_tokenizer_loss(
         "vel": vel_loss.detach(),
         "commit": commit_loss.detach(),
     }
+
 
 def train_epoch(
     model: MotionRVQTokenizer,
@@ -103,6 +105,7 @@ def train_epoch(
 
     return {k: v / max(n, 1) for k, v in total.items()}
 
+
 @torch.no_grad()
 def validate(
     model: MotionRVQTokenizer, loader: DataLoader, device: torch.device
@@ -120,6 +123,7 @@ def validate(
     util = model.codebook_utilization()
     return total_recon / max(n, 1), util
 
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", default="data/AMASS", dest="data_dir")
@@ -131,68 +135,144 @@ def main() -> int:
     parser.add_argument("--codebook-size", type=int, default=512, dest="codebook_size")
     parser.add_argument("--down-t", type=int, default=4, dest="down_t")
     parser.add_argument("--max-motion-length", type=int, default=200, dest="max_motion_length")
-    parser.add_argument("--checkpoint-dir", default="checkpoints/rvq_tokenizer",
-                        dest="checkpoint_dir")
+    parser.add_argument(
+        "--checkpoint-dir", default="checkpoints/rvq_tokenizer", dest="checkpoint_dir"
+    )
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--num-workers", type=int, default=0,
-                        help="DataLoader workers (0=main process, safe on Windows)",
-                        dest="num_workers")
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=0,
+        help="DataLoader workers (0=main process, safe on Windows)",
+        dest="num_workers",
+    )
     # Loss weights (MoMask defaults -- tune per ablation)
-    parser.add_argument("--recon-weight", type=float, default=1.0,
-                        help="Reconstruction MSE weight (MoMask=1.0)", dest="recon_weight")
-    parser.add_argument("--vel-weight", type=float, default=0.5,
-                        help="Velocity smoothness MSE weight (MoMask=0.5, Mogo=1.0)",
-                        dest="vel_weight")
-    parser.add_argument("--commit-weight", type=float, default=0.25,
-                        help="Codebook commitment loss weight (MoMask=0.02, Mogo=0.25)",
-                        dest="commit_weight")
-    parser.add_argument("--reset-dead-every", type=int, default=5, dest="reset_dead_every",
-                        help=("Run VQ-VAE-2 dead-code revival every N epochs (0 disables). "
-                              "Replaces unused codebook entries with random training latents "
-                              "to fight collapse on deeper RVQ layers."))
-    parser.add_argument("--reset-dead-threshold", type=float, default=1.0,
-                        dest="reset_dead_threshold",
-                        help="Cluster_size threshold below which a code is considered dead.")
-    parser.add_argument("--weight-decay", type=float, default=0.01,
-                        dest="weight_decay",
-                        help="AdamW weight decay (L2 reg).")
+    parser.add_argument(
+        "--recon-weight",
+        type=float,
+        default=1.0,
+        help="Reconstruction MSE weight (MoMask=1.0)",
+        dest="recon_weight",
+    )
+    parser.add_argument(
+        "--vel-weight",
+        type=float,
+        default=0.5,
+        help="Velocity smoothness MSE weight (MoMask=0.5, Mogo=1.0)",
+        dest="vel_weight",
+    )
+    parser.add_argument(
+        "--commit-weight",
+        type=float,
+        default=0.25,
+        help="Codebook commitment loss weight (MoMask=0.02, Mogo=0.25)",
+        dest="commit_weight",
+    )
+    parser.add_argument(
+        "--reset-dead-every",
+        type=int,
+        default=5,
+        dest="reset_dead_every",
+        help=(
+            "Run VQ-VAE-2 dead-code revival every N epochs (0 disables). "
+            "Replaces unused codebook entries with random training latents "
+            "to fight collapse on deeper RVQ layers."
+        ),
+    )
+    parser.add_argument(
+        "--reset-dead-threshold",
+        type=float,
+        default=1.0,
+        dest="reset_dead_threshold",
+        help="Cluster_size threshold below which a code is considered dead.",
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=0.01,
+        dest="weight_decay",
+        help="AdamW weight decay (L2 reg).",
+    )
     # Resume / data source / wandb
-    parser.add_argument("--resume", type=str, default=None,
-                        help=("Path to checkpoint .pt to resume training from "
-                              "(model+optimizer+scheduler+epoch)"))
-    parser.add_argument("--causal-decoder", action="store_true", dest="causal_decoder",
-                        help=("Build the decoder with CausalConv1d + nearest-neighbor "
-                              "upsampling instead of ConvTranspose1d. Required for "
-                              "streaming-mode inference (output frame t depends only "
-                              "on latent tokens up to ceil(t / down_t)). Default off "
-                              "preserves bit-compatibility with existing checkpoints."))
-    parser.add_argument("--data", default="amass",
-                        choices=["amass", "humanml3d", "all", "mega"], dest="data_source",
-                        help=("Which corpus to train on: amass (default), humanml3d, "
-                              "all (AMASS+HumanML3D), or mega (AMASS+HumanML3D+ARCTIC+InterX)."))
-    parser.add_argument("--humanml3d-dir", default="data/humanml3d", dest="humanml3d_dir",
-                        help="HumanML3D root (used when --data is humanml3d or all/mega)")
-    parser.add_argument("--arctic-dir", default="data/arctic/unpack", dest="arctic_dir",
-                        help="ARCTIC root (used when --data is mega)")
-    parser.add_argument("--interx-dir", default="data/inter-x", dest="interx_dir",
-                        help="Inter-X root (used when --data is mega)")
-    parser.add_argument("--stats-path", type=str, default=None, dest="stats_path",
-                        help=("Path to a precomputed (mean, std) .npz from "
-                              "scripts/training/precompute_stats.py. Required for fair "
-                              "cross-corpus comparison; without it, each --data run uses "
-                              "its own train-split stats and val_recon is incomparable."))
-    parser.add_argument("--trans-stats-path", type=str, default=None, dest="trans_stats_path",
-                        help=("Path to per-source translation stats .npz from "
-                              "scripts/training/precompute_translation_stats.py. When set, "
-                              "translation channels (3:6) are normalised per source "
-                              "(amass / humanml3d) instead of via the shared stats — "
-                              "fixes the bimodal AMASS-vs-HumanML3D translation distribution."))
-    parser.add_argument("--wandb-mode", default="offline",
-                        choices=["online", "offline", "disabled"],
-                        dest="wandb_mode",
-                        help=("W&B mode: offline (default, sync later), "
-                              "online (needs WANDB_API_KEY), disabled"))
+    parser.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        help=("Path to checkpoint .pt to resume training from (model+optimizer+scheduler+epoch)"),
+    )
+    parser.add_argument(
+        "--causal-decoder",
+        action="store_true",
+        dest="causal_decoder",
+        help=(
+            "Build the decoder with CausalConv1d + nearest-neighbor "
+            "upsampling instead of ConvTranspose1d. Required for "
+            "streaming-mode inference (output frame t depends only "
+            "on latent tokens up to ceil(t / down_t)). Default off "
+            "preserves bit-compatibility with existing checkpoints."
+        ),
+    )
+    parser.add_argument(
+        "--data",
+        default="amass",
+        choices=["amass", "humanml3d", "all", "mega"],
+        dest="data_source",
+        help=(
+            "Which corpus to train on: amass (default), humanml3d, "
+            "all (AMASS+HumanML3D), or mega (AMASS+HumanML3D+ARCTIC+InterX)."
+        ),
+    )
+    parser.add_argument(
+        "--humanml3d-dir",
+        default="data/humanml3d",
+        dest="humanml3d_dir",
+        help="HumanML3D root (used when --data is humanml3d or all/mega)",
+    )
+    parser.add_argument(
+        "--arctic-dir",
+        default="data/arctic/unpack",
+        dest="arctic_dir",
+        help="ARCTIC root (used when --data is mega)",
+    )
+    parser.add_argument(
+        "--interx-dir",
+        default="data/inter-x",
+        dest="interx_dir",
+        help="Inter-X root (used when --data is mega)",
+    )
+    parser.add_argument(
+        "--stats-path",
+        type=str,
+        default=None,
+        dest="stats_path",
+        help=(
+            "Path to a precomputed (mean, std) .npz from "
+            "scripts/training/precompute_stats.py. Required for fair "
+            "cross-corpus comparison; without it, each --data run uses "
+            "its own train-split stats and val_recon is incomparable."
+        ),
+    )
+    parser.add_argument(
+        "--trans-stats-path",
+        type=str,
+        default=None,
+        dest="trans_stats_path",
+        help=(
+            "Path to per-source translation stats .npz from "
+            "scripts/training/precompute_translation_stats.py. When set, "
+            "translation channels (3:6) are normalised per source "
+            "(amass / humanml3d) instead of via the shared stats — "
+            "fixes the bimodal AMASS-vs-HumanML3D translation distribution."
+        ),
+    )
+    parser.add_argument(
+        "--wandb-mode",
+        default="offline",
+        choices=["online", "offline", "disabled"],
+        dest="wandb_mode",
+        help=("W&B mode: offline (default, sync later), online (needs WANDB_API_KEY), disabled"),
+    )
     args = parser.parse_args()
 
     run_dir, run_id = make_run_dir(args.checkpoint_dir)
@@ -220,13 +300,17 @@ def main() -> int:
     if args.stats_path:
         loaded = np.load(args.stats_path)
         shared_stats = MotionStats(mean=loaded["mean"], std=loaded["std"])
-        log.info("[rvq] using shared stats from %s  mean|.|=%.4f  std|.|=%.4f",
-                 args.stats_path,
-                 float(np.abs(shared_stats.mean).mean()),
-                 float(np.abs(shared_stats.std).mean()))
+        log.info(
+            "[rvq] using shared stats from %s  mean|.|=%.4f  std|.|=%.4f",
+            args.stats_path,
+            float(np.abs(shared_stats.mean).mean()),
+            float(np.abs(shared_stats.std).mean()),
+        )
     else:
-        log.warning("[rvq] no --stats-path: this run computes its own stats. "
-                    "val_recon will NOT be comparable across --data variants.")
+        log.warning(
+            "[rvq] no --stats-path: this run computes its own stats. "
+            "val_recon will NOT be comparable across --data variants."
+        )
 
     trans_stats_by_source: dict[str, MotionStats] | None = None
     if args.trans_stats_path:
@@ -239,8 +323,11 @@ def main() -> int:
 
             if mean_k in ts.files and std_k in ts.files:
                 trans_stats_by_source[src_key] = MotionStats(mean=ts[mean_k], std=ts[std_k])
-        log.info("[rvq] per-source translation stats from %s (sources=%s)",
-                 args.trans_stats_path, list(trans_stats_by_source.keys()))
+        log.info(
+            "[rvq] per-source translation stats from %s (sources=%s)",
+            args.trans_stats_path,
+            list(trans_stats_by_source.keys()),
+        )
 
         for src_key, st in trans_stats_by_source.items():
             log.info("[rvq]   %s trans std|.|=%.4f", src_key, float(np.abs(st.std).mean()))
@@ -248,60 +335,86 @@ def main() -> int:
     if args.data_source == "amass":
         log.info("[rvq] data source: AMASS only (%s)", args.data_dir)
         train_ds = MotionDataset(
-            args.data_dir, "train", args.max_motion_length, augment=True,
-            stats=shared_stats, trans_stats_by_source=trans_stats_by_source,
+            args.data_dir,
+            "train",
+            args.max_motion_length,
+            augment=True,
+            stats=shared_stats,
+            trans_stats_by_source=trans_stats_by_source,
         )
         val_ds = MotionDataset(
-            args.data_dir, "val", args.max_motion_length,
-            vocab=train_ds.vocab, stats=train_ds.motion_stats,
+            args.data_dir,
+            "val",
+            args.max_motion_length,
+            vocab=train_ds.vocab,
+            stats=train_ds.motion_stats,
             trans_stats_by_source=trans_stats_by_source,
         )
         test_ds = MotionDataset(
-            args.data_dir, "test", args.max_motion_length,
-            vocab=train_ds.vocab, stats=train_ds.motion_stats,
+            args.data_dir,
+            "test",
+            args.max_motion_length,
+            vocab=train_ds.vocab,
+            stats=train_ds.motion_stats,
             trans_stats_by_source=trans_stats_by_source,
         )
     else:
         if args.data_source == "humanml3d":
-            log.info("[rvq] data source: HumanML3D only (%s, AMASS backing=%s)",
-                     args.humanml3d_dir, args.data_dir)
+            log.info(
+                "[rvq] data source: HumanML3D only (%s, AMASS backing=%s)",
+                args.humanml3d_dir,
+                args.data_dir,
+            )
             cfg = UnifiedConfig(
                 amass=SourceConfig(enabled=False),
                 arctic=SourceConfig(enabled=False),
-                humanml3d=SourceConfig(enabled=True, data_dir=args.humanml3d_dir,
-                                       amass_dir=args.data_dir),
+                humanml3d=SourceConfig(
+                    enabled=True, data_dir=args.humanml3d_dir, amass_dir=args.data_dir
+                ),
             )
         elif args.data_source == "all":
             log.info("[rvq] data source: AMASS + HumanML3D unified")
             cfg = UnifiedConfig(
                 amass=SourceConfig(enabled=True, data_dir=args.data_dir),
                 arctic=SourceConfig(enabled=False),
-                humanml3d=SourceConfig(enabled=True, data_dir=args.humanml3d_dir,
-                                       amass_dir=args.data_dir),
+                humanml3d=SourceConfig(
+                    enabled=True, data_dir=args.humanml3d_dir, amass_dir=args.data_dir
+                ),
             )
         else:  # "mega"
             log.info("[rvq] data source: AMASS + HumanML3D + ARCTIC + InterX unified")
             cfg = UnifiedConfig(
                 amass=SourceConfig(enabled=True, data_dir=args.data_dir),
                 arctic=SourceConfig(enabled=True, data_dir=args.arctic_dir),
-                humanml3d=SourceConfig(enabled=True, data_dir=args.humanml3d_dir,
-                                       amass_dir=args.data_dir),
+                humanml3d=SourceConfig(
+                    enabled=True, data_dir=args.humanml3d_dir, amass_dir=args.data_dir
+                ),
                 interx=SourceConfig(enabled=True, data_dir=args.interx_dir),
             )
         buf = build_or_load_unified_buffer(cfg, args.data_source)
         log.info("[rvq] buffer: %d samples", len(buf))
         train_ds = UnifiedMotionDataset(
-            "train", args.max_motion_length, augment=True, preloaded_buf=buf,
-            stats=shared_stats, trans_stats_by_source=trans_stats_by_source,
+            "train",
+            args.max_motion_length,
+            augment=True,
+            preloaded_buf=buf,
+            stats=shared_stats,
+            trans_stats_by_source=trans_stats_by_source,
         )
         val_ds = UnifiedMotionDataset(
-            "val", args.max_motion_length, preloaded_buf=buf,
-            vocab=train_ds.vocab, stats=train_ds.motion_stats,
+            "val",
+            args.max_motion_length,
+            preloaded_buf=buf,
+            vocab=train_ds.vocab,
+            stats=train_ds.motion_stats,
             trans_stats_by_source=trans_stats_by_source,
         )
         test_ds = UnifiedMotionDataset(
-            "test", args.max_motion_length, preloaded_buf=buf,
-            vocab=train_ds.vocab, stats=train_ds.motion_stats,
+            "test",
+            args.max_motion_length,
+            preloaded_buf=buf,
+            vocab=train_ds.vocab,
+            stats=train_ds.motion_stats,
             trans_stats_by_source=trans_stats_by_source,
         )
     log.info("[rvq] dataset: train=%d val=%d test=%d", len(train_ds), len(val_ds), len(test_ds))
@@ -317,7 +430,7 @@ def main() -> int:
     )
 
     model = MotionRVQTokenizer(
-        motion_dim=MOTION_DIM,
+        motion_dim=CONSTS.smplx.pose_dim,
         latent_dim=args.latent_dim,
         n_codebooks=args.n_codebooks,
         codebook_size=args.codebook_size,
@@ -345,14 +458,20 @@ def main() -> int:
     for epoch in range(start_epoch, args.epochs + 1):
         t0 = time.time()
         train_metrics = train_epoch(
-            model, train_loader, optimizer, device,
-            args.recon_weight, args.vel_weight, args.commit_weight,
+            model,
+            train_loader,
+            optimizer,
+            device,
+            args.recon_weight,
+            args.vel_weight,
+            args.commit_weight,
         )
 
         if args.reset_dead_every > 0 and epoch % args.reset_dead_every == 0:
             sample_batch = next(iter(train_loader))
             reset_counts = model.reset_dead_codes(
-                sample_batch["motion"].to(device), threshold=args.reset_dead_threshold,
+                sample_batch["motion"].to(device),
+                threshold=args.reset_dead_threshold,
             )
 
             if sum(reset_counts) > 0:
@@ -361,8 +480,8 @@ def main() -> int:
         scheduler.step()
 
         mean_active = sum(u["active_fraction"] for u in util) / max(len(util), 1)
-        mean_entropy_pct = (
-            sum(u["entropy"] / max(u["max_entropy"], 1e-8) for u in util) / max(len(util), 1)
+        mean_entropy_pct = sum(u["entropy"] / max(u["max_entropy"], 1e-8) for u in util) / max(
+            len(util), 1
         )
         log.info(
             "[rvq] epoch %2d  loss=%.4f  recon=%.4f  vel=%.4f  val_recon=%.4f  "
@@ -393,18 +512,21 @@ def main() -> int:
 
         # wandb_log runs AFTER on-disk saves so a wandb-side crash never costs an epoch
         util_log = {f"codebook/cb{i}_{k}": v for i, u in enumerate(util) for k, v in u.items()}
-        wandb_log({
-            "epoch": epoch,
-            "train/loss": train_metrics.get("loss", 0.0),
-            "train/recon": train_metrics.get("recon", 0.0),
-            "train/vel": train_metrics.get("vel", 0.0),
-            "train/commit": train_metrics.get("commit", 0.0),
-            "val/recon": val_recon,
-            "best_val_recon": min(best_val, val_recon),
-            "codebook/mean_active_pct": mean_active * 100,
-            "codebook/mean_entropy_pct": mean_entropy_pct * 100,
-            **util_log,
-        }, step=epoch)
+        wandb_log(
+            {
+                "epoch": epoch,
+                "train/loss": train_metrics.get("loss", 0.0),
+                "train/recon": train_metrics.get("recon", 0.0),
+                "train/vel": train_metrics.get("vel", 0.0),
+                "train/commit": train_metrics.get("commit", 0.0),
+                "val/recon": val_recon,
+                "best_val_recon": min(best_val, val_recon),
+                "codebook/mean_active_pct": mean_active * 100,
+                "codebook/mean_entropy_pct": mean_entropy_pct * 100,
+                **util_log,
+            },
+            step=epoch,
+        )
 
     log.info("[rvq] done. best val_recon=%.4f", best_val)
 
@@ -420,15 +542,19 @@ def main() -> int:
     test_active = sum(u["active_fraction"] for u in test_util) / max(len(test_util), 1)
     log.info(
         "[rvq] TEST recon=%.4f  cb_active=%.1f%%",
-        test_recon, test_active * 100,
+        test_recon,
+        test_active * 100,
     )
-    wandb_log({
-        "test/recon": test_recon,
-        "test/codebook_active_pct": test_active * 100,
-    })
+    wandb_log(
+        {
+            "test/recon": test_recon,
+            "test/codebook_active_pct": test_active * 100,
+        }
+    )
 
     wandb_finish()
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

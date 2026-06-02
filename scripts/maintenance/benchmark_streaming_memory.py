@@ -35,7 +35,7 @@ from pathlib import Path
 import psutil
 import torch
 
-from src.modules.motion.nn_models import TextToMotionSSM
+from src.architecture.nn_models import TextToMotionSSM
 
 
 class BenchCfg:

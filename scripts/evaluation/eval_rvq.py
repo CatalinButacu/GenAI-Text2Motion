@@ -37,12 +37,12 @@ import torch
 from sklearn.manifold import TSNE
 from torch.utils.data import DataLoader, Dataset
 
+from src.architecture.rvq_tokenizer import MotionRVQTokenizer
 from src.data.motion_dataset import MotionDataset
 from src.data.motion_normalize import MotionStats
 from src.data.unified import build_or_load_unified_buffer
 from src.data.unified_dataset import SourceConfig, UnifiedConfig, UnifiedMotionDataset
-from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
-from src.shared.constants import MOTION_DIM
+from src.shared.constants import SMPLX
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +72,7 @@ ACTION_PATTERNS = [
     ("climb", re.compile(r"\b(climb|climbs|climbing)\b", re.I)),
 ]
 
+
 def action_label(text: str) -> str:
     for label, pat in ACTION_PATTERNS:
         if pat.search(text):
@@ -79,25 +80,34 @@ def action_label(text: str) -> str:
 
     return "other"
 
+
 def amass_subset(sample_id: str) -> str:
     return sample_id.split("/")[0] if "/" in sample_id else "unknown"
 
+
+def camel_to_snake(name: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
 def load_checkpoint(ck_path: str, device: torch.device) -> tuple[MotionRVQTokenizer, dict]:
     log.info("[eval] loading %s", ck_path)
-    ck = torch.load(ck_path, map_location=device, weights_only=False)
-    cfg = ck["config"]
+    ck = torch.load(ck_path, map_location=device, weights_only=False)  # NOSONAR
+    # Pre-2026-05-22 checkpoints store camelCase config keys; normalise to snake_case.
+    cfg = {camel_to_snake(k): v for k, v in ck["config"].items()}
     model = MotionRVQTokenizer(
-        motion_dim=MOTION_DIM,
+        motion_dim=SMPLX.pose_dim,
         latent_dim=cfg["latent_dim"],
         n_codebooks=cfg["n_codebooks"],
         codebook_size=cfg["codebook_size"],
         down_t=cfg["down_t"],
     ).to(device)
-    model.load_state_dict(ck["model_state_dict"])
+    state = {camel_to_snake(k): v for k, v in ck["model_state_dict"].items()}
+    model.load_state_dict(state)
     model.eval()
     log.info("[eval] checkpoint epoch=%d  val_loss=%.4f", ck["epoch"], ck.get("val_loss", -1))
 
     return model, cfg
+
 
 def build_test_dataset(cfg: dict, stats_path: str | None) -> tuple[Dataset, str]:
     """Mirror the dataset construction used at train time, test split only."""
@@ -109,8 +119,9 @@ def build_test_dataset(cfg: dict, stats_path: str | None) -> tuple[Dataset, str]
         shared_stats = MotionStats(mean=s["mean"], std=s["std"])
 
     if src == "amass":
-        ds = MotionDataset(cfg["data_dir"], "test", cfg["max_motion_length"],
-                           augment=False, stats=shared_stats)
+        ds = MotionDataset(
+            cfg["data_dir"], "test", cfg["max_motion_length"], augment=False, stats=shared_stats
+        )
 
         return ds, "amass"
 
@@ -118,23 +129,28 @@ def build_test_dataset(cfg: dict, stats_path: str | None) -> tuple[Dataset, str]
         ucfg = UnifiedConfig(
             amass=SourceConfig(enabled=False),
             arctic=SourceConfig(enabled=False),
-            humanml3d=SourceConfig(enabled=True, data_dir=cfg["humanml3d_dir"],
-                                   amass_dir=cfg["data_dir"]),
+            humanml3d=SourceConfig(
+                enabled=True, data_dir=cfg["humanml3d_dir"], amass_dir=cfg["data_dir"]
+            ),
         )
     else:
         ucfg = UnifiedConfig(
             amass=SourceConfig(enabled=True, data_dir=cfg["data_dir"]),
             arctic=SourceConfig(enabled=False),
-            humanml3d=SourceConfig(enabled=True, data_dir=cfg["humanml3d_dir"],
-                                   amass_dir=cfg["data_dir"]),
+            humanml3d=SourceConfig(
+                enabled=True, data_dir=cfg["humanml3d_dir"], amass_dir=cfg["data_dir"]
+            ),
         )
     buf = build_or_load_unified_buffer(ucfg, src)
-    ds = UnifiedMotionDataset("test", cfg["max_motion_length"], augment=False,
-                              preloaded_buf=buf, stats=shared_stats)
+    ds = UnifiedMotionDataset(
+        "test", cfg["max_motion_length"], augment=False, preloaded_buf=buf, stats=shared_stats
+    )
 
     return ds, src
 
+
 # build_or_load_unified_buffer is now imported from src.data.unified at the top of this file.
+
 
 @torch.no_grad()
 def evaluate_batch(model: MotionRVQTokenizer, motion: torch.Tensor, mask: torch.Tensor):
@@ -152,13 +168,19 @@ def evaluate_batch(model: MotionRVQTokenizer, motion: torch.Tensor, mask: torch.
 
     return recon, indices, latent_mean
 
-def reconstruction_quality(model: MotionRVQTokenizer, dataset, device: torch.device,
-                           batch_size: int, max_batches: int | None) -> dict:
+
+def reconstruction_quality(
+    model: MotionRVQTokenizer,
+    dataset,
+    device: torch.device,
+    batch_size: int,
+    max_batches: int | None,
+) -> dict:
     """Per-clip MSE + per-block MSE + worst/best clips."""
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
     per_clip_mse: list[float] = []
-    per_block_sse: dict[str, float] = {name: 0.0 for name, _, _ in CHANNEL_BLOCKS}
-    per_block_count: dict[str, float] = {name: 0.0 for name, _, _ in CHANNEL_BLOCKS}
+    per_block_sse: dict[str, float] = dict.fromkeys((name for name, _, _ in CHANNEL_BLOCKS), 0.0)
+    per_block_count: dict[str, float] = dict.fromkeys((name for name, _, _ in CHANNEL_BLOCKS), 0.0)
     n_batches = 0
 
     for batch in loader:
@@ -196,6 +218,7 @@ def reconstruction_quality(model: MotionRVQTokenizer, dataset, device: torch.dev
         "per_clip_mse": mse_arr.tolist(),
     }
 
+
 def codebook_stats(model: MotionRVQTokenizer) -> dict:
     util = model.codebook_utilization()
 
@@ -204,8 +227,10 @@ def codebook_stats(model: MotionRVQTokenizer) -> dict:
         "entropy_pct": [u["entropy"] / max(u["max_entropy"], 1e-8) * 100 for u in util],
     }
 
-def collect_latents(model: MotionRVQTokenizer, dataset, device: torch.device,
-                    batch_size: int, max_clips: int | None) -> tuple[np.ndarray, list, list]:
+
+def collect_latents(
+    model: MotionRVQTokenizer, dataset, device: torch.device, batch_size: int, max_clips: int | None
+) -> tuple[np.ndarray, list, list]:
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
     latents: list[np.ndarray] = []
     texts: list[str] = []
@@ -233,6 +258,7 @@ def collect_latents(model: MotionRVQTokenizer, dataset, device: torch.device,
     limit = max_clips or n
     return np.concatenate(latents, axis=0)[:limit], texts[:limit], sources[:limit]
 
+
 def plot_mse_hist(per_clip_mse: list[float], out_dir: str, title: str) -> None:
     arr = np.array(per_clip_mse)
     med = float(np.median(arr))
@@ -250,19 +276,24 @@ def plot_mse_hist(per_clip_mse: list[float], out_dir: str, title: str) -> None:
     fig.savefig(os.path.join(out_dir, "01_recon_mse_hist.png"), dpi=110)
     plt.close(fig)
 
+
 def plot_block_mse(block_mse: dict, out_dir: str, title: str) -> None:
     names = list(block_mse.keys())
     vals = [block_mse[n] for n in names]
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.bar(names, vals, color=["tab:red", "tab:orange", "tab:blue", "tab:green",
-                                "tab:purple", "tab:gray"])
+    ax.bar(
+        names,
+        vals,
+        color=["tab:red", "tab:orange", "tab:blue", "tab:green", "tab:purple", "tab:gray"],
+    )
     ax.set_ylabel("MSE (z-norm space)")
     ax.set_title(f"{title} — per-block reconstruction MSE")
     ax.tick_params(axis="x", rotation=20)
     fig.tight_layout()
     fig.savefig(os.path.join(out_dir, "02_block_mse.png"), dpi=110)
     plt.close(fig)
+
 
 def plot_codebook_usage(cb_stats: dict, out_dir: str, title: str) -> None:
     n_layers = len(cb_stats["active_pct"])
@@ -282,14 +313,15 @@ def plot_codebook_usage(cb_stats: dict, out_dir: str, title: str) -> None:
     fig.savefig(os.path.join(out_dir, "03_codebook_usage.png"), dpi=110)
     plt.close(fig)
 
-def plot_tsne_clusters(latents: np.ndarray, labels: list, out_dir: str, title: str,
-                      label_kind: str) -> dict:
+
+def plot_tsne_clusters(
+    latents: np.ndarray, labels: list, out_dir: str, title: str, label_kind: str
+) -> dict:
     """Run t-SNE and color points by category. Returns count by category."""
     n_clips = latents.shape[0]
     log.info("[eval] running t-SNE on %d clips x %d dims", n_clips, latents.shape[1])
     perplexity = min(30, max(5, n_clips // 4 - 1))
-    tsne = TSNE(n_components=2, perplexity=perplexity, init="pca",
-                random_state=42, max_iter=500)
+    tsne = TSNE(n_components=2, perplexity=perplexity, init="pca", random_state=42, max_iter=500)
     coords = tsne.fit_transform(latents)
 
     counts: dict[str, int] = {}
@@ -303,8 +335,14 @@ def plot_tsne_clusters(latents: np.ndarray, labels: list, out_dir: str, title: s
 
     for i, cat in enumerate(sorted_cats):
         idx = [j for j, lab in enumerate(labels) if lab == cat]
-        ax.scatter(coords[idx, 0], coords[idx, 1], s=8, alpha=0.55,
-                   color=cmap(i % 20), label=f"{cat} (n={counts[cat]})")
+        ax.scatter(
+            coords[idx, 0],
+            coords[idx, 1],
+            s=8,
+            alpha=0.55,
+            color=cmap(i % 20),
+            label=f"{cat} (n={counts[cat]})",
+        )
     ax.set_title(f"{title} — t-SNE of clip latents (colored by {label_kind})")
     ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), fontsize=8, ncol=1)
     fig.tight_layout()
@@ -313,21 +351,33 @@ def plot_tsne_clusters(latents: np.ndarray, labels: list, out_dir: str, title: s
 
     return counts
 
-def write_report(out_dir: str, ck_path: str, cfg: dict, recon: dict, cb_stats: dict,
-                cluster_counts: dict, label_kind: str) -> None:
+
+def write_report(
+    out_dir: str,
+    ck_path: str,
+    cfg: dict,
+    recon: dict,
+    cb_stats: dict,
+    cluster_counts: dict,
+    label_kind: str,
+) -> None:
     lines: list[str] = []
     lines.append("# RVQ tokenizer evaluation\n")
     lines.append(f"**Checkpoint:** `{ck_path}`")
     lines.append(f"**Source:** {cfg.get('data_source', 'amass')}")
-    lines.append(f"**Latent dim:** {cfg['latent_dim']}, **codebooks:** {cfg['n_codebooks']}, "
-                 f"**codebook size:** {cfg['codebook_size']}, **down_t:** {cfg['down_t']}\n")
+    lines.append(
+        f"**Latent dim:** {cfg['latent_dim']}, **codebooks:** {cfg['n_codebooks']}, "
+        f"**codebook size:** {cfg['codebook_size']}, **down_t:** {cfg['down_t']}\n"
+    )
 
     lines.append("## A) Reconstruction quality\n")
     lines.append(f"- Test clips evaluated: **{recon['n_clips']}**")
     lines.append(f"- Mean MSE: **{recon['mse_mean']:.4f}**  (z-norm space)")
-    lines.append(f"- Percentiles p10 / p50 / p90 / p99: "
-                 f"{recon['mse_p10']:.4f} / {recon['mse_p50']:.4f} / "
-                 f"{recon['mse_p90']:.4f} / {recon['mse_p99']:.4f}\n")
+    lines.append(
+        f"- Percentiles p10 / p50 / p90 / p99: "
+        f"{recon['mse_p10']:.4f} / {recon['mse_p50']:.4f} / "
+        f"{recon['mse_p90']:.4f} / {recon['mse_p99']:.4f}\n"
+    )
 
     lines.append("### Per-block MSE (lower = better)\n")
     lines.append("| block | MSE |")
@@ -356,30 +406,56 @@ def write_report(out_dir: str, ck_path: str, cfg: dict, recon: dict, cb_stats: d
         f.write("\n".join(lines))
 
     with open(os.path.join(out_dir, "metrics.json"), "w", encoding="utf-8") as f:
-        f.write(json.dumps({
-            "checkpoint": ck_path, "config": cfg,
-            "recon": {k: v for k, v in recon.items() if k != "per_clip_mse"},
-            "codebook": cb_stats, "cluster_counts": cluster_counts,
-        }, indent=2))
+        f.write(
+            json.dumps(
+                {
+                    "checkpoint": ck_path,
+                    "config": cfg,
+                    "recon": {k: v for k, v in recon.items() if k != "per_clip_mse"},
+                    "codebook": cb_stats,
+                    "cluster_counts": cluster_counts,
+                },
+                indent=2,
+            )
+        )
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", required=True, help="Path to best_model.pt")
     parser.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
     parser.add_argument("--batch-size", type=int, default=32, dest="batch_size")
-    parser.add_argument("--max-clips-cluster", type=int, default=2000, dest="max_clips_cluster",
-                        help="Cap clips fed to t-SNE (slow on >2k)")
-    parser.add_argument("--max-batches-mse", type=int, default=None, dest="max_batches_mse",
-                        help="Cap batches for MSE; default = whole test set")
-    parser.add_argument("--stats-path", default="data/stats/amass_full.npz", dest="stats_path",
-                        help="Override stats path; defaults to AMASS-full shared stats")
-    parser.add_argument("--output-dir", default=None, dest="output_dir",
-                        help="Default: alongside checkpoint as eval_<run_id>/")
+    parser.add_argument(
+        "--max-clips-cluster",
+        type=int,
+        default=2000,
+        dest="max_clips_cluster",
+        help="Cap clips fed to t-SNE (slow on >2k)",
+    )
+    parser.add_argument(
+        "--max-batches-mse",
+        type=int,
+        default=None,
+        dest="max_batches_mse",
+        help="Cap batches for MSE; default = whole test set",
+    )
+    parser.add_argument(
+        "--stats-path",
+        default="data/stats/amass_full.npz",
+        dest="stats_path",
+        help="Override stats path; defaults to AMASS-full shared stats",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        dest="output_dir",
+        help="Default: alongside checkpoint as eval_<run_id>/",
+    )
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s  %(levelname)-8s  %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s", datefmt="%H:%M:%S"
+    )
 
     if args.output_dir is None:
         ck_dir = os.path.dirname(args.checkpoint)
@@ -402,16 +478,21 @@ def main() -> int:
     recon = reconstruction_quality(model, dataset, device, args.batch_size, args.max_batches_mse)
     plot_mse_hist(recon["per_clip_mse"], args.output_dir, title)
     plot_block_mse(recon["block_mse"], args.output_dir, title)
-    log.info("[eval]   mean MSE=%.4f  p50=%.4f  p90=%.4f",
-             recon["mse_mean"], recon["mse_p50"], recon["mse_p90"])
+    log.info(
+        "[eval]   mean MSE=%.4f  p50=%.4f  p90=%.4f",
+        recon["mse_mean"],
+        recon["mse_p50"],
+        recon["mse_p90"],
+    )
 
     log.info("[eval] step B: codebook stats")
     cb_stats = codebook_stats(model)
     plot_codebook_usage(cb_stats, args.output_dir, title)
 
     log.info("[eval] step C: collecting latents for clustering")
-    latents, texts, sources = collect_latents(model, dataset, device, args.batch_size,
-                                              args.max_clips_cluster)
+    latents, texts, _ = collect_latents(
+        model, dataset, device, args.batch_size, args.max_clips_cluster
+    )
     log.info("[eval]   collected %d clip latents", len(latents))
     # Pick label kind: HumanML3D / unified -> action keyword. AMASS -> AMASS subset.
     if src == "amass":
@@ -431,6 +512,7 @@ def main() -> int:
     log.info("[eval] DONE — see %s/report.md", args.output_dir)
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

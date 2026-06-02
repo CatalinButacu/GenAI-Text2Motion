@@ -18,8 +18,8 @@ import unittest
 import torch
 import torch.nn.functional as F
 
-from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
-from src.modules.motion.training.trainer_utils import (
+from src.architecture.rvq_tokenizer import MotionRVQTokenizer
+from src.architecture.training.trainer_utils import (
     geometric_losses,
     soft_decode_logits,
 )

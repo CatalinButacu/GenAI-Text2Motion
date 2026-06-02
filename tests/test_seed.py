@@ -13,7 +13,7 @@ from unittest.mock import patch
 import numpy as np
 import torch
 
-from src.modules.motion.training.trainer_utils import lock_seed
+from src.architecture.training.trainer_utils import lock_seed
 from src.shared.seed import seed_all, seed_dict, seed_worker
 
 

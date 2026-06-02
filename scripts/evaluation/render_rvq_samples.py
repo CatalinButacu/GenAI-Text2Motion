@@ -37,14 +37,16 @@ from scripts.evaluation.eval_rvq import (
     load_checkpoint,
 )
 from src.data.motion_normalize import MotionStats, denormalize
+from src.modules.render.config import RenderConfig
 from src.modules.render.smplx_render import (
-    configure_renderer,
+    configure_scene,
     get_renderer,
     reset_scene,
     smplx_params2_sequence,
 )
 
 log = logging.getLogger(__name__)
+
 
 def per_clip_mse(model, dataset, device, batch_size: int) -> tuple[np.ndarray, list[int]]:
     """MSE per clip (mask-aware) + frame counts. Used to rank clips."""
@@ -53,7 +55,6 @@ def per_clip_mse(model, dataset, device, batch_size: int) -> tuple[np.ndarray, l
     lengths: list[int] = []
 
     with torch.no_grad():
-
         for batch in loader:
             motion = batch["motion"].to(device)
             mask = batch["motion_mask"].to(device)
@@ -70,6 +71,7 @@ def per_clip_mse(model, dataset, device, batch_size: int) -> tuple[np.ndarray, l
 
     return np.array(mses), lengths
 
+
 def pick_indices(mses: np.ndarray, picks: list[str], n_per: int) -> dict[str, list[int]]:
     sorted_idx = np.argsort(mses)
     n = len(mses)
@@ -82,32 +84,35 @@ def pick_indices(mses: np.ndarray, picks: list[str], n_per: int) -> dict[str, li
         midpoint = n // 2
         half = n_per // 2
         start = max(0, midpoint - half)
-        out["median"] = sorted_idx[start:start + n_per].tolist()
+        out["median"] = sorted_idx[start : start + n_per].tolist()
 
     if "worst" in picks:
         out["worst"] = sorted_idx[-n_per:][::-1].tolist()
 
     return out
 
-def render_smplx_to_gif(smplx_params: np.ndarray, output_path: str, fps: int = 30,
-                     width: int = 720, height: int = 480) -> None:
+
+def render_smplx_to_gif(
+    smplx_params: np.ndarray, output_path: str, fps: int = 30, width: int = 720, height: int = 480
+) -> None:
     """Render a (T, 168) SMPL-X sequence to an animated GIF.
 
     aitviewer's save_video with output_path=None and frame_dir=<tmp> writes
     a PNG per frame without invoking FFmpeg. We then stitch into a GIF with
     imageio (Pillow backend, no external deps).
     """
-    seq = smplx_params2_sequence(smplx_params)
+    seq = smplx_params2_sequence(smplx_params, num_betas=RenderConfig.num_betas)
     renderer = get_renderer(width=width, height=height)
     reset_scene(renderer)
-    configure_renderer(renderer, seq, fps)
+    configure_scene(renderer, seq, fps)
 
     frame_dir = tempfile.mkdtemp(prefix="rvq_render_")
 
     try:
         renderer.save_video(frame_dir=frame_dir, video_dir=None, output_fps=fps)
-        frame_paths = sorted(glob.glob(os.path.join(frame_dir, "**", "frame_*.png"),
-                                       recursive=True))
+        frame_paths = sorted(
+            glob.glob(os.path.join(frame_dir, "**", "frame_*.png"), recursive=True)
+        )
 
         if not frame_paths:
             raise RuntimeError(f"no frames written to {frame_dir}")
@@ -117,8 +122,10 @@ def render_smplx_to_gif(smplx_params: np.ndarray, output_path: str, fps: int = 3
     finally:
         shutil.rmtree(frame_dir, ignore_errors=True)
 
-def render_clip(model, dataset, idx: int, stats: MotionStats, device,
-               fps: int, out_orig: str, out_recon: str) -> int:
+
+def render_clip(
+    model, dataset, idx: int, stats: MotionStats, device, fps: int, out_orig: str, out_recon: str
+) -> int:
     item = dataset[idx]
     motion_norm = item["motion"].unsqueeze(0).to(device)  # (1, T_pad, 168) z-normalized
     real_len = int(item["length"])
@@ -138,6 +145,7 @@ def render_clip(model, dataset, idx: int, stats: MotionStats, device,
 
     return real_len
 
+
 def safe_id(s: str) -> str:
     bad = '/\\:*?"<>|'
 
@@ -146,25 +154,68 @@ def safe_id(s: str) -> str:
 
     return s[:60]
 
+
+def renderAndAppend(
+    kind: str, i: int, dataset, model, stats, device, src: str, mses, args, report_lines: list[str]
+) -> None:
+    sample = dataset[i]
+    sid = sample.get("texts", "") or "clip"
+
+    if src == "amass":
+        raw_id = dataset.samples[i].get("sample_id", f"clip_{i}")  # type: ignore[attr-defined]
+        label = amass_subset(raw_id)
+        file_tag = safe_id(raw_id)
+    else:
+        label = action_label(sid if isinstance(sid, str) else "")
+        file_tag = safe_id(f"{label}_{i:04d}")
+
+    orig_path = os.path.join(args.output_dir, f"{kind}_{i:04d}_{file_tag}_orig.gif")
+    recon_path = os.path.join(args.output_dir, f"{kind}_{i:04d}_{file_tag}_recon.gif")
+
+    try:
+        T = render_clip(model, dataset, i, stats, device, args.fps, orig_path, recon_path)
+    except (RuntimeError, OSError) as exc:
+        log.exception("[render] FAILED idx=%d kind=%s: %s", i, kind, exc)
+        return
+
+    report_lines.append(
+        f"| {kind} | {i} | {float(mses[i]):.4f} | {T} | {label} | "
+        f"{os.path.basename(orig_path)} | {os.path.basename(recon_path)} |"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu",
-                        choices=["cpu", "cuda"])
+    parser.add_argument(
+        "--device", default="cuda" if torch.cuda.is_available() else "cpu", choices=["cpu", "cuda"]
+    )
     parser.add_argument("--batch-size", type=int, default=16, dest="batch_size")
-    parser.add_argument("--n-samples", type=int, default=2, dest="n_samples",
-                        help="Number of clips per pick category")
-    parser.add_argument("--picks", default="best,median,worst",
-                        help="Comma-separated list from {best, median, worst}")
-    parser.add_argument("--stats-path", default="data/stats/amass_full.npz", dest="stats_path",
-                        help="Stats path (must match what the dataset was z-normalized with)")
+    parser.add_argument(
+        "--n-samples",
+        type=int,
+        default=2,
+        dest="n_samples",
+        help="Number of clips per pick category",
+    )
+    parser.add_argument(
+        "--picks",
+        default="best,median,worst",
+        help="Comma-separated list from {best, median, worst}",
+    )
+    parser.add_argument(
+        "--stats-path",
+        default="data/stats/amass_full.npz",
+        dest="stats_path",
+        help="Stats path (must match what the dataset was z-normalized with)",
+    )
     parser.add_argument("--output-dir", default=None, dest="output_dir")
     parser.add_argument("--fps", type=int, default=30)
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s  %(levelname)-8s  %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s", datefmt="%H:%M:%S"
+    )
 
     if args.output_dir is None:
         args.output_dir = os.path.join(os.path.dirname(args.checkpoint), "eval", "render")
@@ -177,8 +228,11 @@ def main() -> int:
         return 1
     s = np.load(args.stats_path)
     stats = MotionStats(mean=s["mean"], std=s["std"])
-    log.info("[render] stats loaded mean|.|=%.4f std|.|=%.4f",
-             float(np.abs(stats.mean).mean()), float(np.abs(stats.std).mean()))
+    log.info(
+        "[render] stats loaded mean|.|=%.4f std|.|=%.4f",
+        float(np.abs(stats.mean).mean()),
+        float(np.abs(stats.std).mean()),
+    )
 
     device = torch.device(args.device)
     model, cfg = load_checkpoint(args.checkpoint, device)
@@ -186,10 +240,13 @@ def main() -> int:
     log.info("[render] test set: %d samples (source=%s)", len(dataset), src)
 
     log.info("[render] computing per-clip MSE")
-    mses, lengths = per_clip_mse(model, dataset, device, args.batch_size)
-    log.info("[render]   p10=%.4f  p50=%.4f  p90=%.4f",
-             float(np.percentile(mses, 10)), float(np.percentile(mses, 50)),
-             float(np.percentile(mses, 90)))
+    mses, _ = per_clip_mse(model, dataset, device, args.batch_size)
+    log.info(
+        "[render]   p10=%.4f  p50=%.4f  p90=%.4f",
+        float(np.percentile(mses, 10)),
+        float(np.percentile(mses, 50)),
+        float(np.percentile(mses, 90)),
+    )
 
     requested = [p.strip() for p in args.picks.split(",") if p.strip()]
     picks_by_kind = pick_indices(mses, requested, args.n_samples)
@@ -205,38 +262,15 @@ def main() -> int:
     report_lines.append("|---|---|---|---|---|---|---|")
 
     for kind, indices in picks_by_kind.items():
-
         for i in indices:
-            sample = dataset[i]
-            sid = sample.get("texts", "") or "clip"
-
-            if src == "amass":
-                raw_id = dataset.samples[i].get("sample_id", f"clip_{i}")  # type: ignore[attr-defined]
-                label = amass_subset(raw_id)
-                file_tag = safe_id(raw_id)
-            else:
-                label = action_label(sid if isinstance(sid, str) else "")
-                file_tag = safe_id(f"{label}_{i:04d}")
-
-            orig_path = os.path.join(args.output_dir, f"{kind}_{i:04d}_{file_tag}_orig.gif")
-            recon_path = os.path.join(args.output_dir, f"{kind}_{i:04d}_{file_tag}_recon.gif")
-
-            try:
-                T = render_clip(model, dataset, i, stats, device, args.fps,
-                               orig_path, recon_path)
-            except (RuntimeError, OSError) as exc:
-                log.error("[render] FAILED idx=%d kind=%s: %s", i, kind, exc)
-                continue
-            report_lines.append(
-                f"| {kind} | {i} | {float(mses[i]):.4f} | {T} | {label} | "
-                f"{os.path.basename(orig_path)} | {os.path.basename(recon_path)} |"
-            )
+            renderAndAppend(kind, i, dataset, model, stats, device, src, mses, args, report_lines)
 
     with open(os.path.join(args.output_dir, "report_render.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(report_lines))
     log.info("[render] DONE — see %s/report_render.md", args.output_dir)
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

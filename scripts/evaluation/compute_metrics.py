@@ -39,16 +39,14 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
 
-from src.shared.constants import (
-    MOTION_DIM,
-    MOTION_FPS,
-    SMPLX_TRANSL_Z_IDX,
-)
+from src.shared.constants import CONSTS, SMPLX
+from src.shared.run_manifest import build_manifest, save_manifest
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +56,7 @@ BODY_SLICE = slice(6, 69)
 LFOOT_START = (7 - 1) * 3
 RFOOT_START = (8 - 1) * 3
 # Z-up height = trans[2]; index within the (T, 3) trans slice
-PELVIS_HEIGHT_IDX: int = SMPLX_TRANSL_Z_IDX - 3
+PELVIS_HEIGHT_IDX: int = SMPLX.transl_z_idx - 3
 
 # Contact detection thresholds (justified below).
 #
@@ -92,9 +90,9 @@ class ClipMetrics(NamedTuple):
     validity : bool
         ``True`` if params are finite and all body joint angles < pi rad.
     joint_angle_mean : np.ndarray
-        Shape ``(MOTION_DIM,)`` -- per-dimension mean over all frames.
+        Shape ``(CONSTS.smplx.pose_dim,)`` -- per-dimension mean over all frames.
     joint_angle_cov_diag : np.ndarray
-        Shape ``(MOTION_DIM,)`` -- per-dimension variance over all frames.
+        Shape ``(CONSTS.smplx.pose_dim,)`` -- per-dimension variance over all frames.
         Used together with ``joint_angle_mean`` to form a diagonal Gaussian
         for FID computation.
     """
@@ -153,8 +151,8 @@ def foot_sliding(params: np.ndarray) -> float:
     body = params[:, BODY_SLICE]
     lfoot = body[:, LFOOT_START : LFOOT_START + 3]
     rfoot = body[:, RFOOT_START : RFOOT_START + 3]
-    lvel = np.linalg.norm(np.diff(lfoot, axis=0), axis=1) * MOTION_FPS  # rad/s
-    rvel = np.linalg.norm(np.diff(rfoot, axis=0), axis=1) * MOTION_FPS  # rad/s
+    lvel = np.linalg.norm(np.diff(lfoot, axis=0), axis=1) * CONSTS.runtime.motion_fps  # rad/s
+    rvel = np.linalg.norm(np.diff(rfoot, axis=0), axis=1) * CONSTS.runtime.motion_fps  # rad/s
     foot_vel = np.minimum(lvel, rvel)  # slower foot = most likely planted
     contact_vel = contact[1:]
     if not contact_vel.any():
@@ -178,8 +176,8 @@ def is_valid(params: np.ndarray) -> bool:
 def compute_clip_metrics(clip_id: str, params: np.ndarray) -> ClipMetrics:
     """Compute all per-clip metrics for one (T, 168) array."""
     assert (
-        params.ndim == 2 and params.shape[1] == MOTION_DIM
-    ), f"Expected (T, {MOTION_DIM}), got {params.shape}"
+        params.ndim == 2 and params.shape[1] == SMPLX.pose_dim
+    ), f"Expected (T, {SMPLX.pose_dim}), got {params.shape}"
     return ClipMetrics(
         clip_id=clip_id,
         n_frames=len(params),
@@ -242,8 +240,13 @@ def load_clips(clip_dir: str) -> list[ClipMetrics]:
         arr = np.load(str(f))
         if arr.ndim == 1:
             arr = arr.reshape(1, -1)
-        if arr.shape[-1] != MOTION_DIM:
-            log.warning("Skipping %s - expected dim %d, got %d", f.name, MOTION_DIM, arr.shape[-1])
+        if arr.shape[-1] != SMPLX.pose_dim:
+            log.warning(
+                "Skipping %s - expected dim %d, got %d",
+                f.name,
+                SMPLX.pose_dim,
+                arr.shape[-1],
+            )
             continue
         metrics.append(compute_clip_metrics(f.stem, arr))
         log.debug("Loaded %s: %d frames", f.stem, len(arr))
@@ -306,6 +309,19 @@ def run(clips_dir: str, reference_dir: str | None, output: str, label: str) -> d
     with open(output, "w") as f:
         json.dump(summary, f, indent=2)
     log.info("Metrics saved to %s", output)
+
+    manifestPath = str(
+        Path(output).parent
+        / f"manifest_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}.json"
+    )
+    manifest = build_manifest(
+        {"clips_dir": clips_dir, "reference_dir": reference_dir, "label": label},
+        [],
+        extra={"metrics_path": output},
+    )
+    manifest["metrics_path"] = output
+    save_manifest(manifest, manifestPath)
+    log.info("Manifest saved to %s", manifestPath)
     return summary
 
 def main():

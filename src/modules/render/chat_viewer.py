@@ -22,12 +22,17 @@ from __future__ import annotations
 import logging
 import threading
 from array import array
+from collections.abc import Callable, Iterator
+from typing import TYPE_CHECKING, Any
 
 import imgui
 import numpy as np
 from aitviewer.renderables.smpl import SMPLSequence
 from aitviewer.viewer import Viewer
 
+from src.modules.motion.models import MotionClip
+
+from .config import RenderConfig
 from .smplx_render import smplx_params2_sequence
 
 log = logging.getLogger(__name__)
@@ -51,27 +56,45 @@ PLAYBACK_H = 158
 
 CHAT_H = 208
 
+# RGBA colours used in the history strip for each status value
+HISTORY_STATUS_COLORS: dict[str, tuple[float, float, float, float]] = {
+    "ok": (0.5, 1.0, 0.5, 1.0),
+    "running": (1.0, 0.85, 0.35, 1.0),
+}
+HISTORY_ERROR_COLOR: tuple[float, float, float, float] = (1.0, 0.45, 0.45, 1.0)
 
 
 class ChatViewer(Viewer):
     """Viewer with a chat bar that drives the text-to-motion pipeline live."""
 
+    if TYPE_CHECKING:
+        # aitviewer's Viewer.__init__ sets self.scene = None before constructing
+        # the real Scene, so Pyright infers type None. Override it to Any so that
+        # scene.fps / scene.nodes / scene.camera etc. are accepted without stubs.
+        scene: Any
+
     def __init__(
         self,
         pipeline_runner,
+        render_cfg: RenderConfig,
         fps: int = 30,
         title: str = "Text-to-Motion  |  GenAI Text2Motion",
         size: tuple[int, int] = (1280, 800),
+        stream_pipeline_runner: Callable[[str], Iterator[np.ndarray]] | None = None,
+        stream_coord_system: str = "yup",
     ) -> None:
         super().__init__(title=title, size=size)
 
         self.pipeline_runner = pipeline_runner
+        self.stream_pipeline_runner = stream_pipeline_runner
+        self.stream_coord_system = stream_coord_system
+        self.render_cfg = render_cfg
         self.fps = fps
         self.input_buffer = ""
         self.history: list[tuple[str, str]] = []
         self.busy = False
         self.busy_msg = ""
-        self.pending_clip: dict | None = None
+        self.pending_clip: MotionClip | None = None
         self.lock = threading.Lock()
 
         self.scene.fps = fps
@@ -102,7 +125,7 @@ class ChatViewer(Viewer):
     def gui_playback(self) -> None:
         """Playback panel: left column, bottom — top/bottom aligned with Chat."""
         h = self.window_size[1]
-        y = h - CHAT_H - 5          # same top edge as Chat
+        y = h - CHAT_H - 5  # same top edge as Chat
         imgui.set_next_window_position(10, y, imgui.ALWAYS)
         imgui.set_next_window_size(LEFT_W, CHAT_H, imgui.ALWAYS)
         expanded, _ = imgui.begin("Playback", None)
@@ -121,18 +144,27 @@ class ChatViewer(Viewer):
             imgui.plot_lines(
                 f"Internal {fps_avg:.1f} fps @ {ms_avg:.2f} ms [{ms_last:.2f}ms]",
                 array("f", (1.0 / self._past_frametimes).tolist()),
-                scale_min=0, scale_max=100.0, graph_size=(LEFT_W - 20, 20),
+                scale_min=0,
+                scale_max=100.0,
+                graph_size=(LEFT_W - 20, 20),
             )
             _, self.playback_fps = imgui.drag_float(
-                "Playback fps", self.playback_fps, 0.1,
-                min_value=1.0, max_value=120.0, format="%.1f",
+                "Playback fps",
+                self.playback_fps,
+                0.1,
+                min_value=1.0,
+                max_value=120.0,
+                format="%.1f",
             )
             imgui.same_line(spacing=10)
             imgui.text(f"({self.playback_fps / self.scene.fps:.2f}x)")
 
             n_frames = self.scene.n_frames
             _, self.scene.current_frame_id = imgui.slider_int(
-                "Frame##seq", self.scene.current_frame_id, 0, n_frames - 1,
+                "Frame##seq",
+                self.scene.current_frame_id,
+                0,
+                n_frames - 1,
             )
             self.prevent_background_interactions()
         if imgui.collapsing_header("Advanced options")[0]:
@@ -161,11 +193,7 @@ class ChatViewer(Viewer):
         hist_h = CHAT_H - 72
         imgui.begin_child("##chat-hist", height=hist_h, border=False)
         for prompt, status in self.history:
-            color = (
-                (0.5, 1.0, 0.5, 1.0) if status == "ok"
-                else (1.0, 0.85, 0.35, 1.0) if status == "running"
-                else (1.0, 0.45, 0.45, 1.0)
-            )
+            color = HISTORY_STATUS_COLORS.get(status, HISTORY_ERROR_COLOR)
             imgui.text_colored(f"▶ {prompt}", *color)
             if status not in ("ok", "running"):
                 imgui.same_line()
@@ -181,7 +209,9 @@ class ChatViewer(Viewer):
         input_w = chat_w - 110
         imgui.set_next_item_width(input_w)
         enter_pressed, self.input_buffer = imgui.input_text(
-            "##prompt", self.input_buffer, MAX_INPUT_LEN,
+            "##prompt",
+            self.input_buffer,
+            MAX_INPUT_LEN,
             imgui.INPUT_TEXT_ENTER_RETURNS_TRUE,
         )
         imgui.same_line()
@@ -203,19 +233,22 @@ class ChatViewer(Viewer):
     # Pipeline integration
     # ------------------------------------------------------------------
 
-    def swap_clip(self, clip: dict) -> None:
-        """Replace the current SMPLSequence in the scene with one built from `clip`."""
-        for node in list(self.scene.nodes):
-            if isinstance(node, SMPLSequence):
-                self.scene.remove(node)
+    def swap_clip(self, clip: MotionClip) -> None:
+        seq_nodes = [n for n in self.scene.nodes if isinstance(n, SMPLSequence)]
+        had_sequence = len(seq_nodes) > 0
+
+        for node in seq_nodes:
+            self.scene.remove(node)
         seq = smplx_params2_sequence(
-            clip["smplx_params"],
-            betas=clip.get("betas"),
-            gender=clip.get("gender", "neutral"),
-            input_coord_system=clip.get("input_coord_system", "yup"),
+            clip.smplx_params,
+            num_betas=self.render_cfg.num_betas,
+            betas=clip.betas,
+            gender=self.render_cfg.gender,
+            input_coord_system=clip.coord_system,
         )
         self.scene.add(seq)
-        self.scene.current_frame_id = 0
+        if not had_sequence:
+            self.scene.current_frame_id = 0
         self.run_animations = True
 
     def submit_prompt(self, prompt: str) -> None:
@@ -228,24 +261,64 @@ class ChatViewer(Viewer):
         self.history.append((prompt, "running"))
         self.history[:] = self.history[-MAX_HISTORY:]
 
-        def worker() -> None:
-            status = "ok"
-            clip_dict = None
-            try:
-                clip_dict = self.pipeline_runner(prompt)
-                if clip_dict is None:
-                    status = "no motion"
-            except Exception as exc:  # noqa: BLE001
-                log.exception("[chat] pipeline failed")
-                status = f"error: {exc}"
-            with self.lock:
-                self.pending_clip = clip_dict
-                if self.history and self.history[-1][0] == prompt:
-                    self.history[-1] = (prompt, status)
-                self.busy = False
-                self.busy_msg = ""
+        if self.stream_pipeline_runner is not None:
+            threading.Thread(
+                target=self.streaming_worker, args=(prompt,), daemon=True
+            ).start()
+        else:
+            threading.Thread(target=self.full_clip_worker, args=(prompt,), daemon=True).start()
 
-        threading.Thread(target=worker, daemon=True).start()
+    def full_clip_worker(self, prompt: str) -> None:
+        status = "ok"
+        clip_result = None
+
+        try:
+            clip_result = self.pipeline_runner(prompt)
+
+            if clip_result is None:
+                status = "no motion"
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[chat] pipeline failed")
+            status = f"error: {exc}"
+
+        with self.lock:
+            self.pending_clip = clip_result
+
+            if self.history and self.history[-1][0] == prompt:
+                self.history[-1] = (prompt, status)
+
+            self.busy = False
+            self.busy_msg = ""
+
+    def streaming_worker(self, prompt: str) -> None:
+        assert self.stream_pipeline_runner is not None
+        status = "ok"
+        accumulated_frames: np.ndarray | None = None
+
+        try:
+            for chunk in self.stream_pipeline_runner(prompt):
+                if accumulated_frames is None:
+                    accumulated_frames = chunk
+                else:
+                    accumulated_frames = np.concatenate([accumulated_frames, chunk], axis=0)
+
+                partial_clip = MotionClip(
+                    action=prompt,
+                    smplx_params=accumulated_frames.copy(),
+                    coord_system=self.stream_coord_system,
+                )
+                with self.lock:
+                    self.pending_clip = partial_clip
+        except Exception as exc:  # noqa: BLE001
+            log.exception("[chat] streaming pipeline failed")
+            status = f"error: {exc}"
+
+        with self.lock:
+            if self.history and self.history[-1][0] == prompt:
+                self.history[-1] = (prompt, status)
+
+            self.busy = False
+            self.busy_msg = ""
 
     def on_update(self) -> None:
         with self.lock:
@@ -257,4 +330,3 @@ class ChatViewer(Viewer):
     def gui(self) -> None:
         self.on_update()
         super().gui()
-

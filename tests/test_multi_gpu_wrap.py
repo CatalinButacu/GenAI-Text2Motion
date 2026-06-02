@@ -21,7 +21,7 @@ from unittest.mock import patch
 
 import torch
 
-from src.modules.motion.training.base_trainer import BaseSSMTrainer
+from src.architecture.training.base_trainer import BaseSSMTrainer
 
 
 class FakeConfig:
@@ -76,7 +76,7 @@ def fake_finalize_just_wrap(trainer, config) -> None:
     keeps the test runnable on CPU-only CI without compiled-CUDA PyTorch while
     still exercising the cuda-device-type branches.
     """
-    from src.modules.motion.nn_models import TextToMotionSSM
+    from src.architecture.nn_models import TextToMotionSSM
     trainer.model = TextToMotionSSM(config).to("cpu")
     n_gpus = (
         torch.cuda.device_count() if trainer.device.type == "cuda" else 0

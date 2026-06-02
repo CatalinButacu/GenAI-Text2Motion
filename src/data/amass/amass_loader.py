@@ -1,16 +1,4 @@
-"""AMASS .npz loader.
-
-Coordinate-system contract: this loader does NOT apply a Z-up -> Y-up
-rotation. It expects the input .npz files to already be in the Y-up
-convention used throughout the pipeline (matches HumanML3D and aitviewer).
-
-If you point this loader at raw AMASS-native .npz (Z-up), the entire
-pipeline silently produces sideways motion. Either:
-  - preprocess your AMASS dump to Y-up upstream (preferred), or
-  - set RenderConfig.input_coord_system='zup' so the renderer rotates
-    on the way out (works for visualization, not for training -- the
-    SSM learns the wrong manifold).
-"""
+"""AMASS .npz loader. Expects Y-up input; MotionSSM stamps clip.coord_system at inference."""
 
 from __future__ import annotations
 
@@ -21,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from src.shared.constants import MOTION_FPS
+from src.shared.constants import CONSTS
 
 from .amass_text import text_from_filename
 from .smplx_pack import SMPLXSample, pack_smplx_pose
@@ -53,7 +41,7 @@ class AMASSLoader:
             return None
 
         T = data["root_orient"].shape[0]
-        fps = float(data.get("mocap_frame_rate", MOTION_FPS))
+        fps = float(data.get("mocap_frame_rate", CONSTS.runtime.motion_fps))
         root_orient = data["root_orient"].astype(np.float32)
         trans = data["trans"].astype(np.float32)
         pose_body = data["pose_body"].astype(np.float32)
@@ -67,10 +55,16 @@ class AMASSLoader:
                 pose_hand = pose_hand[:, :90]
         else:
             pose_hand = np.zeros((T, 90), dtype=np.float32)
-        pose_jaw = (data["pose_jaw"].astype(np.float32)
-                   if "pose_jaw" in data else np.zeros((T, 3), dtype=np.float32))
-        pose_eye = (data["pose_eye"].astype(np.float32)
-                   if "pose_eye" in data else np.zeros((T, 6), dtype=np.float32))
+        pose_jaw = (
+            data["pose_jaw"].astype(np.float32)
+            if "pose_jaw" in data
+            else np.zeros((T, 3), dtype=np.float32)
+        )
+        pose_eye = (
+            data["pose_eye"].astype(np.float32)
+            if "pose_eye" in data
+            else np.zeros((T, 6), dtype=np.float32)
+        )
         motion = pack_smplx_pose(root_orient, trans, pose_body, pose_hand, pose_jaw, pose_eye)
 
         if np.isnan(motion).any() or np.isinf(motion).any():
@@ -78,26 +72,33 @@ class AMASSLoader:
 
             return None
 
-        betas = (data["betas"].astype(np.float32)
-                 if "betas" in data else np.zeros(16, dtype=np.float32))
+        betas = (
+            data["betas"].astype(np.float32) if "betas" in data else np.zeros(16, dtype=np.float32)
+        )
 
         if len(betas) < 16:
             betas = np.pad(betas, (0, 16 - len(betas)))
         gender_val = data.get("gender", "neutral")
         gender = (
-            str(gender_val)
-            if not isinstance(gender_val, np.ndarray)
-            else str(gender_val.item())
+            str(gender_val) if not isinstance(gender_val, np.ndarray) else str(gender_val.item())
         )
         sample_id = str(path.relative_to(self.data_dir).with_suffix("")).replace(os.sep, "/")
 
         return SMPLXSample(
-            sample_id=sample_id, motion=motion, betas=betas, fps=fps,
-            duration=T / fps, gender=gender, text=text_from_filename(sample_id), source="amass",
+            sample_id=sample_id,
+            motion=motion,
+            betas=betas,
+            fps=fps,
+            duration=T / fps,
+            gender=gender,
+            text=text_from_filename(sample_id),
+            source="amass",
         )
 
     def load_dataset(
-        self, max_samples: int | None = None, min_frames: int = 30,
+        self,
+        max_samples: int | None = None,
+        min_frames: int = 30,
     ) -> list[SMPLXSample]:
         files = self.discover_files()
 

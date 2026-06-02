@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
-import re
 
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.spatial.transform import Rotation as R
+
+from src.shared.constants import LR_SWAP, LR_WORD_RE
 
 from .aug_quality import detect_tpose, quality_filter
 from .aug_slerp import slerp_resample
@@ -73,11 +74,6 @@ def mirror_flip(motion: np.ndarray) -> np.ndarray:
     mirror_rotvec_inplace(m, r_start, r_start + hand_len)
 
     return m.astype(np.float32)
-
-
-LR_WORD_RE = re.compile(r"\b(left|right|Left|Right|LEFT|RIGHT)\b")
-LR_SWAP = {"left": "right", "right": "left", "Left": "Right", "Right": "Left",
-            "LEFT": "RIGHT", "RIGHT": "LEFT"}
 
 
 def mirror_flip_text(text: str) -> str:

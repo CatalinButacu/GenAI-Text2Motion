@@ -1,15 +1,19 @@
 #!/usr/bin/env python
-"""Run the ablation study: N prompts x 2 configs -> metrics CSV/JSON.
+"""Run the ablation study: N prompts x K configs -> metrics CSV/JSON.
 
-Ablation matrix (matches current pipeline: SpaCy + L-BFGS-B + MotionSSM + SMPL-X render):
-  full   -- SpaCy + L-BFGS-B + MotionSSM  (baseline)
-  no_m2  -- random layout instead of L-BFGS-B planner  (M2 ablation)
+Ablation matrix:
+  full             -- SpaCy + L-BFGS-B + MotionSSM  (baseline)
+  no_m2            -- random layout instead of L-BFGS-B planner
+  no_film          -- MotionSSM with FiLM conditioning disabled
+  no_bidirectional -- MotionSSM with unidirectional (causal) SSM
+  no_m1_spacy      -- regex/fallback parser instead of SpaCy
+  cpu_baseline     -- full config but forced to CPU device
 
 Usage
 -----
   python scripts/evaluation/evaluate_ablation.py --output results/ablation
   python scripts/evaluation/evaluate_ablation.py --output results/ablation --n-prompts 10
-  python scripts/evaluation/evaluate_ablation.py --output results/ablation --configs full
+  python scripts/evaluation/evaluate_ablation.py --output results/ablation --configs full,no_m2
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ import os
 import time
 import traceback
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +34,8 @@ import numpy as np
 from scripts.evaluation.compute_metrics import compute_clip_metrics, summarise
 from src.pipeline import Pipeline
 from src.shared.config import PipelineConfig
+from src.shared.run_manifest import build_manifest, save_manifest
+from src.shared.stats_report import aggregate_seeds, detect_outliers, format_stats_table
 
 log = logging.getLogger(__name__)
 
@@ -131,24 +138,42 @@ assert len(OOD_PROMPTS) == 19, f"Expected 19 OOD prompts, got {len(OOD_PROMPTS)}
 
 #  Config definitions
 
-ALL_CONFIGS = ["full", "no_m2"]
+ALL_CONFIGS = ["full", "no_m2", "no_film", "no_bidirectional", "no_m1_spacy", "cpu_baseline"]
 
-def pipeline_config_for(config_name: str, output_dir: str, duration: float = 3.0,
-                      fps: int = 24, device: str = "cpu"):
+
+def pipeline_config_for(
+    config_name: str, output_dir: str, duration: float = 3.0, fps: int = 24, device: str = "cpu"
+) -> PipelineConfig:
     """Build PipelineConfig for a given ablation config name."""
     if config_name not in ALL_CONFIGS:
         raise ValueError(f"Unknown config: {config_name!r}")
+
+    effective_device = "cpu" if config_name == "cpu_baseline" else device
+
     cfg = PipelineConfig(
         fps=fps,
         duration=float(duration),
-        device=device,
+        device=effective_device,
         output_dir=output_dir,
     )
-    cfg.planner.random_layout = config_name == "no_m2"
+
+    if config_name == "no_m2":
+        cfg.planner.random_layout = True
+
+    if config_name == "no_film":
+        cfg.motion.use_film = False
+
+    if config_name == "no_bidirectional":
+        cfg.motion.bidirectional = False
+
+    if config_name == "no_m1_spacy":
+        cfg.understanding.use_spacy = False
 
     return cfg
 
+
 #  Per-run result
+
 
 @dataclass
 class RunResult:
@@ -167,13 +192,13 @@ class RunResult:
     n_entities: int = 0
     n_actions: int = 0
 
+
 def extract_motion_metrics(result: dict) -> dict:
     """Pull motion quality metrics from a pipeline result dict."""
     clips = result.get("motion_clips", [])
     if not clips:
         return {}
-    # motion.invoke returns dict[str, MotionClip] (actor_name -> clip).
-    # Accept both shapes for backwards compatibility with older callers.
+
     clip_list = list(clips.values()) if isinstance(clips, dict) else list(clips)
 
     all_params = [c.smplx_params for c in clip_list if c.smplx_params is not None]
@@ -199,32 +224,42 @@ def extract_motion_metrics(result: dict) -> dict:
         "validity": summary["validity_rate"] > 0.5,
     }
 
+
 def run_single(
-    prompt: str, config_name: str, output_dir: str, duration: float, fps: int,
+    prompt: str,
+    config_name: str,
+    output_dir: str,
+    duration: float,
+    fps: int,
     device: str = "cpu",
+    seed: int = 42,
 ) -> RunResult:
     """Run pipeline for one prompt/config combination."""
     run = RunResult(prompt=prompt, config=config_name, success=False)
     t0 = time.perf_counter()
     try:
-        cfg = pipeline_config_for(config_name, output_dir=output_dir, duration=duration,
-                                fps=fps, device=device)
+        cfg = pipeline_config_for(
+            config_name, output_dir=output_dir, duration=duration, fps=fps, device=device
+        )
+        cfg.seed = seed
         safe_name = prompt[:40].replace(" ", "_").replace("/", "-")
         output_name = f"{config_name}__{safe_name}"
 
         pipeline = Pipeline(cfg)
-        result = pipeline.run(prompt, output_name=output_name)
+        result = pipeline.render_to_file(prompt, output_name=output_name)
+
+        if result is None:
+            run.error = "empty prompt"
+            return run
 
         run.success = True
         run.latency_s = time.perf_counter() - t0
 
-        # Parsing metrics
         parsed = result.get("parsed_scene")
         if parsed:
             run.n_entities = len(getattr(parsed, "entities", []))
             run.n_actions = len(getattr(parsed, "actions", []))
 
-        # Motion quality metrics
         m = extract_motion_metrics(result)
         if m:
             run.n_clips = m.get("n_clips", 0)
@@ -240,7 +275,9 @@ def run_single(
 
     return run
 
+
 #  Aggregation
+
 
 def aggregate(results: list[RunResult]) -> dict:
     """Compute mean +/- std for all numeric metrics across a list of results."""
@@ -271,7 +308,9 @@ def aggregate(results: list[RunResult]) -> dict:
         "mean_latency_s": latency_mean,
     }
 
+
 #  Save helpers
+
 
 def save_csv(all_results: list[RunResult], path: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -282,33 +321,110 @@ def save_csv(all_results: list[RunResult], path: str) -> None:
             writer.writerow(asdict(r))
     log.info("CSV saved to %s", path)
 
+
 def save_summary(summary_by_config: dict, path: str) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         json.dump(summary_by_config, f, indent=2)
     log.info("Summary JSON saved to %s", path)
 
+
+def compute_deltas(summary_by_config: dict) -> dict:
+    """Compute per-metric delta vs the 'full' baseline config."""
+    baseline = summary_by_config.get("full", {})
+    deltas: dict[str, dict] = {}
+
+    for cfgName, s in summary_by_config.items():
+        deltas[cfgName] = {}
+
+        for metric in ("foot_sliding_mean_ms", "ground_pen_mean_cm", "mean_latency_s", "validity_rate"):
+            base_val = baseline.get(metric)
+            cur_val = s.get(metric)
+
+            if base_val is not None and cur_val is not None and np.isfinite(base_val) and np.isfinite(cur_val):
+                deltas[cfgName][metric] = cur_val - base_val
+            else:
+                deltas[cfgName][metric] = None
+
+    return deltas
+
+
 def print_table(summary_by_config: dict) -> None:
     header = (
         f"{'Config':<20} {'Success':>8} {'Valid%':>8} {'FtSlide':>10} "
-        f"{'GndPen':>10} {'Latency':>10}"
+        f"{'GndPen':>10} {'Latency':>10} {'ΔFtSlide':>10}"
     )
     print(f"\n{'' * len(header)}")
     print(header)
     print(f"{'' * len(header)}")
+    deltas = compute_deltas(summary_by_config)
+
     for cfg, s in summary_by_config.items():
         foot = (
             f"{s['foot_sliding_mean_ms']:.4f}" if np.isfinite(s["foot_sliding_mean_ms"]) else "N/A"
         )
         gp = f"{s['ground_pen_mean_cm']:.3f}" if np.isfinite(s["ground_pen_mean_cm"]) else "N/A"
         lat = f"{s['mean_latency_s']:.1f}s" if np.isfinite(s["mean_latency_s"]) else "N/A"
+        delta_foot = deltas.get(cfg, {}).get("foot_sliding_mean_ms")
+        delta_str = f"{delta_foot:+.4f}" if delta_foot is not None else "--"
         print(
             f"  {cfg:<18} {s['success_rate'] * 100:>7.1f}%  {s['validity_rate'] * 100:>7.1f}%  "
-            f"{foot:>10}  {gp:>10}  {lat:>10}"
+            f"{foot:>10}  {gp:>10}  {lat:>10}  {delta_str:>10}"
         )
     print(f"{'' * len(header)}\n")
 
+
 #  Main
+
+
+def runMultiSeedAblation(prompts, args, selected_seeds: list[int]) -> None:
+    per_seed_summaries: list[dict] = []
+
+    for seed in selected_seeds:
+        seed_results: list[RunResult] = []
+        seed_dir = os.path.join(args.output, f"seed_{seed}")
+        Path(seed_dir).mkdir(parents=True, exist_ok=True)
+
+        for config_nm in args.configs:
+            config_dir2 = os.path.join(seed_dir, config_nm)
+            Path(config_dir2).mkdir(parents=True, exist_ok=True)
+
+            for prompt in prompts:
+                log.info("[seed=%d] config=%s  prompt=%r", seed, config_nm, prompt[:50])
+                run = run_single(
+                    prompt, config_nm, config_dir2, args.duration, args.fps,
+                    device=args.device, seed=seed
+                )
+                seed_results.append(run)
+
+        seed_summary: dict = {}
+
+        for config_nm in args.configs:
+            config_runs2 = [r for r in seed_results if r.config == config_nm]
+            seed_summary[config_nm] = aggregate(config_runs2)
+
+        per_seed_summaries.append(seed_summary)
+
+    for config_nm in args.configs:
+        per_seed_rows = [ps[config_nm] for ps in per_seed_summaries if config_nm in ps]
+        aggregated = aggregate_seeds(per_seed_rows)
+        log.info("Multi-seed stats for %s:%s", config_nm, format_stats_table(aggregated))
+
+        outliers = detect_outliers(per_seed_rows, seed_ids=selected_seeds)
+
+        for seed_id, metric in outliers:
+            log.warning("Outlier detected: seed=%d config=%s metric=%s", seed_id, config_nm, metric)
+
+    stats_path = os.path.join(args.output, "multi_seed_stats.json")
+    stats_out: dict = {}
+
+    for config_nm in args.configs:
+        per_seed_rows = [ps[config_nm] for ps in per_seed_summaries if config_nm in ps]
+        stats_out[config_nm] = aggregate_seeds(per_seed_rows)
+
+    Path(stats_path).write_text(json.dumps(stats_out, indent=2, default=str))
+    log.info("Multi-seed stats saved to %s", stats_path)
+
 
 def main():
     logging.basicConfig(
@@ -322,14 +438,16 @@ def main():
         "--output", default="results/ablation", help="Output directory for CSV/JSON results"
     )
     p.add_argument(
-        "--n-prompts", type=int, default=50, help="Number of prompts to evaluate (default: all 50)"
-    , dest="n_prompts")
+        "--n-prompts",
+        type=int,
+        default=50,
+        help="Number of prompts to evaluate (default: all 50)",
+        dest="n_prompts",
+    )
     p.add_argument(
         "--configs",
-        nargs="+",
-        default=ALL_CONFIGS,
-        choices=ALL_CONFIGS,
-        help="Which configs to run",
+        default=",".join(ALL_CONFIGS),
+        help="Comma-separated list of config names to run (e.g. full,no_m2)",
     )
     p.add_argument(
         "--duration",
@@ -338,16 +456,39 @@ def main():
         help="Clip duration per run (shorter = faster evaluation)",
     )
     p.add_argument("--fps", type=int, default=24)
-    p.add_argument("--device", default="cpu", choices=["cuda", "cpu"],
-                   help="Device for motion generation (M4). Render still uses GPU via aitviewer.")
+    p.add_argument(
+        "--device",
+        default="cpu",
+        choices=["cuda", "cpu"],
+        help="Device for motion generation (M4). Render still uses GPU via aitviewer.",
+    )
     p.add_argument("--resume", action="store_true", help="Skip runs that already have output files")
     p.add_argument(
         "--ood",
         action="store_true",
         help="Run OOD generalisation set (20 prompts with out-of-distribution phrasing) "
-             "instead of the standard 50-prompt eval suite.",
+        "instead of the standard 50-prompt eval suite.",
+    )
+    p.add_argument(
+        "--seeds",
+        default="42",
+        help="Comma-separated list of random seeds (default: 42). Multiple seeds enable "
+        "multi-seed statistical reporting with 95%% CI.",
     )
     args = p.parse_args()
+
+    # Parse and validate comma-separated configs string
+    selected_configs = [c.strip() for c in args.configs.split(",") if c.strip()]
+    unknown_configs = [c for c in selected_configs if c not in ALL_CONFIGS]
+
+    if unknown_configs:
+        raise ValueError(f"Unknown config(s): {unknown_configs}. Valid: {ALL_CONFIGS}")
+
+    args.configs = selected_configs
+
+    # Parse --seeds into a list of ints
+    selected_seeds = [int(s.strip()) for s in args.seeds.split(",") if s.strip()]
+    log.info("Seeds: %s", selected_seeds)
 
     if args.ood:
         prompts = OOD_PROMPTS
@@ -375,8 +516,10 @@ def main():
         for i, prompt in enumerate(prompts):
             done += 1
             log.info("[%d/%d] config=%s  prompt=%r", done, total, config_name, prompt[:50])
-            run = run_single(prompt, config_name, config_dir, args.duration, args.fps,
-                            device=args.device)
+            run = run_single(
+                prompt, config_name, config_dir, args.duration, args.fps,
+                device=args.device, seed=selected_seeds[0]
+            )
             config_results.append(run)
             all_results.append(run)
 
@@ -389,10 +532,27 @@ def main():
         config_runs = [r for r in all_results if r.config == config_name]
         summary[config_name] = aggregate(config_runs)
 
-    save_summary(summary, os.path.join(args.output, "ablation_summary.json"))
+    summary_path = os.path.join(args.output, "ablation_summary.json")
+    save_summary(summary, summary_path)
     print_table(summary)
 
+    if len(selected_seeds) > 1:
+        runMultiSeedAblation(prompts, args, selected_seeds)
+
+    manifestPath = os.path.join(
+        args.output,
+        f"manifest_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}.json",
+    )
+    manifest = build_manifest(
+        PipelineConfig(),
+        list(prompts),
+        extra={"configs": args.configs, "summary_path": summary_path},
+    )
+    manifest["summary_path"] = summary_path
+    save_manifest(manifest, manifestPath)
+    log.info("Manifest saved to %s", manifestPath)
     log.info("Ablation complete. Results in %s", args.output)
+
 
 if __name__ == "__main__":
     main()

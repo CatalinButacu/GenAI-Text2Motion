@@ -24,9 +24,9 @@ import time
 import torch
 import torch.nn.functional as F
 
-from src.modules.motion.config import TrainingConfig
-from src.modules.motion.nn_models import TextToMotionSSM
-from src.modules.motion.rvq_tokenizer import MotionRVQTokenizer
+from src.architecture.nn_models import TextToMotionSSM
+from src.architecture.rvq_tokenizer import MotionRVQTokenizer
+from src.shared.config import TrainingConfig
 
 log = logging.getLogger(__name__)
 

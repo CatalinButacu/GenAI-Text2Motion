@@ -35,13 +35,9 @@ from pathlib import Path
 
 import torch
 
-from src.modules.motion.config import TrainingConfig
-from src.modules.motion.training import train_amass, train_humanml3d, train_unified
-from src.shared.constants import (
-    SSM_D_MODEL,
-    SSM_D_STATE,
-    SSM_N_LAYERS,
-)
+from src.architecture.training import train_amass, train_humanml3d, train_unified
+from src.shared.config import SSM, TrainingConfig, load_yaml_config
+from src.shared.constants import CONSTS
 from src.shared.run_ctx import init_wandb, log_gpu_sanity, make_run_dir, snapshot_config
 
 NPZ = "*.npz"
@@ -116,6 +112,15 @@ def main():
     parser.add_argument("--data-source", choices=["amass", "humanml3d", "unified"],
                         default="amass", dest="data_source")
     parser.add_argument(
+        "--config", type=str, default=None, dest="config_yaml",
+        help=("Path to a YAML config (e.g. configs/motion_ssm.yaml). When set, the "
+              "YAML drives every architecture + training field; CLI flags only "
+              "override run-level things (--resume, --checkpoint-dir, --device, "
+              "--data-dir, --data-source, --seed). Run-architecture flags like "
+              "--d-model are IGNORED when --config is supplied to avoid YAML-vs-CLI "
+              "drift -- edit the YAML if you want to change them."),
+    )
+    parser.add_argument(
         "--data-dir",
         type=str,
         default=None,
@@ -142,12 +147,10 @@ def main():
     )
     parser.add_argument(
         "--pose-prefix-prob", type=float, default=0.0, dest="pose_prefix_prob",
-        help=("Probability per batch to run the pose-prefix curriculum: split "
-              "each clip into (prefix, suffix), encode the prefix through the "
-              "frozen tokenizer + model.seed_from_latent, supervise prediction "
-              "of the suffix only. 0.0 = cold-start only (default). 0.5 = the "
-              "recommended value for the streaming headline run -- teaches the "
-              "model to continue smoothly across action transitions."),
+        help=("RESERVED: pose-prefix curriculum is not wired into the current "
+              "trainer loop. The model API (TextToMotionSSM.forward(seed_latent=...)) "
+              "exists but no batch in run_train_epoch currently sets seed_latent. "
+              "Passing >0.0 raises so the flag never silently lies."),
     )
     parser.add_argument(
         "--single-gpu", action="store_true", dest="single_gpu",
@@ -164,9 +167,9 @@ def main():
               "tokens, restoring the residual structure of RVQ. Requires training "
               "from scratch -- old checkpoints have the independent head's weights."),
     )
-    parser.add_argument("--d-model", type=int, default=SSM_D_MODEL, dest="d_model")
-    parser.add_argument("--d-state", type=int, default=SSM_D_STATE, dest="d_state")
-    parser.add_argument("--n-layers", type=int, default=SSM_N_LAYERS, dest="n_layers")
+    parser.add_argument("--d-model", type=int, default=SSM.d_model, dest="d_model")
+    parser.add_argument("--d-state", type=int, default=SSM.d_state, dest="d_state")
+    parser.add_argument("--n-layers", type=int, default=SSM.n_layers, dest="n_layers")
     parser.add_argument("--seed", type=int, default=42, help="Random seed (-1 = non-deterministic)")
     parser.add_argument("--weight-decay", type=float, default=0.01, dest="weight_decay")
     parser.add_argument(
@@ -273,7 +276,34 @@ def main():
         help="Inter-layer dropout probability in SSM trunk (0.0 = off). "
              "Set 0.1 for regularisation when fine-tuning from a warm-start checkpoint.",
     )
+    parser.add_argument(
+        "--adapter-mode", action="store_true", dest="adapter_mode",
+        help=("Freeze the SSM trunk + text encoder + positional embeddings and "
+              "only train FiLM, the RVQ decoder head, and condition_proj. "
+              "Requires --adapter-base-ckpt to point at a baseline trained model."),
+    )
+    parser.add_argument(
+        "--adapter-base-ckpt", type=str, default=None, dest="adapter_base_ckpt",
+        help="Trained checkpoint to initialise the frozen weights from.",
+    )
+    parser.add_argument(
+        "--adapter-lora", nargs="*", default=[], dest="adapter_lora_targets",
+        help=("Dotted submodule paths to wrap with a LoRA delta. Example: \"\n"
+              "--adapter-lora condition_proj decoder.length_head\""),
+    )
+    parser.add_argument(
+        "--adapter-lora-rank", type=int, default=8, dest="adapter_lora_rank",
+        help="Rank for the LoRA adapters (default: 8).",
+    )
     args = parser.parse_args()
+
+    if args.pose_prefix_prob > 0.0:
+        parser.error(
+            "--pose-prefix-prob > 0 is not implemented in the current trainer. "
+            "run_train_epoch never sets seed_latent. Either implement the "
+            "curriculum in src/modules/motion/training/trainer_utils.py first, "
+            "or rerun with --pose-prefix-prob 0.0."
+        )
 
     # Resolve defaults
     # --text-encoder alias overrides --sbert-model if both supplied.
@@ -345,7 +375,41 @@ def main():
         arch="residual_k" if args.ar_k_head else "independent",
         pose_prefix_prob=args.pose_prefix_prob,
         model_dropout=args.model_dropout,
+        adapter_mode=args.adapter_mode,
+        adapter_base_ckpt=args.adapter_base_ckpt,
+        adapter_lora_targets=list(args.adapter_lora_targets or []),
+        adapter_lora_rank=args.adapter_lora_rank,
     )
+
+    if args.config_yaml is not None:
+        yaml_flat = load_yaml_config(args.config_yaml)
+        valid_fields = {f.name for f in TrainingConfig.__dataclass_fields__.values()}
+        consumed = {k: v for k, v in yaml_flat.items() if k in valid_fields}
+        # YAML wins on everything it specifies; run-level overrides come from CLI.
+        for k, v in consumed.items():
+            setattr(config, k, v)
+        # Preserve run-level CLI overrides that the user almost always sets per-run
+        run_level_overrides = {
+            "data_dir": args.data_dir,
+            "checkpoint_dir": args.checkpoint_dir,
+            "device": args.device,
+            "resume_from": args.resume,
+            "warm_start": args.warm_start,
+        }
+
+        for k, v in run_level_overrides.items():
+            if v is not None and v != "":
+                setattr(config, k, v)
+        log.info(
+            "[train_motion_ssm] config loaded from %s (%d fields applied)",
+            args.config_yaml, len(consumed),
+        )
+
+        if args.pose_prefix_prob > 0.0 or consumed.get("pose_prefix_prob", 0.0) > 0.0:
+            sys.exit(
+                "pose_prefix_prob > 0 from YAML is not implemented in the current "
+                "trainer. Set it to 0.0 in the YAML."
+            )
     if args.sources is not None and args.data_source == "unified":
         config.unified_sources = args.sources
     # Pass per-source data dirs through so unified_factory can find them

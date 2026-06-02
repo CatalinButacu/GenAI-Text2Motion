@@ -12,14 +12,14 @@ from unittest.mock import patch
 import numpy as np
 import torch
 
-from src.modules.motion.models import MotionClip, MotionSource
-from src.modules.motion.ssm import (
+from src.architecture.ssm import (
     BiMambaLayer,
     MambaLayer,
     SSMConfig,
     create_ssm_layer,
     get_ssm_info,
 )
+from src.modules.motion.models import MotionClip, MotionSource
 
 
 class TestSSMConfig(unittest.TestCase):
@@ -54,7 +54,7 @@ class TestMambaLayer(unittest.TestCase):
         layer.eval()
         x_t = torch.randn(2, 32)
         h = torch.zeros(2, cfg.d_inner, cfg.d_state)
-        out, h_new, buf = layer.step(x_t, h)
+        out, h_new, _ = layer.step(x_t, h)
         self.assertEqual(out.shape, (2, 32))
         self.assertEqual(h_new.shape, (2, cfg.d_inner, cfg.d_state))
 
@@ -100,21 +100,23 @@ class TestMotionClip(unittest.TestCase):
 class TestMotionGenerator(unittest.TestCase):
     @patch("src.modules.motion.generator.SSMMotionModel")
     def test_generate_returns_clip(self, MockModel):
+        from src.modules.motion.generator import MotionGenerator
+        from src.shared.config import MotionConfig
+
         dummy_clip = MotionClip(action="walk", smplx_params=np.zeros((30, 168)))
         instance = MockModel.return_value
         instance.generate_from_text_tokens.return_value = dummy_clip
 
-        from src.modules.motion.generator import MotionGenerator
-
         gen = MotionGenerator.__new__(MotionGenerator)
         gen.backend = instance
-        gen.temperature = 1.0
-        gen.top_p = 1.0
-        gen.cfg_scale = 1.0
+        gen.cfg = MotionConfig()
+        gen.reranker = None
+        gen.retriever = None
+
         result = gen.generate("a person walks", num_frames=30)
         self.assertIsInstance(result, MotionClip)
         instance.generate_from_text_tokens.assert_called_once_with(
-            "a person walks", 30, temperature=1.0, top_p=1.0, cfg_scale=1.0
+            "a person walks", 30, temperature=1.0, top_p=1.0, cfg_scale=2.0
         )
 
 

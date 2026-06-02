@@ -16,12 +16,12 @@ import unittest
 
 import torch
 
-from src.modules.motion.rvq_tokenizer import (
+from src.architecture.rvq_tokenizer import (
     MotionRVQTokenizer,
     ResidualVectorQuantizer,
     RVQCodebook,
 )
-from src.modules.motion.training.trainer_utils import token_ce_loss
+from src.architecture.training.trainer_utils import token_ce_loss
 
 
 def tiny_tokenizer(down_t: int = 4) -> MotionRVQTokenizer:

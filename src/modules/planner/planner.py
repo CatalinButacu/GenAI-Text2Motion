@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import random
 
-from src.shared.vocabulary import OBJECTS
+from src.shared.vocab import OBJECTS
 
 from .config import PlannerConfig
 from .constraint_layout import solve_layout
@@ -31,7 +31,6 @@ def place_objects(objects: list, actions: list, config: PlannerConfig) -> dict[s
     for i, obj in enumerate(objects):
         z = object_z(obj.name, actions, config)
         pos[obj.name] = Position3D(i * config.obj_space, 0.0, z)
-    two_obj_fall(objects, actions, pos, config)
 
     return pos
 
@@ -44,7 +43,7 @@ def object_z(name: str, actions: list, config: PlannerConfig) -> float:
     return config.ground_height
 
 
-def two_obj_fall(
+def apply_two_object_fall(
     objects: list, actions: list, pos: dict[str, Position3D], config: PlannerConfig
 ) -> None:
     if len(objects) != 2:
@@ -89,9 +88,6 @@ class ScenePlanner:
     def __init__(self, config: PlannerConfig | None = None) -> None:
         self.config = config or PlannerConfig()
 
-    def plan(self, parsed_scene) -> PlannedScene:
-        return self.plan_parsed(parsed_scene)
-
     def compute_duration(self, raw: float, explicit: bool) -> float:
         if self.config.duration_jitter > 0 and not explicit:
             return max(
@@ -100,7 +96,7 @@ class ScenePlanner:
 
         return raw
 
-    def plan_parsed(self, parsed_scene) -> PlannedScene:
+    def plan(self, parsed_scene) -> PlannedScene:
         raw_duration = getattr(parsed_scene, "duration", self.config.base_duration)
         duration_explicit = getattr(parsed_scene, "duration_explicit", False)
         duration = self.compute_duration(raw_duration, duration_explicit)
@@ -138,6 +134,7 @@ class ScenePlanner:
         actors = [e for e in parsed_scene.entities if e.is_actor]
         objects = [e for e in parsed_scene.entities if not e.is_actor]
         obj_pos = place_objects(objects, parsed_scene.actions, self.config)
+        apply_two_object_fall(objects, parsed_scene.actions, obj_pos, self.config)
         act_pos = place_actors(actors, parsed_scene.actions, obj_pos, self.config)
 
         return self.build_planned(
@@ -153,7 +150,7 @@ class ScenePlanner:
         entities,
         pos_map: dict,
         mode: str,
-        duration: float = 5.0,
+        duration: float,
         actions: list | None = None,
     ) -> PlannedScene:
         planned: list[PlannedEntity] = []
@@ -180,9 +177,7 @@ class ScenePlanner:
 
 
 def try_solve(entity_names: list[str], relations: list) -> dict[str, tuple]:
-    """Run the L-BFGS-B layout solver. Returns an empty dict when there is nothing
-    to solve (no entities or no relations); raises if the solver itself fails.
-    """
+    """Run the L-BFGS-B layout solver. Returns {} when there is nothing to solve."""
     if not entity_names or not relations:
         return {}
 

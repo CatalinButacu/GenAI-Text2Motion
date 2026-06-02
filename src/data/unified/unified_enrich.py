@@ -4,7 +4,7 @@ import logging
 import re
 
 from src.data.humanml3d_loader import HumanML3DLoader
-from src.shared.vocabulary import get_action_by_keyword
+from src.shared.vocab import get_action_by_keyword
 
 log = logging.getLogger(__name__)
 

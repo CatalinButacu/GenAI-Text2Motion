@@ -13,9 +13,9 @@ architecture:
   max_motion_length: 200
   max_text_length: 64
   vocab_size: 10000
-  bidirectional: true
+  bidirectional: false
   use_film: true
-  arch: independent           # 'independent' or 'residual_k' (AR K-head)
+  arch: residual_k          # 'independent' or 'residual_k' (AR K-head)
   model_dropout: 0.1          # inter-layer dropout for regularisation
   use_sbert: true
   sbert_model: clip-ViT-B-32  # CLIP via sentence-transformers
@@ -56,9 +56,12 @@ training:
   keep_last_checkpoints: 5
   seed: 42
   single_gpu: false
-  # Pose-prefix curriculum (decision #11/#15). 0.5 = recommended for the
-  # streaming-headline run; 0.0 keeps the cold-start-only behaviour.
-  pose_prefix_prob: 0.5
+  # Pose-prefix curriculum: NOT WIRED IN THE CURRENT TRAINER LOOP.
+  # Keep 0.0 until the trainer actually consumes seed_latent during training.
+  # The model API (TextToMotionSSM.forward(seed_latent=...)) exists and is
+  # covered by tests/test_seed_latent.py, but no batch in run_train_epoch
+  # currently sets it. Setting >0.0 will fail loudly in train_motion_ssm.py.
+  pose_prefix_prob: 0.0
   # Causal RVQ decoder (decision #10). Must MATCH the tokenizer's training
   # flag -- if the RVQ checkpoint was trained with --causal-decoder, this
   # must also be true at SSM training time, otherwise the latent → motion

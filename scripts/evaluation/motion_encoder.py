@@ -58,7 +58,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.shared.constants import MOTION_DIM
+from src.shared.constants import CONSTS, SMPLX
 
 log = logging.getLogger(__name__)
 
@@ -174,7 +174,7 @@ class T2MMotionEncoder(nn.Module):
     End-to-end: (B, T, D) motion -> (B, 512) L2-normalised embedding.
     """
 
-    def __init__(self, input_dim: int = MOTION_DIM) -> None:
+    def __init__(self, input_dim: int = SMPLX.pose_dim) -> None:
         super().__init__()
         self.input_dim = input_dim
         self.movement = MovementEncoder()
@@ -221,7 +221,7 @@ class T2MMotionEncoder(nn.Module):
 
 
 def load_encoder(
-    input_dim: int = MOTION_DIM,
+    input_dim: int = SMPLX.pose_dim,
     weights_path: str | None = None,
     device: str = "cpu",
 ) -> T2MMotionEncoder:

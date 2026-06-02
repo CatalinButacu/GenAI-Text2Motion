@@ -21,7 +21,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from src.modules.motion.training.trainer_utils import (
+from src.architecture.training.trainer_utils import (
     find_latest_ckpt,
     load_compatible,
     resolve_ckpt_path,

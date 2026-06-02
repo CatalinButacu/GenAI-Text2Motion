@@ -60,7 +60,7 @@ class CodebookVocab:
                 key = (cb, entry)
                 self.entry_to_label[key] = label
                 self.label_to_entries.setdefault(label, []).append(key)
-        log.info("[vocab] loaded %d labeled entries  %d unique labels",
+        log.info("loaded %d labeled entries  %d unique labels",
                  len(self.entry_to_label), len(self.label_to_entries))
 
     def labels(self) -> list[str]:
@@ -91,7 +91,7 @@ class CodebookVocab:
         # Use a short sentence form for SBERT so the embedding focuses on action verb
         prompts = [f"a person {lab.replace('_', ' ')}" for lab in self.label_list]
         self.label_embeds = self.encoder.encode(prompts, normalize_embeddings=True)
-        log.info("[vocab] SBERT-encoded %d labels for compound decomposition",
+        log.info("SBERT-encoded %d labels for compound decomposition",
                  len(self.label_list))
 
     def decompose_text(self, text: str) -> list[tuple[str, float]]:

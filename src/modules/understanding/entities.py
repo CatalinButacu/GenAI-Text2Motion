@@ -5,53 +5,25 @@ import logging
 import re
 from collections import defaultdict
 
-from src.shared.constants import SCENE_COLORS
-from src.shared.vocabulary import ACTIONS, OBJECTS, ObjectCategory
+from src.shared.constants import (
+    ANAPHORIC_HUMANOID,
+    CONSTS,
+    RULER_NAME,
+    WORD_TO_COUNT,
+)
+from src.shared.vocab import ACTIONS, OBJECTS, ObjectCategory
 
 from .actions import resolve_noun
 from .models import ParsedEntity, SpatialRelation
 from .parsing_utils import RGBA_TO_NAME, SPATIAL_RELATIONS
 
 log = logging.getLogger(__name__)
-RULER_NAME = "vocab_entity_ruler"
-
-WORD_TO_COUNT: dict[str, int] = {
-    "two": 2,
-    "couple": 2,
-    "pair": 2,
-    "both": 2,
-    "three": 3,
-    "triple": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-    "ten": 10,
-    "several": 3,
-    "few": 3,
-    "multiple": 3,
-    "many": 4,
-}
-
-ANAPHORIC_HUMANOID: frozenset[str] = frozenset(
-    {
-        "another",
-        "other",
-        "someone",
-        "somebody",
-        "they",
-        "both",
-        "second",
-    }
-)
 
 
 def token_color(token) -> tuple | None:
     for child in token.children:
-        if child.dep_ == "amod" and child.lemma_.lower() in SCENE_COLORS:
-            return SCENE_COLORS[child.lemma_.lower()]
+        if child.dep_ == "amod" and child.lemma_.lower() in CONSTS.scene.colors:
+            return CONSTS.scene.colors[child.lemma_.lower()]
 
     return None
 
@@ -109,6 +81,14 @@ def span_has_anaphoric_det(ent_root) -> bool:
     return any(c.dep_ == "det" and c.lower_ in ANAPHORIC_HUMANOID for c in ent_root.children)
 
 
+def vocab_patterns(prefix: str, vocab: dict) -> list[dict]:
+    return [
+        {"label": f"{prefix}:{name}", "pattern": kw if " " in kw else [{"LEMMA": kw}]}
+        for name, defn in vocab.items()
+        for kw in defn.keywords
+    ]
+
+
 def build_entity_ruler(nlp) -> None:
     if nlp.has_pipe(RULER_NAME):
         return
@@ -116,21 +96,9 @@ def build_entity_ruler(nlp) -> None:
     ruler = nlp.add_pipe(
         "entity_ruler", name=RULER_NAME, before="ner", config={"overwrite_ents": True}
     )
-    patterns: list[dict] = []
-
-    for obj_name, obj_def in OBJECTS.items():
-        label = f"VOCAB_OBJ:{obj_name}"
-
-        for kw in obj_def.keywords:
-            patterns.append({"label": label, "pattern": kw if " " in kw else [{"LEMMA": kw}]})
-
-    for act_name, act_def in ACTIONS.items():
-        label = f"VOCAB_ACT:{act_name}"
-
-        for kw in act_def.keywords:
-            patterns.append({"label": label, "pattern": kw if " " in kw else [{"LEMMA": kw}]})
+    patterns = vocab_patterns("VOCAB_OBJ", OBJECTS) + vocab_patterns("VOCAB_ACT", ACTIONS)
     ruler.add_patterns(patterns)
-    log.debug("[M1] EntityRuler: %d patterns added", len(patterns))
+    log.debug("EntityRuler: %d patterns added", len(patterns))
 
 
 def register_entity(e: ParsedEntity, registry: dict[str, ParsedEntity]) -> tuple[str, str | None]:
@@ -185,11 +153,8 @@ def extract_entities(doc) -> list[ParsedEntity]:
         name_groups[entry[0].name].append(entry)
 
     for base_name, group in name_groups.items():
-        first_entity, first_count, _ = group[0]
-        # Use the explicit numeric count from the first mention only.
-        # Multiple NLP spans of the same object type in one clause may be
-        # coreferential (e.g. "a ball rolls and hits a ball") -- dedup to 1.
-        # Genuinely distinct types appear in separate groups.
+        first_entity, first_count = group[0][:2]
+        # Coreferential spans ("a ball rolls and hits a ball") dedupe to the first mention's count.
         add_entity(first_entity, first_count, seen_names, seen_types, result)
 
     for token in doc:

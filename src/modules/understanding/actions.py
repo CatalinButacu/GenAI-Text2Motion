@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from itertools import groupby
 
-from src.shared.vocabulary import ACTIONS, OBJECTS, resolve_action
+from src.shared.constants import CONSTS
+from src.shared.vocab import ACTIONS, OBJECTS, resolve_action
 
 from .models import ParsedAction, ParsedEntity
 from .parsing_utils import DURATION_RE, MODIFIER_WORDS, OBJ_DEPS, SUBJ_DEPS
@@ -101,8 +102,7 @@ def collect_compound_token(tkn, entities, subjects: list[str]) -> None:
 
 def dep_subjects(token, entities) -> list[str]:
     subjects: list[str] = []
-    # For coordinated verbs (e.g. "rolls and hits"), the grammatical subject
-    # is attached to the head verb, not the conj verb.
+    # Coordinated verbs ("rolls and hits"): grammatical subject sits on the head verb.
     target = token.head if token.dep_ == "conj" else token
 
     # Prefer agent (passive) over nsubjpass when both present
@@ -111,8 +111,7 @@ def dep_subjects(token, entities) -> list[str]:
     if not subjects:
         collect_subj_token(target, entities, subjects)
 
-    # Fallback: spaCy's en_core_web_sm mislabels short physics-context sentences
-    # (e.g. "a cube slides") as NOUN ROOT with the subject as a "compound" dep.
+    # Fallback: en_core_web_sm mislabels short sentences with subject as compound dep.
     if not subjects:
         collect_compound_token(target, entities, subjects)
 
@@ -152,18 +151,8 @@ def is_negated(token) -> bool:
     return any(c.dep_ == "neg" for c in token.children)
 
 
-def emit_span_actions(ent, entities, actors, objects, emit_fn) -> None:
-    """Pass 1 helper: emit actions for a single EntityRuler span."""
-    if not ent.label_.startswith("VOCAB_ACT:"):
-        return
-
-    at = ent.label_.split(":", 1)[1]
-
-    if is_negated(ent.root):
-        return
-
+def emit_resolved(at, head, entities, actors, objects, emit_fn) -> None:
     adef = ACTIONS.get(at)
-    head = ent.root
     subjects = dep_subjects(head, entities) or (actors[:1] if actors else [""])
     target = dep_arg(head, entities, OBJ_DEPS) or (
         objects[0] if adef and adef.requires_target and objects else ""
@@ -171,6 +160,18 @@ def emit_span_actions(ent, entities, actors, objects, emit_fn) -> None:
 
     for actor in subjects:
         emit_fn(at, actor, target)
+
+
+def emit_span_actions(ent, entities, actors, objects, emit_fn) -> None:
+    """Pass 1 helper: emit actions for a single EntityRuler span."""
+    if not ent.label_.startswith("VOCAB_ACT:"):
+        return
+
+    if is_negated(ent.root):
+        return
+
+    at = ent.label_.split(":", 1)[1]
+    emit_resolved(at, ent.root, entities, actors, objects, emit_fn)
 
 
 def emit_token_actions(token, entities, actors, objects, emit_fn) -> None:
@@ -183,14 +184,7 @@ def emit_token_actions(token, entities, actors, objects, emit_fn) -> None:
     if at is None:
         return
 
-    adef = ACTIONS.get(at)
-    subjects = dep_subjects(token, entities) or (actors[:1] if actors else [""])
-    target = dep_arg(token, entities, OBJ_DEPS) or (
-        objects[0] if adef and adef.requires_target and objects else ""
-    )
-
-    for actor in subjects:
-        emit_fn(at, actor, target)
+    emit_resolved(at, token, entities, actors, objects, emit_fn)
 
 
 def extract_actions(doc, entities, order, duration, modifier, clause_text) -> list[ParsedAction]:
@@ -234,7 +228,7 @@ def extract_duration(text: str) -> float | None:
         return None
 
     val = float(m.group(1))
-    # scale minutes to seconds
+
     if re.search(r"\bmin", m.group(0), re.IGNORECASE):
         val *= 60.0
 
@@ -275,13 +269,13 @@ def propagate_rename(actions: list[ParsedAction], old: str, new: str) -> None:
 def compute_scene_duration(actions: list[ParsedAction]) -> tuple[float, bool]:
     """Return (total_duration, duration_explicit) from per-action slot durations."""
     if not any(a.duration is not None for a in actions):
-        return 5.0, False
+        return CONSTS.runtime.default_clip_duration_s, False
 
     slots = [
         max(a.duration for a in group if a.duration is not None)
-        for _, slot_iter in groupby(actions, key=lambda a: a.order)
+        for slot_key, slot_iter in groupby(actions, key=lambda a: a.order)
         for group in [[*slot_iter]]
         if any(a.duration is not None for a in group)
     ]
 
-    return (sum(slots) if slots else 5.0), True
+    return (sum(slots) if slots else CONSTS.runtime.default_clip_duration_s), True

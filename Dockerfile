@@ -1,6 +1,4 @@
-# Demo container: runs main.py end-to-end. NOT for training.
-# Mount checkpoints + SMPL-X body models at runtime (see Makefile `docker-demo`).
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -14,9 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements.lock.txt ./
-RUN pip install --upgrade pip && pip install -r requirements.lock.txt
-RUN python -m spacy download en_core_web_sm
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
+RUN pip install --upgrade pip uv && uv pip install --system ".[viewer]" \
+ && python -m spacy download en_core_web_sm
 
 COPY . .
 

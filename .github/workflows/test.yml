@@ -8,10 +8,6 @@ on:
 
 jobs:
   test:
-    # Single Python version: matches the dev environment (3.12). Adding a
-    # second version doubles CI time and the older Pythons aren't dev or
-    # deploy targets. If we ever need forward-compat insurance, switch to
-    # an upcoming release (3.13) rather than an older one.
     runs-on: ubuntu-latest
 
     steps:
@@ -21,12 +17,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements-ci.txt
 
       - name: Cache spaCy + huggingface + sentence_transformers models
-        # Big downloads we hit every run; keyed on a manifest under .github/cache-manifest.txt
-        # so future model bumps invalidate the cache deliberately rather than silently.
         uses: actions/cache@v4
         with:
           path: |
@@ -42,11 +34,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libegl1 libgl1 libglx-mesa0 libosmesa6
 
-      - name: Install CI dependencies (CPU-only, headless)
+      - name: Install dependencies via uv (CPU torch)
         run: |
-          python -m pip install --upgrade pip
-          pip install --extra-index-url https://download.pytorch.org/whl/cpu \
-                      -r requirements-ci.txt
+          python -m pip install --upgrade pip uv
+          uv pip install --system --extra-index-url https://download.pytorch.org/whl/cpu \
+                         -e ".[dev,viewer]"
           python -m spacy download en_core_web_sm
 
       - name: Run fast tests (no GPU, no checkpoints, no aitviewer)
@@ -55,6 +47,4 @@ jobs:
         timeout-minutes: 15
 
       - name: Lint (ruff)
-        run: |
-          pip install ruff
-          ruff check src tests scripts
+        run: ruff check src tests scripts

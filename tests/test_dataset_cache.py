@@ -22,7 +22,7 @@ from __future__ import annotations
 import hashlib
 import unittest
 
-from src.data.dataset_cache import CACHE_SCHEMA, DEFAULT_FILTER_KWARGS
+from src.shared.constants import CACHE_SCHEMA, DEFAULT_FILTER_KWARGS
 
 
 def hash_of(data_dir: str, max_samples: int | None, max_length: int,

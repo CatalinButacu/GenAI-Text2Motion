@@ -409,7 +409,7 @@ class TestBackfillActorTargets(unittest.TestCase):
         self.assertEqual(a.actor, "bob")
 
     def test_fills_missing_target_when_required(self):
-        from src.shared.vocabulary import ACTIONS
+        from src.shared.vocab import ACTIONS
 
         # Find an action that requires_target
         target_action = next((name for name, d in ACTIONS.items() if d.requires_target), None)
@@ -465,36 +465,36 @@ class TestPropagateRename(unittest.TestCase):
 class TestComputeActionFrames(unittest.TestCase):
     """src.modules.motion.clip_ops.compute_action_frames"""
 
+    MIN_FRAMES = 20
+
     @classmethod
     def setUpClass(cls):
         from src.modules.motion.clip_ops import compute_action_frames
-        from src.modules.motion.config import MotionConfig
         from src.modules.understanding.models import ParsedAction
 
         cls.fn = staticmethod(compute_action_frames)
-        cls.cfg = MotionConfig(min_action_frames=20)
         cls.PA = ParsedAction
 
     def test_explicit_duration_converted_to_frames(self):
-        from src.shared.constants import MOTION_FPS
+        from src.shared.constants import CONSTS
 
         a = self.PA(action_type="walk", duration=2.0)
-        frames = self.fn(a, total_frames=100, n_actions=5, config=self.cfg)
-        self.assertEqual(frames, max(int(2.0 * MOTION_FPS), 20))
+        frames = self.fn(a, total_frames=100, n_actions=5, min_action_frames=self.MIN_FRAMES)
+        self.assertEqual(frames, max(int(2.0 * CONSTS.runtime.motion_fps), 20))
 
     def test_implicit_duration_uses_budget(self):
         a = self.PA(action_type="walk", duration=None)
-        frames = self.fn(a, total_frames=100, n_actions=5, config=self.cfg)
+        frames = self.fn(a, total_frames=100, n_actions=5, min_action_frames=self.MIN_FRAMES)
         self.assertEqual(frames, 20)
 
     def test_budget_too_small_returns_min_frames(self):
         a = self.PA(action_type="walk", duration=None)
-        frames = self.fn(a, total_frames=10, n_actions=5, config=self.cfg)
+        frames = self.fn(a, total_frames=10, n_actions=5, min_action_frames=self.MIN_FRAMES)
         self.assertEqual(frames, 20)  # 10//5=2, clamped to min=20
 
     def test_explicit_duration_too_short_returns_min_frames(self):
         a = self.PA(action_type="walk", duration=0.1)
-        frames = self.fn(a, total_frames=100, n_actions=1, config=self.cfg)
+        frames = self.fn(a, total_frames=100, n_actions=1, min_action_frames=self.MIN_FRAMES)
         self.assertEqual(frames, 20)  # int(0.1*30)=3, clamped to 20
 
 
@@ -555,20 +555,20 @@ class TestConfigConsistency(unittest.TestCase):
     """Cross-module config invariants."""
 
     def test_render_fps_matches_motion_fps(self):
-        """RenderConfig.fps must equal MOTION_FPS so video plays at the correct speed.
+        """RenderConfig.fps must equal CONSTS.runtime.motion_fps so video plays at the correct speed.
 
-        MotionClip.fps = MOTION_FPS = 30, but RenderConfig.fps defaults to 50.
+        MotionClip.fps = CONSTS.runtime.motion_fps = 30, but RenderConfig.fps defaults to 50.
         When M6 renders with fps=50 a clip recorded at 30fps, the output video
         plays at 30/50 = 60% of normal speed (wrong timing).
         """
         from src.modules.render.config import RenderConfig
-        from src.shared.constants import MOTION_FPS
+        from src.shared.constants import CONSTS
 
         self.assertEqual(
             RenderConfig().fps,
-            MOTION_FPS,
+            CONSTS.runtime.motion_fps,
             msg=(
-                f"RenderConfig.fps={RenderConfig().fps} != MOTION_FPS={MOTION_FPS}. "
+                f"RenderConfig.fps={RenderConfig().fps} != CONSTS.runtime.motion_fps={CONSTS.runtime.motion_fps}. "
                 "The render will produce videos with wrong playback speed."
             ),
         )
@@ -588,13 +588,13 @@ class TestConfigConsistency(unittest.TestCase):
         self.assertEqual(cfg.planner.base_duration, 7.5)
 
     def test_pipeline_custom_fps_does_not_affect_motion_fps(self):
-        """MOTION_FPS is a constant; PipelineConfig.fps is for output video only."""
+        """CONSTS.runtime.motion_fps is a constant; PipelineConfig.fps is for output video only."""
         from src.shared.config import PipelineConfig
-        from src.shared.constants import MOTION_FPS
+        from src.shared.constants import CONSTS
 
         cfg = PipelineConfig(fps=24)
-        # Motion clips are always generated at MOTION_FPS regardless of output fps
-        self.assertEqual(MOTION_FPS, 30)
+        # Motion clips are always generated at CONSTS.runtime.motion_fps regardless of output fps
+        self.assertEqual(CONSTS.runtime.motion_fps, 30)
         self.assertNotEqual(cfg.fps, cfg.motion.min_action_frames)  # unrelated fields
 
     def test_planner_config_has_base_duration(self):
@@ -693,13 +693,13 @@ class TestBuildActionLemmaMap(unittest.TestCase):
         self.assertIsInstance(self.lemma_map, dict)
 
     def test_all_values_are_action_names(self):
-        from src.shared.vocabulary import ACTIONS
+        from src.shared.vocab import ACTIONS
 
         for v in self.lemma_map.values():
             self.assertIn(v, ACTIONS, msg=f"{v!r} not in ACTIONS")
 
     def test_known_action_keyword_present(self):
-        from src.shared.vocabulary import ACTIONS
+        from src.shared.vocab import ACTIONS
 
         # Pick the first keyword of the first action
         first_action = next(iter(ACTIONS.values()))

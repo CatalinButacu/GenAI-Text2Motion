@@ -12,23 +12,9 @@ import numpy as np
 from src.data.amass import AMASSLoader
 from src.data.augmentation import canonicalize_root, detect_tpose, quality_filter, resample_to_fps
 from src.data.motion_normalize import MotionStats, compute_motion_stats
+from src.shared.constants import CACHE_SCHEMA, DEFAULT_FILTER_KWARGS, INGEST_MAX_LENGTH
 
 log = logging.getLogger(__name__)
-
-CACHE_SCHEMA = 4  # bump when cache payload shape, filter params, or canonicalization changes
-
-# Cache stores clips at this length cap (~33 s @ 30 fps), covering full content
-# of >95% of AMASS clips. Runtime DataLoader random-crops to max_motion_length (200).
-# Larger = more temporal-window diversity per clip, but more disk + RAM.
-INGEST_MAX_LENGTH = 1000
-
-DEFAULT_FILTER_KWARGS: dict = {
-    "min_frames": 30,
-    "max_root_speed": 10.0,
-    "max_accel": 50.0,
-    "max_joint_rotvel": 30.0,
-    "min_variance": 1e-4,
-}
 
 
 def process_amass_files(

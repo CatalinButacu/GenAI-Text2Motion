@@ -27,7 +27,7 @@ uv sync --extra viewer
 uv sync --extra dev
 
 # Or with pip
-pip install -r requirements.txt
+pip install ".[viewer]"
 python -m spacy download en_core_web_sm
 ```
 
@@ -49,14 +49,20 @@ Text Prompt
 # Default
 python main.py "a person walks forward"
 
-# Custom duration / fps
-python main.py "a person walks and kicks a ball" --duration 8 --fps 30
-
-# Ablation: skip layout optimization (random placement)
-python main.py "a person walks" --no-layout-opt
+# Cap clip duration / set output fps
+python main.py "a person walks and kicks a ball" --max-duration 8 --fps 30
 
 # Sampling controls for the RVQ head
 python main.py "a person dances" --temperature 1.2 --top-p 0.9
+
+# Classifier-free guidance (requires an SBERT checkpoint trained with cfg_dropout)
+python main.py "a person waves" --cfg-scale 2.0
+
+# Candidate reranking (SBERT picks the best of N samples)
+python main.py "a person punches" --rerank --num-candidates 4
+
+# Parse + plan only, skip motion + render
+python main.py "a person walks" --dry-run
 
 # CPU only
 python main.py "a person waves" --device cpu
@@ -71,8 +77,8 @@ from src.pipeline import Pipeline
 from src.shared.config import PipelineConfig
 
 config = PipelineConfig(duration=8, fps=30)
-result = Pipeline(config).run("a person walks to a ball and kicks it")
-print(result["video_path"])   # outputs/videos/output.mp4
+result = Pipeline(config).render_to_file("a person walks to a ball and kicks it")
+print(result["video_path"])
 ```
 
 ## Modules
@@ -158,8 +164,8 @@ data/
 
 ## Training
 
-See [TRAINING.md](TRAINING.md) for the full procedure (loss curves, ablations,
-cloud / Terraform setup). Short version:
+See [.claude/docs/TRAINING.md](.claude/docs/TRAINING.md) for the full procedure
+(loss curves, ablations, cloud / Terraform setup). Short version:
 
 ```bash
 # Step 1 — RVQ tokenizer on AMASS / HumanML3D (frozen during step 2)
@@ -203,8 +209,8 @@ completes).
 | MotionSSM (current) | 4.60 | 12.4 % | — | Plateaued; undertrained vs MoMask baseline |
 | MoMask (reference)  | ~3.5 | ~25 %  | 0.08 | Published baseline (CVPR 2024) |
 
-See [doc/planning/](doc/planning/) for the audit and improvement plan that
-followed the plateau finding (2026-05-12).
+See [.claude/docs/planning/](.claude/docs/planning/) for the audit and improvement
+plan that followed the plateau finding (2026-05-12).
 
 ## Testing & Benchmarks
 
@@ -234,10 +240,10 @@ metrics loop back to data preparation or modeling, not to deployment.
 
 ## Further reading
 
-See [doc/planning/11_REFERENCES.md](doc/planning/11_REFERENCES.md) for the
-curated bibliography (Mamba/SSM, RVQ, motion generation, CLIP, training
-tricks, evaluation, visual guides). Start with the visual guides if any of
-the architecture choices are unclear.
+See [.claude/docs/planning/11_REFERENCES.md](.claude/docs/planning/11_REFERENCES.md)
+for the curated bibliography (Mamba/SSM, RVQ, motion generation, CLIP,
+training tricks, evaluation, visual guides). Start with the visual guides if
+any of the architecture choices are unclear.
 
 ## Citation
 

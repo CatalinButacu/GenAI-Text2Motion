@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-SKIP_ACTIONS = {"male", "female", "female1", "male1", "subj calibration"}
+from src.shared.constants import SKIP_ACTIONS
 
 
 def normalize_parent(parts: list[str]) -> str:

@@ -1,23 +1,20 @@
 """Clip generation and blending -- M4 module logic."""
 
+from __future__ import annotations
+
 import logging
 import time
 from typing import Any
 
 import numpy as np
+from scipy.spatial.transform import Rotation, Slerp
 
-from src.shared.constants import MOTION_FPS
-from src.shared.vocabulary import ACTIONS
+from src.shared.constants import CONSTS, SMPLX
+from src.shared.vocab import ACTIONS
 
-from .blend import slerp_blend_frames
-from .config import MotionConfig
-from .generator import MotionGenerator
 from .models import MotionClip, MotionSource
 
 log = logging.getLogger(__name__)
-
-
-#  Clip blending
 
 
 def crossfade_arrays(
@@ -79,7 +76,7 @@ def blend_clips(clips: list[MotionClip], blend_frames: int) -> MotionClip:
         raw = np.concatenate(joint_parts, axis=0)
     elif joint_parts and missing:
         log.warning(
-            "[M4] blend_clips: %d/%d clips have raw_joints=None (indices %s) -- "
+            "blend_clips: %d/%d clips have raw_joints=None (indices %s) -- "
             "dropping ALL raw_joints for this actor. Physics retargeting will fail.",
             len(missing),
             len(clips),
@@ -91,13 +88,16 @@ def blend_clips(clips: list[MotionClip], blend_frames: int) -> MotionClip:
         smplx_params=np.concatenate(feature_parts, axis=0),
         fps=clips[0].fps,
         source=MotionSource.SEQUENCED,
+        coord_system=clips[0].coord_system,
         raw_joints=raw,
     )
 
 
-def sequence_clips(action_clips: list, blend_frames: int) -> dict[str, MotionClip]:
+def sequence_clips(
+    action_clips: list[tuple[str, MotionClip]], blend_frames: int
+) -> dict[str, MotionClip]:
     """Group per-action clips by actor and blend each actor's sequence into one clip."""
-    actor_seqs: dict[str, list] = {}
+    actor_seqs: dict[str, list[MotionClip]] = {}
 
     for actor, clip in action_clips:
         actor_seqs.setdefault(actor, []).append(clip)
@@ -106,9 +106,6 @@ def sequence_clips(action_clips: list, blend_frames: int) -> dict[str, MotionCli
         actor: seq[0] if len(seq) == 1 else blend_clips(seq, blend_frames)
         for actor, seq in actor_seqs.items()
     }
-
-
-#  Clip generation
 
 
 def build_action_query(action, act_def) -> str:
@@ -122,12 +119,12 @@ def build_action_query(action, act_def) -> str:
     return f"{action.modifier} {base}".strip() if action.modifier else base
 
 
-def compute_action_frames(action, total_frames: int, n_actions: int, config: MotionConfig) -> int:
+def compute_action_frames(action, total_frames: int, n_actions: int, min_action_frames: int) -> int:
     """Compute the frame budget for a single action."""
     if action.duration is not None:
-        return max(int(action.duration * MOTION_FPS), config.min_action_frames)
+        return max(int(action.duration * CONSTS.runtime.motion_fps), min_action_frames)
 
-    return max(total_frames // n_actions, config.min_action_frames)
+    return max(total_frames // n_actions, min_action_frames)
 
 
 def last_pose_of(clip: MotionClip | None) -> np.ndarray | None:
@@ -139,8 +136,8 @@ def last_pose_of(clip: MotionClip | None) -> np.ndarray | None:
 
 
 def generate_action_clips(
-    planned, total_frames: int, motion_gen: MotionGenerator, config: MotionConfig
-) -> list[tuple[str, Any]]:
+    planned, total_frames: int, motion_gen: Any
+) -> list[tuple[str, MotionClip]]:
     """Generate one MotionClip per action, ordered and seeded from the previous clip."""
     actions = getattr(planned, "actions", [])
 
@@ -149,18 +146,19 @@ def generate_action_clips(
 
     sorted_actions = sorted(actions, key=lambda a: a.order)
     n_actions = len(sorted_actions)
-    clips: list[tuple] = []
+    min_frames = motion_gen.cfg.min_action_frames
+    clips: list[tuple[str, MotionClip]] = []
     last_clip: dict[str, MotionClip] = {}
 
     for action in sorted_actions:
         act_def = ACTIONS.get(action.action_type)
-        n = compute_action_frames(action, total_frames, n_actions, config)
+        n = compute_action_frames(action, total_frames, n_actions, min_frames)
         query = build_action_query(action, act_def)
         seed = last_pose_of(last_clip.get(action.actor))
         t0 = time.time()
         clip = motion_gen.generate(query, num_frames=n, init_pose=seed)
         log.info(
-            "[M4] generate %r (order=%d) for '%s' -> %d frames (src=%s, seeded=%s) in %.2fs",
+            "generate %r (order=%d) for '%s' -> %d frames (src=%s, seeded=%s) in %.2fs",
             query,
             action.order,
             action.actor,
@@ -173,3 +171,52 @@ def generate_action_clips(
         clips.append((action.actor, clip))
 
     return clips
+
+
+
+
+AXIS_ANGLE_DIM = 3
+ROTATION_BASE_OFFSET = SMPLX.transl_slice.stop
+
+ROTATION_SLICES = [SMPLX.root_orient_slice] + [
+    slice(
+        ROTATION_BASE_OFFSET + i * AXIS_ANGLE_DIM,
+        ROTATION_BASE_OFFSET + (i + 1) * AXIS_ANGLE_DIM,
+    )
+    for i in range(SMPLX.n_joints - 1)
+]
+
+
+def slerp_blend_frames(a: np.ndarray, b: np.ndarray, alpha: np.ndarray) -> np.ndarray:
+    """Per-frame SLERP blend of two SMPL-X 168-dim pose arrays weighted by alpha."""
+    n_frames = a.shape[0]
+    result = np.empty_like(a)
+    w = alpha[:, None]
+    result[:, SMPLX.transl_slice] = (
+        a[:, SMPLX.transl_slice] * (1 - w) + b[:, SMPLX.transl_slice] * w
+    )
+
+    for sl in ROTATION_SLICES:
+        for i in range(n_frames):
+            t = float(alpha[i])
+
+            if t <= 0.0:
+                result[i, sl] = a[i, sl]
+                continue
+
+            if t >= 1.0:
+                result[i, sl] = b[i, sl]
+                continue
+
+            try:
+                ra = Rotation.from_rotvec(a[i, sl])
+                rb = Rotation.from_rotvec(b[i, sl])
+                result[i, sl] = (
+                    Slerp([0.0, 1.0], Rotation.concatenate([ra, rb]))([t])
+                    .as_rotvec()[0]
+                    .astype(a.dtype)
+                )
+            except ValueError:
+                result[i, sl] = (a[i, sl] * (1 - t) + b[i, sl] * t).astype(a.dtype)
+
+    return result

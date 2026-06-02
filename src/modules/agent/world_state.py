@@ -17,13 +17,14 @@ Frames are SMPL-X 168-d feature vectors. The first 3 channels are root
 orientation (axis-angle), channels 3..6 are root translation (x, y, z).
 See ``src/shared/constants.py`` for the exact slice indices.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 import numpy as np
 
-from src.shared.constants import SMPLX_ROOT_ORIENT_SLICE, SMPLX_TRANSL_SLICE
+from src.shared.constants import CONSTS, SMPLX
 
 
 @dataclass
@@ -68,8 +69,8 @@ class WorldState:
         """
         if frame.shape != (168,) and not (frame.ndim == 1 and frame.shape[0] >= 6):
             raise ValueError(f"frame must be 1-D length-168 (SMPL-X); got {frame.shape}")
-        root_orient = frame[SMPLX_ROOT_ORIENT_SLICE]
-        new_position = frame[SMPLX_TRANSL_SLICE].copy()
+        root_orient = frame[SMPLX.root_orient_slice]
+        new_position = frame[SMPLX.transl_slice].copy()
         # axis-angle root_orient -> yaw is the y-axis rotation magnitude when the
         # body-up axis is the global y-axis (HumanML3D convention). For our
         # condition predicates the precise yaw extraction only needs to be
@@ -103,8 +104,7 @@ class WorldState:
         """
         if object_name not in self.scene_objects:
             raise KeyError(
-                f"unknown scene object {object_name!r}; "
-                f"known: {sorted(self.scene_objects.keys())}"
+                f"unknown scene object {object_name!r}; known: {sorted(self.scene_objects.keys())}"
             )
 
         return float(np.linalg.norm(self.position - self.scene_objects[object_name].position))

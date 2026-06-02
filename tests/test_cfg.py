@@ -2,7 +2,7 @@
 
 The CFG path is: guided = uncond + cfg_scale * (cond - uncond).
 It must:
-  - default to off (cfg_scale=1.0 -> identical output to no-CFG path)
+  - default to 2.0 (guides generation toward text; disable by setting cfg_scale=1.0)
   - actually change outputs at cfg_scale > 1.0
   - be a no-op for non-SBERT/CLIP models (no uncond text path available)
   - propagate from MotionConfig through the generator cache
@@ -14,8 +14,8 @@ import unittest
 
 import torch
 
-from src.modules.motion.config import MotionConfig
 from src.modules.motion.ssm_model import sample_indices
+from src.shared.config import MotionConfig
 
 
 class TestCfgBlendMath(unittest.TestCase):
@@ -47,9 +47,9 @@ class TestCfgBlendMath(unittest.TestCase):
 
 class TestMotionConfigDefaults(unittest.TestCase):
 
-    def test_cfg_scale_defaults_to_off(self):
+    def test_cfg_scale_defaults_to_two(self):
         cfg = MotionConfig()
-        self.assertEqual(cfg.cfg_scale, 1.0)
+        self.assertEqual(cfg.cfg_scale, 2.0)
 
     def test_cfg_scale_can_be_set(self):
         cfg = MotionConfig(cfg_scale=4.0)

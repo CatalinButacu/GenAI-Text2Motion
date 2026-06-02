@@ -13,7 +13,7 @@ import unittest
 import pytest
 import torch
 
-from src.modules.motion.nn_models import PretrainedTextEncoder, SBERTTextEncoder
+from src.architecture.nn_models import PretrainedTextEncoder, SBERTTextEncoder
 
 
 @pytest.mark.slow

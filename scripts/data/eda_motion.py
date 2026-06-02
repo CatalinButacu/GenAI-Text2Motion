@@ -32,10 +32,11 @@ import numpy as np
 from sklearn.decomposition import PCA
 
 from src.data.augmentation import detect_tpose, quality_filter, resample_to_fps
-from src.data.dataset_cache import INGEST_MAX_LENGTH, load_or_build_cache
+from src.data.dataset_cache import load_or_build_cache
 from src.data.motion_normalize import MotionStats, normalize
 from src.data.unified import build_sources_buffer
 from src.data.unified_dataset import SourceConfig, UnifiedConfig
+from src.shared.constants import INGEST_MAX_LENGTH
 
 log = logging.getLogger(__name__)
 

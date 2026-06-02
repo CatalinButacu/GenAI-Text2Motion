@@ -1,13 +1,3 @@
-from __future__ import annotations
+"""Compatibility shim — SpacyConfig, ParserConfig now live in src.shared.config."""
+from src.shared.config import ParserConfig, SpacyConfig  # noqa: F401
 
-from dataclasses import dataclass, field
-
-
-@dataclass
-class SpacyConfig:
-    model: str = "en_core_web_sm"
-
-
-@dataclass
-class ParserConfig:
-    spacy: SpacyConfig = field(default_factory=SpacyConfig)

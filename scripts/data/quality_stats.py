@@ -41,11 +41,11 @@ import numpy as np
 from src.data.amass import AMASSLoader
 from src.data.aug_quality import geodesic_joint_vel
 from src.data.augmentation import detect_tpose, resample_to_fps
-from src.data.dataset_cache import DEFAULT_FILTER_KWARGS
 from src.data.humanml3d import (
     DEFAULT_DIR as HML3D_DIR,
 )
 from src.data.humanml3d import (
+from src.shared.constants import DEFAULT_FILTER_KWARGS
     HumanML3DLoader,
     build_norm_map,
     parse_index_csv,
@@ -65,6 +65,29 @@ REASONS: tuple[str, ...] = (
     "loadFail",        # could not load the file at all (IO, missing keys, NaN raw)
     "tooShortRaw",     # raw shape[0] < 4 frames before any processing
 )
+
+def checkRootDynamics(motion: np.ndarray, T: int, fkw: dict) -> list[str]:
+    fails: list[str] = []
+
+    if motion.shape[1] < 6 or T < 2:
+        return fails
+
+    trans = motion[:, 3:6]
+    dt = 1.0 / 30.0
+    velocity = np.diff(trans, axis=0) / dt
+    speed = np.linalg.norm(velocity, axis=1)
+
+    if speed.size and speed.max() > fkw["max_root_speed"]:
+        fails.append("rootSpeed")
+
+    if T >= 3:
+        accel = np.diff(velocity, axis=0) / dt
+
+        if np.linalg.norm(accel, axis=1).max() > fkw["max_accel"]:
+            fails.append("rootAccel")
+
+    return fails
+
 
 def diagnose_clip(motion: np.ndarray, fps: float, fkw: dict) -> list[str]:
     """Return the list of criteria the clip violates (empty -> passes).
@@ -87,27 +110,48 @@ def diagnose_clip(motion: np.ndarray, fps: float, fkw: dict) -> list[str]:
     if motion.var(axis=0).max() < fkw["min_variance"]:
         fails.append("static")
 
-    if motion.shape[1] >= 6 and T >= 2:
-        trans = motion[:, 3:6]
-        dt = 1.0 / 30.0  # post-resample fps; matches production filter
-        velocity = np.diff(trans, axis=0) / dt
-        speed = np.linalg.norm(velocity, axis=1)
-
-        if speed.size and speed.max() > fkw["max_root_speed"]:
-            fails.append("rootSpeed")
-
-        if T >= 3:
-            accel = np.diff(velocity, axis=0) / dt
-
-            if np.linalg.norm(accel, axis=1).max() > fkw["max_accel"]:
-                fails.append("rootAccel")
+    fails.extend(checkRootDynamics(motion, T, fkw))
 
     if motion.shape[1] >= 9 and T >= 2:
-        # Geodesic angular velocity on the rotation manifold (matches quality_filter).
         if geodesic_joint_vel(motion, fps) > fkw["max_joint_rotvel"]:
             fails.append("jointSnap")
 
     return fails
+
+def tallyFails(fails: list[str], counts: dict, perReason: dict) -> int:
+    """Record fail/pass into counts; return 1 if multi-reason reject, else 0."""
+    if fails:
+        counts["rejected"] += 1
+
+        for r in fails:
+            perReason[r] += 1
+
+        return 1 if len(fails) > 1 else 0
+
+    counts["passed"] += 1
+    return 0
+
+
+def processAmassFileEntry(s, fkw: dict, counts: dict, perReason: dict) -> int:
+    if s.motion.shape[0] < 4:
+        counts["rejected"] += 1
+        perReason["tooShortRaw"] += 1
+        return 0
+
+    motion, fps = s.motion, float(s.fps)
+    trim_s, trim_e = detect_tpose(motion)
+
+    if trim_s > 0 or trim_e > 0:
+        end = motion.shape[0] - trim_e if trim_e > 0 else motion.shape[0]
+        motion = motion[trim_s:end]
+        counts["tposeTrimmed"] += 1
+
+    if abs(fps - 30.0) >= 0.5:
+        motion = resample_to_fps(motion, fps, 30.0)
+        counts["resampled"] += 1
+
+    return tallyFails(diagnose_clip(motion, 30.0, fkw), counts, perReason)
+
 
 def run_amass(data_dir: str, fkw: dict, max_samples: int | None) -> dict:
     loader = AMASSLoader(data_dir)
@@ -119,7 +163,7 @@ def run_amass(data_dir: str, fkw: dict, max_samples: int | None) -> dict:
 
     counts: dict = defaultdict(int)
     counts["total"] = len(files)
-    per_reason: dict[str, int] = {r: 0 for r in REASONS}
+    per_reason: dict[str, int] = dict.fromkeys(REASONS, 0)
     multi_reason: int = 0
 
     t0 = time.time()
@@ -135,33 +179,7 @@ def run_amass(data_dir: str, fkw: dict, max_samples: int | None) -> dict:
             per_reason["loadFail"] += 1
             continue
 
-        if s.motion.shape[0] < 4:
-            counts["rejected"] += 1
-            per_reason["tooShortRaw"] += 1
-            continue
-
-        motion, fps = s.motion, float(s.fps)
-        trim_s, trim_e = detect_tpose(motion)
-
-        if trim_s > 0 or trim_e > 0:
-            end = motion.shape[0] - trim_e if trim_e > 0 else motion.shape[0]
-            motion = motion[trim_s:end]
-            counts["tposeTrimmed"] += 1
-
-        if abs(fps - 30.0) >= 0.5:
-            motion = resample_to_fps(motion, fps, 30.0)
-            counts["resampled"] += 1
-
-        fails = diagnose_clip(motion, 30.0, fkw)
-
-        if fails:
-            counts["rejected"] += 1
-            for r in fails:
-                per_reason[r] += 1
-            if len(fails) > 1:
-                multi_reason += 1
-        else:
-            counts["passed"] += 1
+        multi_reason += processAmassFileEntry(s, fkw, counts, per_reason)
 
     counts["multiReasonRejects"] = multi_reason
     counts["per_reason"] = dict(per_reason)
@@ -191,7 +209,7 @@ def run_humanml3d(hml_dir: str, amass_dir: str, fkw: dict, max_samples: int | No
     counts: dict = defaultdict(int)
     counts["total"] = len(samples)
     counts["preloadBad"] = len(bad or [])
-    per_reason: dict[str, int] = {r: 0 for r in REASONS}
+    per_reason: dict[str, int] = dict.fromkeys(REASONS, 0)
     multi_reason: int = 0
 
     bad_set = set(bad or [])
@@ -216,18 +234,7 @@ def run_humanml3d(hml_dir: str, amass_dir: str, fkw: dict, max_samples: int | No
             per_reason["tooShortRaw"] += 1
             continue
 
-        # HumanML3D pose_data is already at 30 fps; no resample step in production.
-        # detect_tpose is also not run on hml3d in production (clips are pre-trimmed).
-        fails = diagnose_clip(motion, 30.0, fkw)
-
-        if fails:
-            counts["rejected"] += 1
-            for r in fails:
-                per_reason[r] += 1
-            if len(fails) > 1:
-                multi_reason += 1
-        else:
-            counts["passed"] += 1
+        multi_reason += tallyFails(diagnose_clip(motion, 30.0, fkw), counts, per_reason)
 
     counts["multiReasonRejects"] = multi_reason
     counts["per_reason"] = dict(per_reason)

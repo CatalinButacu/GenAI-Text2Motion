@@ -41,6 +41,8 @@ def main():
     benchmarks = [
         ("M2 Scene Planner", "tests/benchmarks/benchmark_m2.py"),
         ("M4 Motion Generator", "tests/benchmarks/benchmark_m4.py"),
+        ("Streaming Memory", "tests/benchmarks/benchmark_streaming.py"),
+        ("E2E Latency", "tests/benchmarks/benchmark_e2e.py"),
     ]
 
     results = []

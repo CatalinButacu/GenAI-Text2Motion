@@ -4,7 +4,7 @@ import logging
 
 import spacy
 
-from src.shared.vocabulary import register_nlp
+from src.shared.vocab import register_nlp
 
 from .actions import (
     backfill_actor_targets,
@@ -35,9 +35,9 @@ class SpacyParser:
         self.nlp = spacy.load(self.config.spacy.model)
         build_entity_ruler(self.nlp)
         register_nlp(self.nlp)
-        log.info("[M1] SpacyParser loaded (%s)", self.nlp.meta["name"])
+        log.info("SpacyParser loaded (%s)", self.nlp.meta["name"])
 
-    def entities_for_clause(self, doc, _clause, registry, actions):
+    def entities_for_clause(self, doc, registry, actions):
         found: list[ParsedEntity] = []
 
         for e in extract_entities(doc):
@@ -86,9 +86,7 @@ class SpacyParser:
                 seen[a.actor].add(key)
                 entity_map[a.actor].actions.append(a)
         duration, duration_explicit = compute_scene_duration(actions)
-        log.info(
-            "[M1] %d entities, %d actions, %d spatial", len(entities), len(actions), len(spatial)
-        )
+        log.info("%d entities, %d actions, %d spatial", len(entities), len(actions), len(spatial))
 
         return ParsedScene(
             prompt=prompt,
@@ -112,12 +110,10 @@ class SpacyParser:
             if actions and not is_concurrent:
                 order += 1
             doc = self.nlp(clause)
-            entities = self.entities_for_clause(doc, clause, registry, actions)
+            entities = self.entities_for_clause(doc, registry, actions)
             actions.extend(self.actions_for_clause(doc, entities, order, clause))
 
-        # If no entities were found but actions were (e.g. "jump three times then sit
-        # down" — imperative form, no explicit subject), default to one humanoid actor
-        # and assign all orphan actions to it.
+        # Imperative form ("jump then sit"): default to a humanoid actor.
         if not registry and actions:
             anon = make_anaphoric_humanoid()
             register_entity(anon, registry)

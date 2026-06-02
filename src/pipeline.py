@@ -1,88 +1,149 @@
 from __future__ import annotations
 
 import logging
+import random
 import time
+from collections.abc import Iterator
+from functools import cached_property
 from typing import Any
 
-from src.modules import motion, planner, render, understanding
+import numpy as np
+import torch
+
+from src.modules.motion.generator import MotionGenerator
+from src.modules.motion.models import MotionClip
+from src.modules.planner.planner import ScenePlanner
+from src.modules.render import render_clip_to_file, view_clip
+from src.modules.render.chat_viewer import ChatViewer
+from src.modules.runtime import StreamBus, StreamCapabilityError, StreamMetricsCollector
+from src.modules.understanding.spacy import SpacyParser
 from src.shared.config import PipelineConfig
 
 log = logging.getLogger(__name__)
 
 
 class Pipeline:
-    """Thin orchestrator. All stage logic lives inside each module's invoke()."""
-
     def __init__(self, config: PipelineConfig | None = None) -> None:
         self.config = config or PipelineConfig()
-        log.info("Pipeline ready (device=%s)", self.config.device)
+        torch.manual_seed(self.config.seed)
+        np.random.seed(self.config.seed)
+        random.seed(self.config.seed)
+        log.info("Pipeline ready (device=%s, seed=%d)", self.config.device, self.config.seed)
 
-    def run(
-        self, prompt: str, output_name: str = "output", stream: bool = False, viewer: bool = False
-    ) -> dict[str, Any]:
+    @cached_property
+    def parser(self) -> SpacyParser:
+        return SpacyParser(self.config.understanding)
+
+    @cached_property
+    def layout(self) -> ScenePlanner:
+        return ScenePlanner(self.config.planner)
+
+    @cached_property
+    def motion(self) -> MotionGenerator:
+        return MotionGenerator(self.config.motion)
+
+    def parse_and_plan(self, prompt: str) -> dict[str, Any] | None:
         prompt = (prompt or "").strip()[: self.config.prompt_max_chars]
 
         if not prompt:
-            return {"prompt": "", "error": "empty prompt"}
+            return None
 
-        t0 = time.time()
-        cfg = self.config
+        parsed = self.parser.parse(prompt)
+        planned = self.layout.plan(parsed)
+        return {"prompt": prompt, "parsed_scene": parsed, "planned_scene": planned}
 
-        def tick(label: str, t_start: float) -> float:
-            elapsed = time.time() - t_start
-            if stream:
-                print(f"  [{elapsed:5.1f}s]  {label}", flush=True)
-            log.info("%s  (%.2fs)", label, elapsed)
-            return time.time()
+    def generate(self, prompt: str) -> dict[str, Any] | None:
+        base = self.parse_and_plan(prompt)
 
-        if stream:
-            print(f"\n>>> PIPELINE START: {prompt!r}", flush=True)
+        if base is None:
+            return None
+
+        clips = self.motion.generate_for_scene(base["planned_scene"])
+        return {**base, "motion_clips": clips}
+
+    def generate_stream(self, prompt: str) -> Iterator[np.ndarray]:
+        base = self.parse_and_plan(prompt)
+
+        if base is None:
+            return
+
+        yield from self.motion.stream_for_scene(base["planned_scene"])
+
+    def validate_streaming(
+        self,
+        prompt: str,
+        max_stream_chunks: int | None = None,
+        bus_size: int = 32,
+    ) -> dict[str, float | int | None]:
+        if max_stream_chunks is not None and max_stream_chunks <= 0:
+            raise ValueError("max_stream_chunks must be positive")
+
+        self.motion.backend.require_stream_capable()
+        bus = StreamBus(max_size=bus_size)
+        metrics = StreamMetricsCollector()
+
+        for chunk in self.generate_stream(prompt):
+            bus.push(chunk)
+            metrics.observe_produced()
+            packet = bus.pop()
+
+            if packet is not None:
+                metrics.observe_consumed(packet)
+
+            if max_stream_chunks is not None and metrics.consumed_chunks >= max_stream_chunks:
+                break
+
+        summary = metrics.summary(dropped_chunks=bus.dropped_chunks)
+        return {
+            "produced_chunks": summary.produced_chunks,
+            "consumed_chunks": summary.consumed_chunks,
+            "dropped_chunks": summary.dropped_chunks,
+            "bad_chunks": summary.bad_chunks,
+            "first_chunk_latency_ms": summary.first_chunk_latency_ms,
+            "inter_chunk_p50_ms": summary.inter_chunk_p50_ms,
+            "inter_chunk_p95_ms": summary.inter_chunk_p95_ms,
+            "wall_time_ms": summary.wall_time_ms,
+        }
+
+    def render_to_file(self, prompt: str, output_name: str = "output") -> dict[str, Any] | None:
+        result = self.generate(prompt)
+
+        if result is None:
+            return None
+
+        clip = next(iter(result["motion_clips"].values()))
+        path = self.config.video_path(output_name)
 
         t = time.time()
-        parsed = understanding.invoke(prompt, cfg.understanding)
-        if stream:
-            print("\n[1/4] Understanding", flush=True)
-            print(f"       entities : {[e.name for e in parsed.entities]}", flush=True)
-            print(f"       actions  : {[a.action_type for a in parsed.actions]}", flush=True)
-        t = tick("understanding done", t)
+        render_clip_to_file(clip, path, self.config.render)
+        log.info("render done (%.2fs)", time.time() - t)
 
-        planned = planner.invoke(parsed, cfg.planner)
-        if stream:
-            print("\n[2/4] Planner", flush=True)
-            for a in planned.actions:
-                dur = getattr(a, "duration", None)
-                dur_str = f"{dur:.1f}s" if dur is not None else "?"
-                print(f"       -> {a.action_type}  dur={dur_str}", flush=True)
-        t = tick("planner done", t)
+        result["video_path"] = path
+        return result
 
-        clips = motion.invoke(planned, cfg.motion)
-        if stream:
-            print(f"\n[3/4] Motion SSM  ({len(clips)} clip(s))", flush=True)
-            for actor, c in clips.items():
-                frames = len(c.smplx_params) if c.smplx_params is not None else "?"
-                print(f"       {actor!r}: action={c.action!r}  frames={frames}", flush=True)
-        t = tick("motion done", t)
+    def run_viewer(self, prompt: str) -> dict[str, Any] | None:
+        result = self.generate(prompt)
 
-        if viewer:
-            if stream:
-                print("\n[4/4] Viewer  (interactive — close window to exit)", flush=True)
-            render.view_interactive(clips, cfg.render)
-            video = ""
-        else:
-            video = render.invoke(clips, cfg.video_path(output_name), cfg.render)
-            if stream:
-                print(f"\n[4/4] Render -> {video}", flush=True)
-        tick("render done", t)
+        if result is None:
+            return None
 
-        total = time.time() - t0
-        if stream:
-            print(f"\n>>> DONE  total={total:.1f}s\n", flush=True)
+        view_clip(next(iter(result["motion_clips"].values())), self.config.render)
+        return result
 
-        return {
-            "prompt": prompt,
-            "parsed_scene": parsed,
-            "planned_scene": planned,
-            "motion_clips": clips,
-            "video_path": video,
-            "elapsed_seconds": total,
-        }
+    def run_chat(self) -> None:
+        log.info("chat window open — type prompts in the chat bar")
+        ChatViewer(
+            pipeline_runner=self.chat_step,
+            stream_pipeline_runner=self.generate_stream,
+            stream_coord_system=self.motion.backend.coord_system,
+            render_cfg=self.config.render,
+            fps=self.config.fps,
+        ).run()
+
+    def chat_step(self, prompt: str) -> MotionClip | None:
+        result = self.generate(prompt)
+
+        if result is None or not result["motion_clips"]:
+            return None
+
+        return next(iter(result["motion_clips"].values()))

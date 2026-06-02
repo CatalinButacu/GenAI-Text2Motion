@@ -13,8 +13,8 @@ import argparse
 import logging
 import sys
 
+from src.architecture.training.trainer import build_unified_buf
 from src.data.unified_dataset import SourceConfig, UnifiedConfig
-from src.modules.motion.training.trainer import build_unified_buf
 
 log = logging.getLogger(__name__)
 

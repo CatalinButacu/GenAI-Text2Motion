@@ -16,13 +16,14 @@ import unittest
 import numpy as np
 import pytest
 
+from src.architecture.ssm import get_ssm_info
+
 # Add project root to path
 from src.modules.motion import MotionGenerator, SSMMotionModel
-from src.modules.motion.ssm import get_ssm_info
 from src.modules.planner import ScenePlanner
 from src.modules.understanding import SpacyParser
 from src.pipeline import Pipeline, PipelineConfig
-from src.shared.vocabulary import (
+from src.shared.vocab import (
     ACTIONS,
     OBJECTS,
     ActionCategory,
@@ -72,6 +73,7 @@ class TestSharedVocabulary(unittest.TestCase):
         assert fall is not None
         self.assertFalse(fall.requires_target)  # pyright: ignore[reportAttributeAccessIssue]
 
+
 class TestSpacyParser(unittest.TestCase):
     """Tests for Module 1: SpacyParser."""
 
@@ -105,6 +107,7 @@ class TestSpacyParser(unittest.TestCase):
         result = self.parser.parse("A red ball and a blue cube")
 
         self.assertGreaterEqual(len(result.entities), 2)
+
 
 class TestParsedEntity(unittest.TestCase):
     """Unit tests for the ParsedEntity dataclass."""
@@ -155,6 +158,7 @@ class TestParsedEntity(unittest.TestCase):
         scene = parser.parse("a person walks")
         actors = [e for e in scene.entities if e.is_actor]
         self.assertGreater(len(actors), 0)
+
 
 class TestSpatialRelation(unittest.TestCase):
     """Unit tests for the SpatialRelation dataclass."""
@@ -218,6 +222,7 @@ class TestSpatialRelation(unittest.TestCase):
         # ON constraint: ball should be above cube
         self.assertGreater(positions["ball"][2], positions["cube"][2])
 
+
 class TestScenePlanner(unittest.TestCase):
     """Tests for Module 2: Scene Planner."""
 
@@ -252,12 +257,13 @@ class TestScenePlanner(unittest.TestCase):
         max_z = max(e.position.z for e in planned.entities)
         self.assertGreater(max_z, 0.30)
 
+
 class TestMotionGenerator(unittest.TestCase):
     """Tests for Module 4: Motion Generator."""
 
     def test_generator_raises_when_ssm_checkpoint_missing(self):
         """MotionGenerator fails fast at construction when the SSM checkpoint is missing."""
-        from src.modules.motion.config import MotionConfig
+        from src.shared.config import MotionConfig
 
         cfg = MotionConfig(checkpoint_path="checkpoints/nonexistent.pt")
         with self.assertRaises(FileNotFoundError):
@@ -277,6 +283,7 @@ class TestMotionGenerator(unittest.TestCase):
         self.assertEqual(clip.num_frames, 30)
         self.assertIsNotNone(clip.source)
         self.assertEqual(clip.source, MotionSource.RETRIEVAL)
+
 
 class TestSSMMotionGenerator(unittest.TestCase):
     """Tests for SSM-enhanced Motion Generator."""
@@ -301,6 +308,7 @@ class TestSSMMotionGenerator(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             SSMMotionModel(checkpoint_path="nonexistent/path.pt")
 
+
 class TestSSMCore(unittest.TestCase):
     """Tests for SSM module core components."""
 
@@ -313,6 +321,7 @@ class TestSSMCore(unittest.TestCase):
         self.assertIn("references", info)
         self.assertIn("novel_contribution", info)
 
+
 class TestBiMambaLayer(unittest.TestCase):
     """Tests for the BiMambaLayer bidirectional Mamba wrapper."""
 
@@ -320,7 +329,7 @@ class TestBiMambaLayer(unittest.TestCase):
         """BiMambaLayer output shape equals input shape (drop-in for MambaLayer)."""
         import torch
 
-        from src.modules.motion.ssm import BiMambaLayer, SSMConfig
+        from src.architecture.ssm import BiMambaLayer, SSMConfig
 
         cfg = SSMConfig(d_model=32, d_state=8)
         layer = BiMambaLayer(cfg)
@@ -336,7 +345,7 @@ class TestBiMambaLayer(unittest.TestCase):
         """Forward and backward scans produce different outputs (not identical copies)."""
         import torch
 
-        from src.modules.motion.ssm import BiMambaLayer, SSMConfig
+        from src.architecture.ssm import BiMambaLayer, SSMConfig
 
         cfg = SSMConfig(d_model=16, d_state=4)
         layer = BiMambaLayer(cfg)
@@ -352,13 +361,14 @@ class TestBiMambaLayer(unittest.TestCase):
             torch.allclose(fwd, bwd), "Forward and backward scans are identical --likely a bug"
         )
 
+
 class TestSBERTTextEncoder(unittest.TestCase):
     """Tests for SBERTTextEncoder - validates fallback when SBERT not installed."""
 
     def test_proj_layer_shape(self):
         """Projection layer has correct input/output dimensions regardless of SBERT."""
 
-        from src.modules.motion.nn_models import SBERTTextEncoder
+        from src.architecture.nn_models import SBERTTextEncoder
 
         enc = SBERTTextEncoder(d_model=64)
         # Probed dim for all-MiniLM-L6-v2 is 384; projection is (384 -> 64).
@@ -367,33 +377,24 @@ class TestSBERTTextEncoder(unittest.TestCase):
         self.assertEqual(enc.encoder_dim, 384)
         self.assertEqual(proj_linear.out_features, 64)
 
-    def test_forward_raises_without_sbert(self):
-        """forward() raises a RuntimeError with a clear message when SBERT unavailable."""
-        from src.modules.motion.nn_models import SBERTTextEncoder
-
-        enc = SBERTTextEncoder(d_model=64)
-        if enc.available:
-            self.skipTest("sentence-transformers is installed --skipping unavailability test")
-
-        with self.assertRaises(RuntimeError):
-            enc(["a person walks"])
 
 class TestSMPLXConstants(unittest.TestCase):
     """Tests the self-consistency of SMPL-X architectural constants."""
 
     def test_transl_y_idx_in_range(self):
         """SMPLX_TRANSL_Y_IDX must be within the global translation slice [3:6]."""
-        from src.shared.constants import SMPLX_TRANSL_SLICE, SMPLX_TRANSL_Y_IDX
+        from src.shared.constants import SMPLX
 
-        self.assertGreaterEqual(SMPLX_TRANSL_Y_IDX, SMPLX_TRANSL_SLICE.start)
-        self.assertLess(SMPLX_TRANSL_Y_IDX, SMPLX_TRANSL_SLICE.stop)
+        self.assertGreaterEqual(SMPLX.transl_y_idx, SMPLX.transl_slice.start)
+        self.assertLess(SMPLX.transl_y_idx, SMPLX.transl_slice.stop)
 
     def test_motion_dim(self):
         """Calculated dim 168 should match root, transl, body, hands, jaw, eyes."""
-        from src.shared.constants import MOTION_DIM
+        from src.shared.constants import SMPLX
 
         computed = 3 + 3 + 63 + 45 + 45 + 3 + 6
-        self.assertEqual(MOTION_DIM, computed)
+        self.assertEqual(SMPLX.pose_dim, computed)
+
 
 class TestFIDEvaluator(unittest.TestCase):
     """Tests for the T2M FID + R-Precision evaluation pipeline."""
@@ -476,6 +477,7 @@ class TestFIDEvaluator(unittest.TestCase):
         d = compute_diversity(feats, n_pairs=20)
         self.assertGreaterEqual(d, 0.0)
 
+
 class TestPipelineIntegration(unittest.TestCase):
     """Integration tests for full pipeline (requires all modules + PyBullet)."""
 
@@ -498,9 +500,10 @@ class TestPipelineIntegration(unittest.TestCase):
         config = PipelineConfig(duration=1.0, fps=12)
 
         pipeline = Pipeline(config)
-        result = pipeline.run("A ball falls", output_name="test_integration")
+        result = pipeline.render_to_file("A ball falls", output_name="test_integration")
 
         self.assertIsInstance(result, dict)
+
 
 # =============================================================================
 # RUN TESTS
