@@ -1,0 +1,33 @@
+# data & licensed assets — never commit (290 GB donor corpus, SMPL-X bodies)
+data/
+checkpoints/
+outputs/
+*.zip
+*.npz
+*.pkl
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# caches
+.cache/
+data/.cache/
+
+# editor
+.vscode/
+.idea/
+
+# secrets & terraform state (infra/aws) + the S3 bundle
+*.pem
+*.pub
+bundle.tar
+infra/aws/.terraform/
+infra/aws/*.tfstate
+infra/aws/*.tfstate.*
+infra/aws/terraform.tfvars
+infra/aws/.terraform.lock.hcl

@@ -1,0 +1,42 @@
+#!/bin/bash
+set -eux
+
+# --- Cost guard 1: hard max-lifetime. Self-terminate after max_minutes no matter what. ---
+shutdown -h +${max_minutes} "thesis: hard max-lifetime reached" || true
+
+# --- Cost guard 2: idle-GPU watchdog. Arms once training is seen (GPU busy), then terminates
+# after ${idle_minutes} consecutive idle minutes -> catches "training finished but left running". ---
+cat >/usr/local/bin/idle_watchdog.sh <<'EOF'
+#!/bin/bash
+THRESH=5            # percent GPU util considered "active"
+NEED=${idle_minutes}
+armed=0
+count=0
+while true; do
+  util=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
+  if [ -n "$util" ] && [ "$util" -ge "$THRESH" ]; then
+    armed=1; count=0
+  elif [ "$armed" -eq 1 ]; then
+    count=$((count + 1))
+  fi
+  if [ "$armed" -eq 1 ] && [ "$count" -ge "$NEED" ]; then
+    logger "idle-watchdog: GPU idle $${NEED}m after activity -> terminating"
+    shutdown -h now "thesis: idle GPU, terminating"
+  fi
+  sleep 60
+done
+EOF
+chmod +x /usr/local/bin/idle_watchdog.sh
+
+cat >/etc/systemd/system/idle-watchdog.service <<'EOF'
+[Unit]
+Description=GPU idle watchdog (cost guard)
+After=multi-user.target
+[Service]
+ExecStart=/usr/local/bin/idle_watchdog.sh
+Restart=always
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now idle-watchdog.service

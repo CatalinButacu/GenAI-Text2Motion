@@ -1,0 +1,52 @@
+[project]
+name = "text2motion"
+version = "0.1.0"
+description = "Streaming text to whole-body SMPL-X motion (master's thesis, clean rebuild)"
+requires-python = "==3.12.*"
+dependencies = [
+    "torch",
+    "numpy",
+    "scipy",
+    "smplx",
+    "pyyaml",
+    "pandas",
+    "tqdm",
+    "transformers",  # CLIP ViT-B/32 text encoder (caption conditioning); see model/text_encoder.py
+]
+
+[project.optional-dependencies]
+viewer = ["aitviewer"]
+dev = ["ruff", "pytest"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# CUDA torch: pull torch from the PyTorch CUDA 13.2 wheel index (driver 591.44 supports it; the wheel
+# bundles its own CUDA runtime, so no system CUDA toolkit is needed). Pins the GPU build so it
+# survives future `uv sync`. GPU: RTX 3050 Laptop, 4 GB VRAM -> use fp16/bf16 + small batches.
+[[tool.uv.index]]
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu132" }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "scripts", "tests"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # import sorting
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: integration tests (need data/checkpoints)",
+    "gpu: requires a CUDA GPU",
+]

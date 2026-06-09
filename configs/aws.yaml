@@ -1,0 +1,21 @@
+# Portable config for cloud training — all paths relative to the repo root (no D:\ donor deps).
+# Ship the data bundle (data/HumanML3D_official incl texts/, data/eval_stats, data/official_evaluator,
+# data/t2m_glove, checkpoints/tokenizer_fsq.pt) alongside src/ + configs/. Other sub-configs inherit
+# the dataclass defaults in shared/config.py.
+seed: 42
+device: cuda
+
+data:
+  track: hml3d263
+  sources: [humanml3d]
+  mirror_augment: true      # only effective if M<id>.npy/.txt exist (regen task); else base-only
+  max_motion_len: 196
+  min_motion_len: 40
+
+paths:
+  eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
+  eval_stats_dir: data/eval_stats
+  hml3d_out_dir: data/HumanML3D_official
+  texts_dir: null           # null -> dataset uses hml3d_out_dir/texts (staged there)
+  checkpoints_dir: checkpoints
+  outputs_dir: outputs

@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored (never commit it).
+region        = "eu-central-1"        # Frankfurt (closest to .ro). Use your stopped instance's region.
+instance_type = "g4dn.xlarge"         # T4 16GB; "g5.xlarge" for A10G 24GB
+bucket        = "thesis-t2m-yourname" # globally-unique S3 bucket: aws s3 mb s3://thesis-t2m-yourname
+allowed_cidr  = "0.0.0.0/0"           # IPv6-only client -> leave open (key-only) + use SSM; or your-ip/32
+# ami_id      = "ami-xxxxxxxx"        # optional: paste a Deep Learning AMI id if auto-pick fails
+# max_hours   = 36                    # hard self-terminate backstop
+# spot_max_price = "0.30"

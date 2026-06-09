@@ -1,0 +1,9 @@
+# never commit secrets / state / keys
+*.pem
+*.pub
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+.terraform/
+.terraform.lock.hcl
+crash.log
