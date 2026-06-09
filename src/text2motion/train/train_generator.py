@@ -65,7 +65,7 @@ def run(args: argparse.Namespace) -> None:
     )
 
     out_dir = Path(cfg.paths.hml3d_out_dir)
-    text_dir = Path(cfg.paths.texts_dir)
+    text_dir = Path(cfg.paths.texts_dir) if cfg.paths.texts_dir is not None else out_dir / "texts"
     our_mean = np.load(out_dir / "Mean.npy").astype(np.float32)
     our_std = np.load(out_dir / "Std.npy").astype(np.float32)
     eval_mean, eval_std = load_eval_stats(cfg.paths.eval_stats_dir)

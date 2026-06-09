@@ -16,6 +16,6 @@ paths:
   eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
   eval_stats_dir: data/eval_stats
   hml3d_out_dir: data/HumanML3D_official
-  texts_dir: null           # null -> dataset uses hml3d_out_dir/texts (staged there)
+  texts_dir: data/HumanML3D_official/texts   # staged copy of the official captions (+M mirror)
   checkpoints_dir: checkpoints
   outputs_dir: outputs
