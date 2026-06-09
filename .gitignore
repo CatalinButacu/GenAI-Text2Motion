@@ -22,6 +22,10 @@ data/.cache/
 .vscode/
 .idea/
 
+# aws ssm scratch (command docs / ids)
+_*.json
+_cmdid.txt
+
 # secrets & terraform state (infra/aws) + the S3 bundle
 *.pem
 *.pub
