@@ -1,5 +1,97 @@
 # STATUS — session checkpoint (2026-06-03, updated)
 
+## Update (2026-06-10b, FINISH-LINE PLAN EXECUTING — Track A done, runs in flight, harvest armed)
+Plan accepted (`~/.claude/plans/what-is-the-best-peaceful-map.md`): ~$80 AWS budget → one g5.xlarge
+canary (~$2) + THE final 100M twin run (~$20) + contingency/reserve; everything else local.
+User-confirmed: 100M twins on g5, prefix+END upgrades included (gated), AMASS pretraining ablation on.
+- **SAMPLING LOCKED (val, 300 clips, ep-20 transformer): cfg_scale 5.0, temperature 1.1, top_p 0.9**
+  → FID 3.46 / R@1 0.21 vs 6.14 / 0.105 unguided (−44% FID, ×2 R@1, zero retraining). Full grids in
+  `outputs/{cfg_sweep,temp_sweep}.log`. Over-guidance onset at scale 8 (FID up, R@1 still rising).
+- **TRACK A COMPLETE** (28 tests green, ruff clean, sanity gate PASS):
+  (1) `use_kernel` fused mamba-ssm scan — EXPLICIT opt-in, lazy import that fails LOUD (user rule:
+  no try/except fallbacks, ever); parity test auto-runs where mamba-ssm installs (= the g5 canary).
+  (2) **16-token CLIP prefix** (`TextEncoderCfg.prefix_len == GeneratorCfg.text_prefix_len`; pooled
+  + 15 masked token states; P=1 byte-identical to legacy — parity-tested, old ckpts unaffected).
+  (3) **END token** (vocab+1; placed at each clip's last token; excluded from soft-decode;
+  `stream(stop_at_end=True)` self-terminates, fixed-length mode masks END → protocol-comparable).
+  (4) **100M twins param-matched: transformer 12L/d768 = 94.70M vs mamba 23L = 96.37M (+1.77%)**,
+  bf16 autocast (`TrainCfg.amp`), `configs/final100m.yaml`. Sanity-overfit on the 4GB GPU:
+  CE 7.0 → 0.003 (transformer) / 0.004 (mamba) — PASS both, prefix+END+bf16 active.
+- **Cloud mamba (31.8M, old recipe) at ep ~27, ~43 min/ep; dies Jun 11 01:30 UTC at ~ep 42.**
+  **Head-to-head @ep20 (200-clip trend, no CFG): mamba R@1 0.193 == transformer 0.193, R@3 0.375 >
+  0.354, FID 4.80 vs 3.24 (within that metric's epoch-to-epoch noise)** → early gate signal GOOD.
+  Best ckpt auto-synced to S3 (ckpt-sync.service verified working, 14:42 upload).
+- **Iso-vocab FSQ ablation training locally** (500 ep, ~20 h, `tokenizer_fsq_isovocab.pt` — added
+  `--ckpt_name` so ablations can't clobber winners + run_log manifests in train_tokenizer too).
+  Trend: recon-FID 0.190→0.054 by ep 100, perplexity 331/512. Question: FSQ vs RVQ 0.0382 at the
+  SAME 512 vocab. ETA ~Jun 11 07:00 UTC, then the GPU frees for AMASS regen.
+- **Streaming benchmark built** (`eval/streaming_bench.py`): ms/step + EXACT state bytes + CUDA peak
+  vs horizon; CPU smoke already shows KV growth vs fixed SSM state. Run on idle GPU for the figure.
+- **HARVEST CHAIN ARMED:** background watcher polls the box every 10 min → on death: download
+  `generator_mamba.pt` → `checkpoints/generator_mamba_cloud.pt` + log; when the GPU frees: twin
+  table v0 = `_twin_eval` per backbone (`--split test --cfg_scale 5.0 --temperature 1.1`, 20-rep,
+  full test) → `outputs/twin_table_v0.log`. **Machine must stay awake overnight.**
+
+## OPEN DECISIONS (the queue, in order)
+1. **ADR-0002 gate (after twin table v0):** mamba FID within ~1.5x of transformer at locked sampling
+   → proceed to the 100M run; else debug locally first. Record the v0 table in ADR 0002 either way.
+   Caveat to record: mamba ~42ep vs transformer 150ep wall-budget mismatch (both select best-by-eval;
+   transformer peaked at ep 20, so epoch-budget is comparable in practice).
+2. **Tokenizer for the final run:** winner-FSQ (0.0266) unless iso-vocab/AMASS-pretrained beats it on
+   recon-FID; decision by recon-FID + a downstream val-FID check. Iso-vocab is otherwise a table row.
+3. **Final-run hyperparams pinned in `configs/final100m.yaml`** (wd 0.01, pkeep 0.8, 60 ep, bs 64
+   bf16, eval-every-5 on val at cfg 5.0/t1.1); canary may revise epoch count if pace projects >20 h.
+4. **GPU queue (local):** iso-vocab (running) → AMASS regen → tokenizer pretrain ablation → twin
+   table v0 interleaved at harvest. Streaming-bench figure on any idle window.
+5. **Budget ledger:** ~$21 spent (g4dn 36 h). Reserved: canary ~$2, final run ~$20, contingency ~$15,
+   optional 31.6M-recipe ablation rerun ~$7. Spend nothing on cloud before the v0 gate verdict.
+
+## Update (2026-06-10, CLOUD RUN LIVE-READ + FULL CODE REVIEW — act before Jun 11 01:30 UTC)
+(Corrects the first version of this entry: the instance is ALIVE — it runs in **eu-west-1**, the
+earlier "dead" read came from querying eu-north-1, the bucket region.)
+- **Instance `i-0d79ed71ae495022e`** (g4dn.xlarge, eu-west-1) launched Jun 9 13:30 UTC, GPU 100%.
+  **Transformer: 150 ep COMPLETE in 5h57m** (~2.4 min/ep). **Mamba: running, ~34 min/ep** (pure-
+  PyTorch scan ≈ 14x slower). **Hard max-lifetime (36h) kills the box Jun 11 01:30 UTC ≈ epoch ~50.**
+- **MITIGATED data-loss bug:** `run.sh` syncs only `outputs/`, uploads checkpoints only after a
+  backbone finishes → a lifetime-kill would lose ALL mamba weights. Started `ckpt-sync.service` on
+  the box via SSM (s3-syncs `generator_mamba*` every 15 min). Fix run.sh before any relaunch.
+- **Transformer result: best in-train FID 3.24 @ ep 20** (R@1 0.193); after ~ep 20 train CE falls
+  (6.8→1.08) while eval degrades (R@1→0.09–0.13) = overfits early; ep 20→150 wasted. Best ckpt on S3.
+- **Code review findings (logical errors not previously spotted):**
+  1. **Model selection on the TEST split** — in-train `evaluate_generation` reads `test.txt` and the
+     best checkpoint is picked by test FID = selection leakage. Switch in-train eval to **val.txt**
+     (1,460 clips); test is touched once, by `_twin_eval.py`, at the end.
+  2. **CFG trained but never applied** — `stream()` has no guidance scale; we pay cfg_dropout=0.1 and
+     collect zero benefit. Add two-pass guided sampling + sweep scale/temp on val (no retrain needed).
+  3. **No regularization to speak of** — `TrainCfg.weight_decay=0.0` (AdamW degenerates to Adam),
+     dropout 0.1, no token-input corruption (T2M-GPT's `pkeep` trick). Explains the ep-20 overfit.
+  4. In-train eval = first-200 test ids, 1 rep, first caption → biased + noisy; trend-only. The
+     citable protocol stays `_twin_eval.py` (20-rep, full split, random caption).
+  5. Dataset caption-crop edge case: a captioned segment whose crop falls outside [40,196] silently
+     keeps the FULL clip with the segment's caption → mislabeled training pairs (small but real).
+  6. Cosine schedule spans 150 ep, so LR is ~97% of peak in the ep-20–40 window where the model
+     actually peaks → shorten schedule (~50–60 ep) or early-stop.
+- **Representation capacity is NOT the bottleneck:** tokenizer recon-FID 0.0266 (full test) vs
+  generator ~3.2 → the gap is generator/conditioning/protocol, not Contribution A.
+- **FIX BATCH APPLIED (same session; 22 non-slow tests green, ruff clean, smoke on real data):**
+  (1) `stream(cfg_scale=)` — CFG guidance via a cond+uncond batch row (zero text = the drop_text
+  null), state stays bounded; plumbed through `generation_eval`, `train_generator --cfg_scale`,
+  `_twin_eval --cfg_scale/--split/--ckpt`. (2) In-train eval now defaults to **val** (`--eval_split`),
+  eval_every 10→5, epochs default 150→60 (decay must land in the ep-20–40 peak window). (3)
+  `TrainCfg.weight_decay` 0→0.01 + new `pkeep=0.8` input-token corruption (targets stay clean;
+  tests pin pkeep=1.0). (4) Dataset: captions are now chosen among annotations whose segment is
+  usable, cropped to the segment, and windowed INSIDE the crop (mislabeled-pair fix; still 22,418
+  train clips). (5) `shared/run_log.py` manifests (config+git+seed+versions, metrics.jsonl) wired
+  into train_generator + a CLAUDE.md golden rule (select on val, test once via `_twin_eval`).
+  (6) `run.sh`: checkpoint s3-sync loop + 60 epochs. CFG-scale sweep (1–4, val, 300 clips, cloud
+  ep-20 transformer ckpt) running locally -> `outputs/cfg_sweep.log`.
+- **NEXT:** (1) let mamba run to the lifetime kill (~ep 50, ckpts now safe; transformer peaked by
+  ep 20–40 anyway, so the twin gate is still adjudicable); (2) implement CFG inference + val-split
+  in-train eval + weight_decay/pkeep + run-manifest logging; (3) `mamba-ssm` CUDA kernels for the
+  next run; (4) `_twin_eval.py --backbone both` → citable table into ADR 0002; (5) streaming
+  latency/memory plot (local, free); (6) iso-vocab FSQ ablation; (7) optional AMASS tokenizer
+  pretraining as an ablation (the 290 GB donor data is unused by design on the citable track).
+
 ## Update (2026-06-08b, TWIN PARAM-MATCH + MAMBA TRAINING MADE TRACTABLE; runs launched)
 Matched the twin param counts and fixed the Mamba training-time blocker, then launched both runs.
 - **Param match (config-driven):** shared parts (token_emb+heads+text_proj) = 6.41M, identical both.

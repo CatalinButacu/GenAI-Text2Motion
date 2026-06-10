@@ -25,6 +25,7 @@ from text2motion.model.generator import MotionGenerator
 from text2motion.model.text_encoder import CLIPTextEncoder
 from text2motion.model.tokenizer import ResidualFsqTokenizer
 from text2motion.shared.config import load_config
+from text2motion.shared.run_log import log_metrics, start_run
 from text2motion.shared.seed import seed_everything
 from text2motion.train.trainer import GeneratorTrainer
 
@@ -82,6 +83,8 @@ def run(args: argparse.Namespace) -> None:
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_path = ckpt_dir / f"generator_{args.backbone}.pt"
     resume_path = ckpt_dir / f"generator_{args.backbone}_last.pt"
+    run_dir = start_run(f"generator_{args.backbone}", cfg, cfg.paths.outputs_dir, extra=vars(args))
+    log_metrics(run_dir, {"train_clips": len(loader.dataset), "device": device})
     print(f"train clips: {len(loader.dataset)}  device: {device}  backbone: {args.backbone}")
 
     best_fid = float("inf")
@@ -110,6 +113,7 @@ def run(args: argparse.Namespace) -> None:
                 totals[key] = totals.get(key, 0.0) + value
             steps += 1
         means = {k: v / steps for k, v in totals.items()}
+        log_metrics(run_dir, {"epoch": epoch + 1, **means})
         print(
             f"epoch {epoch + 1:3d}  ce {means['ce']:.4f}  recon {means['recon']:.4f}  "
             f"total {means['total']:.4f}"
@@ -118,14 +122,29 @@ def run(args: argparse.Namespace) -> None:
         if (epoch + 1) % args.eval_every == 0 or epoch + 1 == args.epochs:
             trainer.ema.copy_to(generator)
             metrics = evaluate_generation(
-                generator, text_encoder, tokenizer, out_dir, text_dir, our_mean, our_std,
-                motion_matcher, text_matcher, build_text, eval_mean, eval_std,
-                downsample=cfg.tokenizer.downsample, device=device, max_clips=args.max_eval_clips,
+                generator,
+                text_encoder,
+                tokenizer,
+                out_dir,
+                text_dir,
+                our_mean,
+                our_std,
+                motion_matcher,
+                text_matcher,
+                build_text,
+                eval_mean,
+                eval_std,
+                downsample=cfg.tokenizer.downsample,
+                device=device,
+                max_clips=args.max_eval_clips,
                 temperature=args.temperature,
+                cfg_scale=args.cfg_scale,
+                split=args.eval_split,
             )
             trainer.ema.restore(generator)
+            log_metrics(run_dir, {"epoch": epoch + 1, "split": args.eval_split, **metrics})
             print(
-                f"  [gen-eval] clips {metrics['clips']}  FID {metrics['fid']:.4f}  "
+                f"  [gen-eval:{args.eval_split}] clips {metrics['clips']}  FID {metrics['fid']:.4f}  "
                 f"R@1 {metrics['r_top1']:.3f}  R@3 {metrics['r_top3']:.3f}  "
                 f"MM {metrics['mm_dist']:.3f}  Div {metrics['diversity']:.3f}"
             )
@@ -151,12 +170,20 @@ def run(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train the text-to-motion generator (Contribution B).")
+    parser = argparse.ArgumentParser(
+        description="Train the text-to-motion generator (Contribution B)."
+    )
     parser.add_argument("--config", required=True)
     parser.add_argument("--backbone", required=True, choices=["mamba", "transformer"])
-    parser.add_argument("--epochs", type=int, default=150)  # prior-plateau lesson: 100-200+ epochs
+    # 60, not 150: the 2026-06 run peaked at ep ~20-40 and degraded after; the cosine decay must
+    # land in that window. Scale epochs back up only with evidence (val FID still improving).
+    parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--eval_every", type=int, default=10)
+    parser.add_argument("--cfg_scale", type=float, default=1.0, help="CFG at in-train eval")
+    parser.add_argument("--eval_split", default="val", choices=["val", "test"])
+    parser.add_argument(
+        "--eval_every", type=int, default=5
+    )  # the peak sits early; sample it densely
     parser.add_argument("--max_eval_clips", type=int, default=200)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--our_vab_dir", default="data/t2m_glove/glove")

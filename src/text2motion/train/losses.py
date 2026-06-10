@@ -30,7 +30,10 @@ def soft_decode(logits: torch.Tensor, tokenizer: ResidualFsqTokenizer) -> torch.
     for token_index, unit in enumerate(units):
         all_idx = torch.arange(unit.codebook_size, device=logits.device)
         codebook = unit.indices_to_codes(all_idx)  # (V, fsq_dim)
-        expected_codes.append(logits[..., token_index, :].softmax(-1) @ codebook)
+        # slice to the real vocab: an END-token generator carries one extra logit column that has
+        # no code; the expectation renormalizes over decodable codes only
+        real = logits[..., token_index, : unit.codebook_size]
+        expected_codes.append(real.softmax(-1) @ codebook)
 
     if isinstance(quantizer, GroupedFSQ):
         soft_codes = torch.cat(expected_codes, dim=-1)
@@ -73,15 +76,19 @@ def generator_loss(
     tokenizer: ResidualFsqTokenizer,
     cfg: TrainCfg,
     lengths: torch.Tensor | None = None,
+    token_lengths: torch.Tensor | None = None,
+    has_end: bool = False,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     """Total loss + per-term scalars. logits (B,T',R,V), target_tokens (B,T',R), gt_motion (B,T,263).
-    `lengths` (B,) gives the unpadded motion length per clip; padded tokens/frames are masked out."""
-    token_lengths = None
-    if lengths is not None:
+    `lengths` (B,) gives the unpadded motion length per clip; padded tokens/frames are masked out.
+    `token_lengths` overrides the derived token mask (END-token training: includes the END slot);
+    `has_end` drops the appended END time position from the motion-space (soft-decode) terms."""
+    if token_lengths is None and lengths is not None:
         token_lengths = (lengths // tokenizer.cfg.downsample).clamp(max=target_tokens.size(1))
 
     ce = token_ce_loss(logits, target_tokens, token_lengths)
-    geo = geometric_losses(soft_decode(logits, tokenizer), gt_motion, lengths)
+    motion_logits = logits[:, :-1] if has_end else logits  # END slot decodes no motion
+    geo = geometric_losses(soft_decode(motion_logits, tokenizer), gt_motion, lengths)
     total = (
         ce
         + cfg.w_recon * geo["recon"]

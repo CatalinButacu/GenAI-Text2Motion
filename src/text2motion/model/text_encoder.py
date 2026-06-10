@@ -80,7 +80,9 @@ class CLIPTextEncoder(nn.Module):
         return next(self.parameters()).device
 
     def forward(self, texts: list[str]) -> torch.Tensor:
-        """list[str] of length B -> (B, out_dim). Gradients flow into the unfrozen params."""
+        """list[str] of length B -> (B, out_dim) when cfg.prefix_len == 1 (pooled, legacy), else
+        (B, prefix_len, out_dim): the pooled vector followed by the first prefix_len-1 token hidden
+        states (padding positions zeroed). Gradients flow into the unfrozen params."""
         tokens = self.tokenizer(
             texts,
             padding="max_length",
@@ -89,4 +91,11 @@ class CLIPTextEncoder(nn.Module):
             return_tensors="pt",
         )
         tokens = {k: v.to(self.device) for k, v in tokens.items()}
-        return self.model(**tokens).text_embeds  # (B, out_dim)
+        out = self.model(**tokens)
+        if self.cfg.prefix_len == 1:
+            return out.text_embeds  # (B, out_dim)
+
+        hidden = out.last_hidden_state[:, : self.cfg.prefix_len - 1]  # (B, P-1, out_dim)
+        mask = tokens["attention_mask"][:, : self.cfg.prefix_len - 1]  # zero the padded positions
+        hidden = hidden * mask.unsqueeze(-1).to(hidden.dtype)
+        return torch.cat([out.text_embeds.unsqueeze(1), hidden], dim=1)  # (B, P, out_dim)

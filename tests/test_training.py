@@ -42,7 +42,7 @@ def test_train_step_learns():
     torch.manual_seed(0)
     tok = ResidualFsqTokenizer(TOK)
     gen = MotionGenerator(GEN)
-    trainer = GeneratorTrainer(gen, tok, TrainCfg(lr=3e-3, cfg_dropout=0.0))
+    trainer = GeneratorTrainer(gen, tok, TrainCfg(lr=3e-3, cfg_dropout=0.0, pkeep=1.0))
     gt = torch.randn(2, 32, 263)
     text = torch.randn(2, GEN.d_text)
 

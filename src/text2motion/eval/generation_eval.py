@@ -59,12 +59,14 @@ def evaluate_generation(
     max_clips: int | None = None,
     temperature: float = 1.0,
     top_p: float = 0.9,
+    cfg_scale: float = 1.0,
+    split: str = "val",  # in-train model selection MUST NOT touch test (only _twin_eval does, once)
 ) -> dict[str, float]:
     generator.eval()
     text_encoder.eval()
     tokenizer.eval()
 
-    ids = [n.strip() for n in (out_dir / "test.txt").read_text().splitlines() if n.strip()]
+    ids = [n.strip() for n in (out_dir / f"{split}.txt").read_text().splitlines() if n.strip()]
     ids = list(dict.fromkeys(i[1:] if i.startswith("M") else i for i in ids))[:max_clips]
 
     gt_feats, gen_feats, text_pairs = [], [], []
@@ -82,7 +84,12 @@ def evaluate_generation(
 
         text_emb = text_encoder([caption_ann.caption])
         tokens = torch.stack(
-            list(generator.stream(text_emb, token_len, temperature=temperature, top_p=top_p)), dim=1
+            list(
+                generator.stream(
+                    text_emb, token_len, temperature=temperature, top_p=top_p, cfg_scale=cfg_scale
+                )
+            ),
+            dim=1,
         )
         gen = tokenizer.decode(tokens)[0].cpu().numpy() * our_std + our_mean
 

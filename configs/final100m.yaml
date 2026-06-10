@@ -1,0 +1,38 @@
+# Phase-3 FINAL twin run (cloud, g5.xlarge A10G): 100M-class param-matched twins
+# (transformer 12L d768 = 94.70M vs mamba 23L = 96.37M, +1.77% — recomputed via _param_match.py),
+# 16-token CLIP prefix, END token, fused mamba kernel, bf16. Local sanity runs override
+# use_kernel=false (mamba-ssm is Linux/CUDA-only and the import fails loud by design).
+seed: 42
+device: cuda
+
+data:
+  track: hml3d263
+  sources: [humanml3d]
+  mirror_augment: true
+  max_motion_len: 196
+  min_motion_len: 40
+
+paths:
+  eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
+  eval_stats_dir: data/eval_stats
+  hml3d_out_dir: data/HumanML3D_official
+  texts_dir: data/HumanML3D_official/texts
+  checkpoints_dir: checkpoints
+  outputs_dir: outputs
+
+text_encoder:
+  prefix_len: 16            # pooled + first 15 token states; must equal generator.text_prefix_len
+
+generator:
+  d_model: 768
+  n_heads: 12
+  n_layers: 12              # transformer twin
+  mamba_n_layers: 23        # param-matched (+1.77%)
+  dt_rank: 48               # d_model / 16
+  max_seq_len: 96           # 16 prefix + 49 motion + END + headroom
+  text_prefix_len: 16
+  use_end_token: true
+  use_kernel: true          # cloud: mamba-ssm fused scan (import must succeed — fail-loud)
+
+train:
+  amp: bf16                 # A10G bf16 autocast; optimizer/EMA stay fp32

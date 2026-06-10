@@ -67,6 +67,10 @@ sampling · scale the generator (50–150M, not 5M) · **compute FID early and o
 - **snake_case** (PEP8) everywhere — the donor's camelCase is NOT inherited. Python 3.12, ruff (line 100).
 - **Config-driven via typed dataclasses** (`shared/config.py`): instantiate one `Config`, pass a
   function only the sub-config it needs. No module-level global constants, no magic numbers in code.
+- **Log every run** (`shared/run_log.py`): `start_run()` at every train/eval entrypoint (config +
+  git commit + seed + versions manifest), `log_metrics()` per epoch/eval. Any number quoted in an
+  ADR/STATUS/the dissertation must trace to a run dir. Model selection on **val** only; `test` is
+  touched once per final table (the 20-rep `_twin_eval.py` protocol).
 
 ## Status
 - [ ] Repo scaffolded · [ ] Donor assets mapped · [ ] Motion representation round-trips

@@ -136,8 +136,12 @@ class TokenizerCfg:
     downsample: int = 4  # temporal downsample (two stride-2 convs)
     num_quantizers: int = 6
     fsq_levels: tuple[int, ...] = (8, 5, 5, 5)  # per-level codebook = 8*5*5*5 = 1000 (~2^10)
-    quantizer: str = "grouped"  # "grouped" (G groups -> G*dim latent) | "residual" (sum -> dim latent)
-    quant_dropout: float = 0.2  # prob of dropping trailing residual levels during training (residual only)
+    quantizer: str = (
+        "grouped"  # "grouped" (G groups -> G*dim latent) | "residual" (sum -> dim latent)
+    )
+    quant_dropout: float = (
+        0.2  # prob of dropping trailing residual levels during training (residual only)
+    )
     n_resblocks: int = 3  # T2M-GPT VQVAEV3 NRES3
 
 
@@ -177,6 +181,8 @@ class TextEncoderCfg:
     max_length: int = 77  # CLIP context length
     unfreeze_last_n: int = 1  # unfreeze the last N transformer layers (+ final LN + projection)
     unfreeze_projection: bool = True
+    prefix_len: int = 1  # 1 = pooled vector only (T2M-GPT mold); P>1 = pooled + first P-1 token
+    # hidden states (AttT2M-style fine-grained conditioning). Must equal GeneratorCfg.text_prefix_len.
 
 
 @dataclass(frozen=True)
@@ -189,12 +195,20 @@ class GeneratorCfg:
     backbone: str = "mamba"  # "mamba" (Contribution B) | "transformer" (twin baseline)
     d_model: int = 512
     n_layers: int = 8  # transformer-twin depth; a Mamba block is ~half an attn+MLP block, so:
-    mamba_n_layers: int = 15  # param-matched to the twin (31.84M vs 31.64M, +0.6%); resolved per run
+    mamba_n_layers: int = (
+        15  # param-matched to the twin (31.84M vs 31.64M, +0.6%); resolved per run
+    )
     d_text: int = 512  # text-embedding dim (CLIP/SBERT), prepended as a prefix
     num_codebooks: int = 6  # must equal tokenizer.num_quantizers
     codebook_size: int = 1000  # must equal tokenizer per-level codebook (prod fsq_levels)
-    max_seq_len: int = 64  # downsampled steps (196/4 ≈ 49)
+    max_seq_len: int = 96  # positions: text_prefix_len + downsampled steps (+ END), with headroom
     dropout: float = 0.1
+    text_prefix_len: int = 1  # tokens of text prefix; must equal TextEncoderCfg.prefix_len
+    use_end_token: bool = (
+        False  # vocab+1 END per head -> self-terminating length (False = legacy ckpts)
+    )
+    use_kernel: bool = False  # mamba-ssm fused selective scan in training forward. EXPLICIT opt-in
+    # (cloud config): when True the import must succeed — no silent fallback (fail-loud rule).
     # mamba (S6) backbone
     d_state: int = 16
     d_conv: int = 4
@@ -211,11 +225,20 @@ class TrainCfg:
 
     lr: float = 2e-4
     text_encoder_lr: float = 1e-5  # small LR for the partially-unfrozen CLIP text encoder
-    weight_decay: float = 0.0
-    warmup_steps: int = 1000  # linear LR warmup; then cosine decay (prior-plateau lesson: long schedule)
+    weight_decay: float = (
+        0.01  # AdamW decoupled decay (0.0 = plain Adam; the 2026-06 run overfit by ep 20)
+    )
+    warmup_steps: int = (
+        1000  # linear LR warmup; then cosine decay over the FULL run, so size the run
+    )
     lr_min_ratio: float = 0.01  # cosine floor as a fraction of peak LR
     ema_decay: float = 0.999  # eval the EMA copy
     cfg_dropout: float = 0.1  # drop text condition this often so CFG works at inference
+    pkeep: float = 0.8  # teacher-forcing input corruption: keep a token with this prob, else random
+    # (T2M-GPT uses 0.5; fights memorization + exposure bias. 1.0 disables — tests pin that.)
+    amp: str = (
+        "off"  # "bf16" wraps forward+loss in autocast (Ampere+: A10G/3050); opt/EMA stay fp32
+    )
     w_recon: float = 0.5
     w_velocity: float = 0.3
     w_foot: float = 0.1

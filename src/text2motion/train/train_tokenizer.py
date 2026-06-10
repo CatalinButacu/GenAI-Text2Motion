@@ -23,6 +23,7 @@ from text2motion.eval.tokenizer_eval import evaluate_tokenizer
 from text2motion.model.rvq_baseline import RvqBaselineTokenizer
 from text2motion.model.tokenizer import ResidualFsqTokenizer
 from text2motion.shared.config import Config, load_config
+from text2motion.shared.run_log import log_metrics, start_run
 from text2motion.train.tokenizer_trainer import TokenizerTrainer
 
 
@@ -59,8 +60,12 @@ def run(args: argparse.Namespace) -> None:
 
     ckpt_dir = Path(cfg.paths.checkpoints_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    ckpt_path = ckpt_dir / f"tokenizer_{args.tokenizer}.pt"
-    print(f"train clips: {len(loader.dataset)}  device: {device}  codebook: {tokenizer.codebook_size}")
+    ckpt_name = args.ckpt_name or f"tokenizer_{args.tokenizer}.pt"
+    ckpt_path = ckpt_dir / ckpt_name
+    run_dir = start_run(f"tokenizer_{Path(ckpt_name).stem}", cfg, cfg.paths.outputs_dir, vars(args))
+    print(
+        f"train clips: {len(loader.dataset)}  device: {device}  codebook: {tokenizer.codebook_size}"
+    )
 
     best_fid = float("inf")
     for epoch in range(args.epochs):
@@ -73,6 +78,7 @@ def run(args: argparse.Namespace) -> None:
                 totals[key] = totals.get(key, 0.0) + value
             steps += 1
         means = {k: v / steps for k, v in totals.items()}
+        log_metrics(run_dir, {"epoch": epoch + 1, **means})
         print(
             f"epoch {epoch + 1:3d}  recon {means['recon']:.4f}  commit {means['commit']:.4f}  "
             f"perplexity {means['perplexity']:.1f}"
@@ -81,10 +87,19 @@ def run(args: argparse.Namespace) -> None:
         if (epoch + 1) % args.eval_every == 0 or epoch + 1 == args.epochs:
             trainer.ema.copy_to(tokenizer)
             metrics = evaluate_tokenizer(
-                tokenizer, out_dir, our_mean, our_std, matcher, eval_mean, eval_std,
-                joints_num=cfg.hml3d.num_joints, device=device, max_clips=args.max_eval_clips,
+                tokenizer,
+                out_dir,
+                our_mean,
+                our_std,
+                matcher,
+                eval_mean,
+                eval_std,
+                joints_num=cfg.hml3d.num_joints,
+                device=device,
+                max_clips=args.max_eval_clips,
             )
             trainer.ema.restore(tokenizer)
+            log_metrics(run_dir, {"epoch": epoch + 1, **metrics})
             print(
                 f"  [eval] clips {metrics['clips']}  MPJPE {metrics['mpjpe_mm']:.1f}mm  "
                 f"feat-L2 {metrics['feature_l2']:.4f}  recon-FID {metrics['recon_fid']:.4f}"
@@ -108,6 +123,9 @@ def main() -> None:
     parser.add_argument("--eval_every", type=int, default=5)
     parser.add_argument("--max_eval_clips", type=int, default=None)
     parser.add_argument("--num_workers", type=int, default=0)
+    parser.add_argument(
+        "--ckpt_name", default=None, help="checkpoint filename (ablations must not clobber winners)"
+    )
     run(parser.parse_args())
 
 

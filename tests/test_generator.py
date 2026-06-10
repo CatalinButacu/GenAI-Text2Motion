@@ -28,7 +28,9 @@ def small_cfg(backbone: str) -> GeneratorCfg:
 def streamed_logits(gen: MotionGenerator, tokens: torch.Tensor, text: torch.Tensor) -> torch.Tensor:
     """Reproduce forward()'s teacher-forced logits by stepping one input at a time."""
     state = gen.backbone.init_state(tokens.size(0), tokens.device)
-    h, state = gen.backbone.step(gen.text_prefix(text), state)
+    prefix = gen.text_prefix(text)  # (B, P, d_model); P=1 here, stepped like stream() does
+    for position in range(prefix.size(1)):
+        h, state = gen.backbone.step(prefix[:, position], state)
     outs = [gen.logits(h)]
 
     for t in range(tokens.size(1) - 1):

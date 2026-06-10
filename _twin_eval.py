@@ -75,15 +75,34 @@ def embed_texts(matcher, pairs, device, batch=32):
 
 
 @torch.no_grad()
-def generate(backbone, cfg, tokenizer, te, device, ids, out_dir, text_dir, our_mean, our_std,
-             max_clips, temperature, top_p):
+def generate(
+    backbone,
+    cfg,
+    tokenizer,
+    te,
+    device,
+    ids,
+    out_dir,
+    text_dir,
+    our_mean,
+    our_std,
+    max_clips,
+    temperature,
+    top_p,
+    cfg_scale=1.0,
+    ckpt=None,
+):
     n_layers = cfg.generator.mamba_n_layers if backbone == "mamba" else cfg.generator.n_layers
     gen_cfg = replace(
-        cfg.generator, backbone=backbone, n_layers=n_layers,
-        num_codebooks=cfg.tokenizer.num_quantizers, codebook_size=tokenizer.codebook_size,
+        cfg.generator,
+        backbone=backbone,
+        n_layers=n_layers,
+        num_codebooks=cfg.tokenizer.num_quantizers,
+        codebook_size=tokenizer.codebook_size,
     )
     gen = MotionGenerator(gen_cfg).to(device).eval()
-    gen.load_state_dict(torch.load(f"checkpoints/generator_{backbone}.pt", map_location=device))
+    ckpt = ckpt or f"checkpoints/generator_{backbone}.pt"
+    gen.load_state_dict(torch.load(ckpt, map_location=device))
 
     gt_feats, gen_feats, tok_lists = [], [], []
     for clip_id in ids[:max_clips]:
@@ -104,7 +123,12 @@ def generate(backbone, cfg, tokenizer, te, device, ids, out_dir, text_dir, our_m
             continue
         text_emb = te([anns[0].caption])  # condition on the first caption
         tokens = torch.stack(
-            list(gen.stream(text_emb, token_len, temperature=temperature, top_p=top_p)), dim=1
+            list(
+                gen.stream(
+                    text_emb, token_len, temperature=temperature, top_p=top_p, cfg_scale=cfg_scale
+                )
+            ),
+            dim=1,
         )
         decoded = tokenizer.decode(tokens)[0].cpu().numpy() * our_std + our_mean
         gt_feats.append(feat)
@@ -113,8 +137,19 @@ def generate(backbone, cfg, tokenizer, te, device, ids, out_dir, text_dir, our_m
     return gt_feats, gen_feats, tok_lists
 
 
-def evaluate(name, gt_feats, gen_feats, tok_lists, motion_matcher, text_matcher, build_text,
-             eval_mean, eval_std, device, reps=20):
+def evaluate(
+    name,
+    gt_feats,
+    gen_feats,
+    tok_lists,
+    motion_matcher,
+    text_matcher,
+    build_text,
+    eval_mean,
+    eval_std,
+    device,
+    reps=20,
+):
     gt_emb = embed_motions(motion_matcher, gt_feats, eval_mean, eval_std, device)
     gen_emb = embed_motions(motion_matcher, gen_feats, eval_mean, eval_std, device)
 
@@ -138,9 +173,11 @@ def evaluate(name, gt_feats, gen_feats, tok_lists, motion_matcher, text_matcher,
     rprec = np.stack(rprec)
     fid_val = fid(gt_emb, gen_emb)
     div = diversity(gen_emb, num_pairs=300)
-    print(f"{name:12s} clips {len(gen_feats):4d}  FID {fid_val:6.3f}  "
-          f"R@1 {rprec[:,0].mean():.3f}±{rprec[:,0].std():.3f}  R@2 {rprec[:,1].mean():.3f}  "
-          f"R@3 {rprec[:,2].mean():.3f}  MM {np.mean(mmdist):.3f}  Div {div:.3f}")
+    print(
+        f"{name:12s} clips {len(gen_feats):4d}  FID {fid_val:6.3f}  "
+        f"R@1 {rprec[:, 0].mean():.3f}±{rprec[:, 0].std():.3f}  R@2 {rprec[:, 1].mean():.3f}  "
+        f"R@3 {rprec[:, 2].mean():.3f}  MM {np.mean(mmdist):.3f}  Div {div:.3f}"
+    )
 
 
 def main():
@@ -150,6 +187,11 @@ def main():
     parser.add_argument("--max_clips", type=int, default=100000)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top_p", type=float, default=0.9)
+    parser.add_argument("--cfg_scale", type=float, default=1.0)
+    parser.add_argument(
+        "--split", default="test", choices=["val", "test"]
+    )  # val = sweeps/selection
+    parser.add_argument("--ckpt", default=None, help="explicit checkpoint (single-backbone only)")
     parser.add_argument("--device", default=None)
     args = parser.parse_args()
 
@@ -169,21 +211,48 @@ def main():
     tokenizer.to(device).eval()
     te = CLIPTextEncoder(cfg.text_encoder).to(device).eval()
 
-    ids = [n.strip() for n in (out_dir / "test.txt").read_text().splitlines() if n.strip()]
+    ids = [n.strip() for n in (out_dir / f"{args.split}.txt").read_text().splitlines() if n.strip()]
     ids = list(dict.fromkeys(i[1:] if i.startswith("M") else i for i in ids))
 
     backbones = ["transformer", "mamba"] if args.backbone == "both" else [args.backbone]
-    print(f"device {device}  test ids {len(ids)}  (20-rep full-test, our_vab)")
+    print(
+        f"device {device}  {args.split} ids {len(ids)}  cfg_scale {args.cfg_scale}  "
+        f"temp {args.temperature}  (20-rep, our_vab)"
+    )
     for backbone in backbones:
-        if not Path(f"checkpoints/generator_{backbone}.pt").is_file():
+        ckpt = args.ckpt if len(backbones) == 1 else None
+        if not Path(ckpt or f"checkpoints/generator_{backbone}.pt").is_file():
             print(f"{backbone:12s} SKIP (no checkpoint yet)")
             continue
         gt_feats, gen_feats, tok_lists = generate(
-            backbone, cfg, tokenizer, te, device, ids, out_dir, text_dir, our_mean, our_std,
-            args.max_clips, args.temperature, args.top_p,
+            backbone,
+            cfg,
+            tokenizer,
+            te,
+            device,
+            ids,
+            out_dir,
+            text_dir,
+            our_mean,
+            our_std,
+            args.max_clips,
+            args.temperature,
+            args.top_p,
+            cfg_scale=args.cfg_scale,
+            ckpt=ckpt,
         )
-        evaluate(backbone, gt_feats, gen_feats, tok_lists, motion_matcher, text_matcher,
-                 build_text, eval_mean, eval_std, device)
+        evaluate(
+            backbone,
+            gt_feats,
+            gen_feats,
+            tok_lists,
+            motion_matcher,
+            text_matcher,
+            build_text,
+            eval_mean,
+            eval_std,
+            device,
+        )
 
 
 if __name__ == "__main__":

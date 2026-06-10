@@ -57,12 +57,21 @@ def _parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
 class MambaMixer(nn.Module):
     """Minimal selective-SSM mixer with a shared step()/scan recurrence (so stream == batch)."""
 
-    def __init__(self, d_model: int, d_state: int, d_conv: int, expand: int, dt_rank: int) -> None:
+    def __init__(
+        self,
+        d_model: int,
+        d_state: int,
+        d_conv: int,
+        expand: int,
+        dt_rank: int,
+        use_kernel: bool = False,
+    ) -> None:
         super().__init__()
         self.d_inner = expand * d_model
         self.d_state = d_state
         self.d_conv = d_conv
         self.dt_rank = dt_rank
+        self.use_kernel = use_kernel
         self.in_proj = nn.Linear(d_model, 2 * self.d_inner, bias=False)
         self.conv1d = nn.Conv1d(self.d_inner, self.d_inner, d_conv, groups=self.d_inner, bias=True)
         self.x_proj = nn.Linear(self.d_inner, dt_rank + 2 * d_state, bias=False)
@@ -110,10 +119,29 @@ class MambaMixer(nn.Module):
         x_c = F.silu(self.conv1d(x_pad).transpose(1, 2))  # (B, L, d_inner), causal
 
         a = -torch.exp(self.a_log)  # (d_inner, d_state)
-        dt, b, c = torch.split(self.x_proj(x_c), [self.dt_rank, self.d_state, self.d_state], dim=-1)
-        dt = F.softplus(self.dt_proj(dt))  # (B, L, d_inner)
+        dt_raw, b, c = torch.split(
+            self.x_proj(x_c), [self.dt_rank, self.d_state, self.d_state], dim=-1
+        )
+
+        if self.use_kernel:  # fused CUDA scan (mamba-ssm); import failure is LOUD — no fallback
+            from mamba_ssm.ops.selective_scan_interface import selective_scan_fn
+
+            y = selective_scan_fn(
+                x_c.transpose(1, 2).contiguous(),  # u (B, d_inner, L)
+                self.dt_proj(dt_raw).transpose(1, 2).contiguous(),  # delta, pre-softplus
+                a,  # A (d_inner, d_state)
+                b.transpose(1, 2).contiguous(),  # B (B, d_state, L)
+                c.transpose(1, 2).contiguous(),  # C (B, d_state, L)
+                self.d_skip,  # D (d_inner,)
+                delta_softplus=True,  # kernel applies the softplus the eager path does
+            ).transpose(1, 2)
+            return self.out_proj(y * F.silu(z))
+
+        dt = F.softplus(self.dt_proj(dt_raw))  # (B, L, d_inner)
         da = torch.exp(dt.unsqueeze(-1) * a)  # (B, L, d_inner, d_state)  = aₜ
-        dbx = dt.unsqueeze(-1) * b.unsqueeze(2) * x_c.unsqueeze(-1)  # (B, L, d_inner, d_state)  = xₜ
+        dbx = (
+            dt.unsqueeze(-1) * b.unsqueeze(2) * x_c.unsqueeze(-1)
+        )  # (B, L, d_inner, d_state)  = xₜ
 
         ssm = _parallel_scan(da, dbx)  # sₜ = aₜ·sₜ₋₁ + xₜ, in log₂(L) passes (s₋₁ = 0)
         y = (ssm * c.unsqueeze(2)).sum(-1) + self.d_skip * x_c  # (B, L, d_inner)
@@ -124,7 +152,12 @@ class MambaBlock(nn.Module):
     def __init__(self, cfg: GeneratorCfg) -> None:
         super().__init__()
         self.norm = RMSNorm(cfg.d_model)
-        self.mixer = MambaMixer(cfg.d_model, cfg.d_state, cfg.d_conv, cfg.expand, cfg.dt_rank)
+        self.mixer = MambaMixer(
+            cfg.d_model, cfg.d_state, cfg.d_conv, cfg.expand, cfg.dt_rank, cfg.use_kernel
+        )
+        self.drop = nn.Dropout(
+            cfg.dropout
+        )  # train-only -> identity in eval, so stream==batch parity holds
 
     def init_state(self, batch: int, device: torch.device):
         return self.mixer.init_state(batch, device)
@@ -134,7 +167,7 @@ class MambaBlock(nn.Module):
         return x_t + out, (ssm, conv)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.mixer(self.norm(x))
+        return x + self.drop(self.mixer(self.norm(x)))
 
 
 class MambaBackbone(nn.Module):
@@ -142,6 +175,9 @@ class MambaBackbone(nn.Module):
         super().__init__()
         self.blocks = nn.ModuleList([MambaBlock(cfg) for _ in range(cfg.n_layers)])
         self.norm_f = RMSNorm(cfg.d_model)
+        # the fused kernel has an efficient backward of its own; checkpointing only pays for the
+        # memory-hungry eager scan (the 4GB-GPU path)
+        self.checkpoint_blocks = not cfg.use_kernel
 
     def init_state(self, batch: int, device: torch.device) -> list:
         return [b.init_state(batch, device) for b in self.blocks]
@@ -154,8 +190,9 @@ class MambaBackbone(nn.Module):
 
     def forward(self, seq: torch.Tensor) -> torch.Tensor:
         for block in self.blocks:
-            if self.training and seq.requires_grad:  # recompute scan in backward -> bounded train memory
-                seq = checkpoint(block, seq, use_reentrant=False)
+            if self.training and seq.requires_grad and self.checkpoint_blocks:
+                seq = checkpoint(block, seq, use_reentrant=False)  # recompute the eager scan in
+                # backward -> bounded train memory on the 4GB GPU
             else:
                 seq = block(seq)
 
@@ -181,6 +218,10 @@ class TransformerBlock(nn.Module):
             nn.GELU(),
             nn.Linear(4 * cfg.d_model, cfg.d_model),
         )
+        self.drop = nn.Dropout(
+            cfg.dropout
+        )  # residual dropout; eval -> identity (step() path is dropout-free)
+        self.attn_drop = cfg.dropout
 
     def split_heads(self, t: torch.Tensor) -> torch.Tensor:
         b, n, _ = t.shape
@@ -188,10 +229,12 @@ class TransformerBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         q, k, v = (self.split_heads(t) for t in self.qkv(self.norm1(x)).chunk(3, dim=-1))
-        a = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        a = F.scaled_dot_product_attention(
+            q, k, v, is_causal=True, dropout_p=self.attn_drop if self.training else 0.0
+        )
         a = a.transpose(1, 2).reshape(x.shape)
-        x = x + self.proj(a)
-        return x + self.mlp(self.norm2(x))
+        x = x + self.drop(self.proj(a))
+        return x + self.drop(self.mlp(self.norm2(x)))
 
     def step(self, x_t: torch.Tensor, cache):
         q, k, v = (self.split_heads(t.unsqueeze(1)) for t in self.qkv(self.norm1(x_t)).chunk(3, -1))
@@ -247,13 +290,17 @@ class MotionGenerator(nn.Module):
     def __init__(self, cfg: GeneratorCfg) -> None:
         super().__init__()
         self.cfg = cfg
+        # END is one extra id past the tokenizer vocab; the tokenizer must never decode it
+        self.end_id = cfg.codebook_size if cfg.use_end_token else None
+        vocab = cfg.codebook_size + (1 if cfg.use_end_token else 0)
         self.token_emb = nn.ModuleList(
-            [nn.Embedding(cfg.codebook_size, cfg.d_model) for _ in range(cfg.num_codebooks)]
+            [nn.Embedding(vocab, cfg.d_model) for _ in range(cfg.num_codebooks)]
         )
         self.text_proj = nn.Linear(cfg.d_text, cfg.d_model)
         self.heads = nn.ModuleList(
-            [nn.Linear(cfg.d_model, cfg.codebook_size) for _ in range(cfg.num_codebooks)]
+            [nn.Linear(cfg.d_model, vocab) for _ in range(cfg.num_codebooks)]
         )
+        self.emb_drop = nn.Dropout(cfg.dropout)  # input/embedding dropout, shared by both backbones
         self.backbone = make_backbone(cfg)
 
     def embed_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
@@ -266,33 +313,70 @@ class MotionGenerator(nn.Module):
         return out
 
     def text_prefix(self, text_emb: torch.Tensor) -> torch.Tensor:
-        return self.text_proj(text_emb)  # (B, d_model)
+        """text_emb (B, d_text) or (B, P, d_text) -> (B, P, d_model); P = cfg.text_prefix_len."""
+        if text_emb.dim() == 2:
+            text_emb = text_emb.unsqueeze(1)
+        if text_emb.size(1) != self.cfg.text_prefix_len:
+            raise ValueError(
+                f"text prefix has {text_emb.size(1)} tokens, cfg.text_prefix_len is "
+                f"{self.cfg.text_prefix_len} (TextEncoderCfg.prefix_len must match)"
+            )
+        return self.text_proj(text_emb)
 
     def logits(self, h: torch.Tensor) -> torch.Tensor:
-        """h (..., d_model) -> (..., num_codebooks, codebook_size)."""
+        """h (..., d_model) -> (..., num_codebooks, vocab)."""
         return torch.stack([head(h) for head in self.heads], dim=-2)
 
     def forward(self, tokens: torch.Tensor, text_emb: torch.Tensor) -> torch.Tensor:
-        """tokens (B, L, R), text_emb (B, d_text) -> logits (B, L, R, codebook_size). Teacher forced:
-        position i predicts tokens[:, i] from the text prefix + tokens[:, :i]."""
+        """tokens (B, L, R), text_emb (B, d_text) or (B, P, d_text) -> logits (B, L, R, vocab).
+        Teacher forced: the P prefix tokens then tokens[:, :i] predict tokens[:, i]."""
         emb = self.embed_tokens(tokens)  # (B, L, d_model)
-        prefix = self.text_prefix(text_emb).unsqueeze(1)  # (B, 1, d_model)
-        seq_in = torch.cat([prefix, emb[:, :-1]], dim=1)  # (B, L, d_model)
-        return self.logits(self.backbone(seq_in))
+        prefix = self.text_prefix(text_emb)  # (B, P, d_model)
+        seq_in = torch.cat([prefix, emb[:, :-1]], dim=1)  # (B, P+L-1, d_model)
+        h = self.backbone(self.emb_drop(seq_in))[:, prefix.size(1) - 1 :]  # (B, L, d_model)
+        return self.logits(h)
 
     @torch.no_grad()
     def stream(
-        self, text_emb: torch.Tensor, steps: int, temperature: float = 1.0, top_p: float = 0.9
+        self,
+        text_emb: torch.Tensor,
+        steps: int,
+        temperature: float = 1.0,
+        top_p: float = 0.9,
+        cfg_scale: float = 1.0,
+        stop_at_end: bool = False,
     ):
-        """Yield one (B, R) token step at a time, streaming with bounded state (Mamba) / KV (twin)."""
+        """Yield one (B, R) token step at a time, streaming with bounded state (Mamba) / KV (twin).
+
+        cfg_scale > 1 applies classifier-free guidance: a second, unconditional row (zeroed text,
+        matching the training-time `drop_text` null condition) runs in the same batch and the logits
+        are extrapolated `uncond + cfg_scale * (cond - uncond)`. State stays bounded (2B rows).
+
+        With an END-token model, `stop_at_end=False` (the GT-length eval protocol) masks END so it
+        can never be sampled; `stop_at_end=True` stops as soon as every row emits END on any
+        codebook (END itself is not yielded), with `steps` as the hard cap."""
         device = text_emb.device
+        guided = cfg_scale != 1.0
+        if guided:
+            text_emb = torch.cat([text_emb, torch.zeros_like(text_emb)], dim=0)
         state = self.backbone.init_state(text_emb.size(0), device)
-        h, state = self.backbone.step(self.text_prefix(text_emb), state)
+        prefix = self.text_prefix(text_emb)  # (2B or B, P, d_model)
+        for position in range(prefix.size(1)):
+            h, state = self.backbone.step(prefix[:, position], state)
 
         for _ in range(steps):
-            tokens = sample_logits(self.logits(h), temperature, top_p)  # (B, R)
+            logits = self.logits(h)
+            if guided:
+                cond, uncond = logits.chunk(2, dim=0)
+                logits = uncond + cfg_scale * (cond - uncond)
+            if self.end_id is not None and not stop_at_end:
+                logits[..., self.end_id] = float("-inf")  # fixed-length protocol: END unreachable
+            tokens = sample_logits(logits, temperature, top_p)  # (B, R)
+            if self.end_id is not None and stop_at_end and (tokens == self.end_id).any(-1).all():
+                return
             yield tokens
-            h, state = self.backbone.step(self.embed_tokens(tokens), state)
+            feed = torch.cat([tokens, tokens], dim=0) if guided else tokens
+            h, state = self.backbone.step(self.embed_tokens(feed), state)
 
 
 def make_backbone(cfg: GeneratorCfg) -> nn.Module:
