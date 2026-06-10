@@ -32,6 +32,18 @@ User-confirmed: 100M twins on g5, prefix+END upgrades included (gated), AMASS pr
   table v0 = `_twin_eval` per backbone (`--split test --cfg_scale 5.0 --temperature 1.1`, 20-rep,
   full test) → `outputs/twin_table_v0.log`. **Machine must stay awake overnight.**
 
+## Update (2026-06-10c, BOX HARVESTED + TERMINATED EARLY — mamba peaked at ep 30)
+- **Mamba overfitting turn confirmed at ep 40** (FID 5.26, R@1 0.094) after the **ep-30 peak:
+  FID 4.17, R@1 0.208 — better than ANY transformer epoch** (twin best R@1 0.193 @ep20). Trajectory:
+  ep20 4.80/0.193 → ep30 4.17/0.208 → ep40 5.26/0.094. Same overfit pattern as the twin, one decade
+  later — consistent with SSM sample-efficiency at matched budget (worth a thesis paragraph).
+- **Harvested**: `checkpoints/generator_mamba_cloud.pt` (= ep-30 EMA best) + `outputs/mamba_cloud.log`.
+  **Instance terminated ~7 h early** (zero evals remained before the hard kill) — saved ~$4.
+- AWS CLI session expired mid-watch (user re-ran `aws login`); box's own IAM sync was never affected.
+- Iso-vocab tokenizer confirmed ALIVE (12 s CPU / 12 s wall probe; log lags ~80 ep from stdout
+  buffering — launch future local runs with `python -u`). On completion → twin table v0 on the
+  freed GPU: `_twin_eval` per backbone, `--split test --cfg_scale 5.0 --temperature 1.1`, 20-rep.
+
 ## OPEN DECISIONS (the queue, in order)
 1. **ADR-0002 gate (after twin table v0):** mamba FID within ~1.5x of transformer at locked sampling
    → proceed to the 100M run; else debug locally first. Record the v0 table in ADR 0002 either way.
