@@ -1,7 +1,8 @@
-# data & licensed assets — never commit (290 GB donor corpus, SMPL-X bodies)
-data/
-checkpoints/
-outputs/
+# data & licensed assets — never commit (290 GB donor corpus, SMPL-X bodies).
+# Root-anchored: the unanchored `data/` silently ignored src/text2motion/data/ (found 2026-06-10).
+/data/
+/checkpoints/
+/outputs/
 *.zip
 *.npz
 *.pkl
@@ -16,7 +17,10 @@ __pycache__/
 
 # caches
 .cache/
-data/.cache/
+/data/.cache/
+
+# machine-local Claude Code settings
+.claude/settings.local.json
 
 # editor
 .vscode/
