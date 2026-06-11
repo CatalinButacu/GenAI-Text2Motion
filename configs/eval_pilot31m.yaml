@@ -1,0 +1,25 @@
+# Eval config for the PILOT 31M checkpoints (cloud run of 2026-06-09/10).
+# Those twins were trained before the Track-A upgrades, with the then-default generator geometry:
+# max_seq_len 64 (pos table 65x512), single pooled text token, no END token. The current dataclass
+# default is max_seq_len 96, which fails-loud on the old transformer pos.weight — this config pins
+# the legacy value. Use ONLY for evaluating generator_{transformer,mamba}_cloud.pt.
+seed: 42
+device: cuda
+
+data:
+  track: hml3d263
+  sources: [humanml3d]
+  mirror_augment: true
+  max_motion_len: 196
+  min_motion_len: 40
+
+paths:
+  eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
+  eval_stats_dir: data/eval_stats
+  hml3d_out_dir: data/HumanML3D_official
+  texts_dir: data/HumanML3D_official/texts
+  checkpoints_dir: checkpoints
+  outputs_dir: outputs
+
+generator:
+  max_seq_len: 64   # pilot geometry; all other generator fields match the pilot defaults

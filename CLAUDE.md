@@ -67,6 +67,10 @@ sampling · scale the generator (50–150M, not 5M) · **compute FID early and o
 - **snake_case** (PEP8) everywhere — the donor's camelCase is NOT inherited. Python 3.12, ruff (line 100).
 - **Config-driven via typed dataclasses** (`shared/config.py`): instantiate one `Config`, pass a
   function only the sub-config it needs. No module-level global constants, no magic numbers in code.
+- **Guard every local run** (`scripts/local_guard.ps1`): launch long local jobs WITH the watchdog —
+  stall-kill on a stale `metrics.jsonl` heartbeat + a max-hours budget (the laptop twin of the
+  cloud cost guards; a frozen tokenizer run once burned 10.6 h unnoticed). Inspect
+  `outputs/GUARD_KILL.txt` before any relaunch. Long python jobs always run with `-u`.
 - **Log every run** (`shared/run_log.py`): `start_run()` at every train/eval entrypoint (config +
   git commit + seed + versions manifest), `log_metrics()` per epoch/eval. Any number quoted in an
   ADR/STATUS/the dissertation must trace to a run dir. Model selection on **val** only; `test` is
