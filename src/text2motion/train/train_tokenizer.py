@@ -62,13 +62,24 @@ def run(args: argparse.Namespace) -> None:
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     ckpt_name = args.ckpt_name or f"tokenizer_{args.tokenizer}.pt"
     ckpt_path = ckpt_dir / ckpt_name
+    resume_path = ckpt_dir / f"{Path(ckpt_name).stem}_last.pt"
     run_dir = start_run(f"tokenizer_{Path(ckpt_name).stem}", cfg, cfg.paths.outputs_dir, vars(args))
     print(
         f"train clips: {len(loader.dataset)}  device: {device}  codebook: {tokenizer.codebook_size}"
     )
 
     best_fid = float("inf")
-    for epoch in range(args.epochs):
+    start_epoch = 0
+    if args.resume and resume_path.is_file():
+        state = torch.load(resume_path, map_location=device)
+        tokenizer.load_state_dict(state["tokenizer"])
+        trainer.opt.load_state_dict(state["optimizer"])
+        trainer.ema.shadow = {k: v.to(device) for k, v in state["ema"].items()}
+        start_epoch = state["epoch"] + 1
+        best_fid = state["best_fid"]
+        print(f"resumed from {resume_path} at epoch {start_epoch} (best recon-FID {best_fid:.4f})")
+
+    for epoch in range(start_epoch, args.epochs):
         tokenizer.train()
         totals: dict[str, float] = {}
         steps = 0
@@ -110,6 +121,16 @@ def run(args: argparse.Namespace) -> None:
                 torch.save(tokenizer.state_dict(), ckpt_path)
                 trainer.ema.restore(tokenizer)
                 print(f"  saved best -> {ckpt_path} (recon-FID {best_fid:.4f})")
+            torch.save(  # full state at every eval: an interrupt costs <= eval_every epochs
+                {
+                    "tokenizer": tokenizer.state_dict(),
+                    "optimizer": trainer.opt.state_dict(),
+                    "ema": trainer.ema.shadow,
+                    "epoch": epoch,
+                    "best_fid": best_fid,
+                },
+                resume_path,
+            )
 
 
 def main() -> None:
@@ -125,6 +146,9 @@ def main() -> None:
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument(
         "--ckpt_name", default=None, help="checkpoint filename (ablations must not clobber winners)"
+    )
+    parser.add_argument(
+        "--resume", action="store_true", help="resume from <ckpt_name stem>_last.pt"
     )
     run(parser.parse_args())
 
