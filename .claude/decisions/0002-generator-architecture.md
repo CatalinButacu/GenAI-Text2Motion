@@ -32,6 +32,22 @@ Small-config run of both backbones on the same tokens → `sanity-overfit`, then
 real FID from `t2m-eval`. Proceed to full scale only if the S6 generator is within range of the twin.
 A superseding ADR is required to change backbone, not a silent edit.
 
+## Gate evidence (2026-06-11) — **PASSED**
+31M pilot twins (identical tokenizer/data/seed/losses; g4dn cloud run), best-by-eval checkpoints
+(transformer ep20 of 150, mamba ep30 of ~42), scored with the 20-rep full-test protocol
+(2,189 clips, CFG 5.0 / T 1.1 / top-p 0.9, `text2motion.eval.evaluate`, run-manifest logged):
+
+| backbone | FID | R@1 | R@2 | R@3 | MM-Dist | Diversity | MModality |
+|---|---|---|---|---|---|---|---|
+| transformer 31.6M | **3.310** | **0.217±.008** | 0.354 | 0.455 | 5.260 | 7.975 | 3.747 |
+| mamba 31.8M | 3.928 | 0.168±.006 | 0.287 | 0.381 | 5.644 | 7.888 | **4.059** |
+
+**FID ratio 1.19× — well inside the ≤1.5× gate → proceed to the 100M run (E5).** Notes recorded:
+(1) budget asymmetry favors the transformer (150 vs ~42 epochs; both peak early, so best-ckpt
+comparison is meaningful but E5 removes the asymmetry); (2) mamba overfit a decade later than the
+twin (ep30 vs ep20 peak — H4); (3) mamba leads MultiModality; transformer leads retrieval precision
+at this scale; (4) both rows pull the in-train trend numbers into citable form for the first time.
+
 ## Consequences
 - Unlocks `src/text2motion/model/generator.py` (S6 backbone + the transformer twin behind one
   interface) after the gate. Streaming `stream_step` contract per `streaming-decode`.

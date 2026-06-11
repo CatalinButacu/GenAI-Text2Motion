@@ -84,6 +84,19 @@ Convention: **bold** = a result that survives into the dissertation tables.
   shows the KV-grows-vs-state-fixed mechanics. Run manifests (`shared/run_log.py`) wired into all
   entrypoints; publish chain automated (post-commit hook → donor/thesis-v2 → GitHub).
 
+## 2026-06-11 — Twin table v0: the ADR-0002 gate PASSES
+
+- **E3 complete — first citable generation numbers** (full test 2,189 clips, 20-rep, CFG 5.0/T1.1):
+  **transformer 31.6M: FID 3.310, R@1 0.217±0.008, MModality 3.747 · mamba 31.8M: FID 3.928,
+  R@1 0.168±0.006, MModality 4.059.** FID ratio **1.19× ≤ 1.5×** → **gate PASSED**, E5 unblocked.
+  Caveats recorded in ADR 0002 (epoch-budget asymmetry 150 vs ~42; resolved by E5).
+- Incidents (both caught by guards, both now structural): the pilot transformer ckpt failed loud on
+  the new max_seq_len default (fixed via `configs/eval_pilot31m.yaml`); the iso-vocab run froze
+  mid-epoch and was killed after burning 10.6 h CPU → **`scripts/local_guard.ps1`** (heartbeat-stall
+  + max-hours watchdog) is now mandatory for local runs (CLAUDE.md rule), relaunch resumed E2.
+- Design note: SE(2) placement augmentation rejected (RIC features are invariant by construction);
+  E7b (AMASS generator pretraining) registered as the real data-side lever.
+
 ## Pending (auto-queued)
 
 - [ ] E2 verdict: iso-vocab final recon-FID vs RVQ 0.0382 (ETA 2026-06-11 ~07:00 UTC).
