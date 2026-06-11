@@ -84,6 +84,7 @@ continuous diffusion-AR. The cell "token-AR S6 for motion" is unoccupied.
 | E5 | 100M twins, full recipe (H2 main) | config gated + sanity-PASS; canary then run | ~$22 |
 | E6 | Streaming benchmark (H3) | harness built; run on final ckpts | local |
 | E7 | AMASS tokenizer pretraining (ablation) | queued | local |
+| E7b | **AMASS generator pretraining**: regen+tokenize AMASS locally (tokens ≈ tens of MB), ship tokens to S3, pretrain the generator *unconditionally* (token-CE only) on the full corpus, then fine-tune conditionally on HumanML3D with the full loss. The principal anti-overfitting lever (22k captioned clips is small for ~100M params); reported as a "+pretraining" ablation row. | registered 2026-06-11 | local + ~$5-8 |
 | E8 | MultiModality + final tables | harness done | local |
 
 Total cloud budget: ≤ $80 (≈$21 spent; ~$45 reserved for E5 + contingency).

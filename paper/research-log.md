@@ -90,5 +90,10 @@ Convention: **bold** = a result that survives into the dissertation tables.
 - [ ] **Twin table v0** (E3): `evaluate --backbone both --split test --cfg_scale 5.0
   --temperature 1.1`, 20-rep, full test, both cloud ckpts → ADR-0002 gate verdict.
 - [ ] E7 AMASS regen + tokenizer pretraining (GPU queue after E2).
+- [ ] E7b (registered 2026-06-11) AMASS **generator** pretraining: local regen+tokenize → token pack
+  to S3 → unconditional CE-only pretrain on cloud → conditional HumanML3D fine-tune. Design note:
+  SE(2) placement augmentation was considered and rejected — the 263 RIC representation already
+  factors out ground-plane rotation+translation (bit-identical features), so "more motion" (this
+  experiment) is the real variance lever, not more views of the same motion.
 - [ ] E5 g5.xlarge canary (kernel parity at scale) → final 100M twin run.
 - [ ] E6 streaming benchmark on final checkpoints → the H3 figure.
