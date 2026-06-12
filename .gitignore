@@ -39,3 +39,4 @@ infra/aws/*.tfstate
 infra/aws/*.tfstate.*
 infra/aws/terraform.tfvars
 infra/aws/.terraform.lock.hcl
+code_patch.tar
