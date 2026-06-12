@@ -92,7 +92,14 @@ def main() -> None:
 
     for backbone in ["transformer", "mamba"]:
         n_layers = cfg.generator.mamba_n_layers if backbone == "mamba" else cfg.generator.n_layers
-        gen_cfg = replace(cfg.generator, backbone=backbone, n_layers=n_layers)
+        # The transformer's learned absolute-position table caps its streamable horizon (indexing
+        # past it CUDA-asserts) — itself a thesis finding: the SSM needs no positional bookkeeping.
+        # For the latency/memory measurement we size the table to the horizon (weights are random;
+        # table size does not affect per-step cost, the KV growth does).
+        bench_seq_len = max(args.horizons) + cfg.generator.text_prefix_len + 8
+        gen_cfg = replace(
+            cfg.generator, backbone=backbone, n_layers=n_layers, max_seq_len=bench_seq_len
+        )
         torch.manual_seed(cfg.seed)
         generator = MotionGenerator(gen_cfg).to(device).eval()
         results[backbone] = bench_backbone(generator, sorted(args.horizons), device)

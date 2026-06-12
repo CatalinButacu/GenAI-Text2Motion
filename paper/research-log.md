@@ -105,7 +105,19 @@ Convention: **bold** = a result that survives into the dissertation tables.
   FSQ-512 0.0307 < RVQ-512 0.0382 (vocab helps, but the quantizer is the difference).
   Run was interrupted twice (frozen-run kill; planned machine handback) — the relaunch with
   `--resume` support + local guard completed cleanly overnight.
-- g5 canary (E5 gate) executed autonomously overnight; verdict pending an AWS re-auth.
+- g5 canary (E5 gate): prebuilt mamba-ssm wheels are ABI-incompatible with the DLAMI torch (cu130)
+  and the box ships only the 12.8 toolkit → canary now installs cuda-toolkit-13-0 and force-builds
+  from source (sm_86). Cost lesson: the original gate-1 failure left a never-busy GPU idling ~15 h
+  (~$18) — watchdog gained a never-busy-within-90-min terminate path.
+- **Streaming finding (E6):** the AR-transformer twin **hard-crashes at the horizon where its
+  learned absolute-position table ends** (CUDA index assert past position 96) — streaming beyond
+  the trained horizon requires positional surgery (clamping/RoPE/extension), while the SSM has no
+  positional bookkeeping at all and streams indefinitely. Recorded as a qualitative limitation in
+  the H3 chapter; benchmark sizes the table to the horizon for the latency/memory measurement.
+- All-AMASS pretraining corpus built (`pretrain_corpus.py`): pose_data already covered the FULL
+  donor AMASS (16,407 sequences) → CPU-only featurization; 2,188 val/test-underlying sources
+  excluded (leakage guard); official normalization preserved. `tokenize_corpus.py` collapses the
+  corpus to a tens-of-MB int16 token pack for the cloud (E7b).
 
 ## Pending (auto-queued)
 
