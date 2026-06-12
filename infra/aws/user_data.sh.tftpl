@@ -10,8 +10,12 @@ cat >/usr/local/bin/idle_watchdog.sh <<'EOF'
 #!/bin/bash
 THRESH=5            # percent GPU util considered "active"
 NEED=${idle_minutes}
+NEVER_BUSY_MAX=90   # minutes: if the GPU was NEVER busy by then, the job failed pre-training ->
+                    # terminate. (2026-06-11 lesson: a gate-1 canary failure left an idle box
+                    # running ~15h because arming required first seeing the GPU busy.)
 armed=0
 count=0
+uptime_min=0
 while true; do
   util=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
   if [ -n "$util" ] && [ "$util" -ge "$THRESH" ]; then
@@ -23,6 +27,11 @@ while true; do
     logger "idle-watchdog: GPU idle $${NEED}m after activity -> terminating"
     shutdown -h now "thesis: idle GPU, terminating"
   fi
+  if [ "$armed" -eq 0 ] && [ "$uptime_min" -ge "$NEVER_BUSY_MAX" ]; then
+    logger "idle-watchdog: GPU never busy within $${NEVER_BUSY_MAX}m of boot -> terminating"
+    shutdown -h now "thesis: never-busy GPU, terminating"
+  fi
+  uptime_min=$((uptime_min + 1))
   sleep 60
 done
 EOF

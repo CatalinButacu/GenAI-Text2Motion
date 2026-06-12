@@ -15,7 +15,16 @@ mkdir -p outputs
 SYNC=$!
 
 echo "=== gate 1: fused kernel ===" | tee outputs/canary_gate1.log
-$PY -m pip install -q --no-build-isolation causal-conv1d mamba-ssm pytest 2>&1 | tail -2 | tee -a outputs/canary_gate1.log
+# FORCE source build against the box's torch: the prebuilt wheels are ABI-incompatible
+# (2026-06-11: undefined symbol c10_cuda_check_implementation). sm_86 = A10G only -> fast compile.
+# The DLAMI's torch is cu130 but ships only the 12.8 toolkit -> install + point at CUDA 13.0
+# (2026-06-12: torch cpp_extension hard-fails on major-version nvcc mismatch).
+if [ ! -d /usr/local/cuda-13.0 ]; then
+  apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cuda-toolkit-13-0
+fi
+export CUDA_HOME=/usr/local/cuda-13.0 PATH=/usr/local/cuda-13.0/bin:$PATH
+export MAMBA_FORCE_BUILD=TRUE CAUSAL_CONV1D_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST=8.6 MAX_JOBS=4
+$PY -m pip install -q --no-build-isolation --no-cache-dir causal-conv1d mamba-ssm pytest 2>&1 | tail -2 | tee -a outputs/canary_gate1.log
 $PY -m pytest tests/test_generator_upgrades.py::test_kernel_matches_eager_scan -q 2>&1 | tee -a outputs/canary_gate1.log
 
 echo "=== gate 2: 5-epoch twins at 100M ===" | tee outputs/canary_timing.log
