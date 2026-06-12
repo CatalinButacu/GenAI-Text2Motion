@@ -119,6 +119,15 @@ Convention: **bold** = a result that survives into the dissertation tables.
   excluded (leakage guard); official normalization preserved. `tokenize_corpus.py` collapses the
   corpus to a tens-of-MB int16 token pack for the cloud (E7b).
 
+- **E6 measured (100M twins, RTX 3050, batch 1, horizons 64→1024,
+  `outputs/streaming_bench_100m.json`): mamba state bit-flat at 2.68 MB at EVERY horizon vs
+  transformer KV growing linearly 5.9→76.7 MB (28× at 1k, unbounded); CUDA peak flat 399 MB vs
+  398→475 MB.** Latency, reported honestly: mamba flat ~26–33 ms/step (horizon-independent) but a
+  ~2.3× higher constant than the transformer's ~12–15 ms at these horizons — unfused per-step
+  kernels × 23 layers vs fused SDPA × 12; crossover beyond the measured range; fused
+  `selective_state_update` is the engineering remedy. Claim wording: bounded memory +
+  horizon-independent latency vs unbounded memory + horizon-dependent latency.
+
 ## Pending (auto-queued)
 
 - [ ] E2 verdict: iso-vocab final recon-FID vs RVQ 0.0382 (ETA 2026-06-11 ~07:00 UTC).
