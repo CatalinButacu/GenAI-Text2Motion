@@ -97,6 +97,16 @@ Convention: **bold** = a result that survives into the dissertation tables.
 - Design note: SE(2) placement augmentation rejected (RIC features are invariant by construction);
   E7b (AMASS generator pretraining) registered as the real data-side lever.
 
+## 2026-06-12 — E2 complete: H1a CONFIRMED (iso-vocab FSQ still beats RVQ)
+
+- **Iso-vocab Grouped-FSQ (6 groups × 512 = RVQ's vocab, matched encoder/budget, 500 ep):
+  best recon-FID 0.0307 / MPJPE 119.5 mm / perplexity 340/512 — beats strong-RVQ 0.0382 by 20%
+  at EQUAL vocabulary → the FSQ win is not a codebook-size artifact.** Ladder: FSQ-1000 0.0266 <
+  FSQ-512 0.0307 < RVQ-512 0.0382 (vocab helps, but the quantizer is the difference).
+  Run was interrupted twice (frozen-run kill; planned machine handback) — the relaunch with
+  `--resume` support + local guard completed cleanly overnight.
+- g5 canary (E5 gate) executed autonomously overnight; verdict pending an AWS re-auth.
+
 ## Pending (auto-queued)
 
 - [ ] E2 verdict: iso-vocab final recon-FID vs RVQ 0.0382 (ETA 2026-06-11 ~07:00 UTC).
