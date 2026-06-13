@@ -1,0 +1,86 @@
+// Model + training architecture (Contribution A frozen, Contribution B twins)
+// Preview: Ctrl+Shift+P -> "Graphviz Interactive Preview: Preview Graphviz / Dot (beside)"
+digraph model_training {
+    rankdir=TB;
+    graph [fontname="Segoe UI", fontsize=11, labelloc="t",
+           label="Model + training: frozen tokenizer (A) feeds the param-matched twins (B)"];
+    node  [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=10];
+    edge  [fontname="Segoe UI", fontsize=9];
+
+    subgraph cluster_inputs {
+        label="Per training step";
+        style=filled; color="#eceff1"; fontname="Segoe UI Semibold";
+        node [fillcolor="#cfd8dc"];
+        motion  [label="GT motion (B, T, 263)\nnormalized, length-masked"];
+        caption [label="caption strings (B,)"];
+    }
+
+    subgraph cluster_A {
+        label="Contribution A - FROZEN during generator training";
+        style=filled; color="#ede7f6"; fontname="Segoe UI Semibold";
+        node [fillcolor="#b39ddb"];
+        enc [label="Conv encoder w512 /4"];
+        fsq [label="Grouped-FSQ 6 x (8,5,5,5)\n= 6 codebooks x 1000"];
+        dec [label="Conv decoder x4"];
+        enc -> fsq -> dec;
+    }
+
+    subgraph cluster_text {
+        label="Text conditioning";
+        style=filled; color="#e1f5fe"; fontname="Segoe UI Semibold";
+        node [fillcolor="#81d4fa"];
+        clip [label="CLIP ViT-B/32 (last layer + proj unfrozen)\nprefix_len 16: pooled + 15 token states"];
+    }
+
+    subgraph cluster_gen {
+        label="Contribution B - the twins (ONE interface)";
+        style=filled; color="#fff3e0"; fontname="Segoe UI Semibold";
+        node [fillcolor="#ffe0b2"];
+        emb    [label="6 token embeddings (vocab 1001 incl END) summed\n+ 16-token text prefix"];
+        twin1  [label="TransformerBackbone 12L d768 = 94.70M\ncausal SDPA - KV-cache GROWS", fillcolor="#ffcc80"];
+        twin2  [label="MambaBackbone 23L d768 = 96.37M\nS6 selective scan - state FIXED 2.68 MB\ntrain: fused kernel / eager parallel scan", fillcolor="#ffab91"];
+        heads  [label="6 heads -> logits (B, L, 6, 1001)"];
+        emb -> twin1 -> heads;
+        emb -> twin2 -> heads;
+    }
+
+    subgraph cluster_losses {
+        label="Loss recipe (t2m-losses)";
+        style=filled; color="#fce4ec"; fontname="Segoe UI Semibold";
+        node [fillcolor="#f8bbd0"];
+        ce   [label="token-CE (END-aware, length-masked)"];
+        soft [label="soft-decode recon: expected codes ->\nfrozen decoder -> L1 vs GT motion"];
+        geo  [label="+ velocity + foot-contact + root terms"];
+        ce -> soft -> geo [style=invis];
+    }
+
+    subgraph cluster_reg {
+        label="Anti-overfit (the 06-10 fix batch)";
+        style=filled; color="#f1f8e9"; fontname="Segoe UI Semibold";
+        node [fillcolor="#dcedc8", shape=note];
+        r1 [label="pkeep 0.8 input corruption"];
+        r2 [label="weight decay 0.01 - dropout 0.1"];
+        r3 [label="CFG dropout 0.1 (text blanked)"];
+        r4 [label="EMA 0.999 - warmup+cosine 60ep - bf16"];
+        r5 [label="early stop: val FID every 5 ep"];
+        r1 -> r2 -> r3 -> r4 -> r5 [style=invis];
+    }
+
+    subgraph cluster_sampling {
+        label="Inference (locked on val 06-11)";
+        style=filled; color="#e0f7fa"; fontname="Segoe UI Semibold";
+        node [fillcolor="#80deea"];
+        s1 [label="CFG scale 5.0:\nblank + 5 x (prompted - blank)"];
+        s2 [label="nucleus top-p 0.9, temperature 1.1"];
+        s3 [label="END token: self-terminating (demo)\nor masked (fixed-length protocol)"];
+        s1 -> s2 -> s3 [style=invis];
+    }
+
+    motion -> enc;
+    fsq    -> emb   [label="target tokens (B, T', 6)"];
+    caption -> clip -> emb;
+    heads  -> ce;
+    heads  -> soft;
+    geo    -> twin2 [label="gradient (frozen decoder)", style=dashed, constraint=false];
+    twin2  -> s1    [label="stream(): step-by-step,\nbounded state", style=dashed, constraint=false];
+}
