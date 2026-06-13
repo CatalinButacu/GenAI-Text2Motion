@@ -1,0 +1,53 @@
+%% Model + training architecture (Contribution A frozen, Contribution B twins)
+flowchart TB
+    subgraph INPUTS["Per training step"]
+        MOTION["GT motion (B, T, 263)<br/>normalized, length-masked"]
+        CAPTION["caption strings (B,)"]
+    end
+
+    subgraph CONTRIB_A["Contribution A - FROZEN during generator training"]
+        ENC["Conv encoder w512 /4"]
+        FSQ["Grouped-FSQ 6 x (8,5,5,5)<br/>= 6 codebooks x 1000"]
+        DEC["Conv decoder x4"]
+        ENC --> FSQ --> DEC
+    end
+
+    subgraph TEXT["Text conditioning"]
+        CLIP["CLIP ViT-B/32 (last layer + proj unfrozen)<br/>prefix_len 16: pooled + 15 token states"]
+    end
+
+    subgraph GEN["Contribution B - the twins (ONE interface)"]
+        EMB["6 token embeddings (vocab 1001 incl END) summed<br/>+ 16-token text prefix"]
+        TWIN1["TransformerBackbone 12L d768 = 94.70M<br/>causal SDPA - KV-cache GROWS"]
+        TWIN2["MambaBackbone 23L d768 = 96.37M<br/>S6 selective scan - state FIXED 2.68MB<br/>train: fused kernel / eager parallel scan"]
+        HEADS["6 heads -> logits (B, L, 6, 1001)"]
+        EMB --> TWIN1 --> HEADS
+        EMB --> TWIN2 --> HEADS
+    end
+
+    subgraph LOSSES["Loss recipe (t2m-losses)"]
+        CE["token-CE (END-aware, length-masked)"]
+        SOFT["soft-decode recon: expected codes -><br/>frozen decoder -> L1 vs GT motion"]
+        GEO["+ velocity + foot-contact + root terms"]
+    end
+
+    subgraph REG["Anti-overfit (the 06-10 fix batch)"]
+        R1["pkeep 0.8 input corruption"]
+        R2["weight decay 0.01 - dropout 0.1"]
+        R3["CFG dropout 0.1 (text blanked)"]
+        R4["EMA 0.999 - warmup+cosine 60ep - bf16"]
+        R5["early stop: val FID every 5 ep"]
+    end
+
+    subgraph SAMPLING["Inference (locked on val 06-11)"]
+        S1["CFG scale 5.0: blank + 5 x (prompted - blank)"]
+        S2["nucleus top-p 0.9, temperature 1.1"]
+        S3["END token: self-terminating (demo)<br/>or masked (fixed-length protocol)"]
+    end
+
+    MOTION --> ENC
+    FSQ -->|"target tokens (B, T', 6)"| GEN
+    CAPTION --> CLIP --> EMB
+    HEADS --> CE
+    HEADS --> SOFT --> GEO
+    GEN -.->|stream(): step-by-step, bounded state| SAMPLING

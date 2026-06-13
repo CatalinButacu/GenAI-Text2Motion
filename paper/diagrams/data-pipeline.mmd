@@ -1,0 +1,41 @@
+%% Data pipeline — every input we own and every derived artifact (sizes/counts as of 2026-06-12)
+%% Render: https://mermaid.live or any Mermaid-enabled markdown viewer
+flowchart TB
+    subgraph DONOR["READ-ONLY donor assets (D:\\Facultate\\dissertation\\data)"]
+        AMASS["AMASS mocap (SMPL-X G release)<br/>151 GB · 16,407 .npz sequences<br/>165-dim SMPL-X params/frame @ 60-120fps"]
+        SMPLX["SMPL-X body models<br/>SMPLX_{NEUTRAL,MALE,FEMALE}.npz"]
+        T2M["Guo evaluator 'finest.tar'<br/>+ Comp_v6 eval Mean/Std<br/>(reused UNMODIFIED - ADR 0001)"]
+        GLOVE["GloVe 300d + our_vab vocab<br/>(R-precision text encoder)"]
+        INTERX["Inter-X / ARCTIC / PAHOI<br/>(unused on citable track)"]
+    end
+
+    subgraph EXTERNAL["External (downloaded once)"]
+        OFFICIAL["Official HumanML3D-263 (TeoGchx mirror, 4.4 GB)<br/>29,228 clips = 14,614 base x2 mirror<br/>splits 23,384 / 1,460 / 4,384"]
+        CAPTIONS["Official captions texts/&lt;id&gt;.txt<br/>+ M&lt;id&gt;.txt mirrored captions<br/>caption#tokens#start#end"]
+        INDEX["index.csv<br/>AMASS source -> HumanML3D clip mapping"]
+    end
+
+    subgraph STAGE1["Stage 1 (06-03, GPU): raw_pose.py"]
+        POSE["pose_data/ - 16,407 files<br/>(T, 22, 3) joints float32<br/>20 fps, Y-up - tens of GB"]
+    end
+
+    subgraph CITABLE["CITABLE TRACK (data/HumanML3D_official)"]
+        VECS["new_joint_vecs/ - 263-dim features<br/>train 22,418 clips (mirrors, len>=40)<br/>+ Mean.npy / Std.npy (THE normalization)"]
+    end
+
+    subgraph PRETRAIN["PRETRAIN CORPUS (06-12, CPU 10 min)"]
+        CORPUS["data/AMASS_263 - 13,249 sequences<br/>pretrain_corpus.py: head-trim, x-flip,<br/>process_file; EXCLUDES 2,188 val/test sources"]
+        PACK["data/amass_tokens.npz - 5.8 MB<br/>8,303 segments x 49 steps x 6 int16<br/>= 22.6 h motion (tokenize_corpus.py)"]
+    end
+
+    TOKENIZER["FROZEN Grouped-FSQ tokenizer<br/>checkpoints/tokenizer_fsq.pt<br/>4 frames x 263 floats -> 1 step x 6 ids<br/>recon-FID 0.0266"]
+
+    AMASS -->|SMPL-X forward, 22 joints, 20fps| POSE
+    SMPLX --> POSE
+    OFFICIAL --> VECS
+    CAPTIONS --> VECS
+    POSE -->|"all sequences (not index-filtered)"| CORPUS
+    INDEX -->|leakage guard: resolve val/test sources| CORPUS
+    CORPUS -->|encode in OFFICIAL normalization| PACK
+    TOKENIZER --> PACK
+    VECS -->|"64-frame windows"| TOKENIZER
