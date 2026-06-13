@@ -1,0 +1,65 @@
+// 05 - CONTRIBUTION B: the two backbones behind one interface (generator.py). One node = one op.
+// Preview: Ctrl+Shift+P -> "Graphviz Interactive Preview: Preview Graphviz / Dot (beside)"
+digraph generator_twins {
+    rankdir=TB;
+    graph [fontname="Segoe UI", fontsize=12, labelloc="t", label="05  Contribution B: param-matched Transformer vs Mamba twins"];
+    node  [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=10];
+    edge  [fontname="Segoe UI", fontsize=9];
+
+    subgraph cluster_front {
+        label="Shared front-end (MotionGenerator)";
+        style=filled; color="#e1f5fe"; fontname="Segoe UI Semibold"; node [fillcolor="#81d4fa"];
+        temb  [label="embed 6 codebook tokens, sum them"];
+        tprefix [label="project 16-token text prefix"];
+        cat   [label="concat prefix then tokens (teacher forcing)"];
+        temb -> cat; tprefix -> cat;
+    }
+
+    subgraph cluster_tf {
+        label="Transformer twin - 12 layers (94.70M) - KV-cache GROWS";
+        style=filled; color="#fff3e0"; fontname="Segoe UI Semibold"; node [fillcolor="#ffb74d"];
+        tnorm [label="RMSNorm"];
+        tqkv  [label="project Q, K, V"];
+        tattn [label="causal scaled-dot-product attention"];
+        tkv   [label="cache K, V (one entry per past step)"];
+        tmlp  [label="MLP block"];
+        tpos  [label="learned absolute position embedding"];
+        tnorm -> tqkv -> tattn -> tmlp; tattn -> tkv [style=dashed]; tpos -> tqkv [style=dashed];
+    }
+
+    subgraph cluster_mb {
+        label="Mamba twin - 23 layers (96.37M) - state FIXED";
+        style=filled; color="#fbe9e7"; fontname="Segoe UI Semibold"; node [fillcolor="#ff8a65"];
+        mnorm [label="RMSNorm"];
+        minp  [label="in_proj: x and gate z"];
+        mconv [label="causal depthwise conv1d"];
+        msel  [label="selective dt, B, C from input (S6)"];
+        mscan [label="state recurrence: s = a*s_prev + b*x"];
+        mout  [label="gate by z, out_proj"];
+        mstate[label="recurrent state (2.68 MB, horizon-independent)"];
+        mnorm -> minp -> mconv -> msel -> mscan -> mout; mscan -> mstate [style=dashed];
+    }
+
+    subgraph cluster_dual {
+        label="Two execution modes (same weights, same recurrence)";
+        style=filled; color="#f1f8e9"; fontname="Segoe UI Semibold"; node [fillcolor="#aed581"];
+        parallel [label="forward(): whole sequence at once (training)"];
+        stepwise [label="step(): one token at a time (streaming)"];
+        parity   [label="stream output == batch output (unit-tested)"];
+        parallel -> parity; stepwise -> parity;
+    }
+
+    subgraph cluster_head {
+        label="Output + sampling";
+        style=filled; color="#e0f7fa"; fontname="Segoe UI Semibold"; node [fillcolor="#4dd0e1"];
+        heads [label="6 heads -> logits (vocab 1001 incl END)"];
+        cfg   [label="CFG: blank + 5.0 x (prompted - blank)"];
+        nucleus [label="nucleus sample (top-p 0.9, temp 1.1)"];
+        endstop [label="stop on END token (self-terminating)"];
+        heads -> cfg -> nucleus -> endstop;
+    }
+
+    cat -> tnorm; cat -> mnorm;
+    tmlp -> heads; mout -> heads;
+    tkv -> stepwise [style=dashed, constraint=false]; mstate -> stepwise [style=dashed, constraint=false];
+}

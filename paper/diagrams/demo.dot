@@ -1,0 +1,55 @@
+// 07 - REALISTIC DEMO (Phase 5). One node = one rendering step. Same checkpoint as the table.
+// Preview: Ctrl+Shift+P -> "Graphviz Interactive Preview: Preview Graphviz / Dot (beside)"
+digraph demo {
+    rankdir=TB;
+    graph [fontname="Segoe UI", fontsize=12, labelloc="t", label="07  Realistic demo: prompt to skinned body, live"];
+    node  [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=10];
+    edge  [fontname="Segoe UI", fontsize=9];
+
+    subgraph cluster_in {
+        label="User input (aitviewer imgui)";
+        style=filled; color="#fff8e1"; fontname="Segoe UI Semibold"; node [fillcolor="#ffd54f"];
+        prompt [label="type a prompt"];
+        chain  [label="optionally queue a next prompt"];
+    }
+
+    subgraph cluster_gen {
+        label="Generation (SAME checkpoint as the citable table)";
+        style=filled; color="#e1f5fe"; fontname="Segoe UI Semibold"; node [fillcolor="#81d4fa"];
+        clip   [label="CLIP encode prompt"];
+        stream [label="stream tokens (CFG 5.0, stop on END)"];
+        decode [label="frozen decoder -> 263 frames"];
+        clip -> stream -> decode;
+    }
+
+    subgraph cluster_pose {
+        label="263 features to body pose (NO inverse kinematics)";
+        style=filled; color="#ede7f6"; fontname="Segoe UI Semibold"; node [fillcolor="#b39ddb"];
+        rot6d  [label="take rot6d channels"];
+        aa     [label="convert to axis-angle"];
+        root   [label="integrate velocity channels for root path"];
+        pose   [label="assemble SMPL-X body pose (relaxed hands)"];
+        rot6d -> aa -> pose; root -> pose;
+    }
+
+    subgraph cluster_render {
+        label="Render";
+        style=filled; color="#e0f2f1"; fontname="Segoe UI Semibold"; node [fillcolor="#80cbc4"];
+        slerp  [label="slerp interpolate 20 fps -> 60 fps"];
+        skin   [label="skin SMPL-X mesh"];
+        live   [label="show frames as they stream in"];
+        fade   [label="cross-fade between prompts"];
+        slerp -> skin -> live; live -> fade;
+    }
+
+    subgraph cluster_out {
+        label="Output";
+        style=filled; color="#f1f8e9"; fontname="Segoe UI Semibold"; node [fillcolor="#aed581"];
+        mp4    [label="headless MP4 export"];
+    }
+
+    prompt -> clip; chain -> stream [style=dashed];
+    decode -> rot6d; decode -> root;
+    pose -> slerp;
+    fade -> mp4;
+}

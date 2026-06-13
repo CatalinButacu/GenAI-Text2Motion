@@ -1,0 +1,63 @@
+// 02 - HOW A BATCH IS BUILT FROM DATA (dataset.py). One node = one decision/transform.
+// Preview: Ctrl+Shift+P -> "Graphviz Interactive Preview: Preview Graphviz / Dot (beside)"
+digraph training_data {
+    rankdir=TB;
+    graph [fontname="Segoe UI", fontsize=12, labelloc="t", label="02  Dataset to batch: what each training example actually is"];
+    node  [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=10];
+    edge  [fontname="Segoe UI", fontsize=9];
+
+    subgraph cluster_index {
+        label="Index time - _index_clips (once, at construction)";
+        style=filled; color="#eceff1"; fontname="Segoe UI Semibold"; node [fillcolor="#cfd8dc"];
+        split   [label="read official split file (train.txt)"];
+        base    [label="normalize ids to base (drop M-prefix)"];
+        variant [label="add mirror variant M<id> for train only"];
+        existf  [label="keep clips whose feature file exists"];
+        existt  [label="keep clips whose caption file exists"];
+        minlen  [label="keep clips with length >= 40 frames"];
+        split -> base -> variant -> existf -> existt -> minlen;
+    }
+
+    subgraph cluster_item {
+        label="Per example - __getitem__ (every batch draw)";
+        style=filled; color="#e1f5fe"; fontname="Segoe UI Semibold"; node [fillcolor="#81d4fa"];
+        loadnpy [label="load 263-feature .npy"];
+        finite  [label="assert all values finite (fail loud)"];
+        parse   [label="parse caption lines (caption#tokens#start#end)"];
+        pickseg [label="_pick_caption_segment: choose a usable caption"];
+        cropseg [label="crop motion to that caption's time segment"];
+        window  [label="_fit_to_max_len: random 196-frame window if too long"];
+        normit  [label="normalize with Mean/Std"];
+        loadnpy -> finite -> parse -> pickseg -> cropseg -> window -> normit;
+    }
+
+    subgraph cluster_aug {
+        label="Active augmentation (variance that is NOT free)";
+        style=filled; color="#f1f8e9"; fontname="Segoe UI Semibold"; node [fillcolor="#aed581"];
+        mirror  [label="mirror clips: left<->right swap, own caption"];
+        randwin [label="random window position per draw"];
+        randcap [label="random caption choice per draw"];
+    }
+
+    subgraph cluster_note {
+        label="Augmentation that is a NO-OP (representation is invariant)";
+        style=filled; color="#ffebee"; fontname="Segoe UI Semibold"; node [fillcolor="#ef9a9a", shape=note];
+        yaw     [label="yaw rotation: heading stored as angular velocity"];
+        offset  [label="ground offset: positions in body-local frame"];
+    }
+
+    subgraph cluster_batch {
+        label="Batch time - collate_pad";
+        style=filled; color="#fff3e0"; fontname="Segoe UI Semibold"; node [fillcolor="#ffe082"];
+        pad     [label="zero-pad motions to batch max length"];
+        lengths [label="emit true lengths (B,) for masking"];
+        caps    [label="emit caption strings (B,)"];
+        pad -> lengths -> caps [style=invis];
+    }
+
+    minlen -> loadnpy;
+    mirror -> variant [style=dashed, constraint=false, label="doubles corpus"];
+    randwin -> window [style=dashed, constraint=false];
+    randcap -> pickseg [style=dashed, constraint=false];
+    normit -> pad;
+}

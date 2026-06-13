@@ -1,0 +1,71 @@
+// 04 - CONTRIBUTION A: the Grouped-FSQ tokenizer (tokenizer.py). One node = one module/op.
+// Preview: Ctrl+Shift+P -> "Graphviz Interactive Preview: Preview Graphviz / Dot (beside)"
+digraph tokenizer {
+    rankdir=TB;
+    graph [fontname="Segoe UI", fontsize=12, labelloc="t", label="04  Contribution A: Grouped-FSQ motion tokenizer"];
+    node  [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=10];
+    edge  [fontname="Segoe UI", fontsize=9];
+
+    subgraph cluster_enc {
+        label="Encoder1d (down x4)";
+        style=filled; color="#e0f2f1"; fontname="Segoe UI Semibold"; node [fillcolor="#80cbc4"];
+        ein   [label="input motion (B, T, 263)"];
+        conv1 [label="stride-2 conv (down x2)"];
+        conv2 [label="stride-2 conv (down x2)"];
+        res   [label="3 residual blocks (width 512)"];
+        ein -> conv1 -> conv2 -> res;
+    }
+
+    subgraph cluster_preq {
+        label="Project to quantizer latent";
+        style=filled; color="#e8f5e9"; fontname="Segoe UI Semibold"; node [fillcolor="#a5d6a7"];
+        preq [label="pre_q linear -> 6 x 4-dim latent"];
+    }
+
+    subgraph cluster_fsq {
+        label="GroupedFSQ - the contribution (6 groups, no learned codebook)";
+        style=filled; color="#ede7f6"; fontname="Segoe UI Semibold"; node [fillcolor="#9575cd"];
+        bound [label="bound: squash each dim to its level range"];
+        round [label="round to nearest lattice point (round_ste)"];
+        ste   [label="straight-through gradient (identity backward)"];
+        idx   [label="codes_to_indices: 6 ids in 0..999 per step"];
+        bound -> round -> ste -> idx;
+    }
+
+    subgraph cluster_postq {
+        label="Back to feature width";
+        style=filled; color="#e8f5e9"; fontname="Segoe UI Semibold"; node [fillcolor="#a5d6a7"];
+        postq [label="post_q linear -> width 512"];
+    }
+
+    subgraph cluster_dec {
+        label="Decoder1d (up x4)";
+        style=filled; color="#e0f2f1"; fontname="Segoe UI Semibold"; node [fillcolor="#80cbc4"];
+        dres  [label="3 residual blocks (width 512)"];
+        up1   [label="upsample conv (x2)"];
+        up2   [label="upsample conv (x2)"];
+        dout  [label="output motion (B, T, 263)"];
+        dres -> up1 -> up2 -> dout;
+    }
+
+    subgraph cluster_loss {
+        label="Reconstruction training (TokenizerTrainer)";
+        style=filled; color="#fce4ec"; fontname="Segoe UI Semibold"; node [fillcolor="#f48fb1"];
+        l1    [label="feature L1 loss"];
+        smooth[label="velocity smoothness L1"];
+        ema   [label="EMA of weights (0.99)"];
+    }
+
+    subgraph cluster_proof {
+        label="Result vs the RVQ baseline (test 2,189 clips)";
+        style=filled; color="#fff8e1"; fontname="Segoe UI Semibold"; node [fillcolor="#ffe082"];
+        win   [label="Grouped-FSQ recon-FID 0.0266"];
+        iso   [label="iso-vocab FSQ 0.0307 (matched 512 vocab)"];
+        rvq   [label="strong RVQ 0.0382"];
+    }
+
+    res -> preq -> bound;
+    idx -> postq -> dres;
+    dout -> l1; dout -> smooth;
+    dout -> win [style=dashed, constraint=false];
+}

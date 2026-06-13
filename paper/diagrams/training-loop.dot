@@ -1,0 +1,81 @@
+// 03 - THE GENERATOR TRAINING STEP (trainer.py train_step + losses.py). One node = one operation.
+// Preview: Ctrl+Shift+P -> "Graphviz Interactive Preview: Preview Graphviz / Dot (beside)"
+digraph training_loop {
+    rankdir=TB;
+    graph [fontname="Segoe UI", fontsize=12, labelloc="t", label="03  One training step: how the twins learn from a batch"];
+    node  [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=10];
+    edge  [fontname="Segoe UI", fontsize=9];
+
+    subgraph cluster_in {
+        label="Batch in";
+        style=filled; color="#eceff1"; fontname="Segoe UI Semibold"; node [fillcolor="#cfd8dc"];
+        gtm   [label="GT motion (B, T, 263)"];
+        gtl   [label="lengths (B,)"];
+        cap   [label="captions (B,)"];
+    }
+
+    subgraph cluster_target {
+        label="Targets via the FROZEN tokenizer (no gradient)";
+        style=filled; color="#ede7f6"; fontname="Segoe UI Semibold"; node [fillcolor="#b39ddb"];
+        enc   [label="tokenizer.encode -> target tokens (B, T', 6)"];
+        endt  [label="_append_end_targets: place END at clip length"];
+        enc -> endt;
+    }
+
+    subgraph cluster_input {
+        label="Teacher-forcing input (corrupted)";
+        style=filled; color="#f1f8e9"; fontname="Segoe UI Semibold"; node [fillcolor="#aed581"];
+        pkeep [label="pkeep 0.8: randomly replace input tokens with random ids"];
+        clean [label="targets stay clean (only inputs corrupted)"];
+        pkeep -> clean [style=invis];
+    }
+
+    subgraph cluster_text {
+        label="Text branch (gradient reaches unfrozen CLIP)";
+        style=filled; color="#e1f5fe"; fontname="Segoe UI Semibold"; node [fillcolor="#81d4fa"];
+        clipenc [label="CLIP encode captions -> 16-token prefix"];
+        cfgdrop [label="drop_text: blank text on 10% of batch (CFG)"];
+        clipenc -> cfgdrop;
+    }
+
+    subgraph cluster_fwd {
+        label="Generator forward (teacher forced)";
+        style=filled; color="#fff3e0"; fontname="Segoe UI Semibold"; node [fillcolor="#ffe082"];
+        embed [label="sum 6 token embeddings + text prefix"];
+        back  [label="backbone (transformer OR mamba)"];
+        heads [label="6 heads -> logits (B, L, 6, 1001)"];
+        embed -> back -> heads;
+    }
+
+    subgraph cluster_loss {
+        label="Loss terms (each its own block)";
+        style=filled; color="#fce4ec"; fontname="Segoe UI Semibold"; node [fillcolor="#f48fb1"];
+        ce    [label="token-CE vs clean targets (length-masked)"];
+        soft  [label="soft-decode: softmax -> expected codes -> frozen decoder"];
+        lrec  [label="recon L1 vs GT motion"];
+        lvel  [label="velocity L1"];
+        lfoot [label="foot-contact L1"];
+        lroot [label="root-trajectory L1"];
+        total [label="weighted sum -> total loss", fillcolor="#f06292"];
+        soft -> lrec; soft -> lvel; soft -> lfoot; soft -> lroot;
+        ce -> total; lrec -> total; lvel -> total; lfoot -> total; lroot -> total;
+    }
+
+    subgraph cluster_opt {
+        label="Optimize";
+        style=filled; color="#e0f7fa"; fontname="Segoe UI Semibold"; node [fillcolor="#4dd0e1"];
+        bwd   [label="backward"];
+        clip  [label="clip grad norm to 1.0"];
+        stepg [label="AdamW step: generator group (lr 2e-4)"];
+        stepc [label="AdamW step: CLIP group (lr 1e-5)"];
+        sched [label="scheduler step: warmup then cosine"];
+        ema   [label="EMA update (decay 0.999)"];
+        bwd -> clip -> stepg -> stepc -> sched -> ema;
+    }
+
+    gtm -> enc; gtl -> endt; cap -> clipenc;
+    endt -> pkeep; endt -> ce;
+    pkeep -> embed; cfgdrop -> embed;
+    heads -> ce; heads -> soft;
+    total -> bwd;
+}

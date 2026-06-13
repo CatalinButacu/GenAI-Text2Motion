@@ -1,63 +1,66 @@
-// Data pipeline - every input we own and every derived artifact (sizes/counts as of 2026-06-12)
+// 01 - DATA PIPELINE (granular). One node = one transform. Color = which stage it belongs to.
 // Preview: Ctrl+Shift+P -> "Graphviz Interactive Preview: Preview Graphviz / Dot (beside)"
 digraph data_pipeline {
     rankdir=TB;
-    graph [fontname="Segoe UI", fontsize=11, labelloc="t",
-           label="Data pipeline: 151 GB raw AMASS -> 5.8 MB token pack"];
+    graph [fontname="Segoe UI", fontsize=12, labelloc="t", label="01  Data pipeline: raw mocap to 263 features"];
     node  [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=10];
     edge  [fontname="Segoe UI", fontsize=9];
 
-    subgraph cluster_donor {
-        label="READ-ONLY donor assets (D:\\Facultate\\dissertation\\data)";
-        style=filled; color="#eceff1"; fontname="Segoe UI Semibold";
-        node [fillcolor="#cfd8dc"];
-        amass  [label="AMASS mocap (SMPL-X G release)\n151 GB | 16,407 .npz sequences\n165-dim SMPL-X params/frame @ 60-120 fps"];
-        smplx  [label="SMPL-X body models\nSMPLX_{NEUTRAL,MALE,FEMALE}.npz"];
-        t2m    [label="Guo evaluator 'finest.tar'\n+ Comp_v6 eval Mean/Std\nreused UNMODIFIED (ADR 0001)"];
-        glove  [label="GloVe 300d + our_vab vocab\n(R-precision text encoder)"];
-        interx [label="Inter-X / ARCTIC / PAHOI\n(unused on citable track)", fillcolor="#eceff1", style="rounded,filled,dashed"];
+    subgraph cluster_raw {
+        label="Donor AMASS (SMPL-X G release, read-only)";
+        style=filled; color="#eceff1"; fontname="Segoe UI Semibold"; node [fillcolor="#cfd8dc"];
+        npz    [label="load .npz sequence"];
+        params [label="read 165-dim SMPL-X pose params"];
+        rate   [label="read mocap_frame_rate (60-120 fps)"];
     }
 
-    subgraph cluster_external {
-        label="External (downloaded once)";
-        style=filled; color="#e8eaf6"; fontname="Segoe UI Semibold";
-        node [fillcolor="#c5cae9"];
-        official [label="Official HumanML3D-263 (TeoGchx mirror, 4.4 GB)\n29,228 clips = 14,614 base x2 mirror\nsplits 23,384 / 1,460 / 4,384"];
-        captions [label="Official captions texts/<id>.txt\n+ M<id>.txt mirrored captions\ncaption#tokens#start#end"];
-        index    [label="index.csv\nAMASS source -> HumanML3D clip mapping"];
+    subgraph cluster_smplx {
+        label="Stage 1 - raw_pose.py (SMPL-X forward, GPU)";
+        style=filled; color="#e0f2f1"; fontname="Segoe UI Semibold"; node [fillcolor="#80cbc4"];
+        layer   [label="build SMPL-X layer (neutral)"];
+        downfps [label="downsample to 20 fps"];
+        forward [label="forward kinematics to 3D joints"];
+        keep22  [label="keep first 22 body joints"];
+        zup     [label="convert Z-up to Y-up"];
+        layer -> downfps -> forward -> keep22 -> zup;
     }
 
-    subgraph cluster_stage1 {
-        label="Stage 1 (06-03, GPU): raw_pose.py";
-        style=filled; color="#e0f2f1"; fontname="Segoe UI Semibold";
-        node [fillcolor="#b2dfdb"];
-        pose [label="pose_data/ - 16,407 files\n(T, 22, 3) joints float32\n20 fps, Y-up | tens of GB"];
+    subgraph cluster_canon {
+        label="Stage 3 - feature.py process_file (per sequence)";
+        style=filled; color="#fff8e1"; fontname="Segoe UI Semibold"; node [fillcolor="#ffe082"];
+        uskel  [label="uniform_skeleton: retarget to template bone lengths"];
+        floor  [label="put feet on the floor (y=0)"];
+        origin [label="translate root to XZ origin at frame 0"];
+        face   [label="rotate so initial facing is +Z"];
+        cont6d [label="get_cont6d_params: per-joint 6D rotations"];
+        rifke  [label="get_rifke: positions in root-invariant frame"];
+        rootvel[label="root angular + linear velocity"];
+        localv [label="local joint velocities"];
+        foot   [label="foot_detect: heel/toe contact flags"];
+        concat [label="concat to 263-dim frame vector"];
+        uskel -> floor -> origin -> face;
+        face -> cont6d; face -> rifke; face -> rootvel; face -> localv; face -> foot;
+        cont6d -> concat; rifke -> concat; rootvel -> concat; localv -> concat; foot -> concat;
     }
 
-    subgraph cluster_citable {
-        label="CITABLE TRACK (data/HumanML3D_official)";
-        style=filled; color="#fff3e0"; fontname="Segoe UI Semibold";
-        node [fillcolor="#ffe0b2"];
-        vecs [label="new_joint_vecs/ - 263-dim features\ntrain 22,418 clips (mirrors, len>=40)\n+ Mean.npy / Std.npy (THE normalization)"];
+    subgraph cluster_norm {
+        label="Stage 4 - normalization (cal_mean_variance)";
+        style=filled; color="#f1f8e9"; fontname="Segoe UI Semibold"; node [fillcolor="#aed581"];
+        mean   [label="Mean.npy over all frames"];
+        std    [label="Std.npy with per-group smoothing"];
+        znorm  [label="normalize: (x - Mean) / Std"];
+        mean -> znorm; std -> znorm;
     }
 
-    subgraph cluster_pretrain {
-        label="PRETRAIN CORPUS (06-12, CPU 10 min)";
-        style=filled; color="#f1f8e9"; fontname="Segoe UI Semibold";
-        node [fillcolor="#dcedc8"];
-        corpus [label="data/AMASS_263 - 13,249 sequences\npretrain_corpus.py: head-trim, x-flip,\nprocess_file; EXCLUDES 2,188 val/test sources"];
-        pack   [label="data/amass_tokens.npz - 5.8 MB\n8,303 segments x 49 steps x 6 int16\n= 22.6 h motion (tokenize_corpus.py)", fillcolor="#aed581"];
+    subgraph cluster_two {
+        label="Two corpora built from the same features";
+        style=filled; color="#ede7f6"; fontname="Segoe UI Semibold"; node [fillcolor="#b39ddb"];
+        citable [label="CITABLE: HumanML3D_official\n22,418 train clips + captions"];
+        corpus  [label="PRETRAIN: AMASS_263\n13,249 sequences, val/test sources excluded"];
     }
 
-    tokenizer [label="FROZEN Grouped-FSQ tokenizer\ncheckpoints/tokenizer_fsq.pt\n4 frames x 263 floats -> 1 step x 6 ids\nrecon-FID 0.0266", fillcolor="#b39ddb", shape=box, style="rounded,filled,bold"];
-
-    amass    -> pose    [label="SMPL-X forward\n22 joints, 20 fps"];
-    smplx    -> pose;
-    official -> vecs;
-    captions -> vecs;
-    pose     -> corpus  [label="all sequences\n(not index-filtered)"];
-    index    -> corpus  [label="leakage guard:\nresolve val/test sources", style=dashed];
-    corpus   -> pack    [label="encode in\nofficial normalization"];
-    tokenizer -> pack;
-    vecs     -> tokenizer [label="64-frame windows", style=dashed];
+    npz -> layer; params -> layer; rate -> downfps;
+    zup -> uskel;
+    concat -> mean; concat -> std; concat -> znorm;
+    znorm -> citable; znorm -> corpus;
 }

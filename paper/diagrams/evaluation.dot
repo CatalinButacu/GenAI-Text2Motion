@@ -1,0 +1,58 @@
+// 06 - EVALUATION (evaluate.py, metrics.py, matcher.py). One node = one metric or guard.
+// Preview: Ctrl+Shift+P -> "Graphviz Interactive Preview: Preview Graphviz / Dot (beside)"
+digraph evaluation {
+    rankdir=TB;
+    graph [fontname="Segoe UI", fontsize=12, labelloc="t", label="06  Evaluation: how a number becomes citable"];
+    node  [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=10];
+    edge  [fontname="Segoe UI", fontsize=9];
+
+    subgraph cluster_split {
+        label="Split discipline";
+        style=filled; color="#eceff1"; fontname="Segoe UI Semibold"; node [fillcolor="#cfd8dc"];
+        val   [label="val: select best checkpoint", fillcolor="#fff59d"];
+        sweeps[label="val: tune CFG and temperature", fillcolor="#fff59d"];
+        test  [label="test: touched once per final table", fillcolor="#ffab91"];
+    }
+
+    subgraph cluster_gen {
+        label="Generate from text (the deployed path)";
+        style=filled; color="#e1f5fe"; fontname="Segoe UI Semibold"; node [fillcolor="#81d4fa"];
+        clip  [label="CLIP encode caption"];
+        stream[label="stream tokens with CFG"];
+        decode[label="frozen decoder -> generated motion"];
+        clip -> stream -> decode;
+    }
+
+    subgraph cluster_match {
+        label="Guo evaluator - reused UNMODIFIED";
+        style=filled; color="#ede7f6"; fontname="Segoe UI Semibold"; node [fillcolor="#b39ddb"];
+        memb  [label="motion encoder -> 512-d motion embedding"];
+        temb  [label="text encoder -> 512-d text embedding"];
+        repro [label="GUARD: GT row reproduces published R@1 0.514"];
+    }
+
+    subgraph cluster_metric {
+        label="Metrics (each its own block, 20 reps)";
+        style=filled; color="#e8eaf6"; fontname="Segoe UI Semibold"; node [fillcolor="#7986cb"];
+        fid   [label="FID: generated vs GT distribution"];
+        rprec [label="R-precision @1/2/3 (32-pool retrieval)"];
+        mmd   [label="MM-Dist: caption-motion distance"];
+        div   [label="Diversity: spread of generations"];
+        mmod  [label="MultiModality: variety per caption"];
+        lat   [label="streaming: ms per step vs horizon"];
+        state [label="streaming: state bytes vs horizon"];
+    }
+
+    subgraph cluster_log {
+        label="Comparability rules";
+        style=filled; color="#f1f8e9"; fontname="Segoe UI Semibold"; node [fillcolor="#aed581", shape=note];
+        manifest [label="run manifest: config, git commit, seed"];
+        jsonl    [label="metrics.jsonl per epoch / eval"];
+        cited    [label="published baselines cited, never retrained"];
+    }
+
+    val -> stream; test -> stream; sweeps -> stream [style=dashed];
+    decode -> memb; clip -> temb;
+    memb -> fid; memb -> rprec; temb -> rprec; temb -> mmd; memb -> div; memb -> mmod;
+    repro -> fid [style=dashed, label="trust"];
+}
