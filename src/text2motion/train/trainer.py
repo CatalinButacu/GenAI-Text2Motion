@@ -13,15 +13,18 @@ path). EMA tracks the generator only. See `.claude/skills/t2m-losses`.
 
 import math
 
+import numpy as np
 import torch
 from torch import nn
 
+from text2motion.data.hml3d import param_util
+from text2motion.data.hml3d.skeleton import Skeleton
 from text2motion.model.generator import MotionGenerator
 from text2motion.model.text_encoder import CLIPTextEncoder
 from text2motion.model.tokenizer import ResidualFsqTokenizer
 from text2motion.shared.config import TrainCfg
 from text2motion.train.ema import Ema
-from text2motion.train.losses import generator_loss
+from text2motion.train.losses import UncertaintyWeighter, active_term_names, generator_loss
 
 
 class GeneratorTrainer:
@@ -31,6 +34,8 @@ class GeneratorTrainer:
         tokenizer: ResidualFsqTokenizer,
         cfg: TrainCfg,
         text_encoder: CLIPTextEncoder | None = None,
+        mean: np.ndarray | None = None,
+        std: np.ndarray | None = None,
     ) -> None:
         self.generator = generator
         self.tokenizer = tokenizer.eval().requires_grad_(
@@ -47,6 +52,34 @@ class GeneratorTrainer:
             if enc_trainable:  # fully-frozen encoder adds nothing to the optimiser
                 groups.append({"params": enc_trainable, "lr": cfg.text_encoder_lr})
                 self._clip_params += enc_trainable
+
+        # Optional Kendall uncertainty weighting: the log-variances are extra learnable params that
+        # join the optimiser (no weight decay group) so AdamW optimises the loss weights too.
+        self.weighter: UncertaintyWeighter | None = None
+        if cfg.loss_weighting == "uncertainty":
+            self.weighter = UncertaintyWeighter(active_term_names(cfg)).to(
+                next(generator.parameters()).device
+            )
+            groups.append({"params": list(self.weighter.parameters()), "weight_decay": 0.0})
+            self._clip_params += list(self.weighter.parameters())
+
+        # FK-consistency needs real (denormalized) positions + a skeleton. Built once; bone lengths
+        # are set per batch from GT inside the loss (uniform_skeleton -> constant across clips).
+        self._fk_on = cfg.w_fk_self > 0 or cfg.w_fk_gt > 0
+        self._mean = self._std = self._skeleton = None
+        if self._fk_on:
+            if mean is None or std is None:
+                raise ValueError(
+                    "FK-consistency loss needs mean/std (pass them to GeneratorTrainer)"
+                )
+            device = next(generator.parameters()).device  # FK runs on the model's device
+            self._mean = torch.from_numpy(np.asarray(mean, dtype=np.float32)).to(device)
+            self._std = torch.from_numpy(np.asarray(std, dtype=np.float32)).to(device)
+            self._skeleton = Skeleton(
+                torch.from_numpy(param_util.t2m_raw_offsets),
+                param_util.t2m_kinematic_chain,
+                str(device),
+            )
 
         self.opt = torch.optim.AdamW(groups, lr=cfg.lr, weight_decay=cfg.weight_decay)
         self.ema = Ema(generator, cfg.ema_decay)
@@ -145,6 +178,10 @@ class GeneratorTrainer:
                 lengths,
                 token_lengths=token_lengths,
                 has_end=self.generator.end_id is not None,
+                mean=self._mean,
+                std=self._std,
+                skeleton=self._skeleton,
+                weighter=self.weighter,
             )
 
         self.opt.zero_grad()

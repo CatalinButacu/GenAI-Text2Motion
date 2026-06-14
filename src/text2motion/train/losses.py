@@ -1,22 +1,38 @@
-"""Generator training losses — the recipe that escapes the prior plateau (token-CE only).
+"""Generator training losses — token-CE anchor + term-split geometric losses (+ optional FK).
 
-The key term is **soft-decode reconstruction**: softmax over each codebook's logits gives an expected
-FSQ code; summed across the residual levels and run through the tokenizer's FROZEN decoder, this
-yields a differentiable motion reconstruction whose gradient reaches the generator logits WITHOUT a
-non-differentiable argmax. The tokenizer's params are frozen (requires_grad=False) so the decoder is
-differentiable-forward but never updated. See `.claude/skills/t2m-losses` and ADR 0001/0002.
+Two families (see paper/lessons/A-loss-and-optimizer.md):
+1. **token cross-entropy** — the discrete-choice objective; the fixed anchor (weight 1.0).
+2. **geometric, term-split** — L1 on the soft-decoded motion, one term per named 263 channel group
+   (root / ric / rot6d / vel / foot), each weighted and logged separately so we SEE which part
+   fails. Optional **forward-kinematics consistency** (fk_self / fk_gt) enforces that the rotation
+   and position channels describe the same body (data-validated GT floor ~0.84mm).
+
+**soft-decode** keeps it differentiable: softmax over each codebook's logits -> expected FSQ code ->
+frozen decoder -> motion, so gradient reaches the generator without a non-differentiable argmax.
+
+Weighting is `fixed` (config scalars) or `uncertainty` (Kendall et al. 2018: learnable log-variance
+per term, `exp(-s)*L + s`). See `.claude/skills/t2m-losses`.
 """
 
 import torch
+from torch import nn
 from torch.nn import functional as F
 
+from text2motion.data.hml3d.feature import recover_from_ric, recover_from_rot
 from text2motion.model.generator import token_ce_loss
 from text2motion.model.tokenizer import GroupedFSQ, ResidualFsqTokenizer
 from text2motion.shared.config import TrainCfg
 
-# HumanML3D-263 channel layout (Guo et al.): index 3 = root height; last 4 = binary foot contacts.
-ROOT_HEIGHT_IDX = 3
-FOOT_CONTACT = slice(-4, None)
+# HumanML3D-263 channel groups (Guo et al., J=22). One slice per term-split loss.
+SLICE_ROOT = slice(0, 4)
+SLICE_RIC = slice(4, 67)
+SLICE_ROT6D = slice(67, 193)
+SLICE_VEL = slice(193, 259)
+SLICE_FOOT = slice(259, 263)
+JOINTS_NUM = 22
+
+GEO_TERMS = ("root", "ric", "rot6d", "vel", "foot")
+FK_TERMS = ("fk_self", "fk_gt")
 
 
 def soft_decode(logits: torch.Tensor, tokenizer: ResidualFsqTokenizer) -> torch.Tensor:
@@ -43,29 +59,102 @@ def soft_decode(logits: torch.Tensor, tokenizer: ResidualFsqTokenizer) -> torch.
     return tokenizer.decoder(tokenizer.post_q(soft_codes))
 
 
+def _frame_mask(recon: torch.Tensor, frame_lengths: torch.Tensor | None) -> torch.Tensor | None:
+    if frame_lengths is None:
+        return None
+    return (
+        torch.arange(recon.size(1), device=recon.device)[None, :] < frame_lengths[:, None]
+    ).float()[..., None]
+
+
 def _masked_l1(a: torch.Tensor, b: torch.Tensor, mask: torch.Tensor | None) -> torch.Tensor:
     if mask is None:
         return F.l1_loss(a, b)
     return (torch.abs(a - b) * mask).sum() / (mask.sum().clamp(min=1.0) * a.size(-1))
 
 
-def geometric_losses(
+def geometric_terms(
     recon: torch.Tensor, gt: torch.Tensor, frame_lengths: torch.Tensor | None = None
 ) -> dict[str, torch.Tensor]:
-    """Motion-space terms on the soft-decoded reconstruction vs ground truth (both (B, T, 263)).
-    When frame_lengths (B,) is given, padded frames (>= length) are masked out."""
-    mask = None
-    if frame_lengths is not None:
-        mask = (
-            torch.arange(recon.size(1), device=recon.device)[None, :] < frame_lengths[:, None]
-        ).float()[..., None]
-    vel_mask = mask[:, 1:] if mask is not None else None
-    root = slice(ROOT_HEIGHT_IDX, ROOT_HEIGHT_IDX + 1)
+    """Per-channel-group L1 on the soft-decoded reconstruction vs GT (both (B, T, 263)). Padded
+    frames (>= length) are masked out. One term per 263 channel group (the 'term split')."""
+    mask = _frame_mask(recon, frame_lengths)
     return {
-        "recon": _masked_l1(recon, gt, mask),
-        "velocity": _masked_l1(recon[:, 1:] - recon[:, :-1], gt[:, 1:] - gt[:, :-1], vel_mask),
-        "foot": _masked_l1(recon[..., FOOT_CONTACT], gt[..., FOOT_CONTACT], mask),
-        "root": _masked_l1(recon[..., root], gt[..., root], mask),
+        "root": _masked_l1(recon[..., SLICE_ROOT], gt[..., SLICE_ROOT], mask),
+        "ric": _masked_l1(recon[..., SLICE_RIC], gt[..., SLICE_RIC], mask),
+        "rot6d": _masked_l1(recon[..., SLICE_ROT6D], gt[..., SLICE_ROT6D], mask),
+        "vel": _masked_l1(recon[..., SLICE_VEL], gt[..., SLICE_VEL], mask),
+        "foot": _masked_l1(recon[..., SLICE_FOOT], gt[..., SLICE_FOOT], mask),
+    }
+
+
+def _recover_rot_batched(motion_raw: torch.Tensor, skeleton) -> torch.Tensor:
+    """recover_from_rot is unbatched; loop the batch and stack -> (B, T, J, 3). Cheap (FK only),
+    and only called when an fk_* weight is active."""
+    return torch.stack(
+        [recover_from_rot(motion_raw[b], JOINTS_NUM, skeleton) for b in range(motion_raw.size(0))]
+    )
+
+
+def fk_consistency_terms(
+    recon: torch.Tensor,
+    gt: torch.Tensor,
+    frame_lengths: torch.Tensor | None,
+    mean: torch.Tensor,
+    std: torch.Tensor,
+    skeleton,
+) -> dict[str, torch.Tensor]:
+    """FK-consistency in real (denormalized) position space. fk_self = FK(recon rot6d) vs recon ric;
+    fk_gt = FK(recon rot6d) vs GT ric. Both length-masked, mean over joints+coords."""
+    recon_raw = recon * std + mean
+    gt_raw = gt * std + mean
+    pos_ric = recover_from_ric(recon_raw, JOINTS_NUM)  # (B, T, J, 3)
+    pos_gt = recover_from_ric(gt_raw, JOINTS_NUM)
+    # uniform_skeleton makes bone lengths constant across all clips, so any GT frame sets the
+    # skeleton's offsets for the FK (needed before recover_from_rot reads skeleton._offset)
+    skeleton.get_offsets_joints(pos_gt[0, 0].detach())
+    pos_rot = _recover_rot_batched(recon_raw, skeleton)  # (B, T, J, 3)
+
+    mask = _frame_mask(recon, frame_lengths)
+    pmask = None if mask is None else mask.unsqueeze(-1)  # (B, T, 1, 1) over (J, 3)
+    return {
+        "fk_self": _masked_l1(pos_rot, pos_ric, pmask),
+        "fk_gt": _masked_l1(pos_rot, pos_gt, pmask),
+    }
+
+
+class UncertaintyWeighter(nn.Module):
+    """Kendall et al. 2018 learnable loss weighting: one log-variance s_i per term;
+    contribution = exp(-s_i) * L_i + s_i (the +s_i term prevents collapse to zero weight)."""
+
+    def __init__(self, term_names: tuple[str, ...]) -> None:
+        super().__init__()
+        self.term_names = term_names
+        self.log_vars = nn.Parameter(torch.zeros(len(term_names)))
+
+    def forward(self, terms: dict[str, torch.Tensor]) -> torch.Tensor:
+        total = terms[self.term_names[0]].new_zeros(())
+        for i, name in enumerate(self.term_names):
+            if name in terms:
+                total = total + torch.exp(-self.log_vars[i]) * terms[name] + self.log_vars[i]
+        return total
+
+
+def active_term_names(cfg: TrainCfg) -> tuple[str, ...]:
+    """Geometric/FK terms with a nonzero weight (the ones the weighter manages)."""
+    weights = term_weights(cfg)
+    return tuple(name for name in (*GEO_TERMS, *FK_TERMS) if weights[name] > 0)
+
+
+def term_weights(cfg: TrainCfg) -> dict[str, float]:
+    return {
+        "root": cfg.w_root,
+        "ric": cfg.w_ric,
+        "rot6d": cfg.w_rot6d,
+        "vel": cfg.w_vel,
+        "foot": cfg.w_foot,
+        "fk_self": cfg.w_fk_self,
+        "fk_gt": cfg.w_fk_gt,
     }
 
 
@@ -78,23 +167,30 @@ def generator_loss(
     lengths: torch.Tensor | None = None,
     token_lengths: torch.Tensor | None = None,
     has_end: bool = False,
+    mean: torch.Tensor | None = None,
+    std: torch.Tensor | None = None,
+    skeleton=None,
+    weighter: UncertaintyWeighter | None = None,
 ) -> tuple[torch.Tensor, dict[str, float]]:
-    """Total loss + per-term scalars. logits (B,T',R,V), target_tokens (B,T',R), gt_motion (B,T,263).
-    `lengths` (B,) gives the unpadded motion length per clip; padded tokens/frames are masked out.
-    `token_lengths` overrides the derived token mask (END-token training: includes the END slot);
-    `has_end` drops the appended END time position from the motion-space (soft-decode) terms."""
+    """Total loss + per-term scalars. CE is the fixed anchor; geometric terms are term-split and
+    combined by fixed config weights (default) or `weighter` (uncertainty). FK terms are computed
+    only when their weight is active and (mean, std, skeleton) are supplied."""
     if token_lengths is None and lengths is not None:
         token_lengths = (lengths // tokenizer.cfg.downsample).clamp(max=target_tokens.size(1))
 
     ce = token_ce_loss(logits, target_tokens, token_lengths)
     motion_logits = logits[:, :-1] if has_end else logits  # END slot decodes no motion
-    geo = geometric_losses(soft_decode(motion_logits, tokenizer), gt_motion, lengths)
-    total = (
-        ce
-        + cfg.w_recon * geo["recon"]
-        + cfg.w_velocity * geo["velocity"]
-        + cfg.w_foot * geo["foot"]
-        + cfg.w_root * geo["root"]
-    )
-    parts = {"ce": ce.item(), **{k: v.item() for k, v in geo.items()}, "total": total.item()}
+    recon = soft_decode(motion_logits, tokenizer)
+
+    terms = geometric_terms(recon, gt_motion, lengths)
+    weights = term_weights(cfg)
+    if (weights["fk_self"] > 0 or weights["fk_gt"] > 0) and skeleton is not None:
+        terms.update(fk_consistency_terms(recon, gt_motion, lengths, mean, std, skeleton))
+
+    if weighter is not None:
+        total = ce + weighter(terms)
+    else:
+        total = ce + sum(weights[name] * value for name, value in terms.items())
+
+    parts = {"ce": ce.item(), **{k: v.item() for k, v in terms.items()}, "total": total.item()}
     return total, parts

@@ -58,17 +58,20 @@ def run(args: argparse.Namespace) -> None:
     )
     generator = MotionGenerator(gen_cfg).to(device)
     text_encoder = CLIPTextEncoder(cfg.text_encoder).to(device)
-    trainer = GeneratorTrainer(generator, tokenizer, cfg.train, text_encoder)
+
+    out_dir = Path(cfg.paths.hml3d_out_dir)
+    text_dir = Path(cfg.paths.texts_dir) if cfg.paths.texts_dir is not None else out_dir / "texts"
+    our_mean = np.load(out_dir / "Mean.npy").astype(np.float32)
+    our_std = np.load(out_dir / "Std.npy").astype(np.float32)
+
+    # mean/std go to the trainer too: the FK-consistency loss denormalizes to real positions
+    trainer = GeneratorTrainer(generator, tokenizer, cfg.train, text_encoder, our_mean, our_std)
     trainer.build_scheduler(args.epochs * len(loader))
     print(
         f"generator params: {sum(p.numel() for p in generator.parameters()):,} "
         f"(backbone {args.backbone}, {n_layers} layers)"
     )
 
-    out_dir = Path(cfg.paths.hml3d_out_dir)
-    text_dir = Path(cfg.paths.texts_dir) if cfg.paths.texts_dir is not None else out_dir / "texts"
-    our_mean = np.load(out_dir / "Mean.npy").astype(np.float32)
-    our_std = np.load(out_dir / "Std.npy").astype(np.float32)
     eval_mean, eval_std = load_eval_stats(cfg.paths.eval_stats_dir)
     motion_matcher, text_matcher = load_matchers(cfg.paths.eval_matcher, device=device)
     w_vectorizer = _load_word_vectorizer(args.our_vab_dir)

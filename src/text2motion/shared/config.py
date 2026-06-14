@@ -239,10 +239,19 @@ class TrainCfg:
     amp: str = (
         "off"  # "bf16" wraps forward+loss in autocast (Ampere+: A10G/3050); opt/EMA stay fp32
     )
-    w_recon: float = 0.5
-    w_velocity: float = 0.3
-    w_foot: float = 0.1
-    w_root: float = 0.3
+    # Term-split geometric weights (CE is the fixed anchor at weight 1.0). Each penalizes one named
+    # 263 channel group on the soft-decoded motion, logged separately for visibility.
+    w_root: float = 0.3  # root block [0:4]
+    w_ric: float = 0.5  # joint positions [4:67]
+    w_rot6d: float = 0.5  # joint rotations [67:193]
+    w_vel: float = 0.3  # velocity channels [193:259]
+    w_foot: float = 0.1  # foot contacts [259:263]
+    # Forward-kinematics consistency (data-validated GT floor 0.84mm). OFF by default; enable for the
+    # A/B ablation before promoting to the final run. fk_self = FK(rot6d) vs model ric;
+    # fk_gt = FK(rot6d) vs GT positions.
+    w_fk_self: float = 0.0
+    w_fk_gt: float = 0.0
+    loss_weighting: str = "fixed"  # "fixed" (config weights) | "uncertainty" (Kendall learnable)
 
 
 @dataclass(frozen=True)

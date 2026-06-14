@@ -1,6 +1,7 @@
 """Training module: the full A+B pipeline wires end-to-end and learns (synthetic motion), the
 soft-decode gradient reaches the generator, and EMA tracks/lags the live weights."""
 
+import numpy as np
 import torch
 
 from text2motion.model.generator import MotionGenerator
@@ -65,6 +66,47 @@ def test_cfg_dropout_step_is_finite():
     parts = trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
 
     assert all(v == v for v in parts.values())  # no NaNs
+
+
+def test_term_split_reports_each_group():
+    """The geometric loss is now split per 263 channel group; each must be logged."""
+    tok = ResidualFsqTokenizer(TOK)
+    gen = MotionGenerator(GEN)
+    trainer = GeneratorTrainer(gen, tok, TrainCfg(cfg_dropout=0.0, pkeep=1.0))
+    parts = trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
+
+    for term in ("ce", "root", "ric", "rot6d", "vel", "foot", "total"):
+        assert term in parts and parts[term] == parts[term]
+
+
+def test_fk_consistency_terms_finite():
+    """FK-consistency (both flavors) runs end-to-end and stays finite; needs mean/std."""
+    tok = ResidualFsqTokenizer(TOK)
+    gen = MotionGenerator(GEN)
+    cfg = TrainCfg(cfg_dropout=0.0, pkeep=1.0, w_fk_self=0.5, w_fk_gt=0.5)
+    mean = np.zeros(263, np.float32)
+    std = np.ones(263, np.float32)
+    trainer = GeneratorTrainer(gen, tok, cfg, mean=mean, std=std)
+    parts = trainer.train_step(
+        torch.randn(2, 32, 263), torch.randn(2, GEN.d_text), torch.tensor([32, 24])
+    )
+
+    for term in ("fk_self", "fk_gt"):
+        assert term in parts and parts[term] == parts[term]
+
+
+def test_uncertainty_weighting_optimizes_log_vars():
+    """Kendall learnable weights join the optimizer and receive gradient."""
+    tok = ResidualFsqTokenizer(TOK)
+    gen = MotionGenerator(GEN)
+    trainer = GeneratorTrainer(
+        gen, tok, TrainCfg(cfg_dropout=0.0, pkeep=1.0, loss_weighting="uncertainty")
+    )
+    assert trainer.weighter is not None
+
+    trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
+    grad = trainer.weighter.log_vars.grad
+    assert grad is not None and torch.isfinite(grad).all()
 
 
 def test_ema_tracks_and_restores():
