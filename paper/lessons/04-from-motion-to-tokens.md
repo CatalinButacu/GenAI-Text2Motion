@@ -75,6 +75,18 @@ extreme: *no* codebook at all.
 dims *is* the integer code; implicit vocab per group = product of levels (8x5x5x5 = 1000). Gradient
 flows through the rounding via a straight-through estimator (`round_ste`).
 
+### Why "6 x 1000" specifically (our config)
+- **6 groups** -> a token step emits **6 integers**. Chosen to (a) match MoMask RVQ's 6 levels =
+  same token budget per step = fair FSQ-vs-RVQ comparison; (b) give a 6x4 = **24-D latent**, the fix
+  for the residual-FSQ collapse (4-D was too small for 263-D motion).
+- **1000 codes/group** = levels (8,5,5,5) = 8x5x5x5, targeting ~2^10 (~10 bits), comparable to
+  standard VQ sizes. **Asymmetric levels** (more resolution on dim 1) are FSQ-recommended as more
+  efficient than equal splits. Integers required, so 1000 not 1024.
+- **Honesty check:** the iso-vocab ablation used (8,8,8) = **512** (matching RVQ exactly) and STILL
+  won (0.0307 vs 0.0382) -> the win is the *quantizer*, not the bigger 1000 vocab.
+- **Expressivity:** 1000^6 ~= 10^18 distinct token-steps, yet the generator only makes 6 independent
+  1000-way choices per step (6 embedding tables, 6 heads over 1000, +1 for END = 1001).
+
 ## 4.5 How WE got to Grouped-FSQ (the actual decision path)
 
 This is the story to tell — it has a hypothesis, a failure, a diagnosis, and a fix:

@@ -62,6 +62,26 @@ Every design choice here traces to a proven result. "Motion-proven" = reported o
   ViT-VQGAN low-dim+L2 codes (arXiv:2110.04627), SimVQ (arXiv:2411.02038), Rotation trick
   (arXiv:2410.06424), LFQ/MAGVIT-v2 (arXiv:2310.05737 — image/video only, vocab too large for HML3D).
 
+## Large Motion Models / scaling (related work — cite & distinguish; we are NOT a scale competitor)
+Our niche is a CONTROLLED mechanism study (SSM vs param-matched transformer twin, matched
+data/seed/budget, standard HumanML3D + citable FID), not a scale race. Cite these as the scaling
+zeitgeist and distinguish on the 4-conjunct claim (next-token, discrete, causal, fixed-state SSM).
+- **LMM** — Zhang et al., arXiv:2404.01284. "Large Motion Model", Diffusion-Transformer + MotionVerse
+  + ArtAttention. The canonical "LMM". → diffusion, not streaming-causal-AR → distinguish.
+- **Being-M0 / MotionLib** — arXiv:2410.03311 (ICML 2025). First MILLION-clip dataset (~15x); shows
+  scaling data+model matters; 2D **lookup-free (LFQ)** tokenizer "Motionbook". → JUSTIFIES our E7b
+  AMASS pretraining lever; LFQ is FSQ's cousin (Lesson 4 landscape).
+- **MotionMillion ("Go to Zero")** — arXiv:2507.07095. Million-scale data, zero-shot generation.
+- **MotionGPT** — arXiv:2306.10900. Finetuned LLM on discrete motion codes (motion-as-language).
+- **LLaMo** — arXiv:2602.12370 (Feb 2026). THE closest rival: scales pretrained LMs, Mixture-of-
+  Transformers, **real-time streaming** motion — BUT **continuous** autoregressive latent (like
+  MotionStreamer), NOT discrete next-token causal SSM. Must cite + distinguish on discrete+SSM.
+- **MotionGPT3** — arXiv:2506.24086. Bimodal motion-language (motion VAE + diffusion head).
+- **UMO** (2603.15975), **GENMO** (2505.01425): motion foundation / generalist models.
+- Defensible framing: "scale is a separate axis; this thesis isolates the sequence-mixer mechanism
+  (bounded-state SSM vs growing-KV transformer) for streaming t2m at matched budget — a result the
+  foundation-model papers do not address."
+
 ## Data & evaluation (reuse, unmodified)
 - **HumanML3D** + the **Guo et al. evaluator** (`text_mot_match`) — Guo et al., "Generating Diverse
   and Natural 3D Human Motions from Text", CVPR 2022; repo github.com/EricGuo5513/HumanML3D. → the
