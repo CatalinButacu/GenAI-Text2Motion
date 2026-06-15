@@ -5,51 +5,57 @@
 > Lesson 7. Code: `tokenizer.py`, `tokenizer_trainer.py`. Research: FSQ (Mentzer), ScaMo.
 
 ## 6.1 The same problem, a different answer
-We still need continuous motion -> discrete tokens. VQ (L5) *learned centroids* and searched for the
-nearest. **FSQ instead rounds onto a fixed integer lattice** — no centroids, no search, no learning
-of the quantizer at all.
+We still need continuous motion $\to$ discrete tokens. VQ (L5) *learned centroids* and searched for
+the nearest. **FSQ instead rounds onto a fixed integer lattice** — no centroids, no search, no
+learning of the quantizer at all.
 
 ## 6.2 Finite Scalar Quantization: rounding onto a fixed lattice (the math)
-Take a SMALL latent `z ∈ R^d` (here `d = 4` per group). Give each dimension `i` a fixed number of
-**levels** `L_i` (e.g. `(8, 5, 5, 5)`). Quantize each dimension independently — bound, then round:
+Take a small latent $z \in \mathbb{R}^{d}$ (here $d = 4$ per group). Give each dimension $i$ a fixed
+number of **levels** $L_i$ (e.g. $(8,5,5,5)$). Quantize each dimension independently — bound, then
+round:
 
-```
-half_i  = (L_i - 1) / 2
-z_hat_i = round( half_i * tanh(z_i) )        # STE on round; lands in {-half_i, ..., half_i}
-idx_i   = z_hat_i + half_i                    # per-dim index in {0, ..., L_i - 1}
-```
+$$
+\text{half}_i = \frac{L_i - 1}{2},
+\qquad
+\hat{z}_i = \operatorname{round}\!\big(\text{half}_i \cdot \tanh(z_i)\big),
+\qquad
+\text{idx}_i = \hat{z}_i + \text{half}_i \in \{0,\dots,L_i-1\}.
+$$
 
-The single token index is the **mixed-radix** combination of the per-dim indices:
+The single token index is the **mixed-radix** combination of the per-dimension indices:
 
-```
-index = sum_i  idx_i * prod_{j<i} L_j         # ranges over prod_i L_i = 8*5*5*5 = 1000
-```
+$$
+\text{index} = \sum_i \text{idx}_i \prod_{j<i} L_j
+\ \in\ \Big\{0,\dots,\textstyle\prod_i L_i - 1\Big\},
+\qquad \prod_i L_i = 8\cdot5\cdot5\cdot5 = 1000.
+$$
 
-No nearest-neighbour search and **no stored vectors** — the "codebook" is the fixed lattice
-`{0..L_i-1}`, never materialised. (Implementation detail: the exact `bound` adds a small even/odd
-shift so the levels straddle zero correctly — see `FSQ.bound` in `tokenizer.py`; the essence is
-`tanh`-bound then `round`.)
+No nearest-neighbour search and **no stored vectors** — the "codebook" is the fixed lattice, never
+materialised. (Implementation detail: the exact bound adds a small even/odd shift so the levels
+straddle zero correctly — see `FSQ.bound` in `tokenizer.py`; the essence is $\tanh$-bound then round.)
 
 **Definitions to note**
-- **Levels `L_i`** — allowed values per latent dimension.
-- **Implicit codebook** — `prod_i L_i` (= 1000); implied by the lattice, never stored.
+- **Levels $L_i$** — allowed values per latent dimension.
+- **Implicit codebook** — $\prod_i L_i$ ($=1000$); implied by the lattice, never stored.
 
 ## 6.3 Training FSQ — the math is "STE only"
-Same autoencoder: encoder -> `z` -> round-to-lattice `q(z)` -> decoder. The only non-differentiable
-op is `round`, handled by the **same STE** as VQ:
+Same autoencoder: encoder $\to z \to$ round-to-lattice $q(z) \to$ decoder. The only
+non-differentiable op is $\operatorname{round}$, handled by the **same STE** as VQ:
 
-```
-z_q = z + sg( q(z) - z )        # forward = q(z); backward = identity
-L   = L_recon                   # that's the whole objective
-```
+$$
+z_q = z + \operatorname{sg}\!\big(q(z) - z\big),
+\qquad
+\mathcal{L} = \mathcal{L}_{\text{recon}}.
+$$
 
 Every VQ training term **vanishes**, and here is exactly why:
-- **commitment** `beta*||z - sg(e)||^2` -> there is no learned `e` to commit to (the lattice is fixed);
-- **codebook loss / EMA** -> there are no centroids to move;
-- **dead-code reset** -> unused lattice points are coordinates with **zero parameters**; nothing
+- **commitment** $\beta\lVert z - \operatorname{sg}(e)\rVert^2$ $\to$ there is no learned $e$ to
+  commit to (the lattice is fixed);
+- **codebook loss / EMA** $\to$ there are no centroids to move;
+- **dead-code reset** $\to$ unused lattice points are coordinates with **zero parameters**; nothing
   collapses, nothing to reinitialise.
 
-So FSQ training = **reconstruct + STE**. That radical simplicity (no collapse to babysit) is the
+So FSQ training $=$ **reconstruct $+$ STE**. That radical simplicity (no collapse to babysit) is the
 practical argument for FSQ.
 
 ## 6.4 Grouped-FSQ (ours): partition the latent into groups

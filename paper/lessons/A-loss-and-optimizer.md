@@ -18,15 +18,23 @@ The generator predicts **discrete tokens**, so the total loss mixes two kinds:
 
 ## A.2 The exact recipe (losses.py + TrainCfg weights)
 
-```
-total = CE
-      + 0.5 * recon      # L1 over full 263 (positions + rotations + everything)
-      + 0.3 * velocity   # L1 on frame-to-frame change (smoothness)
-      + 0.1 * foot       # L1 on the 4 foot-contact channels (anti foot-skate)
-      + 0.3 * root       # L1 on root height (global stability)
-```
-CE drives the discrete choice; the geometric terms make "close in motion" count, which CE alone
-cannot. Weights balance token accuracy vs motion fidelity.
+Term-split (each $\mathcal{L}_g$ is an L1 on one 263 channel group of the **soft-decoded** motion;
+$\mathcal{L}_{\text{CE}}$ is token cross-entropy — the fixed anchor at weight 1):
+
+$$
+\mathcal{L} = \mathcal{L}_{\text{CE}}
++ w_{\text{ric}}\mathcal{L}_{\text{ric}}
++ w_{\text{rot6d}}\mathcal{L}_{\text{rot6d}}
++ w_{\text{vel}}\mathcal{L}_{\text{vel}}
++ w_{\text{foot}}\mathcal{L}_{\text{foot}}
++ w_{\text{root}}\mathcal{L}_{\text{root}}
+\;\big(+\, w_{\text{fk}}\,\mathcal{L}_{\text{fk}}\big)
+$$
+
+with $w_{\text{ric}}=0.5,\ w_{\text{rot6d}}=0.5,\ w_{\text{vel}}=0.3,\ w_{\text{foot}}=0.1,\
+w_{\text{root}}=0.3$; the FK-consistency terms $\mathcal{L}_{\text{fk}}$ are **off by default**
+($w_{\text{fk}}=0$, enabled for the A/B ablation). CE drives the discrete choice; the geometric terms
+make "close in motion space" count, which CE alone cannot see; each is logged separately.
 
 ## A.3 Which cost function is better
 
