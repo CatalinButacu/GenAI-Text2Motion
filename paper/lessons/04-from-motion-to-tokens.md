@@ -70,10 +70,29 @@ The trend across audio -> image -> motion: **move work out of the learned codebo
 structure**, because learned codebooks are the thing that collapses and needs babysitting. FSQ is the
 extreme: *no* codebook at all.
 
-### FSQ mechanics
+### RVQ mechanics (the baseline)
+**Residual Vector Quantization** is a cascade of *learned* codebooks, coarse-to-fine:
+1. Take the encoder latent `z`. Find its nearest code `c1` in **codebook 1**. Quantized so far = `c1`.
+2. Compute the **residual** `r1 = z - c1` (the leftover error). Find its nearest code `c2` in
+   **codebook 2**. Quantized = `c1 + c2`. New residual `r2 = r1 - c2`.
+3. Repeat for all 6 codebooks: `z ~= c1 + c2 + ... + c6`. The **6 indices** are the token step.
+
+So each level *refines the previous error* — early codebooks capture gross motion, later ones add
+detail. The codebooks are **learned** and need the machinery: **EMA** updates the codes toward the
+data, **dead-code reset** reinitialises codes that stop being used (fighting collapse), a
+**commitment loss** pulls the encoder output toward its chosen codes, and **quantization dropout**
+randomly truncates levels in training for robustness. Decode = sum the selected codes -> decoder.
+
+### FSQ mechanics (ours)
 **Round each latent dimension onto a small fixed grid** (levels e.g. (8,5,5,5)); the tuple of rounded
 dims *is* the integer code; implicit vocab per group = product of levels (8x5x5x5 = 1000). Gradient
-flows through the rounding via a straight-through estimator (`round_ste`).
+flows through the rounding via a straight-through estimator (`round_ste`). **No codebook is learned**,
+so none of RVQ's machinery (EMA / reset / commitment) exists — nothing to collapse.
+
+> **The structural contrast.** RVQ's 6 codes are **sequential refinement levels** (each fixes the
+> last one's error, learned codebooks). FSQ's 6 codes are **parallel partition groups** (independent,
+> fixed grids). Both yield 6 integers per step — but one learns and refines, the other partitions and
+> rounds. That difference is the whole of Contribution A.
 
 ### Why "6 x 1000" specifically (our config)
 - **6 groups** -> a token step emits **6 integers**. Chosen to (a) match MoMask RVQ's 6 levels =
@@ -86,6 +105,25 @@ flows through the rounding via a straight-through estimator (`round_ste`).
   won (0.0307 vs 0.0382) -> the win is the *quantizer*, not the bigger 1000 vocab.
 - **Expressivity:** 1000^6 ~= 10^18 distinct token-steps, yet the generator only makes 6 independent
   1000-way choices per step (6 embedding tables, 6 heads over 1000, +1 for END = 1001).
+
+## 4.4c Results to report (interpretation deferred to the paper)
+
+Full HumanML3D test split (2,189 clips), recon-FID via the frozen Guo evaluator. Same conv
+encoder/decoder, width, downsample, and 500-epoch budget for every row — only the quantizer differs.
+
+| Tokenizer | codes/step x vocab | recon-FID ↓ | MPJPE ↓ | perplexity (used) |
+|---|---|---|---|---|
+| Grouped-FSQ | 6 x 1000 | **0.0266** | 119 mm | 572 / 1000 |
+| Grouped-FSQ (iso-vocab) | 6 x 512 | 0.0307 | 119 mm | 340 / 512 |
+| Strong-RVQ | 6 x 512 | 0.0382 | 125 mm | 328 / 512 |
+| *context (published, more compute):* T2M-GPT VQ | — | 0.071 | — | — |
+| *context (published, more compute):* MoMask RVQ | 6 x 512 | 0.019 | 29.5 mm | — |
+
+Plain reading (full analysis in the paper): FSQ and our RVQ are in the **same ballpark** (~0.03,
+both well under T2M-GPT's 0.071); FSQ is modestly better **and** needs no learned codebook or
+collapse machinery; both our rows sit above MoMask's heavily-tuned 0.019. The honest framing to
+develop in the paper: *comparable-or-better reconstruction with a simpler, collapse-free quantizer*,
+not a landslide.
 
 ## 4.5 How WE got to Grouped-FSQ (the actual decision path)
 
