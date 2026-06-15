@@ -1,7 +1,7 @@
-# Tokenizer sweep variant: 6 groups x (8,8,8,5)=2560 -> latent 24-D, bigger per-group vocab.
+﻿# Tokenizer sweep variant: 6 groups x (8,8,8,5)=2560 -> latent 24-D, bigger per-group vocab.
 # Tests whether capacity beyond 1000/group helps or just lowers usage. Anchors: 6x512=0.0307,
 # 6x1000=0.0266.
-seed: 42
+seed: 2026
 device: cuda
 data:
   track: hml3d263

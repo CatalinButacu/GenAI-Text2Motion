@@ -1,5 +1,7 @@
-﻿# Tokenizer sweep variant: 4 groups x (8,5,5,5)=1000 -> latent 16-D, 4 codes/step.
-# Tests fewer groups (smaller latent dim, fewer generator tokens/step). Anchor: 6x1000 = 0.0266.
+﻿# Foundational strong-RVQ baseline re-run WITH manifest (6x512 = recon-FID 0.0382, trained Jun 4
+# before run_log). `--tokenizer rvq` reads rvq_baseline (defaults: 6 levels x 512, EMA 0.99,
+# dead-code reset, commitment 0.02, quant-dropout 0.2). Shares the conv enc/dec with FSQ -> the
+# comparison isolates FSQ-vs-VQ at matched capacity.
 seed: 2026
 device: cuda
 data:
@@ -15,11 +17,3 @@ paths:
   texts_dir: data/HumanML3D_official/texts
   checkpoints_dir: checkpoints
   outputs_dir: outputs
-tokenizer:
-  in_dim: 263
-  width: 512
-  downsample: 4
-  num_quantizers: 4
-  fsq_levels: [8, 5, 5, 5]
-  quantizer: grouped
-  n_resblocks: 3

@@ -1,8 +1,8 @@
-# Portable config for cloud training — all paths relative to the repo root (no D:\ donor deps).
+﻿# Portable config for cloud training â€” all paths relative to the repo root (no D:\ donor deps).
 # Ship the data bundle (data/HumanML3D_official incl texts/, data/eval_stats, data/official_evaluator,
 # data/t2m_glove, checkpoints/tokenizer_fsq.pt) alongside src/ + configs/. Other sub-configs inherit
 # the dataclass defaults in shared/config.py.
-seed: 42
+seed: 2026
 device: cuda
 
 data:

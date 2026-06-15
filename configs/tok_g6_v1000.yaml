@@ -1,5 +1,6 @@
-﻿# Tokenizer sweep variant: 4 groups x (8,5,5,5)=1000 -> latent 16-D, 4 codes/step.
-# Tests fewer groups (smaller latent dim, fewer generator tokens/step). Anchor: 6x1000 = 0.0266.
+﻿# Foundational FSQ re-run WITH manifest (the 6x1000 winner = recon-FID 0.0266, trained Jun 5 before
+# run_log existed). Repo-relative paths; identical tokenizer geometry to the original. Closes the
+# reproducibility gap for the headline Contribution-A number.
 seed: 2026
 device: cuda
 data:
@@ -19,7 +20,7 @@ tokenizer:
   in_dim: 263
   width: 512
   downsample: 4
-  num_quantizers: 4
+  num_quantizers: 6
   fsq_levels: [8, 5, 5, 5]
   quantizer: grouped
   n_resblocks: 3

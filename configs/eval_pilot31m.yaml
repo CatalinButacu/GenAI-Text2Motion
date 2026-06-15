@@ -1,9 +1,9 @@
-# Eval config for the PILOT 31M checkpoints (cloud run of 2026-06-09/10).
+﻿# Eval config for the PILOT 31M checkpoints (cloud run of 2026-06-09/10).
 # Those twins were trained before the Track-A upgrades, with the then-default generator geometry:
 # max_seq_len 64 (pos table 65x512), single pooled text token, no END token. The current dataclass
-# default is max_seq_len 96, which fails-loud on the old transformer pos.weight — this config pins
+# default is max_seq_len 96, which fails-loud on the old transformer pos.weight â€” this config pins
 # the legacy value. Use ONLY for evaluating generator_{transformer,mamba}_cloud.pt.
-seed: 42
+seed: 2026
 device: cuda
 
 data:

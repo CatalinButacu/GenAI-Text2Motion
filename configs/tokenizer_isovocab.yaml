@@ -1,9 +1,9 @@
-# Iso-vocab FSQ ablation (Contribution A closure): per-group codebook 8*8*8 = 512 == strong-RVQ's
+﻿# Iso-vocab FSQ ablation (Contribution A closure): per-group codebook 8*8*8 = 512 == strong-RVQ's
 # 512/level, ruling out the bigger-codebook confound in the Grouped-FSQ (8,5,5,5)=1000 win.
-# Side effect: latent 6*3=18-D vs the winner's 24-D — slightly DISADVANTAGES FSQ, which makes a
+# Side effect: latent 6*3=18-D vs the winner's 24-D â€” slightly DISADVANTAGES FSQ, which makes a
 # repeat win more convincing, and a loss attributable to vocab/latent budget (report either way).
 # Everything else matches the winner exactly (width/downsample/resblocks/groups/budget).
-seed: 42
+seed: 2026
 device: cuda
 
 data:

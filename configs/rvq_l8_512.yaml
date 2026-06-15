@@ -1,5 +1,5 @@
-﻿# Tokenizer sweep variant: 4 groups x (8,5,5,5)=1000 -> latent 16-D, 4 codes/step.
-# Tests fewer groups (smaller latent dim, fewer generator tokens/step). Anchor: 6x1000 = 0.0266.
+# RVQ hypertune: 8 residual levels x 512 codes, code_dim 512. More levels = finer residual
+# refinement, more codes/step (heavier generator). Enc/dec width 512 / downsample 4 / 3 resblocks.
 seed: 2026
 device: cuda
 data:
@@ -15,11 +15,11 @@ paths:
   texts_dir: data/HumanML3D_official/texts
   checkpoints_dir: checkpoints
   outputs_dir: outputs
-tokenizer:
+rvq_baseline:
   in_dim: 263
   width: 512
   downsample: 4
-  num_quantizers: 4
-  fsq_levels: [8, 5, 5, 5]
-  quantizer: grouped
   n_resblocks: 3
+  num_quantizers: 8
+  codebook_size: 512
+  code_dim: 512

@@ -24,6 +24,7 @@ from text2motion.model.rvq_baseline import RvqBaselineTokenizer
 from text2motion.model.tokenizer import ResidualFsqTokenizer
 from text2motion.shared.config import Config, load_config
 from text2motion.shared.run_log import log_metrics, start_run
+from text2motion.shared.seed import seed_everything
 from text2motion.train.tokenizer_trainer import TokenizerTrainer
 
 
@@ -38,6 +39,9 @@ def build_tokenizer(name: str, cfg: Config) -> tuple[torch.nn.Module, float]:
 def run(args: argparse.Namespace) -> None:
     cfg = load_config(args.config)
     device = cfg.device if torch.cuda.is_available() else "cpu"
+    seed_everything(
+        cfg.seed
+    )  # reproducibility — was missing on the tokenizer path until 2026-06-15
 
     loader = build_window_loader(
         cfg.paths, cfg.hml3d, cfg.data, "train", args.window, args.batch_size, args.num_workers
