@@ -1,0 +1,26 @@
+# Tokenizer sweep variant: 6 groups x (8,8,8,5)=2560 -> latent 24-D, bigger per-group vocab.
+# Tests whether capacity beyond 1000/group helps or just lowers usage. Anchors: 6x512=0.0307,
+# 6x1000=0.0266.
+seed: 42
+device: cuda
+data:
+  track: hml3d263
+  sources: [humanml3d]
+  mirror_augment: true
+  max_motion_len: 196
+  min_motion_len: 40
+paths:
+  eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
+  eval_stats_dir: data/eval_stats
+  hml3d_out_dir: data/HumanML3D_official
+  texts_dir: data/HumanML3D_official/texts
+  checkpoints_dir: checkpoints
+  outputs_dir: outputs
+tokenizer:
+  in_dim: 263
+  width: 512
+  downsample: 4
+  num_quantizers: 6
+  fsq_levels: [8, 8, 8, 5]
+  quantizer: grouped
+  n_resblocks: 3

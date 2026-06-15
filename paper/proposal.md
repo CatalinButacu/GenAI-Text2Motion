@@ -79,6 +79,7 @@ continuous diffusion-AR. The cell "token-AR S6 for motion" is unoccupied.
 |---|---|---|---|
 | E1 | Tokenizer: Grouped-FSQ vs strong-RVQ (H1) | **done** — 0.0266 vs 0.0382 | local |
 | E2 | Iso-vocab ablation (H1a) | **done** — 0.0307 < RVQ 0.0382 at equal vocab | local |
+| E2b | Tokenizer latent-space sweep (groups {4,6,8}, vocab {512,1000,2560}) | running — sensitivity table for Contribution A | local |
 | E3 | 31.6M twins, matched budget (H2 pilot) | done (cloud); twin table v0 pending GPU | ~$21 |
 | E4 | CFG/temperature sweep (sampling lock) | **done** — FID −44%, R@1 ×2 | local |
 | E5 | 100M twins, full recipe (H2 main) | config gated + sanity-PASS; canary then run | ~$22 |

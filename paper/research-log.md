@@ -128,6 +128,21 @@ Convention: **bold** = a result that survives into the dissertation tables.
   `selective_state_update` is the engineering remedy. Claim wording: bounded memory +
   horizon-independent latency vs unbounded memory + horizon-dependent latency.
 
+## 2026-06-15 — Overfitting fear RESOLVED + tokenizer latent-space sweep launched
+
+- **Overfit diagnostic (new recipe, 31M transformer, val FID every 5 ep): NO early collapse.**
+  Curve: ep5 2.50 -> ep20 0.92 -> ep35 0.93 -> **ep40 0.87** (R@1 peaks 0.521 @ep35). The OLD
+  recipe collapsed after ep20 (FID 3.2->5+); the new recipe (wd 0.01 + pkeep 0.8 + dropout +
+  60-ep cosine + val early-stop) keeps improving to ep40. **The fix batch works** -> the final
+  100M run's recipe is validated. (Caveat: 200-clip/1-rep val + CFG-aided, so absolutes are noisy;
+  the curve SHAPE is the result.) `outputs/diag_newrecipe.log`.
+- **Tokenizer latent-space sweep launched** (`scripts/tokenizer_sweep.ps1`, 3 variants x 500 ep,
+  resume-safe, manifest-logged): g4_v1000 (4 groups, latent 16-D), g8_v1000 (8 groups, 32-D),
+  g6_v2560 (6 groups, vocab 2560). Two fundamental axes through the anchors (group count {4,6,8},
+  vocab {512,1000,2560}). Goal: a documented latent-space sensitivity table for Contribution A.
+  After ranking: re-run the chosen FSQ + the RVQ baseline WITH manifests (the foundational 0.0266/
+  0.0382 predate run_log -> a reproducibility gap to close).
+
 ## Pending (auto-queued)
 
 - [ ] E2 verdict: iso-vocab final recon-FID vs RVQ 0.0382 (ETA 2026-06-11 ~07:00 UTC).
