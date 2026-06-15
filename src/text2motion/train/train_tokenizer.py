@@ -91,8 +91,9 @@ def run(args: argparse.Namespace) -> None:
         means = {k: v / steps for k, v in totals.items()}
         log_metrics(run_dir, {"epoch": epoch + 1, **means})
         print(
-            f"epoch {epoch + 1:3d}  recon {means['recon']:.4f}  commit {means['commit']:.4f}  "
-            f"perplexity {means['perplexity']:.1f}"
+            f"epoch {epoch + 1:3d}  [common] recon {means['recon']:.4f} total {means['total']:.4f}  "
+            f"[health] perplexity {means['perplexity']:.1f} usage {means['usage_frac']:.1%} "
+            f"commit {means['commit']:.4f}"
         )
 
         if (epoch + 1) % args.eval_every == 0 or epoch + 1 == args.epochs:

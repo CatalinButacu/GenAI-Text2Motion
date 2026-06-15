@@ -31,19 +31,27 @@ class TokenizerTrainer:
         self.opt = torch.optim.AdamW(tokenizer.parameters(), lr=lr, weight_decay=weight_decay)
         self.ema = Ema(tokenizer, ema_decay)
 
-    def _perplexity(self, indices: torch.Tensor) -> float:
-        """Mean over codebooks of exp(entropy of code usage) — effective codes used this batch."""
-        perplexities = []
+    def _code_stats(self, indices: torch.Tensor) -> tuple[float, float]:
+        """Codebook-health signals, averaged over codebooks:
+        - perplexity = exp(entropy of code usage) = EFFECTIVE codes used this batch;
+        - usage_frac = fraction of the codebook actually hit (alive). Low usage = collapse (the thing
+          RVQ fights with dead-code reset; for FSQ unused grid points are free, so it only needs to be
+          'high enough'). Same metric, read per quantizer."""
+        perplexities, usages = [], []
         for codebook in range(indices.shape[-1]):
             counts = torch.bincount(
                 indices[..., codebook].reshape(-1), minlength=self.codebook_size
             ).float()
             probs = counts[counts > 0] / counts.sum()
             perplexities.append(float(torch.exp(-(probs * probs.log()).sum())))
-        return sum(perplexities) / len(perplexities)
+            usages.append(float((counts > 0).float().mean()))
+        n = len(perplexities)
+        return sum(perplexities) / n, sum(usages) / n
 
     def train_step(self, motion: torch.Tensor) -> dict[str, float]:
-        """motion (B, window, 263) normalized. Returns per-term scalars."""
+        """motion (B, window, 263) normalized. Returns two tiers of scalars: COMMON (recon, total)
+        shared by both tokenizers, and HEALTH (quantizer-specific: perplexity, usage_frac, commit)
+        that justifies a healthy tokenizer from either the RVQ or the FSQ point of view."""
         out = self.tokenizer(motion)
         if len(out) == 3:
             recon, indices, commit = out
@@ -60,9 +68,13 @@ class TokenizerTrainer:
         self.opt.step()
         self.ema.update(self.tokenizer)
 
+        perplexity, usage_frac = self._code_stats(indices)
         return {
+            # --- common (both quantizers) ---
             "recon": recon_loss.item(),
-            "commit": commit.item(),
             "total": total.item(),
-            "perplexity": self._perplexity(indices),
+            # --- quantizer health ---
+            "perplexity": perplexity,
+            "usage_frac": usage_frac,
+            "commit": commit.item(),  # RVQ machinery; structurally 0 for FSQ (no codebook to commit)
         }

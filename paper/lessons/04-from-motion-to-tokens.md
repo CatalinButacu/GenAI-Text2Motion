@@ -106,6 +106,37 @@ so none of RVQ's machinery (EMA / reset / commitment) exists — nothing to coll
 - **Expressivity:** 1000^6 ~= 10^18 distinct token-steps, yet the generator only makes 6 independent
   1000-way choices per step (6 embedding tables, 6 heads over 1000, +1 for END = 1001).
 
+## 4.4b Reading the training logs: is the tokenizer healthy? (FSQ vs RVQ)
+
+The trainer logs two categories, so health is justifiable from either quantizer's point of view:
+
+**Category 1 — common (both quantizers):**
+- `recon` — reconstruction L1 (lower = more faithful round trip). The core "is it learning" signal.
+- `total` — recon + (commit, RVQ only). For FSQ, total == recon.
+
+**Category 2 — quantizer health:**
+- `perplexity` — effective codes used (exp of usage entropy). Higher = richer use of the vocabulary.
+- `usage_frac` — fraction of the codebook actually hit (alive). Low = **collapse**.
+- `commit` — commitment loss (RVQ machinery). **Structurally 0 for FSQ** (no codebook to commit to).
+
+**A healthy FSQ run** looks like: `recon` falling, `perplexity` rising and high, `usage_frac` high,
+and **`commit 0.0000`** — because FSQ rounds to a *fixed grid*, it needs **no commitment loss, no
+codebook-EMA, no dead-code reset**. Unused grid points are free (zero params), so it only needs to be
+"high enough", not maximal. The literal `commit 0.0000` in the log is the on-screen proof of the
+"no machinery" claim.
+
+**A healthy RVQ run** looks like: `recon` falling, `perplexity`/`usage_frac` high *and kept high by
+dead-code reset* (a learned codebook collapses without it), and `commit` **small and stable** (the
+encoder stays committed to its codes). A *sick* RVQ shows `usage_frac` crashing → reset fighting it,
+or `commit` blowing up → encoder/codebook drifting apart.
+
+> **The contrast IS Contribution A.** Side by side in the same harness: FSQ logs `commit 0.0000` +
+> no reset machinery; RVQ logs `commit > 0` + needs EMA + dead-code reset — at comparable recon-FID.
+> Simplicity at matched quality, visible in the logs.
+
+(Two EMAs, don't conflate: *codebook-EMA* updates VQ codebook entries — FSQ has none; *weight-EMA*
+is a generic eval-stability moving-average of all weights — the tokenizer trainer applies it to both.)
+
 ## 4.4c Results to report (interpretation deferred to the paper)
 
 Full HumanML3D test split (2,189 clips), recon-FID via the frozen Guo evaluator. Same conv
