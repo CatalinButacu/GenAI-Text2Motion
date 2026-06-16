@@ -2,8 +2,11 @@
 # (seed 2026, new fsq_* ckpt names so it does NOT resume the old unseeded checkpoints). Mirrors the
 # RVQ sweep so both tokenizers are reproducible at seed 2026. Core configs first (winner + iso-vocab),
 # then the latent-space sweep. 500 ep, eval 25, resume-safe, manifest-logged.
-$ErrorActionPreference = "Stop"
+# Continue (not Stop): python writes warnings to stderr, and `2>&1 | Out-File` wraps each stderr line
+# as an ErrorRecord -> with Stop that terminates the driver. Continue keeps it running.
+$ErrorActionPreference = "Continue"
 $env:PYTHONPATH = "src"
+$env:PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"  # guard vs fragmentation OOM (4GB GPU)
 $py = ".venv\Scripts\python.exe"
 
 # 1) wait for the RVQ sweep to complete (frees the GPU)

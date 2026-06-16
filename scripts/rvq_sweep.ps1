@@ -2,8 +2,9 @@
 # Seed 2026 (project default), 500 ep, eval every 25, resume-safe, manifest-logged, ckpt per config.
 # Levels {4,6,8} x codebook {512(,1024)}; enc/dec held constant. rvq_l6_512 doubles as the
 # foundational baseline manifest re-run.
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"  # native stderr via 2>&1 must not terminate the driver
 $env:PYTHONPATH = "src"
+$env:PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"
 $py = ".venv\Scripts\python.exe"
 
 $variants = @(

@@ -1,4 +1,4 @@
-﻿# Phase-3 FINAL twin run (cloud, g5.xlarge A10G): 100M-class param-matched twins
+# Phase-3 FINAL twin run (cloud, g5.xlarge A10G): 100M-class param-matched twins
 # (transformer 12L d768 = 94.70M vs mamba 23L = 96.37M, +1.77% â€” recomputed via _param_match.py),
 # 16-token CLIP prefix, END token, fused mamba kernel, bf16. Local sanity runs override
 # use_kernel=false (mamba-ssm is Linux/CUDA-only and the import fails loud by design).

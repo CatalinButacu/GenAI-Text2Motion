@@ -1,18 +1,13 @@
-﻿# Iso-vocab FSQ ablation (Contribution A closure): per-group codebook 8*8*8 = 512 == strong-RVQ's
-# 512/level, ruling out the bigger-codebook confound in the Grouped-FSQ (8,5,5,5)=1000 win.
-# Side effect: latent 6*3=18-D vs the winner's 24-D â€” slightly DISADVANTAGES FSQ, which makes a
-# repeat win more convincing, and a loss attributable to vocab/latent budget (report either way).
-# Everything else matches the winner exactly (width/downsample/resblocks/groups/budget).
+# Iso-vocab FSQ, seeded: 6 groups x (8,8,8)=512 (matches RVQ vocab), latent 18-D. The matched-vocab
+# confound check for H1a. ASCII-only.
 seed: 2026
 device: cuda
-
 data:
   track: hml3d263
   sources: [humanml3d]
   mirror_augment: true
   max_motion_len: 196
   min_motion_len: 40
-
 paths:
   eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
   eval_stats_dir: data/eval_stats
@@ -20,12 +15,11 @@ paths:
   texts_dir: data/HumanML3D_official/texts
   checkpoints_dir: checkpoints
   outputs_dir: outputs
-
 tokenizer:
   in_dim: 263
   width: 512
   downsample: 4
   num_quantizers: 6
-  fsq_levels: [8, 8, 8]   # product 512 per group (winner: [8, 5, 5, 5] = 1000)
+  fsq_levels: [8, 8, 8]
   quantizer: grouped
   n_resblocks: 3

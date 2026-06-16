@@ -1,4 +1,4 @@
-﻿seed: 2026
+seed: 2026
 device: cuda
 
 # Primary track: standard HumanML3D-263 (citable FID). 20 fps is the standard (Guo/T2M-GPT/MoMask).

@@ -282,7 +282,9 @@ def _to_paths(raw: dict, keys: set[str]) -> dict:
 
 def load_config(path: str | Path) -> Config:
     """Build a ``Config`` from YAML. Absent sections fall back to dataclass defaults."""
-    raw = yaml.safe_load(Path(path).read_text()) or {}
+    raw = (
+        yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    )  # utf-8, not the cp1252 locale default
 
     avatar_raw = raw.get("avatar", {})
 
