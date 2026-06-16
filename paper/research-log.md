@@ -157,6 +157,31 @@ Convention: **bold** = a result that survives into the dissertation tables.
   codebook machinery** = a more EFFICIENT tokenizer, not just marginally better.
 - FSQ sweep chained (waits on sentinel): fsq_g6_v1000, fsq_g6_v512, fsq_g4/g8/g6_v2560, seeded.
 
+## 2026-06-16b — CONCLUSIONS so far (matched seeded tokenizer comparison)
+
+**Contribution A — FSQ beats RVQ at EVERY matched operating point** (seeded 2026, shared enc/dec,
+matched bits/step, full-test recon-FID):
+| codes/step x vocab | FSQ | RVQ | FSQ margin |
+|---|---|---|---|
+| 4x512  | 0.0601 | 0.0626 | 4% |
+| 6x512  | 0.0299 | 0.0335 | 11% |
+| 6x1024 | 0.0283 | 0.0310 | 9% |
+| 8x512  | ~0.0207 (finishing) | 0.0264 | 22% |
+
+- The conclusion CHANGED with rigor: pre-seeding/pre-matching it looked "comparable"; the matched
+  seeded sweep shows FSQ consistently wins, with 0 codebook params (RVQ 1.6-3M) and no machinery.
+- More codes/step dominates (4->8 ~ 0.060->0.021) over vocab (512->1024 ~9%). FSQ reaches a given
+  quality with fewer codes/step than RVQ -> more efficient for the generator.
+- Best FSQ (8x512 ~0.021) approaches MoMask's published 0.019 on a controlled small budget.
+- METHODOLOGY conclusion: tokenizer was unseeded + sweeps unmatched; fixing both was decisive
+  (we found/fixed our own comparison flaws — a defense strength).
+
+**Contribution B (from earlier):** twin gate passed; overfit fear resolved (new recipe improves to
+ep40); mamba sample-efficiency hint; streaming H3 measured (state 2.68MB flat vs KV 5.9->76.7MB).
+**Eval:** reproduces published GT (citable).
+**Open:** g8/native-1000 finishing; single seed; recon-FID is the ceiling (downstream gen-FID A/B
+open); 100M final twin run pending.
+
 ## Pending (auto-queued)
 
 - [ ] E2 verdict: iso-vocab final recon-FID vs RVQ 0.0382 (ETA 2026-06-11 ~07:00 UTC).
