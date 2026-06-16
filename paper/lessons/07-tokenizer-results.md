@@ -11,6 +11,35 @@
   budget** — only the quantizer differs. So differences are attributable to the quantizer.
 - **Data:** full HumanML3D test split (2,189 clips), the evaluator that reproduces published GT.
 
+## 7.1b Comparison protocol — matched INTERFACE, varied MECHANISM (the fairness contract)
+FSQ and RVQ are different mechanisms (parallel fixed-lattice groups vs sequential learned-codebook
+residual levels). That difference is the **independent variable**, not a confound — so we cannot and
+should not make the "layering" identical. Instead we match the *interface* and vary only the mechanism.
+
+**Matched (held equal):**
+1. encoder / decoder (identical conv nets, width, downsample, resblocks);
+2. **codes per step** (the generator's token budget);
+3. **bits per step** $=$ (codes/step) $\times \log_2(\text{vocab})$ -- the information capacity;
+4. data / seed (2026) / epoch budget.
+
+**Varied (the treatment):** the quantizer mechanism only.
+
+Matched pairs (equal bits/step):
+$$
+\text{FSQ } 6{\times}512:\ 6\log_2 512 = 54\text{ bits} = \text{RVQ } 6{\times}512, \qquad
+\text{FSQ } 6{\times}1024:\ 60\text{ bits} = \text{RVQ } 6{\times}1024.
+$$
+(FSQ-1000 is $6\log_2 1000 = 59.8$ bits -- within 0.3% of 60, so it was already fair on the
+information axis; the exact $(8,8,4,4)=1024$ run just removes the integer-vocab nitpick.)
+
+**Why this is fair despite different layering:** it is exactly how the field compares quantizers
+(FSQ paper vs VQ at matched codebook). And the parameter asymmetry runs *in FSQ's favor*: at matched
+vocab, RVQ carries $L\cdot K\cdot d_{\text{code}}\approx 3$M codebook params while **FSQ carries 0** --
+so a tie/win for FSQ is "more (or equal) with fewer params and no machinery."
+
+**Future-proof:** any new quantizer (LFQ, product-VQ, ...) drops in at matched bits/step + shared
+enc/dec; the "different layering" becomes a catalogue of treatments benchmarked under one protocol.
+
 ## 7.2 The table
 | Tokenizer | codes/step x vocab | recon-FID ↓ | MPJPE ↓ | usage (perplexity) | commit |
 |---|---|---|---|---|---|

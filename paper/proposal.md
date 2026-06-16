@@ -52,6 +52,13 @@ continuous diffusion-AR. The cell "token-AR S6 for motion" is unoccupied.
 - **Tokenizer:** conv encoder (width 512, stride-4) → 6 groups × FSQ(8,5,5,5) (1000/group) →
   conv decoder. Baseline: same encoder/decoder with 6×512 RVQ (EMA 0.99, dead-code reset,
   commitment 0.02, quant-dropout 0.2 — the T2M-GPT/MoMask recipe).
+- **Tokenizer comparison protocol (fairness contract):** FSQ vs RVQ are *different mechanisms*
+  (parallel fixed-lattice vs sequential learned-residual), so the mechanism is the independent
+  variable; we match the INTERFACE — shared enc/dec, equal **codes/step**, equal **bits/step**
+  (= codes/step × log₂vocab), equal data/seed/budget — and report each at matched bits/step. Matched
+  pairs: FSQ {4,6,8}×512 ↔ RVQ levels {4,6,8}×512, and FSQ 6×1024 ↔ RVQ 6×1024. At matched vocab RVQ
+  carries ~3M codebook params vs FSQ's 0, so an FSQ tie/win is "equal-or-better with fewer params, no
+  machinery." Detail in `paper/lessons/07-tokenizer-results.md` §7.1b.
 - **Generator:** text prefix (CLIP ViT-B/32; pooled, upgraded to 16-token prefix) + per-codebook
   embeddings → causal backbone (S6 mixer stack | transformer decoder) → per-codebook heads + END
   token. `forward` (parallel teacher-forcing) and `step` (recurrent streaming) share one recurrence;
