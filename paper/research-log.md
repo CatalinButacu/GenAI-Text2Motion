@@ -143,6 +143,20 @@ Convention: **bold** = a result that survives into the dissertation tables.
   After ranking: re-run the chosen FSQ + the RVQ baseline WITH manifests (the foundational 0.0266/
   0.0382 predate run_log -> a reproducibility gap to close).
 
+## 2026-06-16 — RVQ hypertune sweep DONE (seeded 2026); FSQ sweep chained
+
+- **Reproducibility fix:** `train_tokenizer` was UNSEEDED until now; added `seed_everything`; project
+  seed set to **2026** everywhere. All sweep results below are seeded.
+- **RVQ sweep (seeded, full test recon-FID):** l4_512 **0.0626** · l6_512 **0.0335** · l6_1024
+  **0.0310** · **l8_512 0.0264 (best)**. More residual levels help monotonically; bigger codebook
+  helps slightly. (Survived a laptop-RAM crash mid-sweep: 3/4 done from checkpoints; l6_1024 resumed
+  from ep250 after clearing a zombie that leaked ~0.8GB VRAM and CUDA-OOM'd the first resume.)
+- **Key finding:** best RVQ (l8, 0.0264) ~ ties FSQ winner (0.0266). Reframes Contribution A
+  precisely: at MATCHED 6-code budget FSQ (0.0266) beats RVQ-6 (0.0335); RVQ matches only with 8
+  codes/step = longer generator sequences. So FSQ = same recon with **fewer codes/step + no
+  codebook machinery** = a more EFFICIENT tokenizer, not just marginally better.
+- FSQ sweep chained (waits on sentinel): fsq_g6_v1000, fsq_g6_v512, fsq_g4/g8/g6_v2560, seeded.
+
 ## Pending (auto-queued)
 
 - [ ] E2 verdict: iso-vocab final recon-FID vs RVQ 0.0382 (ETA 2026-06-11 ~07:00 UTC).
