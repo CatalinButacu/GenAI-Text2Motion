@@ -39,7 +39,7 @@ def _load_word_vectorizer(our_vab_dir: str):
 def run(args: argparse.Namespace) -> None:
     cfg = load_config(args.config)
     device = cfg.device if torch.cuda.is_available() else "cpu"
-    seed_everything(cfg.seed)  # twin fairness: mamba vs transformer must share the seed (ADR 0001)
+    seed_everything(cfg.seed, cfg.deterministic)  # twin fairness (ADR 0001) + bit-exact determinism
 
     loader = build_dataloader(cfg.paths, cfg.hml3d, cfg.data, "train", args.batch_size)
 

@@ -39,9 +39,7 @@ def build_tokenizer(name: str, cfg: Config) -> tuple[torch.nn.Module, float]:
 def run(args: argparse.Namespace) -> None:
     cfg = load_config(args.config)
     device = cfg.device if torch.cuda.is_available() else "cpu"
-    seed_everything(
-        cfg.seed
-    )  # reproducibility — was missing on the tokenizer path until 2026-06-15
+    seed_everything(cfg.seed, cfg.deterministic)  # reproducible + bit-exact (added 2026-06-15)
 
     loader = build_window_loader(
         cfg.paths, cfg.hml3d, cfg.data, "train", args.window, args.batch_size, args.num_workers

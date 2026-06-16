@@ -37,6 +37,10 @@ class TokenizerTrainer:
         - usage_frac = fraction of the codebook actually hit (alive). Low usage = collapse (the thing
           RVQ fights with dead-code reset; for FSQ unused grid points are free, so it only needs to be
           'high enough'). Same metric, read per quantizer."""
+        # bincount is non-deterministic on CUDA (atomics) -> raises under
+        # use_deterministic_algorithms(True). This is a diagnostic, not in the training graph, so do
+        # it on CPU (deterministic, cheap for small int index tensors).
+        indices = indices.detach().cpu()
         perplexities, usages = [], []
         for codebook in range(indices.shape[-1]):
             counts = torch.bincount(

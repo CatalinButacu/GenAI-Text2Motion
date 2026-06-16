@@ -257,6 +257,7 @@ class TrainCfg:
 @dataclass(frozen=True)
 class Config:
     seed: int = 2026  # overall project seed (twin fairness + reproducibility); manifests record it
+    deterministic: bool = True  # strict bit-exact determinism (cuBLAS/cuDNN + deterministic algos)
     device: str = "cuda"
     hml3d: Hml3dReprCfg = field(default_factory=Hml3dReprCfg)
     avatar: SmplxAvatarCfg = field(default_factory=SmplxAvatarCfg)
