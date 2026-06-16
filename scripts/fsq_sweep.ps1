@@ -9,16 +9,18 @@ $env:PYTHONPATH = "src"
 $env:PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"  # guard vs fragmentation OOM (4GB GPU)
 $py = ".venv\Scripts\python.exe"
 
-# 1) wait for the RVQ sweep to complete (frees the GPU)
+# 1) RVQ sweep already done (sentinel exists); proceed immediately.
 while (-not (Test-Path "outputs/rvq_sweep_done.txt")) { Start-Sleep -Seconds 600 }
-"=== $(Get-Date -Format o)  RVQ done -> starting seeded FSQ sweep ===" | Out-File -Append outputs/fsq_sweep_start.txt -Encoding utf8
+"=== $(Get-Date -Format o)  starting seeded FSQ sweep ===" | Out-File -Append outputs/fsq_sweep_start.txt -Encoding utf8
 
+# Each FSQ config MIRRORS an RVQ config EXACTLY (same codes/step, same vocab) for a clean head-to-head;
+# fsq_g6_v1000 is the FSQ-native recommended config (extra reference). Order: matched pairs first.
 $variants = @(
-    @{ cfg = "configs/tok_g6_v1000.yaml";     name = "fsq_g6_v1000.pt" },   # winner 6x1000
-    @{ cfg = "configs/tokenizer_isovocab.yaml"; name = "fsq_g6_v512.pt" },  # iso-vocab 6x512 (H1a)
-    @{ cfg = "configs/tok_g4_v1000.yaml";      name = "fsq_g4_v1000.pt" },  # latent sweep
-    @{ cfg = "configs/tok_g8_v1000.yaml";      name = "fsq_g8_v1000.pt" },
-    @{ cfg = "configs/tok_g6_v2560.yaml";      name = "fsq_g6_v2560.pt" }
+    @{ cfg = "configs/tokenizer_isovocab.yaml"; name = "fsq_g6_v512.pt" },   # <-> rvq_l6_512  (6x512)
+    @{ cfg = "configs/fsq_g6_v1024.yaml";       name = "fsq_g6_v1024.pt" },  # <-> rvq_l6_1024 (6x1024)
+    @{ cfg = "configs/fsq_g4_v512.yaml";        name = "fsq_g4_v512.pt" },   # <-> rvq_l4_512  (4x512)
+    @{ cfg = "configs/fsq_g8_v512.yaml";        name = "fsq_g8_v512.pt" },   # <-> rvq_l8_512  (8x512)
+    @{ cfg = "configs/tok_g6_v1000.yaml";       name = "fsq_g6_v1000.pt" }   # FSQ-native (8,5,5,5)
 )
 
 foreach ($v in $variants) {

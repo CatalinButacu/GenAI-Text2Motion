@@ -1,0 +1,24 @@
+# FSQ matched to rvq_l8_512: 8 groups x (8,8,8)=512 -> 8 codes/step, vocab 512. ASCII-only.
+seed: 2026
+device: cuda
+data:
+  track: hml3d263
+  sources: [humanml3d]
+  mirror_augment: true
+  max_motion_len: 196
+  min_motion_len: 40
+paths:
+  eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
+  eval_stats_dir: data/eval_stats
+  hml3d_out_dir: data/HumanML3D_official
+  texts_dir: data/HumanML3D_official/texts
+  checkpoints_dir: checkpoints
+  outputs_dir: outputs
+tokenizer:
+  in_dim: 263
+  width: 512
+  downsample: 4
+  num_quantizers: 8
+  fsq_levels: [8, 8, 8]
+  quantizer: grouped
+  n_resblocks: 3
