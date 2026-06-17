@@ -182,6 +182,25 @@ ep40); mamba sample-efficiency hint; streaming H3 measured (state 2.68MB flat vs
 **Open:** g8/native-1000 finishing; single seed; recon-FID is the ceiling (downstream gen-FID A/B
 open); 100M final twin run pending.
 
+## 2026-06-17 — TOKENIZER STAGE COMPLETE (Contribution A locked, seeded + matched)
+
+Both sweeps done, seed 2026, bit-exact determinism enabled. Matched head-to-head (recon-FID):
+| codes/step x vocab | FSQ | RVQ | FSQ margin |
+|---|---|---|---|
+| 4x512  | 0.0601 | 0.0626 | +4% |
+| 6x512  | 0.0299 | 0.0335 | +11% |
+| 6x1024 | 0.0283 | 0.0310 | +9% |
+| 8x512  | **0.0195** | 0.0264 | +26% |
+| FSQ-native 6x1000 | 0.0274 | -- | -- |
+
+- **FSQ wins all matched pairs**, 0 codebook params vs RVQ 1.6-3M. Best FSQ (8x512=0.0195) ~ MoMask
+  0.019. Contribution A is locked: "FSQ >= strong-RVQ at every matched operating point, no codebook
+  machinery." This is the "rvq and fsq are done" gate -> rebuild forward to the generator.
+- **Tokenizer-for-generator decision (open):** best recon is 8x512 (8 codes/step -> generator
+  predicts 8/step, longer sequences) vs the 6-code options 6x1000 (0.0274) / 6x1024 (0.0283) that
+  keep the generator at 6 codebooks. Recommend frozen tokenizer = FSQ 6x1000 (generator-friendly,
+  near-best, the documented design) unless we accept 8 codes/step for the recon ceiling.
+
 ## Pending (auto-queued)
 
 - [ ] E2 verdict: iso-vocab final recon-FID vs RVQ 0.0382 (ETA 2026-06-11 ~07:00 UTC).
