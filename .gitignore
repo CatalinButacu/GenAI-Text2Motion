@@ -19,8 +19,8 @@ __pycache__/
 .cache/
 /data/.cache/
 
-# machine-local Claude Code settings
-.claude/settings.local.json
+# Claude Code tooling -- local only (agents, skills, ADRs, hooks, settings)
+.claude/
 
 # editor
 .vscode/
