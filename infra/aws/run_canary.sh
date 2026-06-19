@@ -30,7 +30,8 @@ $PY -m pytest tests/test_generator_upgrades.py::test_kernel_matches_eager_scan -
 echo "=== gate 2: 5-epoch twins at 100M ===" | tee outputs/canary_timing.log
 for bb in transformer mamba; do
   start=$(date +%s)
-  $PY -u -m text2motion.train.train_generator --config configs/final100m.yaml --backbone "$bb" \
+  $PY -u -m text2motion.train.train_generator --config configs/final100m_fsq8x1024.yaml --backbone "$bb" \
+    --tokenizer_ckpt checkpoints/fsq_g8_v1024.pt \
     --epochs 5 --batch_size 64 --eval_every 5 --cfg_scale 5.0 --temperature 1.1 \
     > "outputs/canary_$bb.log" 2>&1
   echo "$bb total_seconds $(( $(date +%s) - start ))" | tee -a outputs/canary_timing.log

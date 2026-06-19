@@ -18,7 +18,9 @@ CKPT_SYNC=$!
 # 60 epochs, not 150: the 2026-06-09 transformer peaked at ep ~20-40 then degraded (overfit);
 # the cosine schedule must decay inside the useful window.
 for bb in transformer mamba; do
-  $PY -u -m text2motion.train.train_generator --config configs/aws.yaml --backbone "$bb" --epochs 60 --batch_size 64 > "outputs/$bb.log" 2>&1
+  $PY -u -m text2motion.train.train_generator --config configs/final100m_fsq8x1024.yaml --backbone "$bb" \
+    --tokenizer_ckpt checkpoints/fsq_g8_v1024.pt --epochs 60 --batch_size 64 \
+    --eval_every 5 --cfg_scale 5.0 --temperature 1.1 > "outputs/$bb.log" 2>&1
   aws s3 cp "checkpoints/generator_$bb.pt" "s3://$B/results/" --region eu-north-1 2>/dev/null
   aws s3 cp "checkpoints/generator_${bb}_last.pt" "s3://$B/results/" --region eu-north-1 2>/dev/null
 done
