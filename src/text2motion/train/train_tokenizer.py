@@ -1,9 +1,10 @@
 """Train the motion tokenizer (Contribution A) and evaluate reconstruction + downstream FID.
 
 Trains either the Residual-FSQ tokenizer or the strong-RVQ baseline on fixed-length motion windows,
-logging reconstruction loss + codebook perplexity per epoch and MPJPE / downstream FID on the test
-split periodically (with the EMA weights). The best checkpoint (lowest downstream FID) is saved. Run
-both and compare the recorded numbers -- that table is Contribution A's evidence.
+logging reconstruction loss + codebook perplexity per epoch and MPJPE / downstream FID on the **val**
+split periodically (with the EMA weights). The best checkpoint (lowest **val** recon-FID) is saved;
+**test** is evaluated exactly once at the end on that val-selected best (no selection leak onto test).
+Run both and compare the recorded numbers -- that table is Contribution A's evidence.
 
     python -m text2motion.train.train_tokenizer --config configs/default.yaml --tokenizer fsq --epochs 50
     python -m text2motion.train.train_tokenizer --config configs/default.yaml --tokenizer rvq --epochs 50
@@ -111,11 +112,12 @@ def run(args: argparse.Namespace) -> None:
                 joints_num=cfg.hml3d.num_joints,
                 device=device,
                 max_clips=args.max_eval_clips,
+                split="val",  # selection on VAL only; TEST is evaluated once after the loop
             )
             trainer.ema.restore(tokenizer)
-            log_metrics(run_dir, {"epoch": epoch + 1, **metrics})
+            log_metrics(run_dir, {"epoch": epoch + 1, "split": "val", **metrics})
             print(
-                f"  [eval] clips {metrics['clips']}  MPJPE {metrics['mpjpe_mm']:.1f}mm  "
+                f"  [val] clips {metrics['clips']}  MPJPE {metrics['mpjpe_mm']:.1f}mm  "
                 f"feat-L2 {metrics['feature_l2']:.4f}  recon-FID {metrics['recon_fid']:.4f}"
             )
             if metrics["recon_fid"] < best_fid:
@@ -123,7 +125,7 @@ def run(args: argparse.Namespace) -> None:
                 trainer.ema.copy_to(tokenizer)
                 torch.save(tokenizer.state_dict(), ckpt_path)
                 trainer.ema.restore(tokenizer)
-                print(f"  saved best -> {ckpt_path} (recon-FID {best_fid:.4f})")
+                print(f"  saved best (val) -> {ckpt_path} (val recon-FID {best_fid:.4f})")
             torch.save(  # full state at every eval: an interrupt costs <= eval_every epochs
                 {
                     "tokenizer": tokenizer.state_dict(),
@@ -134,6 +136,29 @@ def run(args: argparse.Namespace) -> None:
                 },
                 resume_path,
             )
+
+    # Test touched ONCE, at the end, on the val-selected best checkpoint -- the reported headline.
+    if ckpt_path.is_file():
+        tokenizer.load_state_dict(torch.load(ckpt_path, map_location=device))
+        tokenizer.eval()
+        test_metrics = evaluate_tokenizer(
+            tokenizer,
+            out_dir,
+            our_mean,
+            our_std,
+            matcher,
+            eval_mean,
+            eval_std,
+            joints_num=cfg.hml3d.num_joints,
+            device=device,
+            max_clips=args.max_eval_clips,
+            split="test",
+        )
+        log_metrics(run_dir, {"epoch": args.epochs, "split": "test", "final": True, **test_metrics})
+        print(
+            f"  [TEST once | val-selected best] clips {test_metrics['clips']}  "
+            f"recon-FID {test_metrics['recon_fid']:.4f}  MPJPE {test_metrics['mpjpe_mm']:.1f}mm"
+        )
 
 
 def main() -> None:

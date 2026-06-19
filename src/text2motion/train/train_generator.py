@@ -44,7 +44,7 @@ def run(args: argparse.Namespace) -> None:
     loader = build_dataloader(cfg.paths, cfg.hml3d, cfg.data, "train", args.batch_size)
 
     tokenizer = ResidualFsqTokenizer(cfg.tokenizer)
-    tokenizer.load_state_dict(torch.load("checkpoints/tokenizer_fsq.pt", map_location="cpu"))
+    tokenizer.load_state_dict(torch.load(args.tokenizer_ckpt, map_location="cpu"))
     tokenizer.to(device).eval()
 
     # Mamba uses more layers than the transformer twin to MATCH total params (ADR 0001 controlled twin)
@@ -118,8 +118,8 @@ def run(args: argparse.Namespace) -> None:
         means = {k: v / steps for k, v in totals.items()}
         log_metrics(run_dir, {"epoch": epoch + 1, **means})
         print(
-            f"epoch {epoch + 1:3d}  ce {means['ce']:.4f}  recon {means['recon']:.4f}  "
-            f"total {means['total']:.4f}"
+            f"epoch {epoch + 1:3d}  ce {means['ce']:.4f}  ric {means['ric']:.4f}  "
+            f"rot6d {means['rot6d']:.4f}  foot {means['foot']:.4f}  total {means['total']:.4f}"
         )
 
         if (epoch + 1) % args.eval_every == 0 or epoch + 1 == args.epochs:
@@ -178,6 +178,11 @@ def main() -> None:
     )
     parser.add_argument("--config", required=True)
     parser.add_argument("--backbone", required=True, choices=["mamba", "transformer"])
+    parser.add_argument(
+        "--tokenizer_ckpt",
+        default="checkpoints/tokenizer_fsq.pt",
+        help="frozen tokenizer state_dict to load; must match cfg.tokenizer architecture",
+    )
     # 60, not 150: the 2026-06 run peaked at ep ~20-40 and degraded after; the cosine decay must
     # land in that window. Scale epochs back up only with evidence (val FID still improving).
     parser.add_argument("--epochs", type=int, default=60)

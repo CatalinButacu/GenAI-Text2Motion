@@ -28,6 +28,21 @@ important idea in motion: **the body is a hierarchy (a tree), not a bag of indep
 - **Pose** — the configuration of the whole skeleton at **one instant in time**. (Motion, next
   lesson, is a sequence of poses.)
 
+```mermaid
+flowchart TB
+  P["pelvis = joint 0 = root"] --> LH["L hip (1)"]
+  P --> RH["R hip (2)"]
+  P --> SP["spine (3)"]
+  LH --> LK["L knee"] --> LA["L ankle"]
+  RH --> RK["R knee"] --> RA["R ankle"]
+  SP --> NK["neck / head"]
+  SP --> LS["L shoulder"] --> LE["L elbow"] --> LW["L wrist"]
+  SP --> RS["R shoulder"] --> RE["R elbow"] --> RW["R wrist"]
+```
+
+*The body is a tree rooted at the pelvis; a parent's rotation propagates to every descendant. That
+inheritance down the tree is forward kinematics.*
+
 ## 1.2 The two languages for describing a pose
 
 There are exactly two ways to write down a pose, and the whole project lives on knowing the
@@ -184,6 +199,15 @@ them:
 > **Why this matters for us.** Because our data and our model both work in **rotations**, the demo
 > can drive a skinned body by **FK** (easy, exact). We never need fragile IK. When I said earlier
 > "no IK," this is exactly what I meant.
+
+```mermaid
+flowchart LR
+  ROT["rotations (rot6d / axis-angle)"] -->|"FK: easy, exact, one pass down the tree"| POS["joint positions (x,y,z)"]
+  POS -->|"IK: hard, underdetermined, jittery"| ROT
+```
+
+*Our data and our model both work in rotations, so we only ever need FK (the easy, exact direction) to
+draw a body. We never need fragile IK.*
 
 ## 1.4 Coordinate frames (the quiet source of most bugs)
 

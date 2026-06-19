@@ -1,35 +1,58 @@
-# Lessons roadmap — understand the whole training system before resuming compute
+# Lessons roadmap — the whole thesis, as a grounded teaching path
 
-Compute is PAUSED (2026-06-15). We resume runs (tokenizer sweep, foundational re-runs, final twin)
-only after every component below is explained and understood. Each step = one lesson = one turn,
-with definitions + paper notes + check questions, grounded in our actual code.
+A complete beginner-to-committee path through the system: real-time, incremental text -> SMPL-X motion,
+with two contributions — (A) a Grouped-FSQ motion tokenizer vs a strong-RVQ baseline, and (B) the first
+token-autoregressive S6/Mamba motion generator vs a parameter-matched transformer twin. Every lesson is
+grounded in the actual code (file named in its header), uses LaTeX math, and most carry a Mermaid
+"The picture" diagram. Read in the order below; the numbering is historical, the **grouping** is the
+reading order.
 
-## Already covered
-- **Lesson 1** — a pose: joints, skeleton, rotations (positions vs rotations, FK vs IK).
-- **Lesson 2** — pose -> motion: fps, velocity, why 20 fps.
-- **Lesson 3** — the 263 vector, slice by slice (root / ric / rot6d / vel / foot).
-- **Lesson 4** — the tokenizer (Contribution A): quantizer landscape, FSQ, why 6x1000, log health.
-- **Applied A** — the loss + optimizer (term split, FK-consistency, AdamW recipe).
+> Status (2026-06-17): compute is RUNNING (tokenizer matrix finishing locally; the 100M twin run is the
+> next cloud step). The lesson spine is complete.
 
-## Part I — the tokenizer (Contribution A), as beginner theory then confirmed by values
-| Lesson | Covers |
-|---|---|
-| **5 — RVQ tokenizer** | learned-codebook quantization from scratch: VQ -> STE/commitment/EMA/dead-code reset -> residual stacking; how WE train the strong-RVQ baseline |
-| **6 — FSQ tokenizer** | mirror: fixed-grid quantization, why it needs almost no machinery, Grouped-FSQ; how WE train it |
-| **7 — Tokenizer results** | the single results section: confirm both designs by their values (recon-FID, health), honest caveats, reproducibility |
+## Foundations — representation and data
+| Lesson | Covers | Diagram |
+|---|---|---|
+| **01 — pose, joints, rotations** | positions vs rotations, skeleton, FK vs IK | yes (tree, FK/IK) |
+| **02 — pose to motion** | fps, velocity, why 20 fps | yes (sampling, velocity) |
+| **03 — the 263 vector** | root / ric / rot6d / vel / foot, slice by slice; how we know it's correct | yes (layout + consumers) |
+| **04 — from motion to tokens** | why 263 floats/frame is too much; the discretization bridge | yes (BPE analogy) |
+| **04a — the data pipeline** | normalization, windows, the mirror-symmetry map, splits, hygiene | yes (shapes) |
 
-## Part II — the big training process (the generator, Contribution B) — after Part I
-| Lesson | Covers (user's earlier questions) |
-|---|---|
-| 8 — The generator architecture | "what is the architecture": embeddings + text prefix -> causal backbone (Transformer twin vs Mamba) -> heads |
-| 9 — Generator training (value-by-value) | "what we train on / the output": frozen tokens + CLIP -> teacher forcing -> next-token + soft-decode loss |
-| 10 — Streaming inference (value-by-value) | "the output at runtime": stream_step, bounded state vs KV-cache, CFG, END (the novelty) |
-| 11 — Evaluation | "what matters / how we know": FID, R-precision, the matcher |
-| 12 — What we have + what matters | the assets + the contributions/claims |
+## Part I — the tokenizer (Contribution A)
+| Lesson | Covers | Diagram |
+|---|---|---|
+| **05 — RVQ tokenizer** | learned-codebook VQ -> STE/commitment/EMA/dead-code reset -> residual stack | yes (residual cascade) |
+| **06 — FSQ tokenizer** | fixed-grid quantization, no machinery, Grouped-FSQ; **§6.6a discrete capacity** (bits, rate-distortion, shape-annotated dataflow) | yes (group split, RVQ-vs-FSQ, capacity) |
+| **07 — tokenizer results** | the matched matrix, recon-FID, health, reproducibility; **§7.0a the comparison formally** (controlled experiment + rate-distortion dominance) | yes (experiment structure) |
 
-(The earlier value-by-value training/inference traces live in git history at commit d272992; they
-will be rewritten as Lessons 9-10 for the generator.)
+## Part II — the generator (Contribution B)
+| Lesson | Covers | Diagram |
+|---|---|---|
+| **08 — the autoregressive objective** | $p_\theta(z\mid c)$, text prefix, R parallel heads, CE, sampling, CFG | yes (objective) |
+| **11 — the transformer twin** | causal attention, positional embedding, the growing KV-cache | yes (cache growth) |
+| **12 — the S6/Mamba generator** | continuous SSM -> ZOH recurrence, selectivity, fixed-size state | yes (mixer + recurrence) |
+| **13 — streaming and complexity** | bounded state in bytes, $O(1)$/$O(L)$ vs $O(L)$/$O(L^2)$, the signature plot | yes (bounded vs growing) |
+| **14 — evaluation metrics** | FID, R-precision, MM-Dist, Diversity, MultiModality; the GT-oracle | yes (shared space) |
+| **09 — generator training trace** | value-by-value: frozen tokens + CLIP -> teacher forcing -> losses | yes (shapes) |
+| **10 — generator inference trace** | value-by-value: stream_step, bounded state, CFG, END | yes (shapes) |
 
-## Then (only after Part II)
-Resume compute: tokenizer sweep (resume from `_last.pt`), foundational FSQ/RVQ re-runs with
-manifests, the g5 canary + final 100M twin run.
+## Training methodology
+| Lesson | Covers | Diagram |
+|---|---|---|
+| **A — loss and optimizer** | term-split CE + soft-decode geometric, L1, AdamW + warmup/cosine + EMA + clip | |
+| **B — escaping the plateau** | the plateau-avoidance checklist, CFG dropout, pkeep, text-unfreeze, reproducibility | yes (training step) |
+
+## System, framing, future work
+| Lesson | Covers | Diagram |
+|---|---|---|
+| **15 — streaming decode and demo** | the bounded end-to-end live pipeline -> aitviewer (producer done, render Phase 5) | yes (pipeline shapes) |
+| **16 — related work and positioning** | where A and B sit; the unoccupied cells; cite-and-distinguish | yes (landscape) |
+| **17 — limitations and conclusion** | established vs pending, scope, threats-to-validity table | yes (status map) |
+| **18 — scaling the tokenizer with data** | AMASS pretraining: the two rules (versioned redo; citable eval) + protocol | yes (versioned pipeline) |
+| **19 — results tables and figures** | the 3 tables + streaming-figure scaffold; Table 2 (Contribution A) seeded-filled | |
+
+## What remains (finishing, not new theory)
+- **DONE:** seeded full matrix + Lesson 7 rewrite; all diagrams; numeric consistency; **generalization
+  audit** (`outputs/generalization.md`: no overfitting, gap <= 0 for 13/15 cells).
+- The **100M twin run** -> Table 1's generator rows + the streaming figure (Lesson 19). [cloud-gated]

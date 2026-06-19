@@ -1,9 +1,28 @@
-# Lesson 5 — The training trace: every transformation a value suffers
+# Lesson 9 — The training trace: every transformation a value suffers
 
 > Follow ONE motion clip from disk to the loss, value by value, with exact shapes. This IS the
 > architecture, shown concretely. Symbols: B = batch (e.g. 64), T = frames (<=196), T' = T/4 token
 > steps (downsample 4), 263 feat dims, 512 width, 6 groups x 4 = 24 latent, 1000 codes/group,
 > 16-token text prefix. Code: dataset.py, tokenizer.py, generator.py, trainer.py, losses.py.
+
+## The picture (shapes end to end)
+
+```mermaid
+flowchart TB
+  D["disk (T,263)"] --> N["normalize -> (T,263)"] --> B["batch -> (B,T,263)"]
+  B --> ENC["frozen encode: conv x4 -> (B,T',512) -> pre_q -> (B,T',24) -> GroupedFSQ"]
+  ENC --> TGT["targets (B,T',6) in 0..999, +END -> (B,L,6)"]
+  TGT --> PK["pkeep 0.8 corrupt inputs -> (B,L,6)"]
+  CAP["captions -> CLIP -> (B,16,512), drop_text 0.1"] --> CC
+  PK --> EMB["embed_tokens: sum 6 -> (B,L,512)"]
+  EMB --> CC["concat [prefix; shifted] -> (B,16+L-1,512)"]
+  CC --> BK["causal backbone (twin) -> slice -> (B,L,512)"]
+  BK --> HD["6 heads -> logits (B,L,6,1001)"]
+  HD --> CE["token-CE vs clean targets"]
+  HD --> SD["soft-decode -> frozen decoder -> (B,T,263) -> term-split L1"]
+  CE --> TOT["total -> backward (generator + unfrozen CLIP; NOT tokenizer)"]
+  SD --> TOT
+```
 
 ## Stage 0 — on disk
 `new_joint_vecs/<id>.npy` -> **(T, 263)** float32. Each value is a physical-ish channel (root

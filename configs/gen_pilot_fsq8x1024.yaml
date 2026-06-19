@@ -1,0 +1,28 @@
+# Generator PILOT — transformer twin on the frozen FSQ 8x1024 tokenizer (recon-FID 0.0170, best cell).
+# Local "does it learn?" run before the 100M cloud twin. Generator geometry = dataclass defaults
+# (d_model 512, n_layers 8 -> ~34M); END token enabled (Track-A design). seed 2026.
+seed: 2026
+device: cuda
+data:
+  track: hml3d263
+  sources: [humanml3d]
+  mirror_augment: true
+  max_motion_len: 196
+  min_motion_len: 40
+paths:
+  eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
+  eval_stats_dir: data/eval_stats
+  hml3d_out_dir: data/HumanML3D_official
+  texts_dir: data/HumanML3D_official/texts
+  checkpoints_dir: checkpoints
+  outputs_dir: outputs
+tokenizer:
+  in_dim: 263
+  width: 512
+  downsample: 4
+  num_quantizers: 8
+  fsq_levels: [8, 8, 4, 4]
+  quantizer: grouped
+  n_resblocks: 3
+generator:
+  use_end_token: true

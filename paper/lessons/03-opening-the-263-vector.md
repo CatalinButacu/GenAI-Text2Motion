@@ -4,6 +4,23 @@
 > the 263 channels and say what it is, why it exists, and which concept it came from.
 > Layout verified in `feature.py` (the `data = concatenate(...)` block).
 
+## 3.0 The picture
+
+```mermaid
+flowchart TB
+  subgraph FR["one frame = 263 numbers"]
+    direction TB
+    R["root 0:4 -> turn rate, ground vel x/z, height (4)"]
+    RIC["ric 4:67 -> joint positions, joints 1-21, facing removed (63)"]
+    ROT["rot6d 67:193 -> joint rotations, joints 1-21 (126)"]
+    VEL["vel 193:259 -> local velocities, all 22 joints (66)"]
+    FC["foot 259:263 -> contact flags (4)"]
+  end
+```
+
+*One frame is these five blocks concatenated: 4 + 63 + 126 + 66 + 4 = 263. The root is velocity +
+height (not absolute position); ric and rot6d skip the pelvis, so they count 21 joints, not 22.*
+
 ## 3.1 The exact layout (per frame, 22 joints)
 
 | Slice | Size | Name | Language (Lesson 1) |
@@ -105,6 +122,21 @@ positions give velocity). Why pay for all of it?
 So the 263 is exactly the **hybrid representation** from Lesson 1.2b: it refuses to choose one
 language and instead gives the model (and the evaluator) every view at once, each cheap to compute,
 each useful to a different consumer. The redundancy is a feature, not waste.
+
+## 3.3a Who reads which slice (the system view)
+
+```mermaid
+flowchart LR
+  ALL["all 263"] --> TOK["tokenizer: 4 frames -> 6 integers"]
+  ROT["rot6d 67:193"] --> DEMO["demo: drive SMPL-X body via FK"]
+  ROOT["root vel 0:3"] --> DEMO
+  RIC["ric 4:67"] --> EVAL["evaluator + reconstruction loss"]
+  VEL["velocities 193:259"] --> SMOOTH["smoothness / velocity loss"]
+  FC["foot 259:263"] --> SMOOTH
+```
+
+*The redundancy is deliberate: different consumers read different slices — positions for the
+evaluator, rotations for the body, velocities/contacts for the losses.*
 
 ## 3.4 Where the 263 sits in the whole system
 

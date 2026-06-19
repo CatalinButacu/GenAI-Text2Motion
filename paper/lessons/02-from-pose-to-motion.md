@@ -17,6 +17,14 @@ in time. If a pose is a still photo, motion is a filmstrip.
 
 So a motion clip is a tensor: `(T frames, per-pose numbers)`. In our case `(T, 263)`.
 
+```mermaid
+flowchart LR
+  CONT["continuous motion (real world)"] -->|"sample @ 20 fps (every 0.05 s)"| FR["frame 1 -> frame 2 -> ... -> frame T"]
+  FR --> CLIP["clip tensor (T, 263)"]
+```
+
+*Motion is continuous reality stored as evenly-spaced samples; the clip is a (T, 263) tensor at 20 fps.*
+
 ## 2.2 How finely must we sample? (why 20 fps is enough)
 
 Mocap is captured at 60-120 fps; we **downsample to 20 fps**. Why is that not throwing away the
@@ -63,6 +71,15 @@ reasons, and they matter for us:
 **Definition to note**
 - **Integration** — the inverse of velocity: `position(t) = position(0) + sum of velocities up to t`.
   We integrate the root's stored velocity to place the body in the world at render time.
+
+```mermaid
+flowchart LR
+  POS["poses (where)"] -->|"difference: v(t)=pose(t+1)-pose(t)"| VEL["velocity (rate of change)"]
+  ROOT["root: stored ONLY as velocity + height"] -->|"integrate: sum velocities"| WORLD["absolute trajectory + heading in the room"]
+```
+
+*Velocity is the difference of consecutive poses; the root is stored as velocity and **integrated** back
+to place the body in the world — which is why absolute position is not a number in the data.*
 
 ## 2.4 Why a sequence is MORE than "many poses"
 

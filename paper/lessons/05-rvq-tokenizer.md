@@ -80,6 +80,21 @@ A *healthy* VQ thus needs **STE + commitment + EMA + dead-code reset**. (T2M-GPT
 naive VQ recon-FID $0.49$ vs EMA+reset $0.07$ — a $7\times$ gap.)
 
 ## 5.4 RVQ = quantize the residual, recursively (coarse-to-fine)
+
+```mermaid
+flowchart LR
+  Z["latent z = r_0"] --> Q1["codebook 1: nearest centroid -> k_1, q_1"]
+  Q1 --> R1["residual r_1 = r_0 - q_1"]
+  R1 --> Q2["codebook 2 -> k_2, q_2"]
+  Q2 --> R2["residual r_2 = r_1 - q_2"]
+  R2 --> D["... L levels, residual shrinks each time ..."]
+  D --> S["z_hat = q_1 + q_2 + ... + q_L"]
+  S --> DEC["decoder -> reconstructed motion"]
+```
+
+*Each level quantizes what the previous one missed; early levels capture gross structure, later levels
+add detail. Tokens = the L chosen indices.*
+
 One codebook of moderate $K$ is too coarse. **Residual VQ** applies $L$ quantizers, each to the
 *leftover error* of the previous. With $r_0 = z$, for $l = 1,\dots,L$:
 

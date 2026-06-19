@@ -33,6 +33,21 @@ sub-word tokens, and the model predicts the next token. We do the same for motio
 
 Once you see this mapping, the whole generator (Lesson 5) is just "an LLM over motion words."
 
+```mermaid
+flowchart LR
+  subgraph TXT["text LLM"]
+    direction LR
+    C["characters"] --> BPE["BPE tokenizer"] --> TV["token ids (vocab ~50k)"] --> LM["predict next token"]
+  end
+  subgraph MOT["our motion model"]
+    direction LR
+    F["263 floats / frame"] --> TOK["motion tokenizer (enc -> quant -> dec)"] --> MV["6 codes / step (vocab 1000)"] --> GEN["predict next motion token"]
+  end
+```
+
+*Once motion is a sequence of tokens, generation is literally next-token prediction — the entire LLM
+playbook (cross-entropy, sampling, CFG, KV-cache vs SSM-state) transfers directly.*
+
 ## 4.3 What the tokenizer is: encoder -> quantizer -> decoder
 
 A learned compressor with three parts (all in `tokenizer.py`):
@@ -50,7 +65,7 @@ A learned compressor with three parts (all in `tokenizer.py`):
 - **Downsampling factor** — frames per token step (ours = 4). Fewer tokens = shorter sequences for
   the generator = faster, but coarser.
 - **Reconstruction** — encode then decode; how faithfully the motion survives the round trip. Our
-  headline metric (recon-FID 0.0266).
+  headline metric (recon-FID; FSQ 6x1000 = 0.0274, best cell 0.0170 — full seeded matrix in Lesson 7).
 
 ## 4.4 The landscape of quantizers (every option, and its catch)
 
@@ -102,7 +117,7 @@ so none of RVQ's machinery (EMA / reset / commitment) exists — nothing to coll
   standard VQ sizes. **Asymmetric levels** (more resolution on dim 1) are FSQ-recommended as more
   efficient than equal splits. Integers required, so 1000 not 1024.
 - **Honesty check:** the iso-vocab ablation used (8,8,8) = **512** (matching RVQ exactly) and STILL
-  won (0.0307 vs 0.0382) -> the win is the *quantizer*, not the bigger 1000 vocab.
+  won (0.0305 vs 0.0342, seeded) -> the win is the *quantizer*, not the bigger 1000 vocab.
 - **Expressivity:** 1000^6 ~= 10^18 distinct token-steps, yet the generator only makes 6 independent
   1000-way choices per step (6 embedding tables, 6 heads over 1000, +1 for END = 1001).
 
@@ -142,19 +157,19 @@ is a generic eval-stability moving-average of all weights — the tokenizer trai
 Full HumanML3D test split (2,189 clips), recon-FID via the frozen Guo evaluator. Same conv
 encoder/decoder, width, downsample, and 500-epoch budget for every row — only the quantizer differs.
 
-| Tokenizer | codes/step x vocab | recon-FID ↓ | MPJPE ↓ | perplexity (used) |
-|---|---|---|---|---|
-| Grouped-FSQ | 6 x 1000 | **0.0266** | 119 mm | 572 / 1000 |
-| Grouped-FSQ (iso-vocab) | 6 x 512 | 0.0307 | 119 mm | 340 / 512 |
-| Strong-RVQ | 6 x 512 | 0.0382 | 125 mm | 328 / 512 |
-| *context (published, more compute):* T2M-GPT VQ | — | 0.071 | — | — |
-| *context (published, more compute):* MoMask RVQ | 6 x 512 | 0.019 | 29.5 mm | — |
+| Tokenizer | codes/step x vocab | recon-FID ↓ (seeded) |
+|---|---|---|
+| Grouped-FSQ | 6 x 1000 | **0.0274** |
+| Grouped-FSQ (iso-vocab) | 6 x 512 | 0.0305 |
+| Strong-RVQ | 6 x 512 | 0.0342 |
+| Grouped-FSQ (best cell) | 8 x 1024 | **0.0170** |
+| *context (cited, more compute):* T2M-GPT VQ | — | 0.071 |
+| *context (cited, more compute):* MoMask RVQ | 6 x 512 | 0.019 |
 
-Plain reading (full analysis in the paper): FSQ and our RVQ are in the **same ballpark** (~0.03,
-both well under T2M-GPT's 0.071); FSQ is modestly better **and** needs no learned codebook or
-collapse machinery; both our rows sit above MoMask's heavily-tuned 0.019. The honest framing to
-develop in the paper: *comparable-or-better reconstruction with a simpler, collapse-free quantizer*,
-not a landslide.
+Plain reading: FSQ **beats** the strong RVQ at every matched cell (the full 3x5 matrix + the dominance
+argument live in **Lesson 7**), needs no learned codebook or collapse machinery, and the best cell
+(8x1024 = 0.0170) **beats** MoMask's tuned 0.019 on our controlled budget. (Per-cell MPJPE / perplexity
+live in the run manifests.)
 
 ## 4.5 How WE got to Grouped-FSQ (the actual decision path)
 
@@ -163,15 +178,15 @@ This is the story to tell — it has a hypothesis, a failure, a diagnosis, and a
 1. **Hypothesis.** FSQ is motion-proven (ScaMo) and the residual *structure* is motion-proven
    (MoMask). The original Contribution A was their **combination: Residual-FSQ** — believed novel.
 2. **Build the bar.** A **strong-RVQ baseline** (EMA + dead-code reset + commitment + quant-dropout,
-   the T2M-GPT/MoMask/EnCodec recipe) to beat: recon-FID **0.0382**.
+   the T2M-GPT/MoMask/EnCodec recipe) to beat: recon-FID **0.0342** (seeded 6x512).
 3. **The failure.** Residual-FSQ **collapsed at recon-FID 0.22** — 5x WORSE than RVQ.
 4. **The diagnosis.** Residual FSQ keeps the latent at the tiny `fsq_dim` (codes summed in ~4-D);
    later residual levels collapse onto the fixed grid, and a 4-D continuous latent cannot represent
    263-D motion. The residual structure fights the fixed grid.
 5. **The fix -> Grouped-FSQ.** Instead of stacking residuals in 4-D, **partition** the latent into
    6 groups (6 x 4 = 24-D), FSQ each independently. Every group is used; the latent is wide enough.
-   Result: recon-FID **0.0266**, beating strong-RVQ 0.0382 — and the iso-vocab check (matched 512
-   vocab -> 0.0307) confirms it is the quantizer, not codebook size. **That is Contribution A.**
+   Result: recon-FID **0.0274**, beating strong-RVQ 0.0342 — and the iso-vocab check (matched 512
+   vocab -> 0.0305) confirms it is the quantizer, not codebook size. **That is Contribution A.**
 
 So we got to FSQ for its no-collapse/no-machinery property, and to *Grouped*-FSQ specifically because
 the residual variant failed and the partitioned variant fixed it. The collapse is reported as the
@@ -198,7 +213,8 @@ frozen tokenizer's codes. Two reasons:
    the vocabulary.
 3. Ours downsamples time **/4** and emits **6 FSQ codes per step**, each in 0..999.
 4. **FSQ** = round onto a fixed grid (no learned codebook); **Grouped-FSQ** is Contribution A.
-5. The tokenizer is **trained then frozen**; its recon-FID (0.0266) is the generator's ceiling.
+5. The tokenizer is **trained then frozen**; its recon-FID (0.0274 for 6x1000; best 0.0170) is the
+   generator's ceiling.
 
 ---
 

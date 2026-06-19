@@ -45,11 +45,16 @@ def evaluate_tokenizer(
     joints_num: int = 22,
     device: str = "cpu",
     max_clips: int | None = None,
+    split: str = "test",
+    shuffle_seed: int | None = None,
 ) -> dict[str, float]:
     tokenizer.eval()
-    ids = [n.strip() for n in (out_dir / "test.txt").read_text().splitlines() if n.strip()]
+    ids = [n.strip() for n in (out_dir / f"{split}.txt").read_text().splitlines() if n.strip()]
     ids = [i[1:] if i.startswith("M") else i for i in ids]
-    ids = list(dict.fromkeys(ids))[:max_clips]
+    ids = list(dict.fromkeys(ids))
+    if shuffle_seed is not None:  # representative equal-size sample for cross-split gap comparison
+        np.random.default_rng(shuffle_seed).shuffle(ids)
+    ids = ids[:max_clips]
 
     gt_feats, recon_feats = [], []
     joint_errors, feature_l2 = [], []
