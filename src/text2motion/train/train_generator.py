@@ -57,6 +57,9 @@ def run(args: argparse.Namespace) -> None:
         codebook_size=tokenizer.codebook_size,
     )
     generator = MotionGenerator(gen_cfg).to(device)
+    if args.init_ckpt:  # initialise from the AMASS-pretrained motion prior (fresh optimizer/epoch)
+        generator.load_state_dict(torch.load(args.init_ckpt, map_location=device))
+        print(f"initialised generator from pretrained {args.init_ckpt}")
     text_encoder = CLIPTextEncoder(cfg.text_encoder).to(device)
 
     out_dir = Path(cfg.paths.hml3d_out_dir)
@@ -182,6 +185,11 @@ def main() -> None:
         "--tokenizer_ckpt",
         default="checkpoints/tokenizer_fsq.pt",
         help="frozen tokenizer state_dict to load; must match cfg.tokenizer architecture",
+    )
+    parser.add_argument(
+        "--init_ckpt",
+        default=None,
+        help="pretrained generator weights to initialise from (AMASS pretrain); fresh optimizer",
     )
     # 60, not 150: the 2026-06 run peaked at ep ~20-40 and degraded after; the cosine decay must
     # land in that window. Scale epochs back up only with evidence (val FID still improving).
