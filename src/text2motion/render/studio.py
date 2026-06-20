@@ -35,28 +35,16 @@ def kinematic_bones() -> np.ndarray:
     return np.array(bones, dtype=np.int64)
 
 
-def _require_aitviewer():
-    try:
-        import aitviewer  # noqa: F401
-
-    except ImportError as exc:
-        raise RuntimeError(
-            "aitviewer not installed. Install the viewer extra: `uv sync --extra viewer`."
-        ) from exc
-
-
 def build_skeleton_seq(joints: np.ndarray):
     """Build an aitviewer Skeletons renderable from (T, 22, 3) joint positions."""
-    _require_aitviewer()
-    from aitviewer.renderables.skeletons import Skeletons
+    from aitviewer.renderables.skeletons import Skeletons  # lazy; raises if viewer extra absent
 
     return Skeletons(joint_positions=joints, joint_connections=kinematic_bones())
 
 
 def view_skeleton(joints: np.ndarray) -> None:
     """Open the interactive studio on a recovered (T, 22, 3) clip."""
-    _require_aitviewer()
-    from aitviewer.viewer import Viewer
+    from aitviewer.viewer import Viewer  # lazy; raises if viewer extra absent
 
     viewer = Viewer()
     viewer.scene.add(build_skeleton_seq(joints))
@@ -65,12 +53,11 @@ def view_skeleton(joints: np.ndarray) -> None:
 
 def render_skeleton_video(joints: np.ndarray, out_path: str) -> str:
     """Headless-render a (T, 22, 3) clip to MP4. Needs a working GL/EGL context."""
-    _require_aitviewer()
-    from aitviewer.headless import HeadlessRenderer
+    from aitviewer.headless import HeadlessRenderer  # lazy; raises if viewer extra absent
 
     renderer = HeadlessRenderer()
     renderer.scene.add(build_skeleton_seq(joints))
-    renderer.save_video(output_path=out_path)
+    renderer.save_video(video_dir=out_path, output_fps=20)  # aitviewer>=1.14 API; 20fps = our rate
     return out_path
 
 

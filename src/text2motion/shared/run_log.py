@@ -19,12 +19,15 @@ from typing import Any
 
 
 def _git_commit() -> str:
+    # git is an external PROCESS that genuinely may be absent (not a library) -> narrow to that case
+    # and warn LOUDLY; a manifest without a commit is still useful, but we never hide it silently.
     try:
         out = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True, timeout=10
         )
         return out.stdout.strip()
-    except Exception:  # git missing or not a repo — manifest still valuable without it
+    except (FileNotFoundError, subprocess.SubprocessError) as exc:
+        print(f"WARNING: git commit unavailable ({type(exc).__name__}: {exc}); recording 'unknown'")
         return "unknown"
 
 
@@ -48,14 +51,14 @@ def start_run(name: str, cfg: Any, outputs_dir: Path, extra: dict | None = None)
     run_dir = Path(outputs_dir) / "runs" / f"{stamp}_{name}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    versions = {"python": sys.version.split()[0], "platform": platform.platform()}
-    try:
-        import torch
+    import torch  # core dependency: fail loud if somehow absent, never a silent skip
 
-        versions["torch"] = torch.__version__
-        versions["cuda"] = torch.version.cuda or "cpu"
-    except ImportError:
-        pass
+    versions = {
+        "python": sys.version.split()[0],
+        "platform": platform.platform(),
+        "torch": torch.__version__,
+        "cuda": torch.version.cuda or "cpu",
+    }
 
     manifest = {
         "name": name,

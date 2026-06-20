@@ -12,6 +12,7 @@ dependencies = [
     "pandas",
     "tqdm",
     "transformers",  # CLIP ViT-B/32 text encoder (caption conditioning); see model/text_encoder.py
+    "aitviewer>=1.14.2",
 ]
 
 [project.optional-dependencies]

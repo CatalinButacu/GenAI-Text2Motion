@@ -17,16 +17,6 @@ from torch import nn
 from text2motion.shared.config import TextEncoderCfg
 
 
-def _require_transformers():
-    try:
-        import transformers  # noqa: F401
-
-    except ImportError as exc:
-        raise RuntimeError(
-            "transformers not installed (needed for the CLIP text encoder). Run `uv sync`."
-        ) from exc
-
-
 class CLIPTextEncoder(nn.Module):
     """Caption (list[str]) -> (B, out_dim) pooled+projected CLIP text features.
 
@@ -39,8 +29,7 @@ class CLIPTextEncoder(nn.Module):
 
     def __init__(self, cfg: TextEncoderCfg) -> None:
         super().__init__()
-        _require_transformers()
-        from transformers import CLIPTextModelWithProjection, CLIPTokenizer
+        from transformers import CLIPTextModelWithProjection, CLIPTokenizer  # lazy; raises if absent
 
         self.cfg = cfg
         self.tokenizer = CLIPTokenizer.from_pretrained(cfg.model_id)

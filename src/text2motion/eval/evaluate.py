@@ -233,6 +233,11 @@ def main() -> None:
     parser.add_argument("--mm_clips", type=int, default=100, help="0 disables MultiModality")
     parser.add_argument("--mm_repeats", type=int, default=30)
     parser.add_argument("--ckpt", default=None, help="explicit checkpoint (single-backbone only)")
+    parser.add_argument(
+        "--tokenizer_ckpt",
+        default="checkpoints/tokenizer_fsq.pt",
+        help="frozen tokenizer state_dict to load; must match cfg.tokenizer architecture",
+    )
     parser.add_argument("--device", default=None)
     args = parser.parse_args()
 
@@ -247,7 +252,7 @@ def main() -> None:
     build_text = make_build_text(WordVectorizer(r"data/t2m_glove/glove", "our_vab"))
 
     tokenizer = ResidualFsqTokenizer(cfg.tokenizer)
-    tokenizer.load_state_dict(torch.load("checkpoints/tokenizer_fsq.pt", map_location="cpu"))
+    tokenizer.load_state_dict(torch.load(args.tokenizer_ckpt, map_location="cpu"))
     tokenizer.to(device).eval()
     text_encoder = CLIPTextEncoder(cfg.text_encoder).to(device).eval()
 

@@ -1090,6 +1090,7 @@ name = "text2motion"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aitviewer" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pyyaml" },
@@ -1111,6 +1112,7 @@ viewer = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aitviewer", specifier = ">=1.14.2" },
     { name = "aitviewer", marker = "extra == 'viewer'" },
     { name = "numpy" },
     { name = "pandas" },

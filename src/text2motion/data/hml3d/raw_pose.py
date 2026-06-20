@@ -59,12 +59,7 @@ class AmassPoseExtractor:
         device: str = "cpu",
         chunk_frames: int = 256,
     ) -> None:
-        try:
-            import smplx
-        except ImportError as exc:
-            raise ImportError(
-                "the `smplx` package is required for the AMASS(SMPL-X)->joints forward pass."
-            ) from exc
+        import smplx  # lazy import: raises ImportError naturally if the package is absent
 
         self.device = torch.device(device)
         self.num_betas = num_betas
