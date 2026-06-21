@@ -225,6 +225,32 @@ The high pilot FID was localized — via recon-through-eval (0.059), teacher-for
 (5.02 / 8.5%[*]) and a val−train CE gap (0.94[*]) — to the **generator** (under-capacity +
 data-limited), not the tokenizer or eval pipeline. §5.4 (data) + scale (100M) are the levers.
 
+### 5.8 Training dynamics: the capacity floor (why pretrain, why scale — not more epochs)
+The decisions to *pretrain* (§5.4) and to *scale* (34M→100M) rather than merely *train longer* rest
+on a standard information-theoretic identity [CoverThomas]. Cross-entropy decomposes exactly as
+$$\text{CE}(\theta)=\underbrace{H(p_{\text{data}})}_{\text{irreducible}}+\underbrace{D_{\mathrm{KL}}\!\big(p_{\text{data}}\,\Vert\,p_\theta\big)}_{\ge 0,\ \text{optimized}},$$
+so training only shrinks the KL term; CE descends toward the data entropy $H(p_{\text{data}})$ **from
+above**. Two facts make this operational:
+1. **$H(p_{\text{data}})$ is uncomputable** (it needs the true distribution), so "stop when CE equals
+   the data entropy" is a conceptual floor, never a number we can read off.
+2. A **finite-capacity** model cannot drive KL to zero; it floors at a model-specific
+   $$\text{CE}_{\text{floor}}(\theta)=H(p_{\text{data}})+\varepsilon_{\text{capacity}}(\theta)\;>\;H(p_{\text{data}}).$$
+
+**Evidence that the residual loss is capacity-bound, not time-bound.** On *identical* unconditional
+AMASS data, the pretrain plateaus at CE **5.10** for the 34M model but **1.54** for the 100M model
+(perplexity 164 → 4.7[*]); the difference is $\varepsilon_{\text{capacity}}$. The per-epoch
+improvement collapsed geometrically (ΔCE $-0.052\to-0.008$ over epochs 25–30[*]) — the observable
+signature of KL reaching its capacity floor. More epochs at fixed capacity therefore buy almost
+nothing; **lowering CE requires more capacity (scale) or a better prior (pretraining), not a longer
+schedule.**
+
+**Resulting stopping protocol.** Since $H(p_{\text{data}})$ is unknown, we stop on observables, not on
+an entropy match: (i) the **validation-loss plateau** (KL exhausted for this capacity); (ii) a small
+**train−val gap** (KL must not go negative on train alone — that is memorization, §5.7); and (iii) the
+**downstream task metric** (val FID, best-by-val) as the final arbiter, because the pretrain CE is an
+*initialization*, not the objective. This is why both levers in this thesis are **data/scale**
+(AMASS prior + 100M), and why the pretrain is run only to its knee (§5.4), not to convergence.
+
 ---
 
 ## 6. Discussion and Limitations  *(≈3 p)* — *Source: lessons/17*
@@ -266,6 +292,7 @@ live studio demo, and self-terminating variable-length generation.
 - **[CLIP]** Radford et al. arXiv:2103.00020.
 - **[Being-M0]** arXiv:2410.03311. **[LMM]** arXiv:2404.01284. **[MotionMillion]** arXiv:2507.07095.
 - **[LLaMo]** arXiv:2602.12370. **[MotionStreamer]** (continuous AR streaming). **[AnyMo]** arXiv:2605.29488.
+- **[CoverThomas]** Cover & Thomas. *Elements of Information Theory*, 2nd ed., Wiley 2006. (CE = entropy + KL)
 
 ---
 *Draft status: scaffold + drafted cores (§1, §4, §5). To reach 30–45 pp, absorb the cited lesson files
