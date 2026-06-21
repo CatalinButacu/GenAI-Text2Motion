@@ -85,7 +85,8 @@ def run(a: argparse.Namespace) -> None:
         return floor + (1 - floor) * 0.5 * (1 + math.cos(math.pi * p))
 
     run_dir = start_run(f"pretrain_{a.backbone}", cfg, cfg.paths.outputs_dir, vars(a))
-    print(f"segments {len(loader.dataset)}  steps/epoch {len(loader)}  device {dev}")
+    amp_on = cfg.train.amp == "bf16" and dev == "cuda"  # match the fine-tune's precision (~2x faster)
+    print(f"segments {len(loader.dataset)}  steps/epoch {len(loader)}  device {dev}  amp {cfg.train.amp}")
     step = 0
     for epoch in range(a.epochs):
         generator.train()
@@ -94,7 +95,8 @@ def run(a: argparse.Namespace) -> None:
         for tokens, lengths in loader:
             tokens, lengths = tokens.to(dev), lengths.to(dev)
             null = torch.zeros(tokens.size(0), gc.text_prefix_len, gc.d_text, device=dev)  # uncond
-            loss = token_ce_loss(generator(tokens, null), tokens, lengths)
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):  # match the fine-tune
+                loss = token_ce_loss(generator(tokens, null), tokens, lengths)
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(generator.parameters(), 1.0)
