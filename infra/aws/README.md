@@ -13,15 +13,15 @@ SSH needed. (Portability already done: WordVectorizer is vendored, configs/aws.y
 
 ## Phase-3 FINAL run — FSQ 8x1024, 100M twins (current; do this)
 
-Frozen tokenizer **`checkpoints/fsq_g8_v1024.pt`** (recon-FID 0.0170). Config
-**`configs/final100m_fsq8x1024.yaml`** (transformer 98.1M / Mamba 99.7M param-matched, 8 codebooks x
+Frozen tokenizer **`checkpoints/tokenizer/fsq_g8_v1024.pt`** (recon-FID 0.0170). Config
+**`configs/generator/final100m_fsq8x1024.yaml`** (transformer 98.1M / Mamba 99.7M param-matched, 8 codebooks x
 1024, 16-token prefix, END, fused kernel, bf16). `run_canary.sh` (gate) and `run.sh` (both twins,
 60 ep, val-select, locked CFG 5.0/temp 1.1) are already wired to these.
 
 ```powershell
 # 1) Bundle from repo root — note the FSQ-8x1024 tokenizer + the run scripts:
 $b = "thesis-t2m-913402647373"
-tar -cf bundle.tar src configs checkpoints/fsq_g8_v1024.pt infra/aws/run.sh infra/aws/run_canary.sh `
+tar -cf bundle.tar src configs checkpoints/tokenizer/fsq_g8_v1024.pt infra/aws/run.sh infra/aws/run_canary.sh `
   data/HumanML3D_official data/eval_stats data/official_evaluator data/t2m_glove
 aws s3 cp bundle.tar s3://$b/bundle.tar
 # 2) Launch (cost guards arm automatically):
@@ -51,7 +51,7 @@ Copy-Item terraform.tfvars.example terraform.tfvars   # edit: region, bucket
 ## Build the data bundle + upload to S3 (run from repo root)
 ```powershell
 $b = "thesis-t2m-<name>"
-tar -cf bundle.tar src configs checkpoints/fsq_g8_v1024.pt `
+tar -cf bundle.tar src configs checkpoints/tokenizer/fsq_g8_v1024.pt `
   data/HumanML3D_official data/eval_stats data/official_evaluator data/t2m_glove
 # add the local resume checkpoints if continuing: checkpoints/generator_*_last.pt
 aws s3 cp bundle.tar s3://$b/bundle.tar
