@@ -76,7 +76,7 @@ Convention: **bold** = a result that survives into the dissertation tables.
 - **Mamba pilot result (200-clip trend, no CFG): ep20 FID 4.80 / R@1 0.193 == transformer's ep20
   R@1; ep30 FID 4.17 / R@1 0.208 — above ANY transformer epoch; ep40 R@1 0.094 = the same
   overfitting turn, one decade later → H4 registered.** Best (ep-30 EMA) checkpoint harvested to
-  `checkpoints/generator_mamba_cloud.pt`; **box terminated 7 h early** (no evals remained), ~$4 saved.
+  `checkpoints/generator/generator_mamba_cloud.pt`; **box terminated 7 h early** (no evals remained), ~$4 saved.
 - Iso-vocab FSQ ablation (E2) training locally: 500 ep; at ep 100 recon-FID 0.054 and falling,
   perplexity 331/512 (healthy, no dead codes).
 - Eval driver promoted to `text2motion.eval.evaluate` + **MultiModality** implemented (100×30,
@@ -91,7 +91,7 @@ Convention: **bold** = a result that survives into the dissertation tables.
   R@1 0.168±0.006, MModality 4.059.** FID ratio **1.19× ≤ 1.5×** → **gate PASSED**, E5 unblocked.
   Caveats recorded in ADR 0002 (epoch-budget asymmetry 150 vs ~42; resolved by E5).
 - Incidents (both caught by guards, both now structural): the pilot transformer ckpt failed loud on
-  the new max_seq_len default (fixed via `configs/eval_pilot31m.yaml`); the iso-vocab run froze
+  the new max_seq_len default (fixed via `configs/generator/eval_pilot31m.yaml`); the iso-vocab run froze
   mid-epoch and was killed after burning 10.6 h CPU → **`scripts/local_guard.ps1`** (heartbeat-stall
   + max-hours watchdog) is now mandatory for local runs (CLAUDE.md rule), relaunch resumed E2.
 - Design note: SE(2) placement augmentation rejected (RIC features are invariant by construction);

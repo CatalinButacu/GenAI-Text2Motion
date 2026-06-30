@@ -25,11 +25,11 @@ and improves monotonically with codes/step. Best so far FSQ 8x512 = 0.0196 (~= M
 
 | run | config | mech | ckpt | state |
 |---|---|---|---|---|
-| RVQ 8x1024 | configs/rvq_l8_1024.yaml | rvq | rvq_l8_1024.pt | fresh |
-| FSQ 8x1024 | configs/fsq_g8_v1024.yaml | fsq | fsq_g8_v1024.pt | fresh |
-| FSQ 8x1000 | configs/tok_g8_v1000.yaml | fsq | fsq_g8_v1000.pt | fresh |
-| FSQ 4x1024 | configs/fsq_g4_v1024.yaml | fsq | fsq_g4_v1024.pt | resume ep286->500 |
-| FSQ 4x1000 | configs/tok_g4_v1000.yaml | fsq | fsq_g4_v1000.pt | resume ep72->500 |
+| RVQ 8x1024 | configs/tokenizer/rvq_l8_1024.yaml | rvq | rvq_l8_1024.pt | fresh |
+| FSQ 8x1024 | configs/tokenizer/fsq_g8_v1024.yaml | fsq | fsq_g8_v1024.pt | fresh |
+| FSQ 8x1000 | configs/tokenizer/tok_g8_v1000.yaml | fsq | fsq_g8_v1000.pt | fresh |
+| FSQ 4x1024 | configs/tokenizer/fsq_g4_v1024.yaml | fsq | fsq_g4_v1024.pt | resume ep286->500 |
+| FSQ 4x1000 | configs/tokenizer/tok_g4_v1000.yaml | fsq | fsq_g4_v1000.pt | resume ep72->500 |
 
 Run them with `scripts/matrix_remaining.ps1` (single-instance, sequential, resume-safe).
 
