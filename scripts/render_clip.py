@@ -84,10 +84,10 @@ def run(a: argparse.Namespace) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Render a streamed generated clip to a skeleton PNG strip.")
-    p.add_argument("--config", default="configs/gen_pilot_fsq8x1024.yaml")
+    p.add_argument("--config", default="configs/generator/gen_pilot_fsq8x1024.yaml")
     p.add_argument("--backbone", default="transformer", choices=["transformer", "mamba"])
-    p.add_argument("--ckpt", default="checkpoints/generator_transformer.pt")
-    p.add_argument("--tokenizer_ckpt", default="checkpoints/fsq_g8_v1024.pt")
+    p.add_argument("--ckpt", default="checkpoints/generator/generator_transformer.pt")
+    p.add_argument("--tokenizer_ckpt", default="checkpoints/tokenizer/fsq_g8_v1024.pt")
     p.add_argument("--prompt", required=True)
     p.add_argument("--steps", type=int, default=49)
     p.add_argument("--cfg_scale", type=float, default=3.0)

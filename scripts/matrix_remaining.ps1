@@ -24,11 +24,11 @@ if ($running.Count -gt 0) {
 
 # cfg, mechanism, ckpt name. Fresh cells first (complete the 8-row), then the two partial resumes.
 $variants = @(
-    @{ cfg = "configs/rvq_l8_1024.yaml";  mech = "rvq"; name = "rvq_l8_1024.pt" },   # RVQ 8x1024  fresh
-    @{ cfg = "configs/fsq_g8_v1024.yaml"; mech = "fsq"; name = "fsq_g8_v1024.pt" },  # FSQ 8x1024  fresh
-    @{ cfg = "configs/tok_g8_v1000.yaml"; mech = "fsq"; name = "fsq_g8_v1000.pt" },  # FSQ 8x1000  fresh
-    @{ cfg = "configs/fsq_g4_v1024.yaml"; mech = "fsq"; name = "fsq_g4_v1024.pt" },  # FSQ 4x1024  resume ep286
-    @{ cfg = "configs/tok_g4_v1000.yaml"; mech = "fsq"; name = "fsq_g4_v1000.pt" }   # FSQ 4x1000  resume ep72
+    @{ cfg = "configs/tokenizer/rvq_l8_1024.yaml";  mech = "rvq"; name = "rvq_l8_1024.pt" },   # RVQ 8x1024  fresh
+    @{ cfg = "configs/tokenizer/fsq_g8_v1024.yaml"; mech = "fsq"; name = "fsq_g8_v1024.pt" },  # FSQ 8x1024  fresh
+    @{ cfg = "configs/tokenizer/tok_g8_v1000.yaml"; mech = "fsq"; name = "fsq_g8_v1000.pt" },  # FSQ 8x1000  fresh
+    @{ cfg = "configs/tokenizer/fsq_g4_v1024.yaml"; mech = "fsq"; name = "fsq_g4_v1024.pt" },  # FSQ 4x1024  resume ep286
+    @{ cfg = "configs/tokenizer/tok_g4_v1000.yaml"; mech = "fsq"; name = "fsq_g4_v1000.pt" }   # FSQ 4x1000  resume ep72
 )
 
 foreach ($v in $variants) {

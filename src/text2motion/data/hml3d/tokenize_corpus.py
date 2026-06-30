@@ -75,7 +75,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Tokenize the pretraining corpus (E7b pack).")
     parser.add_argument("--config", required=True)
     parser.add_argument("--features_dir", default="data/AMASS_263/new_joint_vecs")
-    parser.add_argument("--tokenizer_ckpt", default="checkpoints/tokenizer_fsq.pt")
+    parser.add_argument("--tokenizer_ckpt", default="checkpoints/tokenizer/tokenizer_fsq.pt")
     parser.add_argument("--out", default="data/amass_tokens.npz")
     parser.add_argument("--segment_frames", type=int, default=196)
     parser.add_argument("--stride", type=int, default=196, help="< segment_frames for overlap")

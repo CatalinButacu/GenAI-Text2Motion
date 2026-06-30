@@ -7,7 +7,7 @@ identically (ADR 0001 controlled twin). Tokens are precomputed by `tokenize_corp
 decoder/CLIP is needed here; loss = token-CE only (the motion-prior signal). Recipe matches Lesson B
 (AdamW + warmup->cosine + grad-clip); EMA/best-by-val are the fine-tune's job.
 
-    python -m text2motion.train.train_pretrain --config configs/final100m_fsq8x1024.yaml \
+    python -m text2motion.train.train_pretrain --config configs/generator/final100m_fsq8x1024.yaml \
         --backbone mamba --token_pack data/amass_tokens_fsq8x1024.npz --epochs 30 --batch_size 64
 """
 
@@ -84,11 +84,23 @@ def run(a: argparse.Namespace) -> None:
         p = (step - warm) / max(1, total - warm)
         return floor + (1 - floor) * 0.5 * (1 + math.cos(math.pi * p))
 
+    out = a.out or f"checkpoints/generator_{a.backbone}_pretrained.pt"
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    resume_path = Path(out).with_name(Path(out).stem + "_last.pt")  # resume state (gen+opt+step+epoch)
+
     run_dir = start_run(f"pretrain_{a.backbone}", cfg, cfg.paths.outputs_dir, vars(a))
     amp_on = cfg.train.amp == "bf16" and dev == "cuda"  # match the fine-tune's precision (~2x faster)
     print(f"segments {len(loader.dataset)}  steps/epoch {len(loader)}  device {dev}  amp {cfg.train.amp}")
     step = 0
-    for epoch in range(a.epochs):
+    start_epoch = 0
+    if a.resume and resume_path.is_file():  # continue a crashed/stalled pretrain (no progress lost)
+        state = torch.load(resume_path, map_location=dev)
+        generator.load_state_dict(state["generator"])
+        opt.load_state_dict(state["optimizer"])
+        step, start_epoch = state["step"], state["epoch"] + 1
+        print(f"resumed pretrain from {resume_path} at epoch {start_epoch} (step {step})")
+
+    for epoch in range(start_epoch, a.epochs):
         generator.train()
         tot = 0.0
         n = 0
@@ -108,10 +120,14 @@ def run(a: argparse.Namespace) -> None:
             n += 1
         log_metrics(run_dir, {"epoch": epoch + 1, "ce": tot / n})
         print(f"pretrain ep {epoch + 1:3d}  ce {tot / n:.4f}")
+        torch.save(generator.state_dict(), out)  # the prior, kept current every epoch (crash-safe)
+        torch.save(
+            {"generator": generator.state_dict(), "optimizer": opt.state_dict(),
+             "step": step, "epoch": epoch}, resume_path)
+        if dev == "cuda":
+            torch.cuda.empty_cache()  # defrag at epoch boundary (4GB-card fragmentation OOM lesson)
 
-    out = a.out or f"checkpoints/generator_{a.backbone}_pretrained.pt"
-    Path(out).parent.mkdir(parents=True, exist_ok=True)
-    torch.save(generator.state_dict(), out)
+    Path(out + ".done").write_text(f"epochs {a.epochs}", encoding="utf-8")  # completion marker
     print(f"saved pretrained init -> {out}  (fine-tune with: train_generator --init_ckpt {out})")
 
 
@@ -124,6 +140,7 @@ def main() -> None:
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--num_workers", type=int, default=0)
     p.add_argument("--out", default=None)
+    p.add_argument("--resume", action="store_true", help="continue from <out stem>_last.pt")
     run(p.parse_args())
 
 

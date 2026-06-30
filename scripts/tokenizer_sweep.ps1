@@ -7,9 +7,9 @@ $env:PYTHONPATH = "src"
 $py = ".venv\Scripts\python.exe"
 
 $variants = @(
-    @{ cfg = "configs/tok_g4_v1000.yaml";  name = "tok_g4_v1000.pt" },
-    @{ cfg = "configs/tok_g8_v1000.yaml";  name = "tok_g8_v1000.pt" },
-    @{ cfg = "configs/tok_g6_v2560.yaml";  name = "tok_g6_v2560.pt" }
+    @{ cfg = "configs/tokenizer/tok_g4_v1000.yaml";  name = "tok_g4_v1000.pt" },
+    @{ cfg = "configs/tokenizer/tok_g8_v1000.yaml";  name = "tok_g8_v1000.pt" },
+    @{ cfg = "configs/tokenizer/tok_g6_v2560.yaml";  name = "tok_g6_v2560.pt" }
 )
 
 foreach ($v in $variants) {

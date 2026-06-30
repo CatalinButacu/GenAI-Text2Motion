@@ -6,7 +6,7 @@ per-step latency (median over the segment), the EXACT recurrent-state footprint 
 peak memory. Weights are random — latency/state are architecture properties, no checkpoint needed.
 Writes ``outputs/streaming_bench.json`` for the Phase-4 figure and prints the table.
 
-    PYTHONPATH=src python -m text2motion.eval.streaming_bench --config configs/final100m.yaml
+    PYTHONPATH=src python -m text2motion.eval.streaming_bench --config configs/generator/final100m.yaml
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def bench_backbone(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Streaming latency/state-size benchmark.")
-    parser.add_argument("--config", default="configs/final100m.yaml")
+    parser.add_argument("--config", default="configs/generator/final100m.yaml")
     parser.add_argument("--horizons", type=int, nargs="+", default=[64, 128, 256, 512, 1024])
     parser.add_argument("--device", default=None)
     parser.add_argument("--out", default="outputs/streaming_bench.json")

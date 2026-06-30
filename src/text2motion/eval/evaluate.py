@@ -235,7 +235,7 @@ def main() -> None:
     parser.add_argument("--ckpt", default=None, help="explicit checkpoint (single-backbone only)")
     parser.add_argument(
         "--tokenizer_ckpt",
-        default="checkpoints/tokenizer_fsq.pt",
+        default="checkpoints/tokenizer/tokenizer_fsq.pt",
         help="frozen tokenizer state_dict to load; must match cfg.tokenizer architecture",
     )
     parser.add_argument("--device", default=None)

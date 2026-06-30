@@ -16,11 +16,11 @@ while (-not (Test-Path "outputs/rvq_sweep_done.txt")) { Start-Sleep -Seconds 600
 # Each FSQ config MIRRORS an RVQ config EXACTLY (same codes/step, same vocab) for a clean head-to-head;
 # fsq_g6_v1000 is the FSQ-native recommended config (extra reference). Order: matched pairs first.
 $variants = @(
-    @{ cfg = "configs/tokenizer_isovocab.yaml"; name = "fsq_g6_v512.pt" },   # <-> rvq_l6_512  (6x512)
-    @{ cfg = "configs/fsq_g6_v1024.yaml";       name = "fsq_g6_v1024.pt" },  # <-> rvq_l6_1024 (6x1024)
-    @{ cfg = "configs/fsq_g4_v512.yaml";        name = "fsq_g4_v512.pt" },   # <-> rvq_l4_512  (4x512)
-    @{ cfg = "configs/fsq_g8_v512.yaml";        name = "fsq_g8_v512.pt" },   # <-> rvq_l8_512  (8x512)
-    @{ cfg = "configs/tok_g6_v1000.yaml";       name = "fsq_g6_v1000.pt" }   # FSQ-native (8,5,5,5)
+    @{ cfg = "configs/tokenizer/tokenizer_isovocab.yaml"; name = "fsq_g6_v512.pt" },   # <-> rvq_l6_512  (6x512)
+    @{ cfg = "configs/tokenizer/fsq_g6_v1024.yaml";       name = "fsq_g6_v1024.pt" },  # <-> rvq_l6_1024 (6x1024)
+    @{ cfg = "configs/tokenizer/fsq_g4_v512.yaml";        name = "fsq_g4_v512.pt" },   # <-> rvq_l4_512  (4x512)
+    @{ cfg = "configs/tokenizer/fsq_g8_v512.yaml";        name = "fsq_g8_v512.pt" },   # <-> rvq_l8_512  (8x512)
+    @{ cfg = "configs/tokenizer/tok_g6_v1000.yaml";       name = "fsq_g6_v1000.pt" }   # FSQ-native (8,5,5,5)
 )
 
 foreach ($v in $variants) {

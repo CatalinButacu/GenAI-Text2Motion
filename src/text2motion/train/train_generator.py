@@ -87,8 +87,9 @@ def run(args: argparse.Namespace) -> None:
 
     ckpt_dir = Path(cfg.paths.checkpoints_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    ckpt_path = ckpt_dir / f"generator_{args.backbone}.pt"
-    resume_path = ckpt_dir / f"generator_{args.backbone}_last.pt"
+    ckpt_name = args.ckpt_name or f"generator_{args.backbone}.pt"  # ablations must not clobber winners
+    ckpt_path = ckpt_dir / ckpt_name
+    resume_path = ckpt_dir / f"{Path(ckpt_name).stem}_last.pt"
     run_dir = start_run(f"generator_{args.backbone}", cfg, cfg.paths.outputs_dir, extra=vars(args))
     log_metrics(run_dir, {"train_clips": len(loader.dataset), "device": device})
     print(f"train clips: {len(loader.dataset)}  device: {device}  backbone: {args.backbone}")
@@ -118,6 +119,8 @@ def run(args: argparse.Namespace) -> None:
             for key, value in parts.items():
                 totals[key] = totals.get(key, 0.0) + value
             steps += 1
+            if steps % 100 == 0:  # intra-epoch heartbeat: a slow 3h epoch must not read as a hang
+                (Path(run_dir) / "heartbeat").write_text(str(steps), encoding="utf-8")
         means = {k: v / steps for k, v in totals.items()}
         log_metrics(run_dir, {"epoch": epoch + 1, **means})
         print(
@@ -174,6 +177,9 @@ def run(args: argparse.Namespace) -> None:
             resume_path,
         )
 
+        if device == "cuda":
+            torch.cuda.empty_cache()  # defrag at epoch boundary (4GB-card fragmentation OOM lesson)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -183,7 +189,7 @@ def main() -> None:
     parser.add_argument("--backbone", required=True, choices=["mamba", "transformer"])
     parser.add_argument(
         "--tokenizer_ckpt",
-        default="checkpoints/tokenizer_fsq.pt",
+        default="checkpoints/tokenizer/tokenizer_fsq.pt",
         help="frozen tokenizer state_dict to load; must match cfg.tokenizer architecture",
     )
     parser.add_argument(
@@ -203,7 +209,10 @@ def main() -> None:
     parser.add_argument("--max_eval_clips", type=int, default=200)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--our_vab_dir", default="data/t2m_glove/glove")
-    parser.add_argument("--resume", action="store_true", help="resume from <backbone>_last.pt")
+    parser.add_argument(
+        "--ckpt_name", default=None, help="checkpoint filename (ablations must not clobber winners)"
+    )
+    parser.add_argument("--resume", action="store_true", help="resume from <ckpt_name stem>_last.pt")
     run(parser.parse_args())
 
 

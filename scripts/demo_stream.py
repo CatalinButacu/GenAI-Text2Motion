@@ -10,8 +10,8 @@ Needs the viewer extra (install when the venv is free -- it is busy while a pilo
     uv sync --extra viewer
 
     $env:PYTHONPATH="src"; .venv/Scripts/python.exe scripts/demo_stream.py `
-      --config configs/gen_pilot_fsq8x1024.yaml --backbone transformer `
-      --ckpt checkpoints/generator_transformer.pt --tokenizer_ckpt checkpoints/fsq_g8_v1024.pt `
+      --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone transformer `
+      --ckpt checkpoints/generator/generator_transformer.pt --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt `
       --prompt "a person walks forward and sits down" --steps 49 --out outputs/demo.mp4
 """
 
@@ -96,10 +96,10 @@ def run(args: argparse.Namespace) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Stream text -> motion and view it (skeleton).")
-    p.add_argument("--config", default="configs/gen_pilot_fsq8x1024.yaml")
+    p.add_argument("--config", default="configs/generator/gen_pilot_fsq8x1024.yaml")
     p.add_argument("--backbone", default="transformer", choices=["transformer", "mamba"])
-    p.add_argument("--ckpt", default="checkpoints/generator_transformer.pt")
-    p.add_argument("--tokenizer_ckpt", default="checkpoints/fsq_g8_v1024.pt")
+    p.add_argument("--ckpt", default="checkpoints/generator/generator_transformer.pt")
+    p.add_argument("--tokenizer_ckpt", default="checkpoints/tokenizer/fsq_g8_v1024.pt")
     p.add_argument("--prompt", required=True)
     p.add_argument("--steps", type=int, default=49, help="max token steps (~49 = 9.8s @ 20fps)")
     p.add_argument("--cfg_scale", type=float, default=5.0)

@@ -5,7 +5,7 @@ optimizer step) for one step at a given batch size and reports the peak allocati
 free memory -- the definitive answer to "does this model train on this card?". OOM is the thing we
 are probing for, so it is caught and reported (a legitimate runtime failure, not a hidden one).
 
-    $env:PYTHONPATH="src"; .venv/Scripts/python.exe scripts/mem_probe.py --config configs/final100m_fsq8x1024.yaml --backbone transformer --batch 1
+    $env:PYTHONPATH="src"; .venv/Scripts/python.exe scripts/mem_probe.py --config configs/generator/final100m_fsq8x1024.yaml --backbone transformer --batch 1
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Probe true training memory peak.")
     p.add_argument("--config", required=True)
     p.add_argument("--backbone", default="transformer", choices=["transformer", "mamba"])
-    p.add_argument("--tokenizer_ckpt", default="checkpoints/fsq_g8_v1024.pt")
+    p.add_argument("--tokenizer_ckpt", default="checkpoints/tokenizer/fsq_g8_v1024.pt")
     p.add_argument("--batch", type=int, default=1)
     run(p.parse_args())
 

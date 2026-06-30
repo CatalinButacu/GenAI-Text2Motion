@@ -8,10 +8,10 @@ $env:PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"
 $py = ".venv\Scripts\python.exe"
 
 $variants = @(
-    @{ cfg = "configs/rvq_l6_512.yaml";  name = "rvq_l6_512.pt" },
-    @{ cfg = "configs/rvq_l4_512.yaml";  name = "rvq_l4_512.pt" },
-    @{ cfg = "configs/rvq_l8_512.yaml";  name = "rvq_l8_512.pt" },
-    @{ cfg = "configs/rvq_l6_1024.yaml"; name = "rvq_l6_1024.pt" }
+    @{ cfg = "configs/tokenizer/rvq_l6_512.yaml";  name = "rvq_l6_512.pt" },
+    @{ cfg = "configs/tokenizer/rvq_l4_512.yaml";  name = "rvq_l4_512.pt" },
+    @{ cfg = "configs/tokenizer/rvq_l8_512.yaml";  name = "rvq_l8_512.pt" },
+    @{ cfg = "configs/tokenizer/rvq_l6_1024.yaml"; name = "rvq_l6_1024.pt" }
 )
 
 foreach ($v in $variants) {

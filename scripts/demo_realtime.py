@@ -53,8 +53,45 @@ def load_pipeline(a, dev):
     return tok, gen, te, mean, std
 
 
+def render_to_file(frames: list, prompt: str, out_path: str, fps: int) -> str:
+    """Render collected (cf, 22, 3) skeleton chunks to MP4 (ffmpeg) or GIF (Pillow fallback).
+
+    Writer is chosen by an explicit capability check (ffmpeg may genuinely be absent), not a
+    try/except over the import -- a missing GIF fallback would still fail loud.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.animation import FFMpegWriter, FuncAnimation, PillowWriter, writers
+
+    arr = np.stack(frames)  # (T, 22, 3)
+    bones = kinematic_bones()
+    lo, hi = arr.min((0, 1)), arr.max((0, 1))  # global box -> stable view as the root translates
+    fig = plt.figure(figsize=(5, 6))
+    ax = fig.add_subplot(111, projection="3d")
+
+    def update(i: int) -> None:
+        p = arr[i]
+        ax.clear()
+        ax.set_axis_off()
+        for b in bones:
+            ax.plot([p[b[0], 0], p[b[1], 0]], [p[b[0], 2], p[b[1], 2]], [p[b[0], 1], p[b[1], 1]],
+                    color="tab:blue", lw=2)
+        ax.scatter(p[:, 0], p[:, 2], p[:, 1], s=8, color="tab:red")
+        ax.set_xlim(lo[0], hi[0]); ax.set_ylim(lo[2], hi[2]); ax.set_zlim(lo[1], hi[1])
+        ax.view_init(elev=12, azim=-75)
+        ax.set_title(f'"{prompt}"\nframe {i + 1}/{len(arr)}', fontsize=9)
+
+    anim = FuncAnimation(fig, update, frames=len(arr), interval=1000 / fps)
+    if writers.is_available("ffmpeg"):
+        writer, out = FFMpegWriter(fps=fps), out_path
+    else:
+        writer, out = PillowWriter(fps=fps), str(Path(out_path).with_suffix(".gif"))
+    anim.save(out, writer=writer)
+    plt.close(fig)
+    return out
+
+
 def run(a: argparse.Namespace) -> None:
-    if a.headless:
+    if a.headless or a.save:
         matplotlib.use("Agg")  # explicit non-interactive backend; windowed mode uses matplotlib's
         # own default interactive backend (no try/except over GUI libraries -- fail loud if none).
     seed_everything(2026, False)
@@ -83,6 +120,17 @@ def run(a: argparse.Namespace) -> None:
             n += item.shape[0]
             print(f"  t={time.time() - t0:5.1f}s  {n:4d} frames generated (streaming live)")
         print(f"done: {n} frames in {time.time() - t0:.1f}s")
+        return
+
+    if a.save:  # offline render of the streamed clip (same producer path) -> MP4/GIF
+        frames_all: list = []
+        while True:
+            item = q.get()
+            if item is SENTINEL:
+                break
+            frames_all.extend(list(item))
+        out = render_to_file(frames_all, a.prompt, a.save, a.fps)
+        print(f"saved {len(frames_all)} frames -> {out}")
         return
 
     import matplotlib.pyplot as plt
@@ -135,10 +183,10 @@ def run(a: argparse.Namespace) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Real-time streaming motion demo (live 3D animation).")
-    p.add_argument("--config", default="configs/gen_pilot_fsq8x1024.yaml")
+    p.add_argument("--config", default="configs/generator/gen_pilot_fsq8x1024.yaml")
     p.add_argument("--backbone", default="transformer", choices=["transformer", "mamba"])
-    p.add_argument("--ckpt", default="checkpoints/generator_transformer.pt")
-    p.add_argument("--tokenizer_ckpt", default="checkpoints/fsq_g8_v1024.pt")
+    p.add_argument("--ckpt", default="checkpoints/generator/generator_transformer.pt")
+    p.add_argument("--tokenizer_ckpt", default="checkpoints/tokenizer/fsq_g8_v1024.pt")
     p.add_argument("--prompt", required=True)
     p.add_argument("--steps", type=int, default=49)
     p.add_argument("--cfg_scale", type=float, default=3.0)
@@ -146,6 +194,8 @@ def main() -> None:
     p.add_argument("--top_p", type=float, default=0.9)
     p.add_argument("--fixed_length", action="store_true")
     p.add_argument("--headless", action="store_true", help="verify streaming timing, no window")
+    p.add_argument("--save", default=None, help="render the clip to this MP4/GIF path (no window)")
+    p.add_argument("--fps", type=int, default=20, help="playback fps for --save (our motion rate)")
     run(p.parse_args())
 
 

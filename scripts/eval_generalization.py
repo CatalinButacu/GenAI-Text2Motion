@@ -29,21 +29,21 @@ from text2motion.train.train_tokenizer import build_tokenizer
 
 # checkpoint stem -> (config it was trained with, mechanism). Grounded in the sweep scripts.
 CKPT_CONFIGS: dict[str, tuple[str, str]] = {
-    "rvq_l4_512": ("configs/rvq_l4_512.yaml", "rvq"),
-    "rvq_l6_512": ("configs/rvq_l6_512.yaml", "rvq"),
-    "rvq_l8_512": ("configs/rvq_l8_512.yaml", "rvq"),
-    "rvq_l4_1024": ("configs/rvq_l4_1024.yaml", "rvq"),
-    "rvq_l6_1024": ("configs/rvq_l6_1024.yaml", "rvq"),
-    "rvq_l8_1024": ("configs/rvq_l8_1024.yaml", "rvq"),
-    "fsq_g4_v512": ("configs/fsq_g4_v512.yaml", "fsq"),
-    "fsq_g6_v512": ("configs/tokenizer_isovocab.yaml", "fsq"),  # 6x512 = (8,8,8)
-    "fsq_g8_v512": ("configs/fsq_g8_v512.yaml", "fsq"),
-    "fsq_g4_v1024": ("configs/fsq_g4_v1024.yaml", "fsq"),
-    "fsq_g6_v1024": ("configs/fsq_g6_v1024.yaml", "fsq"),
-    "fsq_g8_v1024": ("configs/fsq_g8_v1024.yaml", "fsq"),
-    "fsq_g4_v1000": ("configs/tok_g4_v1000.yaml", "fsq"),
-    "fsq_g6_v1000": ("configs/tok_g6_v1000.yaml", "fsq"),
-    "fsq_g8_v1000": ("configs/tok_g8_v1000.yaml", "fsq"),
+    "rvq_l4_512": ("configs/tokenizer/rvq_l4_512.yaml", "rvq"),
+    "rvq_l6_512": ("configs/tokenizer/rvq_l6_512.yaml", "rvq"),
+    "rvq_l8_512": ("configs/tokenizer/rvq_l8_512.yaml", "rvq"),
+    "rvq_l4_1024": ("configs/tokenizer/rvq_l4_1024.yaml", "rvq"),
+    "rvq_l6_1024": ("configs/tokenizer/rvq_l6_1024.yaml", "rvq"),
+    "rvq_l8_1024": ("configs/tokenizer/rvq_l8_1024.yaml", "rvq"),
+    "fsq_g4_v512": ("configs/tokenizer/fsq_g4_v512.yaml", "fsq"),
+    "fsq_g6_v512": ("configs/tokenizer/tokenizer_isovocab.yaml", "fsq"),  # 6x512 = (8,8,8)
+    "fsq_g8_v512": ("configs/tokenizer/fsq_g8_v512.yaml", "fsq"),
+    "fsq_g4_v1024": ("configs/tokenizer/fsq_g4_v1024.yaml", "fsq"),
+    "fsq_g6_v1024": ("configs/tokenizer/fsq_g6_v1024.yaml", "fsq"),
+    "fsq_g8_v1024": ("configs/tokenizer/fsq_g8_v1024.yaml", "fsq"),
+    "fsq_g4_v1000": ("configs/tokenizer/tok_g4_v1000.yaml", "fsq"),
+    "fsq_g6_v1000": ("configs/tokenizer/tok_g6_v1000.yaml", "fsq"),
+    "fsq_g8_v1000": ("configs/tokenizer/tok_g8_v1000.yaml", "fsq"),
 }
 SPLITS = ("train", "val", "test")
 
