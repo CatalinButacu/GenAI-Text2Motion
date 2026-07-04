@@ -1,4 +1,4 @@
-# Lesson 19 — The results we will report: three tables and the streaming figure
+# Lesson 19 -- The results we will report: three tables and the streaming figure
 
 > The dissertation's results scaffold: the exact tables and figure the committee reads, with columns
 > defined (Lesson 14), Contribution A filled from the seeded matrix (Lesson 7), and the generator rows
@@ -6,7 +6,7 @@
 > #clips, #reps, CFG scale, length mode, and a run-dir id; the claim is **parity + bounded streaming
 > cost**, not beating MoMask.
 
-## Table 1 — Main twin table (test, 20-rep, mean +/- std)
+## Table 1 -- Main twin table (test, 20-rep, mean +/- std)
 
 Columns from Lesson 14 + the streaming state size (Lesson 13). Lower FID/MM-Dist better; higher
 R-precision/Diversity better; Diversity/MultiModality calibrate to GT.
@@ -23,10 +23,10 @@ R-precision/Diversity better; Diversity/MultiModality calibrate to GT.
 | *cited:* MoMask (not streamable) | 0.045 | -- | -- | -- | -- | -- | bidir. |
 
 \*reconstruction FID (the generator's ceiling), not a generation number. GT row reproduces published
-(R@1 0.514 vs 0.511) -> harness check (Lesson 14.7). Pilot row is val/300-clips, different protocol —
+(R@1 0.514 vs 0.511) -> harness check (Lesson 14.7). Pilot row is val/300-clips, different protocol --
 a *scale* ablation, not the headline.
 
-## Table 2 — Contribution A (fillable NOW, seeded matrix)
+## Table 2 -- Contribution A (fillable NOW, seeded matrix)
 
 Recon-FID on HumanML3D-263 test, matched bits/step, shared enc/dec, seed 2026 (Lesson 7.2).
 
@@ -43,7 +43,7 @@ Recon-FID on HumanML3D-263 test, matched bits/step, shared enc/dec, seed 2026 (L
 **Pending columns:** train/val/test generalization gap (`eval_generalization.py`) and downstream
 gen-FID (FSQ-tokens vs RVQ-tokens generator A/B).
 
-## Table 3 — Ablations
+## Table 3 -- Ablations
 
 | Ablation | Status | Finding |
 |---|---|---|
@@ -55,7 +55,7 @@ gen-FID (FSQ-tokens vs RVQ-tokens generator A/B).
 | tokenizer generalization gap | have | gap = test - train <= 0 for 13/15 cells -> no overfitting (`generalization.md`) |
 | AMASS-pretrained tokenizer | future | Lesson 18 protocol |
 
-## Figure — the streaming signature (MEASURED, 100M twins, to horizon 8192)
+## Figure -- the streaming signature (MEASURED, 100M twins, to horizon 8192)
 
 Recurrent-state size and per-step latency vs horizon, both backbones
 (`outputs/streaming_bench*.json`, random-weight 100M twins). **Measured:** Mamba state **2.68 MB flat**
@@ -74,6 +74,6 @@ favors Mamba everywhere; latency too past ~4k. Figure **done**, no checkpoint ne
   efficiency result, not a failure to hide).
 
 > **Bottom line:** Table 2 (Contribution A) is **done and seeded**; Table 1's generator rows and the
-> streaming figure are the remaining deliverables — Table 1 gated on the 100M twin run, the figure
+> streaming figure are the remaining deliverables -- Table 1 gated on the 100M twin run, the figure
 > runnable from shapes today. This scaffold is the dissertation's results chapter with the empties
 > labelled, so filling it is mechanical once the runs land.

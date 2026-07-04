@@ -1,4 +1,4 @@
-"""Skeleton forward/inverse kinematics — faithful port of the official HumanML3D code.
+"""Skeleton forward/inverse kinematics -- faithful port of the official HumanML3D code.
 
 Ported verbatim (math unchanged) from:
     https://github.com/EricGuo5513/HumanML3D/blob/main/common/skeleton.py
@@ -6,7 +6,7 @@ Ported verbatim (math unchanged) from:
 The ONLY changes versus the original are cosmetic: explicit imports instead of
 ``from common.quaternion import *``, and dropping the unused euler/quaternion-fitting
 helpers the 263 pipeline never calls. The numerical behaviour of the kept methods
-(offsets, IK, FK, cont6d FK) is identical — these must match the Guo evaluator's data.
+(offsets, IK, FK, cont6d FK) is identical -- these must match the Guo evaluator's data.
 """
 
 import numpy as np
@@ -102,7 +102,7 @@ class Skeleton:
         target = np.array([[0, 0, 1]]).repeat(len(forward), axis=0)
         root_quat = qbetween_np(forward, target)
 
-        # Inverse Kinematics — quat_params (batch_size, joints_num, 4)
+        # Inverse Kinematics -- quat_params (batch_size, joints_num, 4)
         quat_params = np.zeros(joints.shape[:-1] + (4,))
         root_quat[0] = np.array([[1.0, 0.0, 0.0, 0.0]])
         quat_params[:, 0] = root_quat

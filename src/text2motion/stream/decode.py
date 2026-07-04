@@ -5,7 +5,7 @@ frames in fixed token-windows AS THEY ARRIVE (chunk-by-chunk, never waiting for 
 and push them onto a bounded queue for the studio. Each window is decoded independently, so the
 streamed frames are deterministic and concatenate exactly to the per-window decode. (A non-causal
 conv decoder has mild window-boundary artifacts vs a single full decode; overlap-add is a future
-refinement — the bounded-memory CLAIM is about the generator, not this lightweight decode.)
+refinement -- the bounded-memory CLAIM is about the generator, not this lightweight decode.)
 See `.claude/skills/streaming-decode`.
 """
 
@@ -96,7 +96,7 @@ def run_producer(
     top_p: float = 0.9,
 ) -> None:
     """Background producer: push frame chunks onto a bounded queue (drop-to-latest if the consumer
-    lags — never stall generation), then push STREAM_END. Run in a daemon thread."""
+    lags -- never stall generation), then push STREAM_END. Run in a daemon thread."""
     for chunk in decoder.stream(generator, text_emb, num_steps, temperature, top_p):
         _put_drop_oldest(out_queue, chunk)
 

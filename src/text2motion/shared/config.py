@@ -1,4 +1,4 @@
-"""Typed, config-driven settings — the convention for this and ALL future development.
+"""Typed, config-driven settings -- the convention for this and ALL future development.
 
 Rules of the road:
   * No module-level global constants, no ``from ... import *``, no magic numbers in code.
@@ -208,12 +208,12 @@ class GeneratorCfg:
         False  # vocab+1 END per head -> self-terminating length (False = legacy ckpts)
     )
     use_kernel: bool = False  # mamba-ssm fused selective scan in training forward. EXPLICIT opt-in
-    # (cloud config): when True the import must succeed — no silent fallback (fail-loud rule).
+    # (cloud config): when True the import must succeed -- no silent fallback (fail-loud rule).
     # mamba (S6) backbone
     d_state: int = 16
     d_conv: int = 4
     expand: int = 2
-    dt_rank: int = 32  # selective-Δ rank (≈ d_model/16)
+    dt_rank: int = 32  # selective-delta  rank (~ d_model/16)
     # transformer twin backbone
     n_heads: int = 8
 
@@ -235,10 +235,11 @@ class TrainCfg:
     ema_decay: float = 0.999  # eval the EMA copy
     cfg_dropout: float = 0.1  # drop text condition this often so CFG works at inference
     pkeep: float = 0.8  # teacher-forcing input corruption: keep a token with this prob, else random
-    # (T2M-GPT uses 0.5; fights memorization + exposure bias. 1.0 disables — tests pin that.)
+    # (T2M-GPT uses 0.5; fights memorization + exposure bias. 1.0 disables -- tests pin that.)
     amp: str = (
         "off"  # "bf16" wraps forward+loss in autocast (Ampere+: A10G/3050); opt/EMA stay fp32
     )
+    grad_accum: int = 1  # optimizer step every N micro-batches (loss scaled by 1/N); N x batch_size = effective  # batch, so the 4GB card can match the transformer twin's bs8 as bs4 x 2 (bs8 peak OOMs)
     # Term-split geometric weights (CE is the fixed anchor at weight 1.0). Each penalizes one named
     # 263 channel group on the soft-decoded motion, logged separately for visibility.
     w_root: float = 0.3  # root block [0:4]

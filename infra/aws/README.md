@@ -1,17 +1,17 @@
-# AWS GPU trainer — Terraform (cost-guarded)
+# AWS GPU trainer -- Terraform (cost-guarded)
 
 One command up, one command down. Three independent "never pay for a forgotten box" guards:
-1. **`terraform destroy`** — manual teardown.
-2. **idle-GPU watchdog** — terminates ~`idle_shutdown_minutes` after the GPU goes idle (i.e. training
+1. **`terraform destroy`** -- manual teardown.
+2. **idle-GPU watchdog** -- terminates ~`idle_shutdown_minutes` after the GPU goes idle (i.e. training
    finished). Arms only after it first sees the GPU busy, so it won't kill you mid-setup.
-3. **hard max-lifetime** — self-terminates after `max_hours` regardless.
+3. **hard max-lifetime** -- self-terminates after `max_hours` regardless.
 
 Spot by default; `instance_initiated_shutdown_behavior = terminate` so any shutdown releases the EBS.
 
 IPv6-only client -> we use **S3 for transfer** and **SSM for the shell** (both dual-stack); no inbound
 SSH needed. (Portability already done: WordVectorizer is vendored, configs/aws.yaml has relative paths.)
 
-## Phase-3 FINAL run — FSQ 8x1024, 100M twins (current; do this)
+## Phase-3 FINAL run -- FSQ 8x1024, 100M twins (current; do this)
 
 Frozen tokenizer **`checkpoints/tokenizer/fsq_g8_v1024.pt`** (recon-FID 0.0170). Config
 **`configs/generator/final100m_fsq8x1024.yaml`** (transformer 98.1M / Mamba 99.7M param-matched, 8 codebooks x
@@ -19,7 +19,7 @@ Frozen tokenizer **`checkpoints/tokenizer/fsq_g8_v1024.pt`** (recon-FID 0.0170).
 60 ep, val-select, locked CFG 5.0/temp 1.1) are already wired to these.
 
 ```powershell
-# 1) Bundle from repo root — note the FSQ-8x1024 tokenizer + the run scripts:
+# 1) Bundle from repo root -- note the FSQ-8x1024 tokenizer + the run scripts:
 $b = "thesis-t2m-913402647373"
 tar -cf bundle.tar src configs checkpoints/tokenizer/fsq_g8_v1024.pt infra/aws/run.sh infra/aws/run_canary.sh `
   data/HumanML3D_official data/eval_stats data/official_evaluator data/t2m_glove
@@ -35,6 +35,38 @@ cd infra/aws; terraform init; terraform apply
 # 5) Harvest + Table 1:
 aws s3 cp s3://$b/results/ . --recursive
 #   then: python -m text2motion.eval.evaluate --split test  (20-rep, both backbones)
+```
+
+### Mamba-only 100M (transformer twin already done) -- cheaper, do THIS one
+
+The transformer 100M is already trained (`generator_transformer_100m`, val FID 1.63), so only the
+Mamba half is missing. `run_mamba100m.sh` trains it through the **same two-stage pipeline the
+transformer used**: an AMASS motion-prior **pretrain** (from random init, 30 ep bs32) then a captioned
+**fine-tune** initialised from that prior -- so the twins share the treatment, not just the mixer.
+Fused kernel ON, spot-survivable (resumes at either stage from the last S3 checkpoint). One backbone
+-> **~half the cost** (~$14-18, 10-14 h). The completed twin table then reruns from
+`generator_mamba_100m.pt` + the local `generator_transformer_100m*.pt`.
+
+```powershell
+# 1) Bundle (adds run_mamba100m.sh + the AMASS token pack for the pretrain; the transformer ckpt is
+#    NOT needed on the box -- the final eval is local):
+$b = "thesis-t2m-913402647373"
+tar -cf bundle.tar src configs checkpoints/tokenizer/fsq_g8_v1024.pt data/amass_tokens_fsq8x1024.npz `
+  infra/aws/run_canary.sh infra/aws/run_mamba100m.sh `
+  data/HumanML3D_official data/eval_stats data/official_evaluator data/t2m_glove
+aws s3 cp bundle.tar s3://$b/bundle.tar
+# 2) Launch + SSM in (cost guards arm automatically):
+cd infra/aws; terraform init; terraform apply
+aws ssm start-session --target (terraform output -raw instance_id)
+# 3) On the box: pull bundle, CANARY (kernel-parity gate ~$2), then the Mamba run (pretrain+finetune):
+#      cd /opt/thesis && aws s3 cp s3://<b>/bundle.tar . && tar -xf bundle.tar
+#      bash run_canary.sh        # PASS = kernel parity OK AND 5-ep timing projects < 20 h
+#      bash run_mamba100m.sh     # STAGE A pretrain -> STAGE B finetune; MAMBA100M_DONE -> s3://<b>/results/
+# 4) Harvest + finish the twin table:
+aws s3 cp s3://$b/results/generator_mamba_100m.pt checkpoints/generator/ --region eu-north-1
+python -m text2motion.eval.evaluate --backbone mamba --ckpt checkpoints/generator/generator_mamba_100m.pt `
+  --config configs/generator/final100m_fsq8x1024.yaml --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt `
+  --split test --cfg_scale 6.0 --temperature 1.0 --length_mode fixed --mm_clips 100 --mm_repeats 30
 ```
 
 ---

@@ -1,10 +1,10 @@
 """Encode the pretraining corpus through the FROZEN tokenizer -> one compact token pack (E7b).
 
 Each 263-feature sequence is normalized with the OFFICIAL HumanML3D Mean/Std (the tokenizer's
-training space — corpus-specific stats would shift the lattice), segmented into ``segment_frames``
+training space -- corpus-specific stats would shift the lattice), segmented into ``segment_frames``
 windows (default 196 = the generator's horizon; stride configurable for overlap), and encoded to
 ``(T', num_quantizers)`` int16 indices. Output: a single compressed ``.npz`` (segment name -> token
-array) — the entire AMASS corpus collapses to tens of MB, which is what we ship to S3 for cloud
+array) -- the entire AMASS corpus collapses to tens of MB, which is what we ship to S3 for cloud
 pretraining instead of 151 GB of mocap.
 
     python -m text2motion.data.hml3d.tokenize_corpus --config configs/default.yaml
@@ -41,7 +41,7 @@ def tokenize(args: argparse.Namespace) -> None:
     features = sorted(Path(args.features_dir).glob("*.npy"))
     if not features:
         raise FileNotFoundError(
-            f"no features under {args.features_dir} — run pretrain_corpus first"
+            f"no features under {args.features_dir} -- run pretrain_corpus first"
         )
 
     run_dir = start_run("tokenize_corpus", cfg, cfg.paths.outputs_dir, vars(args))

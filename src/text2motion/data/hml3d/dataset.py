@@ -159,7 +159,7 @@ class Hml3dMotionTextDataset(Dataset):
         feat = np.load(self._vec_dir / f"{clip_id}.npy").astype(np.float32)
         if feat.shape[-1] != self._dim:
             raise ValueError(f"{clip_id}: expected {self._dim}-dim feature, got {feat.shape}")
-        if not np.isfinite(feat).all():  # NaN/Inf would poison gradients (data audit) — fail loud
+        if not np.isfinite(feat).all():  # NaN/Inf would poison gradients (data audit) -- fail loud
             raise ValueError(
                 f"{clip_id}: non-finite values in feature; drop it from the split list"
             )

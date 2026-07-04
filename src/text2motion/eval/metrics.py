@@ -13,7 +13,7 @@ from scipy import linalg
 def frechet_distance(
     mu1: np.ndarray, sigma1: np.ndarray, mu2: np.ndarray, sigma2: np.ndarray
 ) -> float:
-    """Fréchet distance between two Gaussians — the FID core."""
+    """Frechet distance between two Gaussians -- the FID core."""
     diff = mu1 - mu2
     covmean, _ = linalg.sqrtm(sigma1 @ sigma2, disp=False)
 

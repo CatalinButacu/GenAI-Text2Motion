@@ -4,7 +4,7 @@ and view it interactively, render it headless to MP4, or play a live stream of f
 The 263 feature is recovered to joint POSITIONS (`recover_from_ric`) and shown as an aitviewer
 `Skeletons` renderable with the t2m kinematic chain. aitviewer is the optional `[viewer]` extra and
 is imported lazily, so this module imports without it. See `.claude/skills/aitviewer-studio`.
-(The 168 SMPL-X track would instead use aitviewer's SMPLSequence — deferred.)
+(The 168 SMPL-X track would instead use aitviewer's SMPLSequence -- deferred.)
 """
 
 import queue as queue_mod

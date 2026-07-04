@@ -1,8 +1,8 @@
-"""Generator training losses — token-CE anchor + term-split geometric losses (+ optional FK).
+"""Generator training losses -- token-CE anchor + term-split geometric losses (+ optional FK).
 
 Two families (see paper/lessons/A-loss-and-optimizer.md):
-1. **token cross-entropy** — the discrete-choice objective; the fixed anchor (weight 1.0).
-2. **geometric, term-split** — L1 on the soft-decoded motion, one term per named 263 channel group
+1. **token cross-entropy** -- the discrete-choice objective; the fixed anchor (weight 1.0).
+2. **geometric, term-split** -- L1 on the soft-decoded motion, one term per named 263 channel group
    (root / ric / rot6d / vel / foot), each weighted and logged separately so we SEE which part
    fails. Optional **forward-kinematics consistency** (fk_self / fk_gt) enforces that the rotation
    and position channels describe the same body (data-validated GT floor ~0.84mm).

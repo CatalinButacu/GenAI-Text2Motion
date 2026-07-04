@@ -3,7 +3,7 @@
 Encodes then decodes the held-out test motions and reports: MPJPE (mean per-joint position error in
 mm, via ``recover_from_ric``), feature-L2, and the **downstream FID** of the reconstructions (the
 Guo matcher's FID between GT and reconstructed motion embeddings). Downstream FID is the headline
-number — it caps what any generator built on these tokens can reach. The tokenizer works in the
+number -- it caps what any generator built on these tokens can reach. The tokenizer works in the
 dataset's own Mean/Std space; FID uses the matcher's Comp_v6 normalization. See
 ``.claude/skills/motion-tokenizer`` and ``.claude/skills/t2m-eval``.
 """

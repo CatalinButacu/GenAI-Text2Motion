@@ -1,4 +1,4 @@
-# Applied Lesson B — Escaping the plateau: the training recipe and reproducibility
+# Applied Lesson B -- Escaping the plateau: the training recipe and reproducibility
 
 > Companion to Lesson A (A = the loss + optimizer math; **B = the full recipe around them + how every
 > number is made reproducible**). This project is a rebuild whose prior attempt **plateaued** (top-1
@@ -50,16 +50,16 @@ c' = \begin{cases} \varnothing & \text{with prob } p_{\text{drop}} \\ c & \text{
 \qquad p_{\text{drop}} = \texttt{cfg\_dropout} = 0.1.
 $$
 Without this, $p_\theta(z\mid\varnothing)$ is never learned and the inference-time extrapolation
-$\ell_\varnothing + s(\ell_c-\ell_\varnothing)$ has no valid $\ell_\varnothing$ — the single biggest
+$\ell_\varnothing + s(\ell_c-\ell_\varnothing)$ has no valid $\ell_\varnothing$ -- the single biggest
 free quality lever (the pilot's $-42\%$ FID at $s{=}5$, Lesson 8.9) depends on it.
 
-## B.4 pkeep — fighting exposure bias
+## B.4 pkeep -- fighting exposure bias
 
 Teacher forcing feeds **ground-truth** past tokens during training, but at inference the model feeds
-**its own** (sometimes wrong) tokens — a train/test mismatch (*exposure bias*). We corrupt the input
+**its own** (sometimes wrong) tokens -- a train/test mismatch (*exposure bias*). We corrupt the input
 stream: keep each input token with probability $\texttt{pkeep}=0.8$, else replace it with a random
 code. The model thus learns to recover from imperfect history, narrowing the train/inference gap.
-(Note: targets are unchanged — only the *inputs* are corrupted.)
+(Note: targets are unchanged -- only the *inputs* are corrupted.)
 
 ## B.5 Not freezing the text encoder
 
@@ -69,15 +69,15 @@ all. We unfreeze the **last transformer layer + final layer-norm + the projectio
 ($10^{-5}$ vs $2\times10^{-4}$ for the generator) so the pretrained features adapt gently without being
 washed out.
 
-## B.6 Reproducibility — what turns a number into evidence
+## B.6 Reproducibility -- what turns a number into evidence
 
 Every quantitative claim must trace to a run, or it is not admissible:
-- **Seed 2026 everywhere** (`seed=2026`) — twins, tokenizer sweeps, eval; recorded in each manifest.
-- **Strict determinism** (`deterministic=True`) — cuBLAS workspace + cuDNN deterministic +
+- **Seed 2026 everywhere** (`seed=2026`) -- twins, tokenizer sweeps, eval; recorded in each manifest.
+- **Strict determinism** (`deterministic=True`) -- cuBLAS workspace + cuDNN deterministic +
   `use_deterministic_algorithms`, so a re-run reproduces bit-for-bit.
-- **Run manifests** (`run_log.py`) — config + git commit + seed + library versions at `start_run`,
+- **Run manifests** (`run_log.py`) -- config + git commit + seed + library versions at `start_run`,
   then `metrics.jsonl` per epoch/eval. Any number in an ADR / the dissertation points to a run dir.
-- **Selection discipline** — model selection on **val**, **test** scored once (Lessons 7 and 14).
+- **Selection discipline** -- model selection on **val**, **test** scored once (Lessons 7 and 14).
 
 ## B.7 The schedule, precisely
 
@@ -93,9 +93,9 @@ land its peak-quality window (the ~60-epoch budget).
 
 ## B.8 What to hold onto
 
-1. The plateau cure is a **set** of constraints, not one trick — B.2 is the checklist.
+1. The plateau cure is a **set** of constraints, not one trick -- B.2 is the checklist.
 2. **CFG dropout 0.1** is what makes the inference-time guidance win *possible*.
 3. **pkeep 0.8** narrows the teacher-forcing / inference gap (exposure bias).
 4. **Partial text-encoder unfreezing** lifts the cap a frozen encoder imposes.
 5. **Seed + determinism + manifests + val-selection** are what make the results *citable*, not merely
-   internal — the standard an elite committee applies.
+   internal -- the standard an elite committee applies.

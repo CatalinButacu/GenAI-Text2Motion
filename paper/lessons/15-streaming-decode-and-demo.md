@@ -1,7 +1,7 @@
-# Lesson 15 — The live streaming demo: bounded decode to a viewer
+# Lesson 15 -- The live streaming demo: bounded decode to a viewer
 
 > The visible payoff of Contribution B. Lesson 13 proved the *generator's* state is bounded; a live
-> demo needs the **whole pipeline** — generation, decode, and transport — to be bounded too, or it
+> demo needs the **whole pipeline** -- generation, decode, and transport -- to be bounded too, or it
 > stalls. This lesson is that pipeline, grounded in `stream/decode.py` (the decode loop + bounded
 > queue are implemented; the aitviewer mesh render is the Phase-5 deliverable being finished).
 
@@ -20,12 +20,12 @@ flowchart LR
 
 The generator streams tokens with $O(1)$ state (Lesson 13). But three more things must each be bounded
 or the demo cannot run forever:
-1. **decode memory** — we must not buffer the whole token sequence before decoding;
-2. **transport** — a slow renderer must not force the generator to wait (or block its memory);
-3. **per-chunk work** — fixed, independent of how long we have been streaming.
+1. **decode memory** -- we must not buffer the whole token sequence before decoding;
+2. **transport** -- a slow renderer must not force the generator to wait (or block its memory);
+3. **per-chunk work** -- fixed, independent of how long we have been streaming.
 
 `stream/decode.py` satisfies all three. The result is a pipeline whose memory and per-step cost are
-flat in the horizon — the property that makes *open-ended* real-time generation possible.
+flat in the horizon -- the property that makes *open-ended* real-time generation possible.
 
 ## 15.2 Windowed decode (decode as tokens arrive)
 
@@ -34,13 +34,13 @@ $\texttt{chunk\_tokens}=4$ steps, decodes that window to motion frames:
 $$
 \text{window } (B, 4, R)\ \xrightarrow{\ \text{tokenizer.decode}\ }\ (B,\,4\cdot\text{downsample},\,263) = (B, 16, 263)\ \xrightarrow{\ \cdot\sigma+\mu\ }\ \text{denormalised chunk}.
 $$
-It never waits for the full sequence — a chunk of 16 frames is emitted as soon as 4 token-steps exist,
+It never waits for the full sequence -- a chunk of 16 frames is emitted as soon as 4 token-steps exist,
 then the window resets (no growing buffer). A trailing partial window is flushed at the end.
 
 **Honest caveat (state it):** each window is decoded *independently*, so the non-causal conv decoder
 has mild window-boundary artifacts versus one full-sequence decode. Overlap-add is a future
 refinement; crucially, **the bounded-memory claim is about the generator, not this lightweight
-decode**, so this does not affect the thesis result — only demo polish.
+decode**, so this does not affect the thesis result -- only demo polish.
 
 ## 15.3 The bounded queue: drop-to-latest
 
@@ -57,7 +57,7 @@ consumer generation is done. The queue's fixed capacity caps transport memory re
 - **Implemented:** `generator.stream` (bounded-state token generation), `StreamingMotionDecoder`
   (windowed decode), `run_producer` (bounded queue, drop-to-latest, sentinel). The producer side of a
   live demo is complete and testable headless.
-- **Pending (Phase 5):** the consumer — `render/studio.py` wiring CLIP text entry to the producer and
+- **Pending (Phase 5):** the consumer -- `render/studio.py` wiring CLIP text entry to the producer and
   rendering the SMPL-X mesh from the decoded 263 (rot6d -> FK), plus a headless MP4 export. This is a
   deliverable, not a research risk.
 
@@ -66,12 +66,12 @@ consumer generation is done. The queue's fixed capacity caps transport memory re
 Bounded generator state (Lesson 13) is the *claim*; this loop is the *demonstration* of it: type a
 prompt, watch motion appear chunk-by-chunk at fixed per-chunk cost, for as long as you like. The
 transformer twin could drive the same loop, but its KV-cache grows with the horizon (Lesson 11), so an
-open-ended session eventually slows or exhausts memory — exactly the failure the Mamba backbone
+open-ended session eventually slows or exhausts memory -- exactly the failure the Mamba backbone
 avoids. The demo is therefore not decoration: it is the use-case that motivates the bounded-state
-architecture, and (per Lesson 3.5) also the final qualitative validation instrument — correct
+architecture, and (per Lesson 3.5) also the final qualitative validation instrument -- correct
 trajectory, planted feet, correct bends, seen live.
 
-> **Bottom line:** the live pipeline is bounded end-to-end — $O(1)$ generator state, fixed-size
-> windowed decode, and a drop-to-latest bounded queue — so generation never stalls and memory stays
+> **Bottom line:** the live pipeline is bounded end-to-end -- $O(1)$ generator state, fixed-size
+> windowed decode, and a drop-to-latest bounded queue -- so generation never stalls and memory stays
 > flat over any horizon. That is Contribution B made visible; the remaining work is wiring the viewer,
 > not proving the claim.

@@ -29,7 +29,10 @@ class CLIPTextEncoder(nn.Module):
 
     def __init__(self, cfg: TextEncoderCfg) -> None:
         super().__init__()
-        from transformers import CLIPTextModelWithProjection, CLIPTokenizer  # lazy; raises if absent
+        from transformers import (  # lazy; raises if absent
+            CLIPTextModelWithProjection,
+            CLIPTokenizer,
+        )
 
         self.cfg = cfg
         self.tokenizer = CLIPTokenizer.from_pretrained(cfg.model_id)

@@ -1,4 +1,4 @@
-"""Quaternion / continuous-6D rotation math — faithful port of the official HumanML3D code.
+"""Quaternion / continuous-6D rotation math -- faithful port of the official HumanML3D code.
 
 Ported verbatim (math unchanged) from:
     https://github.com/EricGuo5513/HumanML3D/blob/main/common/quaternion.py

@@ -1,4 +1,4 @@
-"""Run manifests — the comparability rule: every training/eval run logs enough to reproduce it.
+"""Run manifests -- the comparability rule: every training/eval run logs enough to reproduce it.
 
 ``start_run`` creates ``<outputs_dir>/runs/<utc-stamp>_<name>/`` holding ``manifest.json`` (resolved
 config, CLI args, git commit, seed, package versions) and returns the directory; ``log_metrics``

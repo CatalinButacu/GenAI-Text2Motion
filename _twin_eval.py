@@ -1,4 +1,4 @@
-"""Back-compat shim — the driver was promoted to ``text2motion.eval.evaluate`` (same CLI, plus
+"""Back-compat shim -- the driver was promoted to ``text2motion.eval.evaluate`` (same CLI, plus
 ``--mm_clips/--mm_repeats`` MultiModality and ``--length_mode end``). Commands in STATUS/ADRs that
 reference ``_twin_eval.py`` keep working.
 

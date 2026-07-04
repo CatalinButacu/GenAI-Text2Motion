@@ -1,0 +1,32 @@
+# Demo model registry: one entry per usable generator checkpoint, pinning the EXACT config and
+# tokenizer it was trained with. Inference must reuse the training bundle, so the studio's model
+# picker offers only these entries -- no free mixing of checkpoints and tokenizers.
+#
+# Fields: label (shown in the dropdown), config (training yaml), ckpt (generator weights),
+# tokenizer_ckpt (the frozen tokenizer of that run), backbone (transformer | mamba).
+#
+# To add a model: copy an entry and point it at that run's OWN training config + tokenizer.
+# The legacy 2026-06-09 cloud twins (generator_{transformer,mamba}_cloud.pt) need
+# configs/generator/eval_pilot31m.yaml and their original tokenizer checkpoint; add them here
+# once that pairing is pinned from the run manifest.
+
+transformer-100m:
+  label: Transformer 100M (final, best val FID)
+  config: configs/generator/final100m_fsq8x1024.yaml
+  ckpt: checkpoints/generator/generator_transformer_100m_val163.pt
+  tokenizer_ckpt: checkpoints/tokenizer/fsq_g8_v1024.pt
+  backbone: transformer
+
+transformer-34m-pilot:
+  label: Transformer 34M (pilot twin)
+  config: configs/generator/gen_pilot_fsq8x1024.yaml
+  ckpt: checkpoints/generator/generator_transformer.pt
+  tokenizer_ckpt: checkpoints/tokenizer/fsq_g8_v1024.pt
+  backbone: transformer
+
+mamba-34m-pilot:
+  label: Mamba 34M (pilot twin, streaming)
+  config: configs/generator/gen_pilot_fsq8x1024.yaml
+  ckpt: checkpoints/generator/generator_mamba.pt
+  tokenizer_ckpt: checkpoints/tokenizer/fsq_g8_v1024.pt
+  backbone: mamba

@@ -1,4 +1,4 @@
-# Lesson 6 — FSQ: turning motion into tokens with a fixed grid (our tokenizer)
+# Lesson 6 -- FSQ: turning motion into tokens with a fixed grid (our tokenizer)
 
 > Mirror of Lesson 5, for the **Grouped-FSQ tokenizer (Contribution A)**. Same beginner framing:
 > what it is, how it is trained, why it needs almost no machinery, how we apply it. Values in
@@ -6,12 +6,12 @@
 
 ## 6.1 The same problem, a different answer
 We still need continuous motion $\to$ discrete tokens. VQ (L5) *learned centroids* and searched for
-the nearest. **FSQ instead rounds onto a fixed integer lattice** — no centroids, no search, no
+the nearest. **FSQ instead rounds onto a fixed integer lattice** -- no centroids, no search, no
 learning of the quantizer at all.
 
 ## 6.2 Finite Scalar Quantization: rounding onto a fixed lattice (the math)
 Take a small latent $z \in \mathbb{R}^{d}$ (here $d = 4$ per group). Give each dimension $i$ a fixed
-number of **levels** $L_i$ (e.g. $(8,5,5,5)$). Quantize each dimension independently — bound, then
+number of **levels** $L_i$ (e.g. $(8,5,5,5)$). Quantize each dimension independently -- bound, then
 round:
 
 $$
@@ -30,15 +30,15 @@ $$
 \qquad \prod_i L_i = 8\cdot5\cdot5\cdot5 = 1000.
 $$
 
-No nearest-neighbour search and **no stored vectors** — the "codebook" is the fixed lattice, never
+No nearest-neighbour search and **no stored vectors** -- the "codebook" is the fixed lattice, never
 materialised. (Implementation detail: the exact bound adds a small even/odd shift so the levels
-straddle zero correctly — see `FSQ.bound` in `tokenizer.py`; the essence is $\tanh$-bound then round.)
+straddle zero correctly -- see `FSQ.bound` in `tokenizer.py`; the essence is $\tanh$-bound then round.)
 
 **Definitions to note**
-- **Levels $L_i$** — allowed values per latent dimension.
-- **Implicit codebook** — $\prod_i L_i$ ($=1000$); implied by the lattice, never stored.
+- **Levels $L_i$** -- allowed values per latent dimension.
+- **Implicit codebook** -- $\prod_i L_i$ ($=1000$); implied by the lattice, never stored.
 
-## 6.3 Training FSQ — the math is "STE only"
+## 6.3 Training FSQ -- the math is "STE only"
 Same autoencoder: encoder $\to z \to$ round-to-lattice $q(z) \to$ decoder. The only
 non-differentiable op is $\operatorname{round}$, handled by the **same STE** as VQ:
 
@@ -71,11 +71,11 @@ flowchart LR
   G6 --> OUT
 ```
 
-*Six parallel groups, each rounded to its own fixed lattice — 6 codes per step (same budget as RVQ's
+*Six parallel groups, each rounded to its own fixed lattice -- 6 codes per step (same budget as RVQ's
 6 levels), but produced simultaneously with no search and no learned codebook.*
 
 A single small FSQ latent is too low-dimensional to represent 263-D motion (we learned this the hard
-way — the residual-FSQ variant collapsed at recon-FID 0.22). **Fix:** split the latent into **G = 6
+way -- the residual-FSQ variant collapsed at recon-FID 0.22). **Fix:** split the latent into **G = 6
 groups**, FSQ each group independently -> **6 codes per token step** (the same token budget as RVQ's
 6 levels, for a fair comparison; and a wide-enough 6x4 = 24-D latent).
 
@@ -101,11 +101,11 @@ flowchart TB
 partitions the latent and rounds every group in parallel. This is the independent variable in the
 Lesson 7 comparison.*
 
-## 6.5 How WE do it (applied — `tokenizer.py`)
+## 6.5 How WE do it (applied -- `tokenizer.py`)
 - **6 groups x (8,5,5,5) = 1000** codes/group; **shares** the conv encoder/decoder with RVQ (same
   width/downsample/resblocks) so the comparison isolates the quantizer.
 - **Training loop** (same `tokenizer_trainer.py`): encode -> round -> decode; loss = **reconstruction
-  L1 (+ velocity)** only — **commit is structurally 0**; AdamW + weight-EMA (eval smoothing, generic,
+  L1 (+ velocity)** only -- **commit is structurally 0**; AdamW + weight-EMA (eval smoothing, generic,
   not a codebook EMA); ~500 epochs; best by downstream recon-FID.
 - Logs the same two tiers; a healthy FSQ shows `recon` falling, `perplexity`/`usage_frac` high, and
   **`commit 0.0000`** (the on-screen proof of "no machinery").
@@ -133,7 +133,7 @@ Shapes for the recommended `tok_g6_v1000` ($\text{width}=512$, $\text{downsample
 levels $(8,5,5,5)\Rightarrow$ FSQ dim $4$, latent $6\times4=24$). The only learned matrices in the
 quantizer path are $W_1\in\mathbb{R}^{512\times24}$ (`pre_q`) and $W_2\in\mathbb{R}^{24\times512}$
 (`post_q`); FSQ itself has **no parameters**. Everything the decoder ever sees passes through the
-integer tensor `indices` $(B,49,6)$ — that is the whole channel.
+integer tensor `indices` $(B,49,6)$ -- that is the whole channel.
 
 ### The capacity formula
 
@@ -147,20 +147,20 @@ For $G=6$, $V=1000$: $\text{bits/step}=6\log_2 1000 \approx 59.8$, $V^G = 1000^{
 2930$ bits, i.e. $\sim 2^{2930}$ distinguishable motions. Capacity for *variety* is never the binding
 constraint; per-step *fidelity* is.
 
-### Is that "enough"? — rate-distortion, not an absolute
+### Is that "enough"? -- rate-distortion, not an absolute
 
 "Enough" is meaningless in isolation; it is defined against distortion. The input per step is
-$4\times263=1052$ floats; we compress it to $36$–$80$ bits — a $\sim\!400\text{–}900\times$ lossy
+$4\times263=1052$ floats; we compress it to $36$-$80$ bits -- a $\sim\!400\text{-}900\times$ lossy
 compression. How much is lost is the **recon-FID**, and the curve recon-FID vs bits/step **is** the
-rate-distortion curve — the Lesson 7 matrix sweeping codes/step $\{4,6,8\}$ is exactly that
+rate-distortion curve -- the Lesson 7 matrix sweeping codes/step $\{4,6,8\}$ is exactly that
 measurement:
 $$
-\text{4 codes} \approx 0.053\text{–}0.063 \;\to\; \text{6 codes} \approx 0.028\text{–}0.034
-\;\to\; \text{8 codes} \approx 0.020\text{–}0.028,
+\text{4 codes} \approx 0.053\text{-}0.063 \;\to\; \text{6 codes} \approx 0.028\text{-}0.034
+\;\to\; \text{8 codes} \approx 0.020\text{-}0.028,
 $$
 monotone with diminishing returns, reaching MoMask's $\approx0.019$ ceiling at 8 codes. We pick the
 **knee**: where extra bits stop materially lowering recon-FID. So the answer to "are 4 integers
-enough?" is empirical — at 4 codes there is visible residual; by 8 codes the reconstruction is at the
+enough?" is empirical -- at 4 codes there is visible residual; by 8 codes the reconstruction is at the
 reference ceiling.
 
 ### Effective vs nominal capacity (perplexity)
@@ -174,7 +174,7 @@ That fuller effective capacity is a core reason FSQ wins at *matched nominal bit
 
 More codes/step is not free downstream: the generator predicts $G$ codes **per step** through $G$
 parallel heads (Lesson 8), so larger $G$ enlarges the per-step joint space and the model, making
-generation harder. Hence the frozen tokenizer is chosen by recon-FID **and** downstream gen-FID — the
+generation harder. Hence the frozen tokenizer is chosen by recon-FID **and** downstream gen-FID -- the
 smallest $G$ that neither bottlenecks reconstruction nor overloads the generator.
 
 ## 6.6 Research lineage

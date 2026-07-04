@@ -1,7 +1,7 @@
-# Lesson 8 — The autoregressive generator: text into a distribution over tokens
+# Lesson 8 -- The autoregressive generator: text into a distribution over tokens
 
 > Opening of Contribution B. Lessons 5-7 built the *tokenizer* (motion <-> a grid of discrete codes).
-> Now we model the codes. This lesson defines the **probabilistic object** the generator is — the
+> Now we model the codes. This lesson defines the **probabilistic object** the generator is -- the
 > objective that **both twins optimise identically**. Lessons 11 (transformer) and 12 (Mamba) are
 > then *only two implementations of the function $f_\theta$ in this lesson*; lesson 13 is a property
 > of that function's state. Every equation here is grounded in `src/text2motion/model/generator.py`.
@@ -37,19 +37,19 @@ p_\theta(z \mid c).
 $$
 Sampling from it and decoding the tokens (frozen decoder) yields motion. Training fits $\theta$.
 
-## 8.2 The factorisation — causal in time, parallel across codebooks
+## 8.2 The factorisation -- causal in time, parallel across codebooks
 
 A grid has $T\cdot R$ entries; modelling the joint directly is intractable, so we factor it. The
 chain rule **in time** gives the autoregressive (causal) structure, and the implementation predicts
-the $R$ codebooks of a single step **in parallel from a shared hidden state** — i.e. conditionally
+the $R$ codebooks of a single step **in parallel from a shared hidden state** -- i.e. conditionally
 independent *given the history*:
 $$
 p_\theta(z \mid c) \;=\; \prod_{t=1}^{T}\;\prod_{r=1}^{R} p_\theta\!\big(z_t^{\,r}\;\big|\;z_{<t},\,c\big),
 \qquad z_{<t} := (z_1,\dots,z_{t-1}).
 $$
 Read it precisely: across **time** the model is strictly causal ($z_t$ may see only the past); across
-the **$R$ codebooks of the same step** there is no inner ordering $z_t^{<r}$ — they share one
-hidden state $h_t$ and are read out by $R$ parallel heads (§8.4). This is a deliberate modelling
+the **$R$ codebooks of the same step** there is no inner ordering $z_t^{<r}$ -- they share one
+hidden state $h_t$ and are read out by $R$ parallel heads (sec. 8.4). This is a deliberate modelling
 choice (`MotionGenerator.logits` stacks $R$ independent heads): it makes a step a single parallel
 prediction (cheap, streaming-friendly) at the cost of not modelling intra-step residual ordering the
 way a masked bidirectional model (MoMask) would. State the trade-off; do not hide it.
@@ -65,7 +65,7 @@ c \in \mathbb{R}^{P\times d_{\text{text}}}
 $$
 (`text_prefix`, with a hard shape assert that $P$ matches the encoder). The prefix is consumed
 **once**, before any motion token. For the transformer twin it stays in the KV-cache; for Mamba it is
-absorbed into the fixed-size recurrent state — the bounded-memory story of lesson 13 starts here.
+absorbed into the fixed-size recurrent state -- the bounded-memory story of lesson 13 starts here.
 
 ## 8.4 Embedding, the shared state, and the heads
 
@@ -74,7 +74,7 @@ $d_{\text{model}}$ vector (`embed_tokens`):
 $$
 e(z_t) \;=\; \sum_{r=1}^{R} E_r\big(z_t^{\,r}\big) \;\in\; \mathbb{R}^{d_{\text{model}}}.
 $$
-A causal backbone $f_\theta$ (the swappable part — transformer or Mamba) turns the prefix and the
+A causal backbone $f_\theta$ (the swappable part -- transformer or Mamba) turns the prefix and the
 embedded history into a hidden state, and $R$ linear heads produce per-codebook logits:
 $$
 h_t \;=\; f_\theta\big(\tilde c,\; e(z_1),\dots,e(z_{t-1})\big)\in\mathbb{R}^{d_{\text{model}}},
@@ -82,8 +82,8 @@ h_t \;=\; f_\theta\big(\tilde c,\; e(z_1),\dots,e(z_{t-1})\big)\in\mathbb{R}^{d_
 \ell_t^{\,r} \;=\; W_r\,h_t \;\in\;\mathbb{R}^{V},\quad
 p_\theta(z_t^{\,r}\mid z_{<t},c)=\mathrm{softmax}(\ell_t^{\,r}).
 $$
-Here $V = K + 1$ when an END token is used (§8.8). **Everything model-specific lives inside
-$f_\theta$**; §8.4 is identical for both twins. That is what makes the comparison controlled.
+Here $V = K + 1$ when an END token is used (sec. 8.8). **Everything model-specific lives inside
+$f_\theta$**; sec. 8.4 is identical for both twins. That is what makes the comparison controlled.
 
 ## 8.5 Training: teacher forcing + the cross-entropy anchor
 
@@ -102,14 +102,14 @@ $$
 {\sum_b L_b}.
 $$
 This is the **anchor**, not the whole loss: the full recipe adds a soft-decode reconstruction term
-(decode the predicted tokens through the frozen decoder and penalise geometry/velocity/foot error) —
+(decode the predicted tokens through the frozen decoder and penalise geometry/velocity/foot error) --
 that is Lesson A and the training-protocol chapter. Here, $\mathcal{L}_{\text{CE}}$ defines *what
 "predict the next token" means* mathematically.
 
 ## 8.6 Sampling: why non-greedy
 
 At inference the future is unknown, so we sample step by step. Greedy decoding
-($\arg\max$) collapses to a few repeated motions — the documented T2M-GPT failure mode. We use
+($\arg\max$) collapses to a few repeated motions -- the documented T2M-GPT failure mode. We use
 **temperature + nucleus (top-$p$)** sampling (`sample_logits`). With temperature $\tau$,
 $$
 \tilde p^{\,r}_v = \frac{\exp(\ell^{\,r}_v/\tau)}{\sum_{u}\exp(\ell^{\,r}_u/\tau)},
@@ -131,7 +131,7 @@ $$
 \ell^{\text{cfg}} \;=\; \ell_{\varnothing} \;+\; s\,\big(\ell_{c} - \ell_{\varnothing}\big),\qquad s\ge 1.
 $$
 $s=1$ is plain conditional sampling; $s>1$ pushes mass toward text-consistent codes. Both rows
-($c$ and $\varnothing$) run in **one batch of size $2B$**, so the streaming state stays bounded — CFG
+($c$ and $\varnothing$) run in **one batch of size $2B$**, so the streaming state stays bounded -- CFG
 costs a constant factor, not growing memory.
 
 ## 8.8 The END token and length
@@ -153,15 +153,15 @@ so an examiner sees exactly which claims are evidenced and which are forthcoming
 
 ## 8.10 Why this lesson is the hinge
 
-Everything downstream is a special case of §8.1-8.7:
-- **Lesson 11 (transformer)** and **Lesson 12 (Mamba)** only replace $f_\theta$ in §8.4 — same
+Everything downstream is a special case of sec. 8.1-8.7:
+- **Lesson 11 (transformer)** and **Lesson 12 (Mamba)** only replace $f_\theta$ in sec. 8.4 -- same
   objective, same heads, same loss, same sampler. The comparison is controlled *because* of this.
 - **Lesson 13 (streaming)** is the statement that $f_\theta$ admits a recurrence
   $h_t = g_\theta(h_{t-1}, e(z_{t-1}))$ whose state size is constant (Mamba) or growing (transformer
-  KV) — a property of $f_\theta$, read off this same forward pass.
-- **Lesson 14 (metrics)** scores samples drawn by §8.6-8.7.
+  KV) -- a property of $f_\theta$, read off this same forward pass.
+- **Lesson 14 (metrics)** scores samples drawn by sec. 8.6-8.7.
 
 > **Bottom line:** the generator is one conditional distribution $p_\theta(z\mid c)$, factored
 > causally in time and in parallel across codebooks, fit by masked next-token cross-entropy, and
 > sampled with temperature/nucleus + classifier-free guidance. The architecture debate (Contribution
-> B) is *only* about which $f_\theta$ computes $h_t$ — and at what streaming cost.
+> B) is *only* about which $f_\theta$ computes $h_t$ -- and at what streaming cost.

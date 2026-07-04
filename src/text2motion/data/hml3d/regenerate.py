@@ -1,4 +1,4 @@
-"""Regenerate standard HumanML3D-263 features from AMASS — faithful port of the official flow.
+"""Regenerate standard HumanML3D-263 features from AMASS -- faithful port of the official flow.
 
 Mirrors the official three-notebook pipeline end to end:
   1. ``raw_pose_processing.ipynb``: AMASS npz -> per-file (T, J, 3) Y-up joints (``raw_pose.py``).
@@ -79,7 +79,7 @@ def _resolve_pose_path(source_path: str, pose_root: Path) -> Path | None:
 
 
 def swap_left_right(data: np.ndarray) -> np.ndarray:
-    """Mirror joints left<->right (and negate x) — exact port of the official function."""
+    """Mirror joints left<->right (and negate x) -- exact port of the official function."""
     assert len(data.shape) == 3 and data.shape[-1] == 3
     data = data.copy()
     data[..., 0] *= -1

@@ -1,7 +1,7 @@
 """THE citable generation-eval driver (promoted from the root `_twin_eval.py` scratch).
 
 20-rep protocol on a full split (Guo et al. matcher, our_vab text, Comp_v6 stats, 32-pool):
-FID, R-precision top-1/2/3, MM-Dist, Diversity — plus **MultiModality** (Guo definition:
+FID, R-precision top-1/2/3, MM-Dist, Diversity -- plus **MultiModality** (Guo definition:
 ``mm_repeats`` generations per caption on ``mm_clips`` clips, 10 random pairs each). Generation is
 stream-based (the deployed path) at the GT token length unless ``--length_mode end`` (END-token
 models). Every invocation writes a run manifest (CLAUDE.md logging rule). Model selection happens
@@ -314,7 +314,7 @@ def main() -> None:
         log_metrics(run_dir, {"backbone": backbone, "ckpt": ckpt, **metrics})
         print(
             f"{backbone:12s} clips {metrics['clips']:4d}  FID {metrics['fid']:6.3f}  "
-            f"R@1 {metrics['r_top1']:.3f}±{metrics['r_top1_std']:.3f}  "
+            f"R@1 {metrics['r_top1']:.3f}+/-{metrics['r_top1_std']:.3f}  "
             f"R@2 {metrics['r_top2']:.3f}  R@3 {metrics['r_top3']:.3f}  "
             f"MM {metrics['mm_dist']:.3f}  Div {metrics['diversity']:.3f}  "
             f"MModality {metrics.get('multimodality', float('nan')):.3f}"

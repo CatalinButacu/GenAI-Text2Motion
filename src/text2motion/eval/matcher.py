@@ -1,4 +1,4 @@
-"""Guo et al. text+motion evaluator (the fixed FID / R-precision matcher) — reused UNMODIFIED.
+"""Guo et al. text+motion evaluator (the fixed FID / R-precision matcher) -- reused UNMODIFIED.
 
 Architecture is a faithful replica of the encoders in `finest.tar` from
     Guo et al. "Generating Diverse and Natural 3D Human Motions from Text", CVPR 2022,
@@ -34,7 +34,7 @@ def _bigru_final_state(
     gru: nn.GRU, x: torch.Tensor, hidden: torch.Tensor, lengths: torch.Tensor | None
 ) -> torch.Tensor:
     """Run a 1-layer BiGRU and return the concatenated forward+backward FINAL hidden state
-    (B, 2*hidden) — Guo et al.'s BiGRUCo pooling (NOT mean-pooling). Lengths, when given, are honoured
+    (B, 2*hidden) -- Guo et al.'s BiGRUCo pooling (NOT mean-pooling). Lengths, when given, are honoured
     via pack_padded_sequence so padding frames never enter the final state."""
     h0 = hidden.repeat(1, x.size(0), 1)
 
@@ -93,7 +93,7 @@ class MotionMatcher(nn.Module):
     """Full motion feature extractor: standard 263 feature -> (B, 512) embedding.
 
     Expects an ALREADY-NORMALISED 263 feature (normalise with `load_eval_stats`). Drops the last
-    4 foot-contact dims internally — no velocity diff, no padding (that was the 168-track hack).
+    4 foot-contact dims internally -- no velocity diff, no padding (that was the 168-track hack).
     """
 
     def __init__(self) -> None:

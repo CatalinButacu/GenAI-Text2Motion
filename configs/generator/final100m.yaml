@@ -1,5 +1,5 @@
 # Phase-3 FINAL twin run (cloud, g5.xlarge A10G): 100M-class param-matched twins
-# (transformer 12L d768 = 94.70M vs mamba 23L = 96.37M, +1.77% â€” recomputed via _param_match.py),
+# (transformer 12L d768 = 94.70M vs mamba 23L = 96.37M, +1.77% -- recomputed via _param_match.py),
 # 16-token CLIP prefix, END token, fused mamba kernel, bf16. Local sanity runs override
 # use_kernel=false (mamba-ssm is Linux/CUDA-only and the import fails loud by design).
 seed: 2026
@@ -32,7 +32,7 @@ generator:
   max_seq_len: 96           # 16 prefix + 49 motion + END + headroom
   text_prefix_len: 16
   use_end_token: true
-  use_kernel: true          # cloud: mamba-ssm fused scan (import must succeed â€” fail-loud)
+  use_kernel: true          # cloud: mamba-ssm fused scan (import must succeed -- fail-loud)
 
 train:
   amp: bf16                 # A10G bf16 autocast; optimizer/EMA stay fp32

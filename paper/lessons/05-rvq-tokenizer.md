@@ -1,9 +1,9 @@
-# Lesson 5 — RVQ: turning motion into tokens with a learned codebook (the baseline)
+# Lesson 5 -- RVQ: turning motion into tokens with a learned codebook (the baseline)
 
 > Beginner theory of the **strong-RVQ baseline tokenizer**, with the mathematics at each step.
 > Framing: quantization is how the analog world becomes digital; VQ generalizes it to vectors and is
 > exactly **online k-means**. Numbers confirmed in Lesson 7. Code: `rvq_baseline.py`,
-> `tokenizer_trainer.py`. (Math in LaTeX — view in a KaTeX/MathJax-capable markdown preview.)
+> `tokenizer_trainer.py`. (Math in LaTeX -- view in a KaTeX/MathJax-capable markdown preview.)
 
 ## 5.1 The problem
 Motion is **continuous** (the 263 floats per frame). A next-token generator needs **discrete**
@@ -12,7 +12,7 @@ tokens. A tokenizer learns to map motion $\to$ a few integers and back. RVQ does
 ## 5.2 Vector Quantization = nearest-centroid (the digital-signal idea, for vectors)
 Recall how a continuous audio signal is digitized: each sample is replaced by the nearest value from
 a finite set of **reproduction levels**. **Vector Quantization (VQ)** is the same idea for vectors:
-the reproduction levels become a set of representative vectors — a **codebook** — which are exactly
+the reproduction levels become a set of representative vectors -- a **codebook** -- which are exactly
 **cluster centroids** (as in k-means).
 
 The encoder produces a latent $z \in \mathbb{R}^{d}$; the codebook is
@@ -26,17 +26,17 @@ k^\star = \arg\min_{k}\,\lVert z - e_k\rVert_2,
 $$
 
 The decoder reconstructs $\hat{x} = \text{Decoder}\!\big(q(z)\big)$, trained against the input $x$
-with $\mathcal{L}_{\text{recon}} = \lVert x - \hat{x}\rVert_1$ (L1 — Lesson A: avoids L2 blur).
+with $\mathcal{L}_{\text{recon}} = \lVert x - \hat{x}\rVert_1$ (L1 -- Lesson A: avoids L2 blur).
 
 **Definitions to note**
-- **Codebook** — the $K$ learned centroids $e_k$.
-- **Quantization** — assign $z$ to its nearest centroid (a Voronoi partition of $\mathbb{R}^d$).
-- **Token** — the index $k^\star$ of that centroid.
+- **Codebook** -- the $K$ learned centroids $e_k$.
+- **Quantization** -- assign $z$ to its nearest centroid (a Voronoi partition of $\mathbb{R}^d$).
+- **Token** -- the index $k^\star$ of that centroid.
 
-## 5.3 Training VQ — three problems, each with its math
+## 5.3 Training VQ -- three problems, each with its math
 
-**Problem 1 — $\arg\min$ has no gradient.** The assignment $k^\star$ is piecewise-constant, so
-$\partial q/\partial z = 0$ almost everywhere and the encoder cannot learn. **Fix — Straight-Through
+**Problem 1 -- $\arg\min$ has no gradient.** The assignment $k^\star$ is piecewise-constant, so
+$\partial q/\partial z = 0$ almost everywhere and the encoder cannot learn. **Fix -- Straight-Through
 Estimator (STE):**
 
 $$
@@ -44,10 +44,10 @@ z_q = z + \operatorname{sg}\!\big(e_{k^\star} - z\big),
 $$
 
 where $\operatorname{sg}(\cdot)$ is stop-gradient. Forward $z_q = e_{k^\star}$ (discrete); backward
-the $\operatorname{sg}$ term contributes nothing, so $\partial z_q/\partial z = 1$ — the gradient is
+the $\operatorname{sg}$ term contributes nothing, so $\partial z_q/\partial z = 1$ -- the gradient is
 **copied straight through** to the encoder.
 
-**Problem 2 — centroids and encoder must agree.** The VQ-VAE objective:
+**Problem 2 -- centroids and encoder must agree.** The VQ-VAE objective:
 
 $$
 \mathcal{L} = \mathcal{L}_{\text{recon}}
@@ -55,7 +55,7 @@ $$
 \;+\; \beta\,\underbrace{\lVert z - \operatorname{sg}(e_{k^\star})\rVert_2^{2}}_{\text{commitment}} .
 $$
 
-In practice the **codebook loss is replaced by an EMA update** (more stable — it *is* online
+In practice the **codebook loss is replaced by an EMA update** (more stable -- it *is* online
 k-means). With decay $\gamma$ (we use $0.99$) and $n_k$ = number of latents assigned to centroid $k$
 this batch:
 
@@ -68,8 +68,8 @@ $$
 So only the **commitment** term $\beta\,\lVert z - \operatorname{sg}(e_{k^\star})\rVert_2^2$ stays in
 the loss (our $\beta = 0.02$); the codebook moves by EMA, not gradient.
 
-**Problem 3 — codebook collapse.** Many centroids end with $N_k \approx 0$ (never assigned).
-**Fix — dead-code reset:** when a centroid falls below a threshold $\tau$, reinitialise it to a
+**Problem 3 -- codebook collapse.** Many centroids end with $N_k \approx 0$ (never assigned).
+**Fix -- dead-code reset:** when a centroid falls below a threshold $\tau$, reinitialise it to a
 random encoder output from the batch:
 
 $$
@@ -77,7 +77,7 @@ $$
 $$
 
 A *healthy* VQ thus needs **STE + commitment + EMA + dead-code reset**. (T2M-GPT measured the stakes:
-naive VQ recon-FID $0.49$ vs EMA+reset $0.07$ — a $7\times$ gap.)
+naive VQ recon-FID $0.49$ vs EMA+reset $0.07$ -- a $7\times$ gap.)
 
 ## 5.4 RVQ = quantize the residual, recursively (coarse-to-fine)
 
@@ -109,12 +109,12 @@ $$
 \qquad \text{tokens} = (k_1,\dots,k_L).
 $$
 
-Each level shrinks the residual, $\lVert r_l\rVert < \lVert r_{l-1}\rVert$ — early levels capture
+Each level shrinks the residual, $\lVert r_l\rVert < \lVert r_{l-1}\rVert$ -- early levels capture
 gross structure, later levels add detail. The effective vocabulary is $K^{L}$ combinations from $L$
 small codebooks. **Quantization dropout:** with some probability keep only the first $L' < L$ levels
 in a step, so the model degrades gracefully.
 
-## 5.5 How WE do it (applied — `rvq_baseline.py`)
+## 5.5 How WE do it (applied -- `rvq_baseline.py`)
 The strong, competitive recipe (T2M-GPT + MoMask + EnCodec defaults):
 - $L = 6$ levels $\times\, K = 512$ centroids, code dim $512$;
 - EMA $\gamma = 0.99$, dead-code reset, commitment $\beta = 0.02$, quant-dropout $0.2$;
@@ -138,9 +138,9 @@ Healthy RVQ: $\mathcal{L}_{\text{recon}}$ falling, perplexity/usage high (held u
 commitment small and stable. Collapse $\Rightarrow$ usage crashes; drift $\Rightarrow$ commitment grows.
 
 ## 5.7 Research lineage
-VQ-VAE (van den Oord et al., 1711.00937) — learned-codebook quantization + STE + commitment;
-SoundStream (2107.03312) / EnCodec (2210.13438) — RVQ as the audio-codec standard; T2M-GPT
-(2301.06052), MoMask (2312.00063) — VQ/RVQ for motion. Our baseline follows them exactly.
+VQ-VAE (van den Oord et al., 1711.00937) -- learned-codebook quantization + STE + commitment;
+SoundStream (2107.03312) / EnCodec (2210.13438) -- RVQ as the audio-codec standard; T2M-GPT
+(2301.06052), MoMask (2312.00063) -- VQ/RVQ for motion. Our baseline follows them exactly.
 
 ### Check before Lesson 6
 1. Write the STE identity for $z_q$ and explain why its backward pass is the identity.

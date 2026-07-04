@@ -1,11 +1,11 @@
-"""Causal token-AR motion generator — Contribution B.
+"""Causal token-AR motion generator -- Contribution B.
 
 Predicts residual-FSQ motion tokens autoregressively over (downsampled) time, conditioned on a text
 embedding fed as a prefix. Two interchangeable backbones behind one interface:
-  * `MambaBackbone` — a selective SSM (S6, Gu & Dao arXiv:2312.00752). THE contribution: to our survey
+  * `MambaBackbone` -- a selective SSM (S6, Gu & Dao arXiv:2312.00752). THE contribution: to our survey
     no published motion generator is a token-autoregressive S6 (all Mamba motion work is diffusion- or
     masked-bidirectional). Fixed-size recurrent state -> bounded memory while streaming.
-  * `TransformerBackbone` — a causal decoder (T2M-GPT mold, arXiv:2301.06052). The controlled twin;
+  * `TransformerBackbone` -- a causal decoder (T2M-GPT mold, arXiv:2301.06052). The controlled twin;
     streams with a KV-cache that GROWS with sequence length.
 
 Each backbone implements `forward(seq)` (parallel, training) and `step(x_t, state)` (recurrent,
@@ -34,14 +34,14 @@ class RMSNorm(nn.Module):
 
 
 # --------------------------------------------------------------------------------------------------
-# Mamba (S6) backbone — Contribution B
+# Mamba (S6) backbone -- Contribution B
 # --------------------------------------------------------------------------------------------------
 
 
 def _parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
-    """Inclusive scan of the first-order linear recurrence sₜ = aₜ·sₜ₋₁ + xₜ (s₋₁ = 0) over dim 1,
-    via Hillis-Steele in log₂(L) affine-composition passes (Heinsen 2023, arXiv:2311.06281). Diagonal
-    aₜ -> all elementwise. Replaces the per-timestep python loop; matches step() within fp tolerance."""
+    """Inclusive scan of the first-order linear recurrence st = at*st-1 + xt (s-1 = 0) over dim 1,
+    via Hillis-Steele in log2(L) affine-composition passes (Heinsen 2023, arXiv:2311.06281). Diagonal
+    at -> all elementwise. Replaces the per-timestep python loop; matches step() within fp tolerance."""
     length = a.size(1)
     shift = 1
     while shift < length:
@@ -123,7 +123,7 @@ class MambaMixer(nn.Module):
             self.x_proj(x_c), [self.dt_rank, self.d_state, self.d_state], dim=-1
         )
 
-        if self.use_kernel:  # fused CUDA scan (mamba-ssm); import failure is LOUD — no fallback
+        if self.use_kernel:  # fused CUDA scan (mamba-ssm); import failure is LOUD -- no fallback
             from mamba_ssm.ops.selective_scan_interface import selective_scan_fn
 
             y = selective_scan_fn(
@@ -138,12 +138,12 @@ class MambaMixer(nn.Module):
             return self.out_proj(y * F.silu(z))
 
         dt = F.softplus(self.dt_proj(dt_raw))  # (B, L, d_inner)
-        da = torch.exp(dt.unsqueeze(-1) * a)  # (B, L, d_inner, d_state)  = aₜ
+        da = torch.exp(dt.unsqueeze(-1) * a)  # (B, L, d_inner, d_state)  = at
         dbx = (
             dt.unsqueeze(-1) * b.unsqueeze(2) * x_c.unsqueeze(-1)
-        )  # (B, L, d_inner, d_state)  = xₜ
+        )  # (B, L, d_inner, d_state)  = xt
 
-        ssm = _parallel_scan(da, dbx)  # sₜ = aₜ·sₜ₋₁ + xₜ, in log₂(L) passes (s₋₁ = 0)
+        ssm = _parallel_scan(da, dbx)  # st = at*st-1 + xt, in log2(L) passes (s-1 = 0)
         y = (ssm * c.unsqueeze(2)).sum(-1) + self.d_skip * x_c  # (B, L, d_inner)
         return self.out_proj(y * F.silu(z))
 
@@ -200,7 +200,7 @@ class MambaBackbone(nn.Module):
 
 
 # --------------------------------------------------------------------------------------------------
-# Transformer backbone — the controlled twin (KV-cache grows with T)
+# Transformer backbone -- the controlled twin (KV-cache grows with T)
 # --------------------------------------------------------------------------------------------------
 
 
@@ -391,7 +391,7 @@ def make_backbone(cfg: GeneratorCfg) -> nn.Module:
 
 def sample_logits(logits: torch.Tensor, temperature: float, top_p: float) -> torch.Tensor:
     """Nucleus sample per codebook. logits (B, R, V) -> tokens (B, R). Non-greedy by default
-    (greedy collapses — the T2M-GPT failure mode)."""
+    (greedy collapses -- the T2M-GPT failure mode)."""
     if temperature <= 0:
         return logits.argmax(-1)
 

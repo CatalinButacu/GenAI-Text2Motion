@@ -1,6 +1,6 @@
 # Streaming Text-to-Motion (SMPL-X)
 
-Master's thesis, clean rebuild: **real-time, incremental text → whole-body SMPL-X motion**, with our
+Master's thesis, clean rebuild: **real-time, incremental text -> whole-body SMPL-X motion**, with our
 own trained generator, viewed in a studio viewer (aitviewer).
 
 > The architecture is an open decision until ADR 0002 is accepted. See `.claude/decisions/`.
@@ -23,5 +23,5 @@ uv sync --extra dev      # ruff + pytest
 ```
 
 ## Status
-Scaffolding stage — see the checklist in `CLAUDE.md`. `model/` is intentionally empty until the
+Scaffolding stage -- see the checklist in `CLAUDE.md`. `model/` is intentionally empty until the
 architecture ADR (0002) is accepted.

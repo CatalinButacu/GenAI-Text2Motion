@@ -1,4 +1,4 @@
-# Applied Lesson A — The loss function and the optimizer (what we actually run)
+# Applied Lesson A -- The loss function and the optimizer (what we actually run)
 
 > Out of the theory sequence (1-3 = representation); this covers *how the model is trained*.
 > Grounded in `losses.py`, `trainer.py`, and `shared/config.py` (TrainCfg).
@@ -7,19 +7,19 @@
 
 The generator predicts **discrete tokens**, so the total loss mixes two kinds:
 
-1. **Classification — token cross-entropy (CE).** "Which of the 1000 codes is correct here?" Correct
-   tool for a codebook choice. Blind spot: to CE every wrong token is *equally* wrong — it cannot see
+1. **Classification -- token cross-entropy (CE).** "Which of the 1000 codes is correct here?" Correct
+   tool for a codebook choice. Blind spot: to CE every wrong token is *equally* wrong -- it cannot see
    that some wrong codes decode to nearly-identical motion. It has no notion of *motion distance*.
 2. **Geometric (regression) on the decoded motion.** Fix CE's blind spot with the **soft-decode
    trick**: logits -> softmax -> *expected* codes -> **frozen decoder** -> reconstructed `(T, 263)`,
    differentiably. Then penalize geometric error. The reconstruction term is **L1 over the full
-   263**, so it penalizes **positions (ric) AND rotations (rot6d) AND velocities together** — this is
+   263**, so it penalizes **positions (ric) AND rotations (rot6d) AND velocities together** -- this is
    the "combining both". Foot and root get extra dedicated terms.
 
 ## A.2 The exact recipe (losses.py + TrainCfg weights)
 
 Term-split (each $\mathcal{L}_g$ is an L1 on one 263 channel group of the **soft-decoded** motion;
-$\mathcal{L}_{\text{CE}}$ is token cross-entropy — the fixed anchor at weight 1):
+$\mathcal{L}_{\text{CE}}$ is token cross-entropy -- the fixed anchor at weight 1):
 
 $$
 \mathcal{L} = \mathcal{L}_{\text{CE}}
@@ -45,13 +45,13 @@ make "close in motion space" count, which CE alone cannot see; each is logged se
 
 ## A.4 Which optimizer (the full stack, already in trainer.py)
 
-- **AdamW** — per-parameter adaptive rates (gradients differ wildly across embeddings / SSM-attention
+- **AdamW** -- per-parameter adaptive rates (gradients differ wildly across embeddings / SSM-attention
   core / heads) + **decoupled weight decay** (`weight_decay=0.01`; plain Adam+L2 does this wrong).
   lr 2e-4 (generator group) and 1e-5 (unfrozen CLIP group).
-- **Warmup -> cosine** — ramp lr from ~0 (early gradients are noisy and can wreck a sequence model),
+- **Warmup -> cosine** -- ramp lr from ~0 (early gradients are noisy and can wreck a sequence model),
   then cosine-anneal; schedule sized to the ~60-epoch peak window.
-- **EMA 0.999** — evaluate a moving average of weights, not the jittery live weights -> stabler gens.
-- **Gradient clipping at 1.0** — cap gradient norm so a rare exploding gradient (common in
+- **EMA 0.999** -- evaluate a moving average of weights, not the jittery live weights -> stabler gens.
+- **Gradient clipping at 1.0** -- cap gradient norm so a rare exploding gradient (common in
   recurrent/sequence models) cannot blow up training.
 
 > **Why not SGD?** SGD needs careful per-layer lr tuning and momentum to match Adam on transformers/
@@ -60,8 +60,8 @@ make "close in motion space" count, which CE alone cannot see; each is logged se
 
 ## A.4b FK-consistency loss (proposed, data-validated 2026-06-14)
 
-Idea (user-proposed; an established technique — "forward-kinematics consistency loss"): the 263 stores
-BOTH rot6d and ric positions, so force them to agree — run FK on rot6d, compare to positions. Two
+Idea (user-proposed; an established technique -- "forward-kinematics consistency loss"): the 263 stores
+BOTH rot6d and ric positions, so force them to agree -- run FK on rot6d, compare to positions. Two
 flavors: **self-consistency** `FK(rot6d) vs model ric`, and **FK-to-GT** `FK(rot6d) vs GT positions`
 (anchors rotations to truth, fights kinematic-chain error accumulation). Strictly richer than a
 bone-length loss (checks the whole pose, not just segment lengths), so bone-length is dropped.
@@ -78,4 +78,4 @@ a local A/B before the final run.
    soft-decode through the frozen decoder).
 2. The recon L1 over the full 263 is where **positions and rotations are penalized together**.
 3. **L1 over L2** for geometry -> no blur.
-4. **AdamW + warmup/cosine + EMA + grad-clip** — the correct, adopted stack for token-AR models.
+4. **AdamW + warmup/cosine + EMA + grad-clip** -- the correct, adopted stack for token-AR models.

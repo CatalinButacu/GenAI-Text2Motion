@@ -1,4 +1,4 @@
-"""Residual-FSQ motion tokenizer — Contribution A.
+"""Residual-FSQ motion tokenizer -- Contribution A.
 
 FSQ (Finite Scalar Quantization, Mentzer et al., arXiv:2309.15505) bounds each latent dim with
 tanh and rounds to fixed levels; the implicit codebook is the product of per-dim level sets, giving
@@ -107,7 +107,7 @@ class ResidualFSQ(nn.Module):
 
 class GroupedFSQ(nn.Module):
     """``num_groups`` independent FSQ groups over a ``(num_groups * dim)`` latent. Concatenating the
-    per-group codes gives a ``num_groups * dim``-dimensional quantized latent — far higher capacity
+    per-group codes gives a ``num_groups * dim``-dimensional quantized latent -- far higher capacity
     than residual FSQ (which stays at ``dim`` and whose later levels collapse on the fixed grid).
     One token per group; every group fully uses its codebook."""
 

@@ -1,9 +1,9 @@
-"""Streaming benchmark — the thesis's signature measurement (ADR 0002 efficiency claim).
+"""Streaming benchmark -- the thesis's signature measurement (ADR 0002 efficiency claim).
 
 Steps both backbones' recurrent `step()` interface to long horizons and records, per horizon:
 per-step latency (median over the segment), the EXACT recurrent-state footprint in bytes
 (Mamba: fixed ssm+conv tensors; transformer twin: the KV-cache, which grows with T), and CUDA
-peak memory. Weights are random — latency/state are architecture properties, no checkpoint needed.
+peak memory. Weights are random -- latency/state are architecture properties, no checkpoint needed.
 Writes ``outputs/streaming_bench.json`` for the Phase-4 figure and prints the table.
 
     PYTHONPATH=src python -m text2motion.eval.streaming_bench --config configs/generator/final100m.yaml
@@ -93,7 +93,7 @@ def main() -> None:
     for backbone in ["transformer", "mamba"]:
         n_layers = cfg.generator.mamba_n_layers if backbone == "mamba" else cfg.generator.n_layers
         # The transformer's learned absolute-position table caps its streamable horizon (indexing
-        # past it CUDA-asserts) — itself a thesis finding: the SSM needs no positional bookkeeping.
+        # past it CUDA-asserts) -- itself a thesis finding: the SSM needs no positional bookkeeping.
         # For the latency/memory measurement we size the table to the horizon (weights are random;
         # table size does not affect per-step cost, the KV growth does).
         bench_seq_len = max(args.horizons) + cfg.generator.text_prefix_len + 8

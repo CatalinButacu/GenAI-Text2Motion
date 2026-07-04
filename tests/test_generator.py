@@ -1,6 +1,6 @@
 """Generator core (Contribution B): stream==batch parity for BOTH backbones (the bounded-memory
 claim made testable), single-batch overfit, and the fixed-state vs growing-KV-cache contrast.
-Synthetic tokens — no real data needed."""
+Synthetic tokens -- no real data needed."""
 
 import torch
 

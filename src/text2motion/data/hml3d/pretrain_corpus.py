@@ -1,4 +1,4 @@
-"""Build the ALL-AMASS pretraining corpus (E7/E7b) — 263 features for every AMASS sequence.
+"""Build the ALL-AMASS pretraining corpus (E7/E7b) -- 263 features for every AMASS sequence.
 
 `regenerate.py` stage 1 already forwarded the FULL donor AMASS through SMPL-X (pose_data covers
 ~16.4k sequences); only its index stage filters down to HumanML3D's captioned clips. This module
@@ -10,7 +10,7 @@ full-length 263 features to ``<out_dir>/new_joint_vecs``.
 index.csv) are EXCLUDED, so pretraining never sees held-out motion. Train-clip sources stay in.
 
 **No new Mean/Std:** the corpus is consumed in the OFFICIAL HumanML3D normalization (the frozen
-tokenizer's space) — see ``tokenize_corpus.py``. Computing corpus-specific stats would silently
+tokenizer's space) -- see ``tokenize_corpus.py``. Computing corpus-specific stats would silently
 shift the token lattice. Failures are loud, per file.
 
     python -m text2motion.data.hml3d.pretrain_corpus --config configs/default.yaml
@@ -69,7 +69,7 @@ def build_corpus(
     pose_root = regen_dir / "pose_data"
     joints_dir = regen_dir / "joints"
     if not pose_root.is_dir():
-        raise FileNotFoundError(f"{pose_root} missing — run regenerate.py --stage amass first")
+        raise FileNotFoundError(f"{pose_root} missing -- run regenerate.py --stage amass first")
 
     # Same reference skeleton as the HumanML3D regen (all clips share SMPL-X bone lengths).
     ref_path = joints_dir / f"{param_util.t2m_tgt_skel_id}.npy"

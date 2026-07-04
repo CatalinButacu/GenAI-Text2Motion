@@ -1,4 +1,4 @@
-"""HumanML3D-263 feature extraction + recovery — faithful port of the official code.
+"""HumanML3D-263 feature extraction + recovery -- faithful port of the official code.
 
 Ported from the ``process_file`` / ``uniform_skeleton`` / ``recover_*`` functions in
     https://github.com/EricGuo5513/HumanML3D/blob/main/motion_representation.ipynb
@@ -6,7 +6,7 @@ Ported from the ``process_file`` / ``uniform_skeleton`` / ``recover_*`` function
 The math is unchanged. The original code carried its parameters as notebook-level globals
 (``n_raw_offsets``, ``kinematic_chain``, ``tgt_offsets``, ``face_joint_indx``, ``fid_l/fid_r``,
 ``l_idx1/l_idx2``). To respect this repo's "no module-level constants / pass config" rule we
-bundle them into a frozen ``FeatureParams`` built from :mod:`param_util` and thread it through —
+bundle them into a frozen ``FeatureParams`` built from :mod:`param_util` and thread it through --
 the numerical pipeline is identical to the original.
 
 263 layout (per frame), exactly as the Guo evaluator / T2M-GPT VQ-VAE expect:

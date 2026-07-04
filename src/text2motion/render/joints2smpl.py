@@ -11,7 +11,8 @@ The 263 track is body-only, so hands/face stay neutral; only the 22 body joints 
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 
 import numpy as np
 import smplx
@@ -57,6 +58,12 @@ def _build_model(cfg: FitConfig, t: int, device: str):
     ).to(device)
 
 
+# Public alias: builds a fitting-ready SMPL-X model for a given (gender, batch size). Callers that
+# fit many same-sized batches (e.g. equal-length streaming chunks) should cache/reuse the result
+# and pass it as ``fit_smplx_to_joints(..., model=...)`` to skip the ~1s rebuild-from-disk cost.
+build_smplx_model = _build_model
+
+
 def _yaw_init(model, target: torch.Tensor, transl: torch.Tensor, device: str) -> torch.Tensor:
     """Pick the frame-0 yaw (of 4) whose zero-pose SMPL joints best match the target -> init orient."""
     t = target.shape[0]
@@ -77,19 +84,95 @@ def _yaw_init(model, target: torch.Tensor, transl: torch.Tensor, device: str) ->
     return best_aa
 
 
+def rest_pose_body(cfg: FitConfig, device: str = "cpu") -> tuple[np.ndarray, np.ndarray]:
+    """A standing zero-pose SMPL-X body (vertices (V,3), faces) -- the avatar shown before any prompt."""
+    model = _build_model(cfg, 1, device)
+    with torch.no_grad():
+        out = model(
+            global_orient=torch.zeros(1, 3, device=device),
+            body_pose=torch.zeros(1, 63, device=device),
+            transl=torch.zeros(1, 3, device=device),
+            betas=torch.zeros(1, cfg.num_betas, device=device),
+        )
+    return out.vertices[0].cpu().numpy(), model.faces.astype(np.int64)
+
+
+def mesh_from_params(
+    cfg: FitConfig,
+    global_orient: np.ndarray,
+    body_pose: np.ndarray,
+    transl: np.ndarray,
+    betas: np.ndarray,
+    gender: str,
+    device: str = "cpu",
+) -> tuple[np.ndarray, np.ndarray]:
+    """Re-forward SMPL-X from stored poses with a NEW gender/betas -> (verts, faces). Drives the live
+    gender + body-weight sliders without re-fitting (pose tracks the motion; betas set the build)."""
+    t = global_orient.shape[0]
+    model = _build_model(replace(cfg, gender=gender), t, device)
+    with torch.no_grad():
+        out = model(
+            global_orient=torch.tensor(global_orient, device=device),
+            body_pose=torch.tensor(body_pose, device=device),
+            transl=torch.tensor(transl, device=device),
+            betas=torch.tensor(betas, dtype=torch.float32, device=device).expand(t, -1),
+        )
+    return out.vertices.cpu().numpy(), model.faces.astype(np.int64)
+
+
 def fit_smplx_to_joints(
-    target_joints: np.ndarray, cfg: FitConfig, device: str = "cuda", verbose: bool = False
+    target_joints: np.ndarray,
+    cfg: FitConfig,
+    device: str = "cuda",
+    verbose: bool = False,
+    on_progress: Callable[[int, int], None] | None = None,
+    warm_start: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None,
+    model=None,
 ) -> FitResult:
-    """(T, 22, 3) target positions -> fitted SMPL-X. Two-stage Adam (orient/transl, then full)."""
+    """(T, 22, 3) target positions -> fitted SMPL-X. Two-stage Adam (orient/transl, then full).
+
+    ``on_progress(done_iters, total_iters)`` is called periodically (if given) so a caller can show
+    a live progress readout -- a full fit takes tens of seconds, not milliseconds.
+
+    ``model``, if given, is an already-built SMPL-X model to reuse instead of rebuilding one from
+    disk (~1s) -- ONLY valid if it was built with the same ``t = target_joints.shape[0]`` (a
+    mismatched batch size silently corrupts the smplx package's cached facial-landmark buffers).
+    Callers that fit many same-sized chunks (streaming) should cache/reuse a model per chunk size.
+
+    ``warm_start = (last_global_orient (3,), last_body_pose (63,), betas (num_betas,))`` from a
+    previous chunk's fit lets a NEW chunk continue cheaply: skips the yaw search and freezes betas
+    (shape shouldn't wobble chunk-to-chunk), so ``cfg.stage1_iters=0`` and a handful of
+    ``stage2_iters`` are enough to stay in lockstep with the previous chunk -- this is what lets the
+    live-streaming avatar in stream_viewer.py move as frames are generated, instead of only after a
+    single slow whole-clip fit at the end.
+    """
     dev = device if torch.cuda.is_available() else "cpu"
     t = target_joints.shape[0]
     target = torch.tensor(target_joints, dtype=torch.float32, device=dev)
-    model = _build_model(cfg, t, dev)
+    if model is None:
+        model = _build_model(cfg, t, dev)
+    total_iters = max(1, cfg.stage1_iters + cfg.stage2_iters)
 
     transl = target[:, 0].clone().requires_grad_(True)  # init at the pelvis target
-    global_orient = _yaw_init(model, target, target[:, 0].detach(), dev).requires_grad_(True)
-    body_pose = torch.zeros(t, 63, device=dev, requires_grad=True)
-    betas = torch.zeros(1, cfg.num_betas, device=dev, requires_grad=True)
+    if warm_start is not None:
+        last_orient, last_pose, last_betas = warm_start
+        global_orient = (
+            torch.tensor(last_orient, dtype=torch.float32, device=dev)
+            .expand(t, -1)
+            .clone()
+            .requires_grad_(True)
+        )
+        body_pose = (
+            torch.tensor(last_pose, dtype=torch.float32, device=dev)
+            .expand(t, -1)
+            .clone()
+            .requires_grad_(True)
+        )
+        betas = torch.tensor(last_betas, dtype=torch.float32, device=dev).unsqueeze(0)  # frozen
+    else:
+        global_orient = _yaw_init(model, target, target[:, 0].detach(), dev).requires_grad_(True)
+        body_pose = torch.zeros(t, 63, device=dev, requires_grad=True)
+        betas = torch.zeros(1, cfg.num_betas, device=dev, requires_grad=True)
 
     def forward():
         return model(
@@ -99,13 +182,17 @@ def fit_smplx_to_joints(
             betas=betas.expand(t, -1),
         ).joints[:, :J]
 
-    stage1 = torch.optim.Adam([global_orient, transl], lr=cfg.lr)
-    for _ in range(cfg.stage1_iters):
-        stage1.zero_grad()
-        ((forward() - target) ** 2).sum(-1).mean().backward()
-        stage1.step()
+    if cfg.stage1_iters > 0:
+        stage1 = torch.optim.Adam([global_orient, transl], lr=cfg.lr)
+        for it in range(cfg.stage1_iters):
+            stage1.zero_grad()
+            ((forward() - target) ** 2).sum(-1).mean().backward()
+            stage1.step()
+            if on_progress is not None and (it % 10 == 0 or it == cfg.stage1_iters - 1):
+                on_progress(it, total_iters)
 
-    stage2 = torch.optim.Adam([global_orient, body_pose, transl, betas], lr=cfg.lr)
+    stage2_params = [global_orient, body_pose, transl] + ([] if warm_start is not None else [betas])
+    stage2 = torch.optim.Adam(stage2_params, lr=cfg.lr)
     for it in range(cfg.stage2_iters):
         stage2.zero_grad()
         joints = forward()
@@ -116,6 +203,8 @@ def fit_smplx_to_joints(
         loss = data + cfg.w_smooth * smooth + cfg.w_reg * body_pose.pow(2).mean()
         loss.backward()
         stage2.step()
+        if on_progress is not None and (it % 10 == 0 or it == cfg.stage2_iters - 1):
+            on_progress(cfg.stage1_iters + it, total_iters)
         if verbose and (it % 100 == 0 or it == cfg.stage2_iters - 1):
             err = (joints.detach() - target).norm(dim=-1).mean().item() * 100
             print(f"  fit it {it:3d}  joint err {err:.1f} cm")

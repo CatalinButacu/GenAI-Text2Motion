@@ -1,6 +1,6 @@
-# Research Proposal — Streaming Text-to-Motion with a Token-Autoregressive State-Space Generator
+# Research Proposal -- Streaming Text-to-Motion with a Token-Autoregressive State-Space Generator
 
-**Author:** Cătălin Butacu · **Status:** living document (started 2026-06-10) · **Repo:** GenAI-Text2Motion @ thesis-v2
+**Author:** Catalin Butacu * **Status:** living document (started 2026-06-10) * **Repo:** GenAI-Text2Motion @ thesis-v2
 
 ## 1. Problem statement
 
@@ -10,7 +10,7 @@ sequences with masked prediction, so motion exists only after a full-sequence pa
 applications (avatars, games, robotics teleoperation) instead need **streaming**: motion must be
 emitted incrementally, with bounded memory and stable per-step latency, while the user watches.
 Causal GPT-style generators (T2M-GPT, AttT2M, Mogo) can stream, but their attention KV-cache grows
-linearly with the generated horizon — memory and per-step cost increase without bound.
+linearly with the generated horizon -- memory and per-step cost increase without bound.
 
 **Research gap (verified against the June 2026 literature):** no published motion generator is a
 *next-token, discrete, causal, fixed-recurrent-state* model. All Mamba/SSM motion work is
@@ -27,7 +27,7 @@ continuous diffusion-AR. The cell "token-AR S6 for motion" is unoccupied.
   quality (FID, R-precision) within range of a parameter-matched causal transformer twin trained
   under identical data/seed/budget/losses.
 - **H3 (streaming efficiency).** At long horizons the Mamba generator holds **O(1) state and flat
-  per-step latency** while the transformer twin's KV-cache and latency grow with the horizon — the
+  per-step latency** while the transformer twin's KV-cache and latency grow with the horizon -- the
   efficiency axis where the SSM wins *given* H2 parity.
 - **H4 (emerging, registered 2026-06-10).** At matched budget the SSM twin is more sample-efficient:
   it overfits later and peaks higher on retrieval precision than the transformer twin.
@@ -43,24 +43,24 @@ continuous diffusion-AR. The cell "token-AR S6 for motion" is unoccupied.
    experiment*: param-matched transformer (94.70M) vs Mamba (96.37M, +1.77%), identical tokenizer,
    data, seed, losses, schedule. Claim = H2 parity + H3 bounded streaming, not absolute SOTA.
 3. **A streaming evaluation protocol**: per-step latency + exact recurrent-state bytes vs horizon
-   (49 → 1024 steps), alongside the standard Guo et al. metric suite.
+   (49 -> 1024 steps), alongside the standard Guo et al. metric suite.
 
 ## 4. Method
 
 - **Representation:** standard HumanML3D-263 (22-joint; root velocities, RIC, rot6d, local
-  velocities, foot contacts), 20 fps — the citable track. SMPL-X 168 whole-body demo deferred.
-- **Tokenizer:** conv encoder (width 512, stride-4) → 6 groups × FSQ(8,5,5,5) (1000/group) →
-  conv decoder. Baseline: same encoder/decoder with 6×512 RVQ (EMA 0.99, dead-code reset,
-  commitment 0.02, quant-dropout 0.2 — the T2M-GPT/MoMask recipe).
+  velocities, foot contacts), 20 fps -- the citable track. SMPL-X 168 whole-body demo deferred.
+- **Tokenizer:** conv encoder (width 512, stride-4) -> 6 groups x FSQ(8,5,5,5) (1000/group) ->
+  conv decoder. Baseline: same encoder/decoder with 6x512 RVQ (EMA 0.99, dead-code reset,
+  commitment 0.02, quant-dropout 0.2 -- the T2M-GPT/MoMask recipe).
 - **Tokenizer comparison protocol (fairness contract):** FSQ vs RVQ are *different mechanisms*
   (parallel fixed-lattice vs sequential learned-residual), so the mechanism is the independent
-  variable; we match the INTERFACE — shared enc/dec, equal **codes/step**, equal **bits/step**
-  (= codes/step × log₂vocab), equal data/seed/budget — and report each at matched bits/step. Matched
-  pairs: FSQ {4,6,8}×512 ↔ RVQ levels {4,6,8}×512, and FSQ 6×1024 ↔ RVQ 6×1024. At matched vocab RVQ
+  variable; we match the INTERFACE -- shared enc/dec, equal **codes/step**, equal **bits/step**
+  (= codes/step x log2vocab), equal data/seed/budget -- and report each at matched bits/step. Matched
+  pairs: FSQ {4,6,8}x512 <-> RVQ levels {4,6,8}x512, and FSQ 6x1024 <-> RVQ 6x1024. At matched vocab RVQ
   carries ~3M codebook params vs FSQ's 0, so an FSQ tie/win is "equal-or-better with fewer params, no
-  machinery." Detail in `paper/lessons/07-tokenizer-results.md` §7.1b.
+  machinery." Detail in `paper/lessons/07-tokenizer-results.md` sec. 7.1b.
 - **Generator:** text prefix (CLIP ViT-B/32; pooled, upgraded to 16-token prefix) + per-codebook
-  embeddings → causal backbone (S6 mixer stack | transformer decoder) → per-codebook heads + END
+  embeddings -> causal backbone (S6 mixer stack | transformer decoder) -> per-codebook heads + END
   token. `forward` (parallel teacher-forcing) and `step` (recurrent streaming) share one recurrence;
   stream==batch parity is a unit-tested structural identity, not an approximation.
 - **Training:** token-CE + soft-decode reconstruction (expected FSQ codes through the frozen
@@ -72,10 +72,10 @@ continuous diffusion-AR. The cell "token-AR S6 for motion" is unoccupied.
 ## 5. Evaluation protocol (locked)
 
 - **Evaluator:** Guo et al. `text_mot_match` reused **unmodified**; our reimplementation reproduces
-  published GT numbers exactly (R@1 0.514 vs 0.511, Diversity 9.67 vs 9.50, MM-Dist 2.98 vs 2.97) —
+  published GT numbers exactly (R@1 0.514 vs 0.511, Diversity 9.67 vs 9.50, MM-Dist 2.98 vs 2.97) --
   the precondition for citable FID.
-- **Metrics:** FID, R-precision@1/2/3, MM-Dist, Diversity, MultiModality (100 captions × 30
-  samples), each as 20-repetition mean±std on the full split; plus the streaming benchmark (H3).
+- **Metrics:** FID, R-precision@1/2/3, MM-Dist, Diversity, MultiModality (100 captions x 30
+  samples), each as 20-repetition mean+/-std on the full split; plus the streaming benchmark (H3).
 - **Discipline:** model selection on **val** only; **test touched once** per final table; every
   number traces to a run manifest (config + git commit + seed + versions). Published baselines are
   cited, never retrained.
@@ -84,28 +84,28 @@ continuous diffusion-AR. The cell "token-AR S6 for motion" is unoccupied.
 
 | # | Experiment | Status | Cost |
 |---|---|---|---|
-| E1 | Tokenizer: Grouped-FSQ vs strong-RVQ (H1) | **done** — 0.0266 vs 0.0382 | local |
-| E2 | Iso-vocab ablation (H1a) | **done** — 0.0307 < RVQ 0.0382 at equal vocab | local |
-| E2b | Tokenizer latent-space sweep (groups {4,6,8}, vocab {512,1000,2560}) | running — sensitivity table for Contribution A | local |
+| E1 | Tokenizer: Grouped-FSQ vs strong-RVQ (H1) | **done** -- 0.0266 vs 0.0382 | local |
+| E2 | Iso-vocab ablation (H1a) | **done** -- 0.0307 < RVQ 0.0382 at equal vocab | local |
+| E2b | Tokenizer latent-space sweep (groups {4,6,8}, vocab {512,1000,2560}) | running -- sensitivity table for Contribution A | local |
 | E3 | 31.6M twins, matched budget (H2 pilot) | done (cloud); twin table v0 pending GPU | ~$21 |
-| E4 | CFG/temperature sweep (sampling lock) | **done** — FID −44%, R@1 ×2 | local |
+| E4 | CFG/temperature sweep (sampling lock) | **done** -- FID -44%, R@1 x2 | local |
 | E5 | 100M twins, full recipe (H2 main) | config gated + sanity-PASS; canary then run | ~$22 |
 | E6 | Streaming benchmark (H3) | harness built; run on final ckpts | local |
 | E7 | AMASS tokenizer pretraining (ablation) | queued | local |
-| E7b | **AMASS generator pretraining**: regen+tokenize AMASS locally (tokens ≈ tens of MB), ship tokens to S3, pretrain the generator *unconditionally* (token-CE only) on the full corpus, then fine-tune conditionally on HumanML3D with the full loss. The principal anti-overfitting lever (22k captioned clips is small for ~100M params); reported as a "+pretraining" ablation row. | registered 2026-06-11 | local + ~$5-8 |
+| E7b | **AMASS generator pretraining**: regen+tokenize AMASS locally (tokens ~ tens of MB), ship tokens to S3, pretrain the generator *unconditionally* (token-CE only) on the full corpus, then fine-tune conditionally on HumanML3D with the full loss. The principal anti-overfitting lever (22k captioned clips is small for ~100M params); reported as a "+pretraining" ablation row. | registered 2026-06-11 | local + ~$5-8 |
 | E8 | MultiModality + final tables | harness done | local |
 
-Total cloud budget: ≤ $80 (≈$21 spent; ~$45 reserved for E5 + contingency).
+Total cloud budget: <= $80 (~$21 spent; ~$45 reserved for E5 + contingency).
 
 ## 7. Threats to validity / limitations
 
-- **Absolute FID gap to MoMask (0.045):** expected and acknowledged — bidirectional refinement +
+- **Absolute FID gap to MoMask (0.045):** expected and acknowledged -- bidirectional refinement +
   far larger compute; our claim is twin parity on the streaming axis, with published numbers cited
   as the ceiling.
 - **Budget asymmetry in E3:** the pilot transformer ran 150 epochs, Mamba ~40; both demonstrably
   peak before epoch 35 (transformer ep20, mamba ep30), so best-checkpoint comparison stands; E5
   removes the asymmetry.
-- **Training-time SSM cost:** our eager parallel-scan trains ~16× slower than fused attention; an
+- **Training-time SSM cost:** our eager parallel-scan trains ~16x slower than fused attention; an
   implementation artifact (resolved by the fused mamba-ssm kernel in E5), distinct from the O(1)
   inference claim.
 - **GT-length conditioning** in fixed-length eval (field-standard caveat); the END token provides

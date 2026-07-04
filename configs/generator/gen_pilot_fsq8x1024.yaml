@@ -1,4 +1,4 @@
-# Generator PILOT — transformer twin on the frozen FSQ 8x1024 tokenizer (recon-FID 0.0170, best cell).
+# Generator PILOT -- transformer twin on the frozen FSQ 8x1024 tokenizer (recon-FID 0.0170, best cell).
 # Local "does it learn?" run before the 100M cloud twin. Generator geometry = dataclass defaults
 # (d_model 512, n_layers 8 -> ~34M); END token enabled (Track-A design). seed 2026.
 seed: 2026

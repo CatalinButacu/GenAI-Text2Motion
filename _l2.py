@@ -10,7 +10,7 @@ from text2motion.eval.word_vectorizer import WordVectorizer  # vendored Guo voca
 from text2motion.shared.config import load_config
 
 # The official HumanML3D (t2m) evaluator loads `our_vab` (dataset_motion_loader.py L18,
-# eval_comp_v6.py L105) — NOT the Inter-X `hhi_vab`. hhi_vab has different sos/eos/unk vectors and a
+# eval_comp_v6.py L105) -- NOT the Inter-X `hhi_vab`. hhi_vab has different sos/eos/unk vectors and a
 # restricted word set that maps many HumanML3D words to its `unk`, displacing every text embedding
 # (MM-Dist ~9 instead of 2.97). Use the standard our_vab the matcher was trained with.
 w_vec = WordVectorizer(r"data/t2m_glove/glove", "our_vab")
@@ -125,9 +125,9 @@ div = diversity(motion_embs, num_pairs=300)
 
 print("\n=== GT 'Real' baseline reproduction (20 reps, random caption) ===")
 print(f"{'metric':22}{'ours':>16}{'published':>14}")
-print(f"{'R-precision top-1':22}{rprec[:,0].mean():>10.3f} ±{rprec[:,0].std():.3f}{'0.511':>14}")
-print(f"{'R-precision top-2':22}{rprec[:,1].mean():>10.3f} ±{rprec[:,1].std():.3f}{'0.703':>14}")
-print(f"{'R-precision top-3':22}{rprec[:,2].mean():>10.3f} ±{rprec[:,2].std():.3f}{'0.797':>14}")
+print(f"{'R-precision top-1':22}{rprec[:,0].mean():>10.3f} +/-{rprec[:,0].std():.3f}{'0.511':>14}")
+print(f"{'R-precision top-2':22}{rprec[:,1].mean():>10.3f} +/-{rprec[:,1].std():.3f}{'0.703':>14}")
+print(f"{'R-precision top-3':22}{rprec[:,2].mean():>10.3f} +/-{rprec[:,2].std():.3f}{'0.797':>14}")
 print(f"{'Matching Score':22}{np.mean(mmdist):>16.3f}{'2.974':>14}")
 print(f"{'Diversity':22}{div:>16.3f}{'9.503':>14}")
 print(f"{'FID (real)':22}{fid_real:>16.4f}{'0.002':>14}")

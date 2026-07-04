@@ -1,4 +1,4 @@
-# configs/ — layout
+# configs/ -- layout
 
 Sorted into subfolders by role (2026-06-29). All path references in scripts/src/infra/paper were
 updated to match. Base configs stay at the root.

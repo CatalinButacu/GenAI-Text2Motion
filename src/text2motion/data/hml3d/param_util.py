@@ -1,4 +1,4 @@
-"""SMPL/T2M skeleton constants — faithful port of the official HumanML3D code.
+"""SMPL/T2M skeleton constants -- faithful port of the official HumanML3D code.
 
 Constants copied EXACTLY (no edits to any value) from:
     https://github.com/EricGuo5513/HumanML3D/blob/main/paramUtil.py            (offsets, chains)
@@ -54,7 +54,7 @@ t2m_kinematic_chain = [
     [9, 13, 16, 18, 20],
 ]
 
-# Hand chains (51-joint SMPL-H ordering) — only used by the mirror swap when >24 joints present.
+# Hand chains (51-joint SMPL-H ordering) -- only used by the mirror swap when >24 joints present.
 t2m_left_hand_chain = [
     [20, 22, 23, 24],
     [20, 34, 35, 36],

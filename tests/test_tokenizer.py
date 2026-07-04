@@ -1,5 +1,5 @@
 """Residual-FSQ tokenizer: shape contract, FSQ index<->code round-trip, and a single-batch
-overfit (the sanity-overfit gate). No real data needed — synthetic motion."""
+overfit (the sanity-overfit gate). No real data needed -- synthetic motion."""
 
 import torch
 
@@ -50,4 +50,4 @@ def test_single_batch_overfit():
         loss.backward()
         opt.step()
 
-    assert loss.item() < 0.5 * loss0  # must at least halve — proves the path learns
+    assert loss.item() < 0.5 * loss0  # must at least halve -- proves the path learns

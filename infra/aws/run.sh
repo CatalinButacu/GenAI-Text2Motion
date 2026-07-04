@@ -9,7 +9,7 @@ PY=/opt/pytorch/bin/python
 mkdir -p outputs
 
 # Sync BOTH logs and checkpoints while training runs: a lifetime/idle kill must never lose weights
-# (the 2026-06-09 run nearly lost all mamba epochs — only outputs/ was synced).
+# (the 2026-06-09 run nearly lost all mamba epochs -- only outputs/ was synced).
 ( while true; do aws s3 cp outputs s3://$B/results --recursive --region eu-north-1 >/dev/null 2>&1; sleep 180; done ) &
 SYNC=$!
 ( while true; do aws s3 sync checkpoints "s3://$B/results/checkpoints" --region eu-north-1 >/dev/null 2>&1; sleep 600; done ) &

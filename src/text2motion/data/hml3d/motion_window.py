@@ -1,4 +1,4 @@
-"""Fixed-length motion windows for tokenizer (RVQ/FSQ) training — motion only, no text.
+"""Fixed-length motion windows for tokenizer (RVQ/FSQ) training -- motion only, no text.
 
 The motion tokenizer is trained on fixed-length windows randomly cropped from each clip (the T2M-GPT
 / MoMask recipe), which keeps batches rectangular and the conv encoder's downsampling exact. Yields

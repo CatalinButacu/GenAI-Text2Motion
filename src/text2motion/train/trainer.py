@@ -1,4 +1,4 @@
-"""Generator trainer — ties Contribution A (frozen tokenizer) + Contribution B (generator) together.
+"""Generator trainer -- ties Contribution A (frozen tokenizer) + Contribution B (generator) together.
 
 Per training step: encode GT motion to tokens (the targets) with the FROZEN tokenizer, predict them
 with the generator (teacher forced), and optimise token-CE + the soft-decode geometric losses, with
@@ -84,6 +84,7 @@ class GeneratorTrainer:
         self.opt = torch.optim.AdamW(groups, lr=cfg.lr, weight_decay=cfg.weight_decay)
         self.ema = Ema(generator, cfg.ema_decay)
         self.scheduler: torch.optim.lr_scheduler.LambdaLR | None = None
+        self._accum_count = 0  # micro-batches since the last optimizer step (cfg.grad_accum)
 
     def build_scheduler(self, total_steps: int) -> None:
         """Linear warmup then cosine decay to ``lr_min_ratio`` of peak, scaling every param group
@@ -184,12 +185,20 @@ class GeneratorTrainer:
                 weighter=self.weighter,
             )
 
-        self.opt.zero_grad()
-        total.backward()
-        nn.utils.clip_grad_norm_(self._clip_params, 1.0)
-        self.opt.step()
-        if self.scheduler is not None:
-            self.scheduler.step()
-        self.ema.update(self.generator)
+        # gradient accumulation: grads sum over grad_accum micro-batches (loss scaled to keep the
+        # gradient an average), then one clipped optimizer/scheduler/EMA step -- identical update
+        # semantics to a single batch of grad_accum x batch_size
+        accum = max(1, self.cfg.grad_accum)
+        if self._accum_count == 0:
+            self.opt.zero_grad()
+        (total / accum).backward()
+        self._accum_count += 1
+        if self._accum_count >= accum:
+            self._accum_count = 0
+            nn.utils.clip_grad_norm_(self._clip_params, 1.0)
+            self.opt.step()
+            if self.scheduler is not None:
+                self.scheduler.step()
+            self.ema.update(self.generator)
 
         return parts

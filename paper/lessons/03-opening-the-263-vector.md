@@ -1,4 +1,4 @@
-# Lesson 3 — Opening the 263 vector, slice by slice
+# Lesson 3 -- Opening the 263 vector, slice by slice
 
 > Goal: map everything from Lessons 1-2 onto the actual numbers. After this you can point at any of
 > the 263 channels and say what it is, why it exists, and which concept it came from.
@@ -37,16 +37,16 @@ height (not absolute position); ric and rot6d skip the pelvis, so they count 21 
 
 ## 3.1a What "ric" means (read this before the table)
 
-**ric = Rotation-Invariant Coordinates** — joint *positions* (Language A) measured in a frame where
+**ric = Rotation-Invariant Coordinates** -- joint *positions* (Language A) measured in a frame where
 the body's **facing direction is removed**. From the code's `get_rifke` ("rotation-invariant forward
 kinematics").
 
 *Picture:* a camera mounted behind the pelvis that **always turns to face the way the body faces**.
-Filmed by it, "walk north" and "walk east" look **identical** — same limbs, only the heading
+Filmed by it, "walk north" and "walk east" look **identical** -- same limbs, only the heading
 differed, and the camera cancelled the heading. That is rotation-invariant: spin the whole body about
 the vertical axis and these numbers do not change.
 
-> **Definition to note — ric:** 3D positions of joints 1-21 in the pelvis-following, facing-cancelled
+> **Definition to note -- ric:** 3D positions of joints 1-21 in the pelvis-following, facing-cancelled
 > frame (numbers `[4:67]`). They say "where the limbs are relative to the body," never "which way the
 > body points in the room."
 
@@ -59,18 +59,18 @@ the vertical axis and these numbers do not change.
 
 *Three different "where" concepts, now distinct:* root velocity `[0:3]` = how the **pelvis moves**;
 root height `[3]` = how high the pelvis sits; ric `[4:67]` = the **other joints relative to the
-pelvis, facing removed**. World position/facing is not stored — integrate the root velocity to get it.
+pelvis, facing removed**. World position/facing is not stored -- integrate the root velocity to get it.
 
 ## 3.1b Which value belongs to which joint (the "which is which" map)
 
 22 joints, indexed 0-21, **pelvis = joint 0 = the root**. Key idea: the pelvis is the **reference
-frame** (a camera the body carries) — you record *how it moves* and *its height*, and everything
+frame** (a camera the body carries) -- you record *how it moves* and *its height*, and everything
 else *relative to it*. So the pelvis cannot be measured against itself: it is absent from the
 position and rotation blocks.
 
 | Block | Index range | Which joints | Per joint |
 |------|------------|--------------|-----------|
-| root (pelvis) | `[0:4]`     | **joint 0 only** | `[0]` turn rate · `[1:3]` ground velocity · `[3]` height |
+| root (pelvis) | `[0:4]`     | **joint 0 only** | `[0]` turn rate * `[1:3]` ground velocity * `[3]` height |
 | ric positions | `[4:67]`    | joints **1-21** (21) | 3 numbers, pelvis-relative |
 | rot6d rotations | `[67:193]`| joints **1-21** (21) | 6 numbers |
 | local velocities | `[193:259]` | **all 22** (0-21) | 3 numbers |
@@ -83,33 +83,33 @@ position and rotation blocks.
 
 ## 3.2 Reading it (each block ties back to a concept)
 
-**Root block `[0:4]` — the body's "where + facing", as velocity + height.**
+**Root block `[0:4]` -- the body's "where + facing", as velocity + height.**
 Note what is *absent*: no absolute x, z position, no absolute heading. Only the **turn rate**,
 **ground-plane speed**, and **height**. To place the body in the world you **integrate** the turn
 rate to get facing and the linear velocity to get the trajectory (Lesson 2). *This is the mechanism
-behind "rotating or sliding a clip changes nothing" — absolute pose was never stored, only its rate
+behind "rotating or sliding a clip changes nothing" -- absolute pose was never stored, only its rate
 of change.*
 
-**ric `[4:67]` — joint positions (Language A), root-relative.**
-The 3D locations of joints 1-21 in the root's own frame (root excluded — it sits at the origin
+**ric `[4:67]` -- joint positions (Language A), root-relative.**
+The 3D locations of joints 1-21 in the root's own frame (root excluded -- it sits at the origin
 here). 21 joints x 3 = 63. Easy to plot, easy for losses and the evaluator to consume directly.
 
-**rot6d `[67:193]` — joint rotations (Language B).**
+**rot6d `[67:193]` -- joint rotations (Language B).**
 The local rotation of each of joints 1-21 as the continuous 6-number code from Lesson 1 (root
-rotation excluded — it is the angular-velocity channel). 21 x 6 = 126. **This is the slice the demo
+rotation excluded -- it is the angular-velocity channel). 21 x 6 = 126. **This is the slice the demo
 reads to drive the SMPL-X body** (rot6d -> axis-angle -> FK).
 
-**local velocities `[193:259]` — per-joint change per frame (Lesson 2).**
+**local velocities `[193:259]` -- per-joint change per frame (Lesson 2).**
 All 22 joints, 3 each = 66. Smoothness / dynamics signal; the training velocity loss leans on this.
 
-**foot contacts `[259:263]` — when feet are grounded.**
+**foot contacts `[259:263]` -- when feet are grounded.**
 4 binary flags (heel/toe x left/right) from a velocity threshold. The anti-foot-skate signal
 (Lesson 2); the loss has a dedicated foot term.
 
 ## 3.3 The deliberate redundancy (an important insight)
 
 The 263 stores joint **positions (ric)** *and* joint **rotations (rot6d)** *and* their
-**velocities** — and these are mathematically redundant (rotations + FK give positions; consecutive
+**velocities** -- and these are mathematically redundant (rotations + FK give positions; consecutive
 positions give velocity). Why pay for all of it?
 
 - **Positions (ric)** are what the **evaluator and reconstruction loss** read most directly, and what
@@ -135,7 +135,7 @@ flowchart LR
   FC["foot 259:263"] --> SMOOTH
 ```
 
-*The redundancy is deliberate: different consumers read different slices — positions for the
+*The redundancy is deliberate: different consumers read different slices -- positions for the
 evaluator, rotations for the body, velocities/contacts for the losses.*
 
 ## 3.4 Where the 263 sits in the whole system
@@ -172,7 +172,7 @@ failure:
 **External (paper) proof of the layout.** The 263 spec is **Guo et al., CVPR 2022** (HumanML3D),
 re-documented identically across follow-ups (e.g. MotionStreamer, arXiv:2503.15451). Published
 composition: `4 root + (J-1)*3 ric + (J-1)*6 rot6d + J*3 vel + 4 foot`; for J=22 -> 4+63+126+66+4 =
-263 — block-for-block equal to our `feature.py` slices `[0:4] [4:67] [67:193] [193:259] [259:263]`.
+263 -- block-for-block equal to our `feature.py` slices `[0:4] [4:67] [67:193] [193:259] [259:263]`.
 Our code header names the exact ported file (`.../HumanML3D/blob/main/motion_representation.ipynb`),
 so we match the standard *by construction*; the frozen Guo evaluator reproducing published metrics on
 our data confirms it *behaviorally*.
@@ -195,7 +195,7 @@ layers:
 **We already do a version of it.** The generator predicts **discrete tokens**, not 263 floats; the
 position/velocity/foot channels enter mainly as **loss terms** (soft-decode geometric losses). So
 "model the compact thing, supervise with positions" is the spirit of our loss design already. The
-narrow open question is only "what should the **tokenizer** encode — all 263 or rot6d-only?".
+narrow open question is only "what should the **tokenizer** encode -- all 263 or rot6d-only?".
 
 **The literature trade-off (well documented, two-sided):**
 - *Rotation-only*: preserves bone lengths, but FK error **accumulates down the chain** (small spine
@@ -205,7 +205,7 @@ narrow open question is only "what should the **tokenizer** encode — all 263 o
 - *263 hybrid*: keeps both deliberately, plus velocity (smoothness) and foot (grounding).
 - *Frontier goes the OTHER way*: "Absolute Coordinates Make Motion Generation Easy" (Meng et al.,
   arXiv:2505.19377) argues HumanML3D's local-relative pelvis modeling causes global **drift** and that
-  **absolute** joint coordinates help — i.e. *more* explicit position info, not less. Plus a known
+  **absolute** joint coordinates help -- i.e. *more* explicit position info, not less. Plus a known
   critique that HumanML3D's rotations are IK-derived and the root uses only a 1-scalar Y-axis
   angular velocity.
 
@@ -235,5 +235,5 @@ axis we cite but do not claim to settle.
 
 ### Looking ahead (Lesson 4 preview)
 Lesson 4: why 263 floats per frame is too much for a generator to predict directly, and how the
-**tokenizer** (Contribution A) turns that continuous vector into a few discrete integers — the bridge
+**tokenizer** (Contribution A) turns that continuous vector into a few discrete integers -- the bridge
 from "motion representation" to "a model that generates motion".

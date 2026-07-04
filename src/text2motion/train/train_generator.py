@@ -68,8 +68,10 @@ def run(args: argparse.Namespace) -> None:
     our_std = np.load(out_dir / "Std.npy").astype(np.float32)
 
     # mean/std go to the trainer too: the FK-consistency loss denormalizes to real positions
-    trainer = GeneratorTrainer(generator, tokenizer, cfg.train, text_encoder, our_mean, our_std)
-    trainer.build_scheduler(args.epochs * len(loader))
+    train_cfg = replace(cfg.train, grad_accum=args.grad_accum)
+    trainer = GeneratorTrainer(generator, tokenizer, train_cfg, text_encoder, our_mean, our_std)
+    # the scheduler advances per OPTIMIZER step, of which accumulation leaves 1/grad_accum as many
+    trainer.build_scheduler(args.epochs * max(1, len(loader) // args.grad_accum))
     print(
         f"generator params: {sum(p.numel() for p in generator.parameters()):,} "
         f"(backbone {args.backbone}, {n_layers} layers)"
@@ -87,7 +89,9 @@ def run(args: argparse.Namespace) -> None:
 
     ckpt_dir = Path(cfg.paths.checkpoints_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    ckpt_name = args.ckpt_name or f"generator_{args.backbone}.pt"  # ablations must not clobber winners
+    ckpt_name = (
+        args.ckpt_name or f"generator_{args.backbone}.pt"
+    )  # ablations must not clobber winners
     ckpt_path = ckpt_dir / ckpt_name
     resume_path = ckpt_dir / f"{Path(ckpt_name).stem}_last.pt"
     run_dir = start_run(f"generator_{args.backbone}", cfg, cfg.paths.outputs_dir, extra=vars(args))
@@ -97,15 +101,20 @@ def run(args: argparse.Namespace) -> None:
     best_fid = float("inf")
     start_epoch = 0
     if args.resume and resume_path.is_file():
-        state = torch.load(resume_path, map_location=device)
+        # stage on CPU: map_location=device parks the whole ~390MB state file on the 4GB card and
+        # the first backward OOMs (2026-07-03); load_state_dict copies to each param's device
+        state = torch.load(resume_path, map_location="cpu")
         generator.load_state_dict(state["generator"])
         text_encoder.load_state_dict(state["text_encoder"])
-        trainer.opt.load_state_dict(state["optimizer"])
+        trainer.opt.load_state_dict(state["optimizer"])  # Adam moments cast to param device
         trainer.ema.shadow = {k: v.to(device) for k, v in state["ema"].items()}
         if trainer.scheduler is not None and state.get("scheduler") is not None:
             trainer.scheduler.load_state_dict(state["scheduler"])
         start_epoch = state["epoch"] + 1
         best_fid = state["best_fid"]
+        del state
+        if device == "cuda":
+            torch.cuda.empty_cache()
         print(f"resumed from {resume_path} at epoch {start_epoch} (best FID {best_fid:.4f})")
 
     for epoch in range(start_epoch, args.epochs):
@@ -201,6 +210,12 @@ def main() -> None:
     # land in that window. Scale epochs back up only with evidence (val FID still improving).
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument(
+        "--grad_accum",
+        type=int,
+        default=1,
+        help="micro-batches per optimizer step; grad_accum x batch_size = effective batch",
+    )
     parser.add_argument("--cfg_scale", type=float, default=1.0, help="CFG at in-train eval")
     parser.add_argument("--eval_split", default="val", choices=["val", "test"])
     parser.add_argument(
@@ -212,7 +227,9 @@ def main() -> None:
     parser.add_argument(
         "--ckpt_name", default=None, help="checkpoint filename (ablations must not clobber winners)"
     )
-    parser.add_argument("--resume", action="store_true", help="resume from <ckpt_name stem>_last.pt")
+    parser.add_argument(
+        "--resume", action="store_true", help="resume from <ckpt_name stem>_last.pt"
+    )
     run(parser.parse_args())
 
 

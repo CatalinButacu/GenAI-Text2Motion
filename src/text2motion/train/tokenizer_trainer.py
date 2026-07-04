@@ -1,6 +1,6 @@
-"""Tokenizer trainer (Contribution A) — trains the Residual-FSQ tokenizer or the strong-RVQ baseline.
+"""Tokenizer trainer (Contribution A) -- trains the Residual-FSQ tokenizer or the strong-RVQ baseline.
 
-One step: encode→quantize→decode a batch of normalized motion windows and minimise the reconstruction
+One step: encode->quantize->decode a batch of normalized motion windows and minimise the reconstruction
 loss (feature-L1 + velocity), plus the commitment term for the RVQ baseline (FSQ needs none). EMA of
 the weights is kept for eval. Codebook perplexity (effective codes used) is logged per step. The two
 tokenizers share this trainer via their ``forward`` returns: FSQ -> (recon, indices), RVQ ->
