@@ -1,12 +1,4 @@
 #!/bin/bash
-# Mamba-only 100M twin -- the transformer 100M twin is already done (val FID 1.63). This trains the
-# missing Mamba half through the SAME two-stage pipeline the transformer used: an AMASS motion-prior
-# PRETRAIN (from-scratch / random init, 30 ep bs32 -> generator_transformer_100m_pretrained.pt used
-# CE 1.54) THEN a captioned FINE-TUNE initialised from that prior. Fused CUDA selective-scan kernel
-# ON, spot-survivable (resume from the last S3 checkpoint at either stage).
-# ~half the cost of run.sh (one backbone): g5.xlarge, ~10-14 h, ~$14-18.
-#
-# Run AFTER run_canary.sh passes (kernel parity + timing gate). On the box:  bash run_mamba100m.sh
 set -euo pipefail
 cd /opt/thesis
 export PYTHONPATH=/opt/thesis/src
@@ -21,73 +13,98 @@ PACK=data/amass_tokens_fsq8x1024.npz
 PRIOR=checkpoints/generator_mamba_100m_pretrained.pt   # matches the transformer prior's naming
 FT=generator_mamba_100m.pt                             # best-by-val fine-tune; resume: *_last.pt
 
-# --- gate: install + BUILD the fused kernel against the box torch, verify it matches the eager path.
-# The plan forbids training mamba on cloud WITHOUT the kernel (14x slower). Self-contained so this is
-# safe even if the canary was skipped; cached after the canary -> a fast re-check then. (== canary gate 1.)
 echo "=== gate: fused selective-scan kernel ===" | tee outputs/mamba100m_gate.log
-# Kernel wheels are CACHED in S3: a ~30s install vs a ~35 min source compile that otherwise idles the
-# GPU toward the never-busy cost-watchdog (which twice reclaimed the box before training started,
-# 2026-07-04). Build once, cache, reuse on every future box. Wheels are torch-ABI-specific, so the
-# cache key would ideally include the torch version; on a stable DLAMI one build serves all runs.
-WHEELDIR=/tmp/wheels; mkdir -p $WHEELDIR
-if aws s3 cp "s3://$B/wheels/" $WHEELDIR/ --recursive --region $REGION 2>/dev/null && ls $WHEELDIR/*.whl >/dev/null 2>&1; then
-  echo "using cached kernel wheels from s3://$B/wheels" | tee -a outputs/mamba100m_gate.log
-  $PY -m pip install -q $WHEELDIR/*.whl pytest
+WHEELDIR=/tmp/wheels
+mkdir -p "$WHEELDIR"
+
+have_cached_wheels() {
+    aws s3 cp "s3://$B/wheels/" "$WHEELDIR/" --recursive --region "$REGION" 2>/dev/null || return 1
+    ls "$WHEELDIR"/*.whl >/dev/null 2>&1
+}
+
+if have_cached_wheels; then
+    echo "using cached kernel wheels from s3://$B/wheels" | tee -a outputs/mamba100m_gate.log
+    $PY -m pip install -q "$WHEELDIR"/*.whl pytest
 else
-  echo "no cached wheels -> one-time source build (then cached)" | tee -a outputs/mamba100m_gate.log
-  # Build against the CUDA toolkit MATCHING torch's build -- cpp_extension hard-fails on a
-  # major-version nvcc mismatch (this DLAMI: torch cu128 + /usr/local/cuda-12.8; a stale canary
-  # recipe hardcoded cuda-13.0 and broke the build).
-  TORCH_CU=$($PY -c "import torch; print(torch.version.cuda)")
-  if [ -d "/usr/local/cuda-$TORCH_CU" ]; then export CUDA_HOME="/usr/local/cuda-$TORCH_CU"
-  elif [ -d /usr/local/cuda ]; then export CUDA_HOME=/usr/local/cuda
-  else echo "no CUDA toolkit matching torch $TORCH_CU" | tee -a outputs/mamba100m_gate.log; exit 1; fi
-  export PATH="$CUDA_HOME/bin:$PATH"
-  export MAMBA_FORCE_BUILD=TRUE CAUSAL_CONV1D_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST=8.6 MAX_JOBS=4
-  echo "building against $CUDA_HOME (torch cuda $TORCH_CU)" | tee -a outputs/mamba100m_gate.log
-  $PY -m pip wheel --no-deps --no-build-isolation -w $WHEELDIR causal-conv1d mamba-ssm 2>&1 | tail -3 | tee -a outputs/mamba100m_gate.log
-  aws s3 cp $WHEELDIR/ "s3://$B/wheels/" --recursive --exclude "*" --include "*.whl" --region $REGION
-  $PY -m pip install -q $WHEELDIR/*.whl pytest
+    echo "no cached wheels -> one-time source build (then cached)" | tee -a outputs/mamba100m_gate.log
+    TORCH_CU=$($PY -c "import torch; print(torch.version.cuda)")
+    if [ -d "/usr/local/cuda-$TORCH_CU" ]; then
+        export CUDA_HOME="/usr/local/cuda-$TORCH_CU"
+    elif [ -d /usr/local/cuda ]; then
+        export CUDA_HOME=/usr/local/cuda
+    else
+        echo "no CUDA toolkit matching torch $TORCH_CU" | tee -a outputs/mamba100m_gate.log
+        exit 1
+    fi
+    export PATH="$CUDA_HOME/bin:$PATH"
+    export MAMBA_FORCE_BUILD=TRUE
+    export CAUSAL_CONV1D_FORCE_BUILD=TRUE
+    export TORCH_CUDA_ARCH_LIST=8.6
+    export MAX_JOBS=4
+    echo "building against $CUDA_HOME (torch cuda $TORCH_CU)" | tee -a outputs/mamba100m_gate.log
+    $PY -m pip wheel --no-deps --no-build-isolation -w "$WHEELDIR" causal-conv1d mamba-ssm 2>&1 | tail -3 | tee -a outputs/mamba100m_gate.log
+    aws s3 cp "$WHEELDIR/" "s3://$B/wheels/" --recursive --exclude "*" --include "*.whl" --region "$REGION"
+    $PY -m pip install -q "$WHEELDIR"/*.whl pytest
 fi
+
 $PY -m pytest tests/test_generator_upgrades.py::test_kernel_matches_eager_scan -q 2>&1 | tee -a outputs/mamba100m_gate.log
 
-# --- sync loops: a spot-kill or the idle/lifetime watchdog must never lose weights or logs ---
-( while true; do aws s3 cp outputs "s3://$B/results" --recursive --region $REGION >/dev/null 2>&1; sleep 180; done ) &
+sync_outputs() {
+    while true; do
+        aws s3 cp outputs "s3://$B/results" --recursive --region "$REGION" >/dev/null 2>&1
+        sleep 180
+    done
+}
+
+sync_checkpoints() {
+    while true; do
+        aws s3 sync checkpoints "s3://$B/results/checkpoints" --region "$REGION" >/dev/null 2>&1
+        sleep 600
+    done
+}
+
+sync_outputs &
 SYNC=$!
-( while true; do aws s3 sync checkpoints "s3://$B/results/checkpoints" --region $REGION >/dev/null 2>&1; sleep 600; done ) &
+sync_checkpoints &
 CKPT_SYNC=$!
 
-# --- pull any prior-run state from S3 so a relaunched spot box continues instead of restarting ---
 for f in "$PRIOR" "${PRIOR%.pt}_last.pt" "$PRIOR.done" "checkpoints/$FT" "checkpoints/${FT%.pt}_last.pt"; do
-  aws s3 cp "s3://$B/results/checkpoints/$(basename "$f")" "$(dirname "$f")/" --region $REGION 2>/dev/null || true
+    aws s3 cp "s3://$B/results/checkpoints/$(basename "$f")" "$(dirname "$f")/" --region "$REGION" 2>/dev/null || true
 done
 
-# --- STAGE A: AMASS motion prior, from random init, matched to the transformer (30 ep, bs32). Skipped
-# once its .done marker exists (so a resumed box jumps straight to fine-tune). --resume continues a
-# half-finished pretrain from its own *_last.pt.
 if [ ! -f "$PRIOR.done" ]; then
-  echo "=== STAGE A: 100M mamba AMASS pretrain ===" | tee -a outputs/mamba100m.log
-  $PY -u -m text2motion.train.train_pretrain --config "$CFG" --backbone mamba \
-    --token_pack "$PACK" --epochs 30 --batch_size 32 --out "$PRIOR" --resume \
-    >> outputs/mamba100m_pretrain.log 2>&1
+    echo "=== STAGE A: 100M mamba AMASS pretrain ===" | tee -a outputs/mamba100m.log
+    $PY -u -m text2motion.train.train_pretrain \
+        --config "$CFG" \
+        --backbone mamba \
+        --token_pack "$PACK" \
+        --epochs 30 \
+        --batch_size 32 \
+        --out "$PRIOR" \
+        --resume \
+        >> outputs/mamba100m_pretrain.log 2>&1
 else
-  echo "STAGE A skipped: $PRIOR.done present" | tee -a outputs/mamba100m.log
+    echo "STAGE A skipped: $PRIOR.done present" | tee -a outputs/mamba100m.log
 fi
 
-# --- STAGE B: captioned fine-tune from the prior, matched recipe to the transformer twin (60 ep,
-# bs64, val-select, in-train eval CFG 5.0 / temp 1.1), kernel ON (config use_kernel: true).
-# --init_ckpt seeds the weights from the prior; --resume overrides with *_last.pt if a killed
-# fine-tune left one, so passing both is correct on a fresh start AND on a spot relaunch.
 echo "=== STAGE B: 100M mamba fine-tune (from prior) ===" | tee -a outputs/mamba100m.log
-$PY -u -m text2motion.train.train_generator --config "$CFG" --backbone mamba \
-  --tokenizer_ckpt "$TOK" --init_ckpt "$PRIOR" --ckpt_name "$FT" \
-  --epochs 60 --batch_size 64 --eval_every 5 --cfg_scale 5.0 --temperature 1.1 --resume \
-  >> outputs/mamba100m.log 2>&1
+$PY -u -m text2motion.train.train_generator \
+    --config "$CFG" \
+    --backbone mamba \
+    --tokenizer_ckpt "$TOK" \
+    --init_ckpt "$PRIOR" \
+    --ckpt_name "$FT" \
+    --epochs 60 \
+    --batch_size 64 \
+    --eval_every 5 \
+    --cfg_scale 5.0 \
+    --temperature 1.1 \
+    --resume \
+    >> outputs/mamba100m.log 2>&1
 
-# --- final push + done marker (the idle watchdog reclaims the box once the GPU goes idle) ---
-aws s3 cp "checkpoints/$FT" "s3://$B/results/" --region $REGION 2>/dev/null || true
-aws s3 cp "checkpoints/${FT%.pt}_last.pt" "s3://$B/results/" --region $REGION 2>/dev/null || true
-kill $SYNC $CKPT_SYNC 2>/dev/null || true
-aws s3 cp outputs "s3://$B/results" --recursive --region $REGION
+aws s3 cp "checkpoints/$FT" "s3://$B/results/" --region "$REGION" 2>/dev/null || true
+aws s3 cp "checkpoints/${FT%.pt}_last.pt" "s3://$B/results/" --region "$REGION" 2>/dev/null || true
+kill "$SYNC" "$CKPT_SYNC" 2>/dev/null || true
+aws s3 cp outputs "s3://$B/results" --recursive --region "$REGION"
 echo done > outputs/MAMBA100M_DONE
-aws s3 cp outputs/MAMBA100M_DONE "s3://$B/results/MAMBA100M_DONE" --region $REGION
+aws s3 cp outputs/MAMBA100M_DONE "s3://$B/results/MAMBA100M_DONE" --region "$REGION"

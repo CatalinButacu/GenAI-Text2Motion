@@ -1,7 +1,3 @@
-"""Strong RVQ baseline (Contribution A's baseline-to-beat): I/O contract matches the FSQ tokenizer,
-the EMA codebook updates without collapsing, indices round-trip, and it overfits one batch (the
-mandatory sanity gate before any real tokenizer run)."""
-
 import torch
 
 from text2motion.model.rvq_baseline import RvqBaselineTokenizer
@@ -34,7 +30,6 @@ def test_encode_decode_shapes_and_contract():
     full_recon, full_idx, commit = tok(x)
     assert full_recon.shape == (2, 32, 263)
     assert commit.ndim == 0  # scalar commitment loss
-    # eval-mode forward and decode(encode) take the same argmin path -> identical
     assert torch.allclose(full_recon, recon)
     assert torch.equal(full_idx, indices)
 
@@ -74,8 +69,6 @@ def test_codebook_updates_and_no_collapse():
         opt.step()
         opt.zero_grad()
 
-    # EMA moved the codebook (it is a buffer, not gradient-updated)
     assert not torch.allclose(embed_before, tok.rvq.layers[0].embed)
-    # the first level uses more than one code (no single-code collapse)
     idx0 = tok.eval().encode(x)[..., 0]
     assert idx0.unique().numel() > 1

@@ -1,11 +1,3 @@
-"""Text-to-motion metrics in the matcher's embedding space (Guo et al. protocol).
-
-FID, R-precision (top-1/2/3), Diversity, MM-Dist. MultiModality is added once a generator can
-produce multiple samples per prompt. All operate on (N, 512) L2-normalised features from `matcher`.
-Reference: Guo et al., CVPR 2022 (github.com/EricGuo5513/text-to-motion); same definitions used by
-T2M-GPT (arXiv:2301.06052) and MoMask (arXiv:2312.00063).
-"""
-
 import numpy as np
 from scipy import linalg
 
@@ -13,7 +5,6 @@ from scipy import linalg
 def frechet_distance(
     mu1: np.ndarray, sigma1: np.ndarray, mu2: np.ndarray, sigma2: np.ndarray
 ) -> float:
-    """Frechet distance between two Gaussians -- the FID core."""
     diff = mu1 - mu2
     covmean, _ = linalg.sqrtm(sigma1 @ sigma2, disp=False)
 
@@ -24,7 +15,6 @@ def frechet_distance(
 
 
 def fid(real_feats: np.ndarray, gen_feats: np.ndarray) -> float:
-    """FID between real and generated motion embeddings, each (N, 512)."""
     mu_r, cov_r = real_feats.mean(0), np.cov(real_feats, rowvar=False)
     mu_g, cov_g = gen_feats.mean(0), np.cov(gen_feats, rowvar=False)
 
@@ -38,10 +28,6 @@ def r_precision(
     top_k: int = 3,
     seed: int = 0,
 ) -> np.ndarray:
-    """Top-1..top_k retrieval accuracy. For each text, rank its true motion against pool_size-1
-    distractors by Euclidean distance; count when the true match lands in the top-k.
-
-    Returns array of length top_k (cumulative top-1, top-2, ... accuracies)."""
     n = len(text_feats)
     rng = np.random.default_rng(seed)
     hits = np.zeros(top_k)
@@ -66,12 +52,10 @@ def r_precision(
 
 
 def mm_dist(text_feats: np.ndarray, motion_feats: np.ndarray) -> float:
-    """Mean Euclidean distance between paired text and motion embeddings."""
     return float(np.linalg.norm(text_feats - motion_feats, axis=1).mean())
 
 
 def diversity(motion_feats: np.ndarray, num_pairs: int = 300, seed: int = 0) -> float:
-    """Average distance over random pairs of motion embeddings."""
     n = len(motion_feats)
     rng = np.random.default_rng(seed)
     a = rng.integers(0, n, num_pairs)

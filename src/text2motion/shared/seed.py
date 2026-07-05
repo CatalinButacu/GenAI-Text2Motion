@@ -1,7 +1,3 @@
-"""Reproducible seeding. Log the seed on every run -- the controlled twin (ADR 0001) must be
-comparable across architectures, which requires fixed, recorded seeds. ``deterministic=True`` adds
-strict bit-exact determinism (cuBLAS workspace + cuDNN deterministic + use_deterministic_algorithms)."""
-
 import os
 import random
 
@@ -19,7 +15,6 @@ def seed_everything(seed: int, deterministic: bool = False) -> int:
         torch.cuda.manual_seed_all(seed)
 
     if deterministic:
-        # Must be set before the first cuBLAS call (we seed at the top of run(), before model build).
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = (
             ":4096:8"  # deterministic cuBLAS matmul (CUDA >=10.2)
         )

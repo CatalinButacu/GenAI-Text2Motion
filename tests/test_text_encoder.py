@@ -1,7 +1,3 @@
-"""CLIP text encoder: caption -> (B, 512) features, partial-unfreeze policy, and trainer wiring
-(the encoder's unfrozen params join the optimiser and receive gradient). Marked `slow` because it
-downloads CLIP ViT-B/32 weights; skips cleanly when they are unavailable (offline)."""
-
 import pytest
 import torch
 
@@ -44,7 +40,6 @@ def test_encode_shape_and_partial_unfreeze():
     trainable = {n for n, p in enc.named_parameters() if p.requires_grad}
     frozen = {n for n, p in enc.named_parameters() if not p.requires_grad}
     assert trainable and frozen  # partially, not fully, frozen
-    # only the last encoder layer (11), the final norm, and the projection are trainable
     assert all(
         ("encoder.layers.11" in n) or ("final_layer_norm" in n) or ("text_projection" in n)
         for n in trainable
@@ -59,14 +54,12 @@ def test_trainer_includes_encoder_and_grad_flows():
     gen = MotionGenerator(GEN)
     trainer = GeneratorTrainer(gen, tok, TrainCfg(cfg_dropout=0.0), text_encoder=enc)
 
-    # optimiser has two param groups: generator (lr) + unfrozen CLIP (text_encoder_lr)
     assert len(trainer.opt.param_groups) == 2
     assert trainer.opt.param_groups[1]["lr"] == TrainCfg().text_encoder_lr
 
     text_emb = trainer.encode(["a person jumps", "a person sits down"])  # keeps grad to CLIP
     trainer.train_step(torch.randn(2, 32, 263), text_emb)
 
-    # at least one unfrozen CLIP param received a gradient through the shared graph
     assert any(
         p.grad is not None and p.grad.abs().sum() > 0 for p in enc.parameters() if p.requires_grad
     )

@@ -1,14 +1,3 @@
-"""Skeleton forward/inverse kinematics -- faithful port of the official HumanML3D code.
-
-Ported verbatim (math unchanged) from:
-    https://github.com/EricGuo5513/HumanML3D/blob/main/common/skeleton.py
-
-The ONLY changes versus the original are cosmetic: explicit imports instead of
-``from common.quaternion import *``, and dropping the unused euler/quaternion-fitting
-helpers the 263 pipeline never calls. The numerical behaviour of the kept methods
-(offsets, IK, FK, cont6d FK) is identical -- these must match the Guo evaluator's data.
-"""
-
 import numpy as np
 import scipy.ndimage as ndimage
 import torch
@@ -51,7 +40,6 @@ class Skeleton:
     def parents(self) -> list[int]:
         return self._parents
 
-    # joints (batch_size, joints_num, 3)
     def get_offsets_joints_batch(self, joints: torch.Tensor) -> torch.Tensor:
         assert len(joints.shape) == 3
         _offsets = self._raw_offset.expand(joints.shape[0], -1, -1).clone()
@@ -64,20 +52,15 @@ class Skeleton:
         self._offset = _offsets.detach()
         return _offsets
 
-    # joints (joints_num, 3)
     def get_offsets_joints(self, joints: torch.Tensor) -> torch.Tensor:
         assert len(joints.shape) == 2
         _offsets = self._raw_offset.clone()
         for i in range(1, self._raw_offset.shape[0]):
-            _offsets[i] = (
-                torch.norm(joints[i] - joints[self._parents[i]], p=2, dim=0) * _offsets[i]
-            )
+            _offsets[i] = torch.norm(joints[i] - joints[self._parents[i]], p=2, dim=0) * _offsets[i]
 
         self._offset = _offsets.detach()
         return _offsets
 
-    # face_joint_idx order: right hip, left hip, right shoulder, left shoulder
-    # joints (batch_size, joints_num, 3)
     def inverse_kinematics_np(
         self,
         joints: np.ndarray,
@@ -85,24 +68,20 @@ class Skeleton:
         smooth_forward: bool = False,
     ) -> np.ndarray:
         assert len(face_joint_idx) == 4
-        # Get Forward Direction
         l_hip, r_hip, sdr_r, sdr_l = face_joint_idx
         across1 = joints[:, r_hip] - joints[:, l_hip]
         across2 = joints[:, sdr_r] - joints[:, sdr_l]
         across = across1 + across2
         across = across / np.sqrt((across**2).sum(axis=-1))[:, np.newaxis]
 
-        # forward (batch_size, 3)
         forward = np.cross(np.array([[0, 1, 0]]), across, axis=-1)
         if smooth_forward:
             forward = ndimage.gaussian_filter1d(forward, 20, axis=0, mode="nearest")
         forward = forward / np.sqrt((forward**2).sum(axis=-1))[..., np.newaxis]
 
-        # Get Root Rotation
         target = np.array([[0, 0, 1]]).repeat(len(forward), axis=0)
         root_quat = qbetween_np(forward, target)
 
-        # Inverse Kinematics -- quat_params (batch_size, joints_num, 4)
         quat_params = np.zeros(joints.shape[:-1] + (4,))
         root_quat[0] = np.array([[1.0, 0.0, 0.0, 0.0]])
         quat_params[:, 0] = root_quat
@@ -121,7 +100,6 @@ class Skeleton:
 
         return quat_params
 
-    # Be sure root joint is at the beginning of kinematic chains
     def forward_kinematics_np(
         self,
         quat_params: np.ndarray,
@@ -129,7 +107,6 @@ class Skeleton:
         skel_joints: np.ndarray | None = None,
         do_root_R: bool = True,
     ) -> np.ndarray:
-        # quat_params (batch_size, joints_num, 4); root_pos (batch_size, 3)
         if skel_joints is not None:
             skel_joints = torch.from_numpy(skel_joints)
             offsets = self.get_offsets_joints_batch(skel_joints)
@@ -156,7 +133,6 @@ class Skeleton:
         skel_joints: torch.Tensor | None = None,
         do_root_R: bool = True,
     ) -> torch.Tensor:
-        # cont6d_params (batch_size, joints_num, 6); root_pos (batch_size, 3)
         if skel_joints is not None:
             offsets = self.get_offsets_joints_batch(skel_joints)
         if len(self._offset.shape) == 2:
@@ -188,7 +164,6 @@ class Skeleton:
         skel_joints: np.ndarray | None = None,
         do_root_R: bool = True,
     ) -> np.ndarray:
-        # cont6d_params (batch_size, joints_num, 6); root_pos (batch_size, 3)
         if skel_joints is not None:
             skel_joints = torch.from_numpy(skel_joints)
             offsets = self.get_offsets_joints_batch(skel_joints)

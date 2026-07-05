@@ -1,5 +1,3 @@
-"""Shared foundations: typed config, seeding, paths. Import sub-configs, not global constants."""
-
 from text2motion.shared.config import (
     Config,
     DataCfg,

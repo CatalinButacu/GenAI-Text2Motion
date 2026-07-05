@@ -1,16 +1,3 @@
-"""Convert the TeoGchx/HumanML3D parquet mirror into our regenerated-data layout.
-
-TeoGchx/HumanML3D is the standard 263-dim HumanML3D (official splits: 23384 train / 4384 test / 1460
-val, base + mirror). Each row carries ``caption``, ``motion`` (T, 263) and ``meta_data.name``. We
-write ``new_joint_vecs/<name>.npy`` and the split lists, then compute ``Mean.npy``/``Std.npy`` from
-the train split with the official ``cal_mean_variance`` per-group std smoothing. Texts are NOT taken
-from here (the parquet lacks the POS ``tokens``/M-mirror captions) -- the dataset reads them from
-``paths.texts_dir`` (the donor's official ``texts/``).
-
-Run:
-    python -m text2motion.data.hml3d.convert_official --src data/hml3d_official --out data/HumanML3D_official
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -74,7 +61,6 @@ def compute_mean_std(out_dir: Path, train_names: list[str]) -> None:
     mean = data.mean(axis=0)
     std = data.std(axis=0)
 
-    # Per-group std smoothing, copied EXACTLY from the official cal_mean_variance.ipynb.
     joints_num = JOINTS_NUM
     std[0:1] = std[0:1].mean() / 1.0
     std[1:3] = std[1:3].mean() / 1.0
@@ -106,7 +92,9 @@ def run(src: Path, out: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Convert TeoGchx/HumanML3D parquet to our layout.")
     parser.add_argument("--src", required=True, help="downloaded parquet repo dir")
-    parser.add_argument("--out", required=True, help="output dir (new_joint_vecs, Mean/Std, splits)")
+    parser.add_argument(
+        "--out", required=True, help="output dir (new_joint_vecs, Mean/Std, splits)"
+    )
     args = parser.parse_args()
     run(Path(args.src), Path(args.out))
 

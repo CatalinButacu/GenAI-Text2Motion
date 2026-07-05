@@ -1,7 +1,3 @@
-"""SMPL-X AMASS forward (Stage 1): the donor's AMASS is the SMPL-X release, so the extractor
-forwards through the SMPL-X body model and yields (T, 22, 3) Y-up joints. Marked `slow` -- needs the
-donor SMPL-X models + AMASS on disk; skips cleanly when they are absent."""
-
 import os
 from pathlib import Path
 

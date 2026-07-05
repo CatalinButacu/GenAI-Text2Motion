@@ -1,21 +1,3 @@
-"""Build the ALL-AMASS pretraining corpus (E7/E7b) -- 263 features for every AMASS sequence.
-
-`regenerate.py` stage 1 already forwarded the FULL donor AMASS through SMPL-X (pose_data covers
-~16.4k sequences); only its index stage filters down to HumanML3D's captioned clips. This module
-walks pose_data wholesale instead: per sequence it applies the SAME canonicalization the official
-index loop applies to AMASS sources (dataset head-trim, x-flip), runs `process_file`, and writes
-full-length 263 features to ``<out_dir>/new_joint_vecs``.
-
-**Eval-leakage guard:** sequences that underlie HumanML3D *val/test* clips (resolved through
-index.csv) are EXCLUDED, so pretraining never sees held-out motion. Train-clip sources stay in.
-
-**No new Mean/Std:** the corpus is consumed in the OFFICIAL HumanML3D normalization (the frozen
-tokenizer's space) -- see ``tokenize_corpus.py``. Computing corpus-specific stats would silently
-shift the token lattice. Failures are loud, per file.
-
-    python -m text2motion.data.hml3d.pretrain_corpus --config configs/default.yaml
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -34,7 +16,6 @@ from .regenerate import _DATASET_HEAD_TRIM_S, _resolve_pose_path
 
 
 def heldout_sources(cfg: Config, pose_root: Path) -> set[Path]:
-    """Resolve every val/test HumanML3D clip back to its AMASS pose file (the exclusion set)."""
     if cfg.paths.hml3d_index_csv is None:
         raise ValueError("paths.hml3d_index_csv must be set (leakage guard needs the index)")
     out_dir = Path(cfg.paths.hml3d_out_dir)
@@ -56,7 +37,6 @@ def heldout_sources(cfg: Config, pose_root: Path) -> set[Path]:
 
 
 def head_trim_frames(rel_path: Path, fps: int) -> int:
-    """Per-dataset leading trim, matching the official index loop (donor dataset names included)."""
     renames = {"HDM05": "MPI_HDM05", "PosePrior": "MPI_Limits", "Transitions": "Transitions_mocap"}
     dataset = rel_path.parts[0]
     official = renames.get(dataset, dataset)
@@ -71,7 +51,6 @@ def build_corpus(
     if not pose_root.is_dir():
         raise FileNotFoundError(f"{pose_root} missing -- run regenerate.py --stage amass first")
 
-    # Same reference skeleton as the HumanML3D regen (all clips share SMPL-X bone lengths).
     ref_path = joints_dir / f"{param_util.t2m_tgt_skel_id}.npy"
     if not ref_path.is_file():
         candidates = sorted(joints_dir.glob("[0-9]*.npy"))

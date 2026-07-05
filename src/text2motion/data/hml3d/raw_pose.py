@@ -1,28 +1,8 @@
-"""AMASS SMPL-X npz -> (T, 22, 3) Y-up joint positions.
-
-The donor's AMASS is the **SMPL-X G** release (``surface_model_type='smplx'``, ``poses`` 165-dim,
-16 betas, separate ``pose_jaw``/``pose_eye``, framerate key ``mocap_frame_rate``) -- NOT the SMPL-H
-release the original HumanML3D used. So we forward through the matching **SMPL-X** body model (via
-the ``smplx`` package) and keep the first 22 body joints (the only ones HumanML3D-263 uses). Hands,
-jaw, eyes and expression do not affect those 22 joints; they are passed at the correct batch size
-only so the SMPL-X forward does not fall back to its batch-1 default buffers.
-
-This diverges from the official SMPL-H+DMPL forward ONLY in the body model. HumanML3D's downstream
-``uniform_skeleton`` retargeting standardizes bone lengths, so the 263 features are near-identical;
-the Stage-2 L2 gate (reproduce T2M-GPT's recon FID on this regenerated data) is what validates it.
-
-Behaviour preserved from the official code: 20 fps downsample via ``int(framerate / 20)`` and
-``[::down_sample]``; Z-up -> Y-up by right-multiplying joints with the exact ``trans_matrix``;
-gender selected from ``bdata['gender']``; sequences without a usable framerate are skipped (None).
-Body model dir comes from config; missing package/files raise (no silent fallback).
-"""
-
 from pathlib import Path
 
 import numpy as np
 import torch
 
-# Z-up (AMASS) -> Y-up rotation, applied as ``joints @ trans_matrix``. Copied EXACTLY.
 TRANS_MATRIX = np.array(
     [
         [1.0, 0.0, 0.0],
@@ -37,8 +17,6 @@ _GENDERS = ("male", "female", "neutral")
 
 
 def _resolve_model_root(smplx_dir: Path) -> Path:
-    """``smplx.create`` looks for ``<root>/smplx/SMPLX_<GENDER>.npz``. Accept either that root or the
-    inner ``smplx/`` folder (the config's ``smplx_models``) and return the root ``smplx.create`` wants."""
     if (smplx_dir / "smplx").is_dir():
         return smplx_dir
 
@@ -49,8 +27,6 @@ def _resolve_model_root(smplx_dir: Path) -> Path:
 
 
 class AmassPoseExtractor:
-    """Loads the gender-specific SMPL-X body models once and converts AMASS npz -> Y-up joints."""
-
     def __init__(
         self,
         smplx_dir: Path,
@@ -126,9 +102,6 @@ class AmassPoseExtractor:
 
     @torch.no_grad()
     def amass_to_pose(self, src_path: str | Path) -> np.ndarray | None:
-        """Convert one AMASS SMPL-X npz to (T, num_joints_out, 3) Y-up joints, 20 fps.
-
-        Returns ``None`` for sequences without a usable framerate (matches the official skip)."""
         bdata = np.load(src_path, allow_pickle=True)
 
         if "trans" not in bdata:

@@ -2,7 +2,9 @@ $ErrorActionPreference = "Continue"
 $env:PYTHONPATH = "src"
 $env:PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"  # guard vs fragmentation OOM (4GB GPU)
 $py = ".venv\Scripts\python.exe"
-while (-not (Test-Path "outputs/rvq_sweep_done.txt")) { Start-Sleep -Seconds 600 }
+while (-not (Test-Path "outputs/rvq_sweep_done.txt")) {
+    Start-Sleep -Seconds 600
+}
 "=== $(Get-Date -Format o)  starting seeded FSQ sweep ===" | Out-File -Append outputs/fsq_sweep_start.txt -Encoding utf8
 $variants = @(
     @{ cfg = "configs/tokenizer/tokenizer_isovocab.yaml"; name = "fsq_g6_v512.pt" },   # <-> rvq_l6_512  (6x512)

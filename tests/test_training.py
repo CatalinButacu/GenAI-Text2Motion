@@ -1,6 +1,3 @@
-"""Training module: the full A+B pipeline wires end-to-end and learns (synthetic motion), the
-soft-decode gradient reaches the generator, and EMA tracks/lags the live weights."""
-
 import numpy as np
 import torch
 
@@ -55,7 +52,6 @@ def test_train_step_learns():
 
     assert last["ce"] < 0.3 * first["ce"]  # generator memorises the (fixed) target tokens
     assert last["total"] < first["total"]
-    # tokenizer stayed frozen
     assert all(not p.requires_grad for p in tok.parameters())
 
 
@@ -69,7 +65,6 @@ def test_cfg_dropout_step_is_finite():
 
 
 def test_term_split_reports_each_group():
-    """The geometric loss is now split per 263 channel group; each must be logged."""
     tok = ResidualFsqTokenizer(TOK)
     gen = MotionGenerator(GEN)
     trainer = GeneratorTrainer(gen, tok, TrainCfg(cfg_dropout=0.0, pkeep=1.0))
@@ -80,7 +75,6 @@ def test_term_split_reports_each_group():
 
 
 def test_fk_consistency_terms_finite():
-    """FK-consistency (both flavors) runs end-to-end and stays finite; needs mean/std."""
     tok = ResidualFsqTokenizer(TOK)
     gen = MotionGenerator(GEN)
     cfg = TrainCfg(cfg_dropout=0.0, pkeep=1.0, w_fk_self=0.5, w_fk_gt=0.5)
@@ -96,7 +90,6 @@ def test_fk_consistency_terms_finite():
 
 
 def test_uncertainty_weighting_optimizes_log_vars():
-    """Kendall learnable weights join the optimizer and receive gradient."""
     tok = ResidualFsqTokenizer(TOK)
     gen = MotionGenerator(GEN)
     trainer = GeneratorTrainer(

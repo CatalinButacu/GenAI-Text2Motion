@@ -1,16 +1,3 @@
-"""Generator trainer -- ties Contribution A (frozen tokenizer) + Contribution B (generator) together.
-
-Per training step: encode GT motion to tokens (the targets) with the FROZEN tokenizer, predict them
-with the generator (teacher forced), and optimise token-CE + the soft-decode geometric losses, with
-classifier-free-guidance dropout on the text condition and an EMA of the weights.
-
-The CLIP text encoder is an OPTIONAL collaborator. When passed, its (partially unfrozen) params join
-the optimiser in their own low-LR group and `encode(texts)` turns captions into the `text_emb` that
-`train_step` consumes -- the two calls share one graph, so backward flows into the unfrozen CLIP
-layers. When omitted, pass a precomputed `text_emb` straight to `train_step` (the synthetic-test
-path). EMA tracks the generator only. See `.claude/skills/t2m-losses`.
-"""
-
 import math
 
 import numpy as np
@@ -53,8 +40,6 @@ class GeneratorTrainer:
                 groups.append({"params": enc_trainable, "lr": cfg.text_encoder_lr})
                 self._clip_params += enc_trainable
 
-        # Optional Kendall uncertainty weighting: the log-variances are extra learnable params that
-        # join the optimiser (no weight decay group) so AdamW optimises the loss weights too.
         self.weighter: UncertaintyWeighter | None = None
         if cfg.loss_weighting == "uncertainty":
             self.weighter = UncertaintyWeighter(active_term_names(cfg)).to(
@@ -63,8 +48,6 @@ class GeneratorTrainer:
             groups.append({"params": list(self.weighter.parameters()), "weight_decay": 0.0})
             self._clip_params += list(self.weighter.parameters())
 
-        # FK-consistency needs real (denormalized) positions + a skeleton. Built once; bone lengths
-        # are set per batch from GT inside the loss (uniform_skeleton -> constant across clips).
         self._fk_on = cfg.w_fk_self > 0 or cfg.w_fk_gt > 0
         self._mean = self._std = self._skeleton = None
         if self._fk_on:
@@ -87,8 +70,6 @@ class GeneratorTrainer:
         self._accum_count = 0  # micro-batches since the last optimizer step (cfg.grad_accum)
 
     def build_scheduler(self, total_steps: int) -> None:
-        """Linear warmup then cosine decay to ``lr_min_ratio`` of peak, scaling every param group
-        by the same factor. Call once total_steps (epochs * len(loader)) is known."""
         warmup = max(self.cfg.warmup_steps, 1)
         floor = self.cfg.lr_min_ratio
 
@@ -102,15 +83,12 @@ class GeneratorTrainer:
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.opt, lr_factor)
 
     def encode(self, texts: list[str]) -> torch.Tensor:
-        """Captions -> (B, d_text). Call inside the training iteration (keeps grad to CLIP)."""
         if self.text_encoder is None:
             raise RuntimeError("trainer has no text_encoder; pass a precomputed text_emb instead")
 
         return self.text_encoder(texts)
 
     def drop_text(self, text_emb: torch.Tensor) -> torch.Tensor:
-        """Classifier-free-guidance dropout: zero the text condition for a random subset of the
-        batch. Works for pooled (B, d) and multi-token-prefix (B, P, d) conditions."""
         if self.cfg.cfg_dropout <= 0:
             return text_emb
 
@@ -121,10 +99,6 @@ class GeneratorTrainer:
     def _append_end_targets(
         self, target_tokens: torch.Tensor, lengths: torch.Tensor | None, downsample: int
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Place END (on every codebook) right after each clip's last real token.
-
-        (B, T', R) -> (B, T'+1, R) targets + token_lengths (B,) that now INCLUDE the END position;
-        positions past END stay masked out of the CE by token_lengths."""
         batch, t_tokens, _ = target_tokens.shape
         device = target_tokens.device
         if lengths is None:
@@ -142,8 +116,6 @@ class GeneratorTrainer:
         text_emb: torch.Tensor,
         lengths: torch.Tensor | None = None,
     ) -> dict[str, float]:
-        """gt_motion (B, T, 263), text_emb (B, d_text) or (B, P, d_text), optional lengths (B,).
-        Returns loss scalars."""
         downsample = self.tokenizer.cfg.downsample
         usable = (gt_motion.size(1) // downsample) * downsample  # encode/decode align on multiples
         gt_motion = gt_motion[:, :usable]
@@ -185,9 +157,6 @@ class GeneratorTrainer:
                 weighter=self.weighter,
             )
 
-        # gradient accumulation: grads sum over grad_accum micro-batches (loss scaled to keep the
-        # gradient an average), then one clipped optimizer/scheduler/EMA step -- identical update
-        # semantics to a single batch of grad_accum x batch_size
         accum = max(1, self.cfg.grad_accum)
         if self._accum_count == 0:
             self.opt.zero_grad()

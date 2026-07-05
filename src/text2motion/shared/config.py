@@ -1,17 +1,3 @@
-"""Typed, config-driven settings -- the convention for this and ALL future development.
-
-Rules of the road:
-  * No module-level global constants, no ``from ... import *``, no magic numbers in code.
-  * Instantiate one ``Config`` (optionally from YAML), then pass a function ONLY the sub-config
-    it needs (variable isolation), e.g. ``build_smplx(cfg.avatar)`` -- not the whole ``cfg``.
-  * Derived values (representation dims, slices) are computed from the spec, never hand-written
-    in two places.
-
-    cfg = load_config("configs/default.yaml")
-    slices = cfg.avatar.slices()       # {"body_pose": slice(6, 69), ...}
-    dim = cfg.avatar.pose_dim          # 168, derived from pose_segments
-"""
-
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,13 +6,6 @@ import yaml
 
 @dataclass(frozen=True)
 class Hml3dReprCfg:
-    """Primary representation: standard HumanML3D-263 (body-only, 22-joint skeleton).
-
-    This is what the reused Guo et al. evaluator consumes and what the citable FID is reported on.
-    The 263 feature is HumanML3D's own packing (root velocities, ric, rot6d, local velocities, foot
-    contacts) in its native frame -- do not re-pack it; use the recovery helper for joint positions.
-    """
-
     dim: int = 263
     num_joints: int = 22
     fps: int = 20  # standard HumanML3D is 20 fps (matches the Guo evaluator / T2M-GPT / MoMask)
@@ -34,14 +13,6 @@ class Hml3dReprCfg:
 
 @dataclass(frozen=True)
 class SmplxAvatarCfg:
-    """Secondary track: SMPL-X whole-body, 168-dim per frame (deferred 168 demo track).
-
-    Layout matches the donor exactly so its pretrained 168 RVQ + render code can be reused:
-    ``root_orient(3) . trans(3) . body(63) . left_hand(45) . right_hand(45) . jaw(3) . eyes(6)``.
-    Stored/trained in **Z-up**; converted to Y-up only at render time. AMASS here is SMPL-H, so
-    jaw/eyes are zero-filled (face deferred). ``pose_dim`` and slices are derived from segments.
-    """
-
     model_type: str = "smplx"
     gender: str = "neutral"
     num_joints: int = 55
@@ -78,9 +49,6 @@ class SmplxAvatarCfg:
 
 @dataclass(frozen=True)
 class PathsCfg:
-    """Resource locations. Data + SMPL-X bodies live in the read-only donor and are license-gated
-    (never committed). Every field is overridable from YAML / per machine."""
-
     donor_root: Path = Path(r"D:\Facultate\dissertation")
     humanml3d_dir: Path | None = None  # donor data/humanml3d (motion_data, mean_std, split, texts)
     eval_matcher: Path | None = None  # Guo et al. finest.tar -- reuse unmodified (ADR 0001)
@@ -93,11 +61,7 @@ class PathsCfg:
     smplx_models: Path | None = (
         None  # unzipped SMPL-X bodies; <dir>/SMPLX_{GENDER}.npz (263 regen +
     )
-    # the 168 demo). The donor AMASS is the SMPL-X release, so this is the body model for regeneration.
     stats_dir: Path | None = None
-    # --- standard HumanML3D-263 regeneration (text2motion/data/hml3d). Uses SMPL-X (above), since the
-    # donor AMASS is the SMPL-X release. The SMPL-H/DMPL fields below are LEGACY (old SMPL-H pipeline),
-    # unused on the SMPL-X 263 path; kept only for a future byte-exact official-repro option. ---
     smplh_dir: Path | None = (
         None  # LEGACY (old SMPL-H pipeline) -- not used by the SMPL-X 263 regen
     )
@@ -113,8 +77,6 @@ class PathsCfg:
 
 @dataclass(frozen=True)
 class DataCfg:
-    """Which corpus + representation a run uses. Primary track = HumanML3D-263 (see ADR 0001)."""
-
     track: str = "hml3d263"  # "hml3d263" (primary) or "smplx168" (deferred demo)
     sources: tuple[str, ...] = ("humanml3d",)
     mirror_augment: bool = True
@@ -124,13 +86,6 @@ class DataCfg:
 
 @dataclass(frozen=True)
 class TokenizerCfg:
-    """Grouped-FSQ motion tokenizer (Contribution A). FSQ (arXiv:2309.15505) over G independent groups
-    (the partitioned-latent winner: grouped recon-FID 0.0266 beats strong-RVQ 0.0382). The residual
-    variant collapsed (0.22) on the fixed FSQ grid at low latent dim -- kept selectable via `quantizer`
-    as the documented motivating finding. Per-group implicit codebook = prod(fsq_levels); grouped
-    concatenates the G codes into a G*fsq_dim latent. See .claude/skills/motion-tokenizer and
-    .claude/docs/references.md."""
-
     in_dim: int = 263
     width: int = 512  # fast iterations on a 4GB GPU (FSQ vs RVQ compared at matched width)
     downsample: int = 4  # temporal downsample (two stride-2 convs)
@@ -147,13 +102,6 @@ class TokenizerCfg:
 
 @dataclass(frozen=True)
 class RvqBaselineCfg:
-    """Strong RVQ baseline-to-beat for Contribution A. Recipe is the T2M-GPT (arXiv:2301.06052) +
-    MoMask (arXiv:2312.00063) standard: EMA codebook (decay 0.99) + dead-code reset + commitment
-    loss + quantization dropout, matching EnCodec/SoundStream RVQ mechanics. It SHARES the conv
-    enc/dec with the FSQ tokenizer (same width/downsample/resblocks); only the quantizer differs, so
-    the comparison isolates FSQ-vs-VQ at matched capacity. Target to beat: MoMask recon FID 0.019 /
-    MPJPE 29.5 mm. See .claude/docs/references.md (Q3 recipe)."""
-
     in_dim: int = 263
     width: int = 512
     downsample: int = 4
@@ -169,29 +117,16 @@ class RvqBaselineCfg:
 
 @dataclass(frozen=True)
 class TextEncoderCfg:
-    """Caption encoder for conditioning. The field standard (T2M-GPT arXiv:2301.06052, MoMask
-    arXiv:2312.00063, Mogo) is CLIP ViT-B/32's pooled 512-d sentence vector, projected and fed as a
-    single prefix token -- which is exactly ``MotionGenerator``'s interface. We do NOT fully freeze
-    it (prior-plateau lesson): the last ``unfreeze_last_n`` transformer layers, the final layer-norm
-    and (optionally) the text projection are trainable. ``out_dim`` MUST equal ``GeneratorCfg.d_text``.
-    See .claude/docs/references.md."""
-
     model_id: str = "openai/clip-vit-base-patch32"
     out_dim: int = 512  # CLIP ViT-B/32 text projection dim; must equal GeneratorCfg.d_text
     max_length: int = 77  # CLIP context length
     unfreeze_last_n: int = 1  # unfreeze the last N transformer layers (+ final LN + projection)
     unfreeze_projection: bool = True
     prefix_len: int = 1  # 1 = pooled vector only (T2M-GPT mold); P>1 = pooled + first P-1 token
-    # hidden states (AttT2M-style fine-grained conditioning). Must equal GeneratorCfg.text_prefix_len.
 
 
 @dataclass(frozen=True)
 class GeneratorCfg:
-    """Causal token-AR generator (Contribution B). `backbone='mamba'` is the contribution (first
-    token-AR S6 motion generator); `backbone='transformer'` is the controlled twin (T2M-GPT mold).
-    Both are causal/streamable; they differ in runtime memory (fixed SSM state vs growing KV-cache).
-    num_codebooks/codebook_size MUST match the tokenizer. See ADR 0002 + .claude/docs/references.md."""
-
     backbone: str = "mamba"  # "mamba" (Contribution B) | "transformer" (twin baseline)
     d_model: int = 512
     n_layers: int = 8  # transformer-twin depth; a Mamba block is ~half an attn+MLP block, so:
@@ -208,21 +143,15 @@ class GeneratorCfg:
         False  # vocab+1 END per head -> self-terminating length (False = legacy ckpts)
     )
     use_kernel: bool = False  # mamba-ssm fused selective scan in training forward. EXPLICIT opt-in
-    # (cloud config): when True the import must succeed -- no silent fallback (fail-loud rule).
-    # mamba (S6) backbone
     d_state: int = 16
     d_conv: int = 4
     expand: int = 2
     dt_rank: int = 32  # selective-delta  rank (~ d_model/16)
-    # transformer twin backbone
     n_heads: int = 8
 
 
 @dataclass(frozen=True)
 class TrainCfg:
-    """Generator training recipe (escapes the prior plateau). See .claude/skills/t2m-losses.
-    Loss = token-CE + w_recon*soft-decode-recon + w_velocity*vel + w_foot*foot + w_root*root."""
-
     lr: float = 2e-4
     text_encoder_lr: float = 1e-5  # small LR for the partially-unfrozen CLIP text encoder
     weight_decay: float = (
@@ -235,21 +164,15 @@ class TrainCfg:
     ema_decay: float = 0.999  # eval the EMA copy
     cfg_dropout: float = 0.1  # drop text condition this often so CFG works at inference
     pkeep: float = 0.8  # teacher-forcing input corruption: keep a token with this prob, else random
-    # (T2M-GPT uses 0.5; fights memorization + exposure bias. 1.0 disables -- tests pin that.)
     amp: str = (
         "off"  # "bf16" wraps forward+loss in autocast (Ampere+: A10G/3050); opt/EMA stay fp32
     )
     grad_accum: int = 1  # optimizer step every N micro-batches (loss scaled by 1/N); N x batch_size = effective  # batch, so the 4GB card can match the transformer twin's bs8 as bs4 x 2 (bs8 peak OOMs)
-    # Term-split geometric weights (CE is the fixed anchor at weight 1.0). Each penalizes one named
-    # 263 channel group on the soft-decoded motion, logged separately for visibility.
     w_root: float = 0.3  # root block [0:4]
     w_ric: float = 0.5  # joint positions [4:67]
     w_rot6d: float = 0.5  # joint rotations [67:193]
     w_vel: float = 0.3  # velocity channels [193:259]
     w_foot: float = 0.1  # foot contacts [259:263]
-    # Forward-kinematics consistency (data-validated GT floor 0.84mm). OFF by default; enable for the
-    # A/B ablation before promoting to the final run. fk_self = FK(rot6d) vs model ric;
-    # fk_gt = FK(rot6d) vs GT positions.
     w_fk_self: float = 0.0
     w_fk_gt: float = 0.0
     loss_weighting: str = "fixed"  # "fixed" (config weights) | "uncertainty" (Kendall learnable)
@@ -272,7 +195,6 @@ class Config:
 
 
 def _to_paths(raw: dict, keys: set[str]) -> dict:
-    """Coerce the named keys from str to Path (YAML stores them as strings)."""
     out = dict(raw)
 
     for key in keys:
@@ -283,7 +205,6 @@ def _to_paths(raw: dict, keys: set[str]) -> dict:
 
 
 def load_config(path: str | Path) -> Config:
-    """Build a ``Config`` from YAML. Absent sections fall back to dataclass defaults."""
     raw = (
         yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     )  # utf-8, not the cp1252 locale default

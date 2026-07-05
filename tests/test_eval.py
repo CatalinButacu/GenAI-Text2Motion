@@ -1,8 +1,3 @@
-"""Eval harness: metric math (non-slow) and the Guo matcher load contract (slow, needs finest.tar).
-
-The slow test guards the `hidden`-buffer regression: finest.tar's motion/text encoders carry a
-trained GRU initial state, and `load_matchers` must consume it (no silently-dropped checkpoint keys)."""
-
 from pathlib import Path
 
 import numpy as np

@@ -1,12 +1,3 @@
-"""Generation evaluation for the text-to-motion generator (Contribution B).
-
-text (CLIP) -> generated tokens (streamed) -> frozen tokenizer decode -> motion, then the Guo matcher
-scores it: FID (generated vs GT motion embeddings), R-precision and Matching Score (caption vs
-generated motion), and Diversity. Per clip we generate the GT token length (no length predictor yet).
-The generator conditions on CLIP; R-precision uses the matcher's own text encoder. See
-``.claude/skills/t2m-eval``.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable

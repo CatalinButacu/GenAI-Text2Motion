@@ -1,18 +1,3 @@
-\
-\
-\
-\
-\
-\
-\
-\
-\
-\
-\
-\
-\
-   
-
 from __future__ import annotations
 
 import argparse
@@ -35,7 +20,7 @@ CKPT_CONFIGS: dict[str, tuple[str, str]] = {
     "rvq_l6_1024": ("configs/tokenizer/rvq_l6_1024.yaml", "rvq"),
     "rvq_l8_1024": ("configs/tokenizer/rvq_l8_1024.yaml", "rvq"),
     "fsq_g4_v512": ("configs/tokenizer/fsq_g4_v512.yaml", "fsq"),
-    "fsq_g6_v512": ("configs/tokenizer/tokenizer_isovocab.yaml", "fsq"),                   
+    "fsq_g6_v512": ("configs/tokenizer/tokenizer_isovocab.yaml", "fsq"),
     "fsq_g8_v512": ("configs/tokenizer/fsq_g8_v512.yaml", "fsq"),
     "fsq_g4_v1024": ("configs/tokenizer/fsq_g4_v1024.yaml", "fsq"),
     "fsq_g6_v1024": ("configs/tokenizer/fsq_g6_v1024.yaml", "fsq"),
@@ -49,7 +34,7 @@ SPLITS = ("train", "val", "test")
 
 def run(args: argparse.Namespace) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
-                                                                                  
+
     base = load_config(next(iter(CKPT_CONFIGS.values()))[0])
     out_dir = Path(base.paths.hml3d_out_dir)
     our_mean = np.load(out_dir / "Mean.npy").astype(np.float32)
@@ -61,7 +46,9 @@ def run(args: argparse.Namespace) -> None:
 
     stems = [s for s in (args.only.split(",") if args.only else CKPT_CONFIGS) if s]
     rows: list[tuple[str, float, float, float]] = []
-    print(f"recon-FID at {args.clips} seed-2026-shuffled clips/split (equal N -> gaps comparable)\n")
+    print(
+        f"recon-FID at {args.clips} seed-2026-shuffled clips/split (equal N -> gaps comparable)\n"
+    )
     print(f"{'checkpoint':14} {'train':>8} {'val':>8} {'test':>8} {'gap(t-tr)':>10} {'|t-v|':>8}")
     for stem in stems:
         path = ckpt_dir / f"{stem}.pt"
@@ -76,9 +63,18 @@ def run(args: argparse.Namespace) -> None:
         tok.to(device).eval()
         fids = {
             sp: evaluate_tokenizer(
-                tok, out_dir, our_mean, our_std, matcher, eval_mean, eval_std,
-                joints_num=joints, device=device, max_clips=args.clips,
-                split=sp, shuffle_seed=2026,
+                tok,
+                out_dir,
+                our_mean,
+                our_std,
+                matcher,
+                eval_mean,
+                eval_std,
+                joints_num=joints,
+                device=device,
+                max_clips=args.clips,
+                split=sp,
+                shuffle_seed=2026,
             )["recon_fid"]
             for sp in SPLITS
         }
@@ -102,14 +98,20 @@ def run(args: argparse.Namespace) -> None:
         "|---|---|---|---|---|---|",
     ]
     for stem, tr, va, te in rows:
-        lines.append(f"| {stem} | {tr:.4f} | {va:.4f} | {te:.4f} | {te - tr:+.4f} | {abs(te - va):.4f} |")
+        lines.append(
+            f"| {stem} | {tr:.4f} | {va:.4f} | {te:.4f} | {te - tr:+.4f} | {abs(te - va):.4f} |"
+        )
     md.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"\nwrote {md}")
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Tokenizer generalization gap (train/val/test recon-FID).")
-    p.add_argument("--clips", type=int, default=1000, help="equal clip count per split (FID is N-biased)")
+    p = argparse.ArgumentParser(
+        description="Tokenizer generalization gap (train/val/test recon-FID)."
+    )
+    p.add_argument(
+        "--clips", type=int, default=1000, help="equal clip count per split (FID is N-biased)"
+    )
     p.add_argument("--only", default="", help="comma-separated checkpoint stems (default: all)")
     run(p.parse_args())
 

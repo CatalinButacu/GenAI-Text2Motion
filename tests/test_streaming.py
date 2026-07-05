@@ -1,7 +1,3 @@
-"""Stage 6 streaming harness: windowed token->frame decode (determinism + coverage), end-to-end
-stream from the generator, the bounded queue producer, and 263->skeleton recovery. No aitviewer
-needed (viewer calls are import-guarded)."""
-
 import queue as queue_mod
 
 import torch
@@ -44,7 +40,6 @@ def test_windowed_decode_covers_all_frames_and_is_deterministic():
 
     assert total == 10 * TOK.downsample  # every token step yields downsample frames
     assert all(c.shape[2] == 263 for c in chunks)
-    # determinism: same tokens -> identical frames
     again = list(dec.stream_tokens(iter(tokens)))
     assert torch.allclose(torch.cat(chunks, 1), torch.cat(again, 1))
 
@@ -63,8 +58,6 @@ def test_end_to_end_stream_from_generator():
 def test_queue_producer_pushes_chunks_then_sentinel():
     dec = make_decoder()
     gen = MotionGenerator(GEN).eval()
-    # 8 steps / chunk_tokens=4 -> 2 chunks + STREAM_END; size the queue to hold them (no drop) so
-    # the full-output assertion is exact. (The drop-to-latest path is exercised below.)
     q: queue_mod.Queue = queue_mod.Queue(maxsize=4)
     run_producer(dec, gen, torch.randn(1, GEN.d_text), num_steps=8, out_queue=q, temperature=0.0)
 
@@ -74,8 +67,6 @@ def test_queue_producer_pushes_chunks_then_sentinel():
 
 
 def test_producer_never_stalls_on_a_full_queue():
-    # drop-to-latest contract: a tiny queue with no concurrent consumer must NOT deadlock the
-    # producer, and the STREAM_END sentinel must still arrive.
     dec = make_decoder()
     gen = MotionGenerator(GEN).eval()
     q: queue_mod.Queue = queue_mod.Queue(maxsize=1)

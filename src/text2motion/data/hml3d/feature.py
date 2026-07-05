@@ -1,23 +1,3 @@
-"""HumanML3D-263 feature extraction + recovery -- faithful port of the official code.
-
-Ported from the ``process_file`` / ``uniform_skeleton`` / ``recover_*`` functions in
-    https://github.com/EricGuo5513/HumanML3D/blob/main/motion_representation.ipynb
-
-The math is unchanged. The original code carried its parameters as notebook-level globals
-(``n_raw_offsets``, ``kinematic_chain``, ``tgt_offsets``, ``face_joint_indx``, ``fid_l/fid_r``,
-``l_idx1/l_idx2``). To respect this repo's "no module-level constants / pass config" rule we
-bundle them into a frozen ``FeatureParams`` built from :mod:`param_util` and thread it through --
-the numerical pipeline is identical to the original.
-
-263 layout (per frame), exactly as the Guo evaluator / T2M-GPT VQ-VAE expect:
-    root_rot_vel(1) + root_lin_vel_xz(2) + root_y(1)
-    + ric local joint pos ((J-1)*3 = 63)
-    + cont6d local joint rot ((J-1)*6 = 126)
-    + local joint velocities (J*3 = 66)
-    + foot contacts (4)
-    = 4 + 63 + 126 + 66 + 4 = 263   (with J = 22)
-"""
-
 from dataclasses import dataclass
 
 import numpy as np
@@ -39,8 +19,6 @@ from .skeleton import Skeleton
 
 @dataclass(frozen=True)
 class FeatureParams:
-    """All constants ``process_file`` needs, ported exactly from the official ``__main__``."""
-
     n_raw_offsets: np.ndarray
     kinematic_chain: list[list[int]]
     tgt_offsets: torch.Tensor  # target skeleton offsets (joints_num, 3)
@@ -54,10 +32,6 @@ class FeatureParams:
 
 
 def build_tgt_offsets(reference_joints: np.ndarray) -> torch.Tensor:
-    """Offsets of the uniform target skeleton, from a reference clip's first frame.
-
-    ``reference_joints`` is (T, joints_num, 3) (the official code uses clip ``000021``).
-    """
     n_raw_offsets = torch.from_numpy(param_util.t2m_raw_offsets)
     example = torch.from_numpy(reference_joints).float()
     tgt_skel = Skeleton(n_raw_offsets, param_util.t2m_kinematic_chain, "cpu")
@@ -65,7 +39,6 @@ def build_tgt_offsets(reference_joints: np.ndarray) -> torch.Tensor:
 
 
 def default_params(tgt_offsets: torch.Tensor) -> FeatureParams:
-    """Assemble :class:`FeatureParams` from the ported ``param_util`` constants."""
     return FeatureParams(
         n_raw_offsets=param_util.t2m_raw_offsets,
         kinematic_chain=param_util.t2m_kinematic_chain,
@@ -81,7 +54,6 @@ def default_params(tgt_offsets: torch.Tensor) -> FeatureParams:
 
 
 def uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarray:
-    """Retarget every clip onto one common skeleton (leg-length scale + IK/FK)."""
     n_raw_offsets = torch.from_numpy(params.n_raw_offsets)
     target_offset = params.tgt_offsets
 
@@ -90,7 +62,6 @@ def uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarray
     src_offset = src_offset.numpy()
     tgt_offset = target_offset.numpy()
 
-    # Calculate Scale Ratio as the ratio of legs
     src_leg_len = np.abs(src_offset[params.l_idx1]).max() + np.abs(src_offset[params.l_idx2]).max()
     tgt_leg_len = np.abs(tgt_offset[params.l_idx1]).max() + np.abs(tgt_offset[params.l_idx2]).max()
 
@@ -98,47 +69,35 @@ def uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarray
     src_root_pos = positions[:, 0]
     tgt_root_pos = src_root_pos * scale_rt
 
-    # Inverse Kinematics
     quat_params = src_skel.inverse_kinematics_np(positions, params.face_joint_indx)
 
-    # Forward Kinematics
     src_skel.set_offset(target_offset)
     new_joints = src_skel.forward_kinematics_np(quat_params, tgt_root_pos)
     return new_joints
 
 
 def process_file(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarray, ...]:
-    """(seq_len, joints_num, 3) joints -> 263-dim feature.
-
-    Returns ``(data, global_positions, positions, l_velocity)`` exactly like the original.
-    ``feet_thre`` is taken from ``params.feet_threshold`` (official default 0.002).
-    """
     feet_thre = params.feet_threshold
     face_joint_indx = params.face_joint_indx
     fid_l, fid_r = params.fid_l, params.fid_r
     n_raw_offsets = torch.from_numpy(params.n_raw_offsets)
     kinematic_chain = params.kinematic_chain
 
-    # Uniform Skeleton
     positions = uniform_skeleton(positions, params)
 
-    # Put on Floor
     floor_height = positions.min(axis=0).min(axis=0)[1]
     positions[:, :, 1] -= floor_height
 
-    # XZ at origin
     root_pos_init = positions[0]
     root_pose_init_xz = root_pos_init[0] * np.array([1, 0, 1])
     positions = positions - root_pose_init_xz
 
-    # All initially face Z+
     r_hip, l_hip, sdr_r, sdr_l = face_joint_indx
     across1 = root_pos_init[r_hip] - root_pos_init[l_hip]
     across2 = root_pos_init[sdr_r] - root_pos_init[sdr_l]
     across = across1 + across2
     across = across / np.sqrt((across**2).sum(axis=-1))[..., np.newaxis]
 
-    # forward (3,), rotate around y-axis
     forward_init = np.cross(np.array([[0, 1, 0]]), across, axis=-1)
     forward_init = forward_init / np.sqrt((forward_init**2).sum(axis=-1))[..., np.newaxis]
 
@@ -148,12 +107,9 @@ def process_file(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarr
 
     positions = qrot_np(root_quat_init, positions)
 
-    # New ground truth positions
     global_positions = positions.copy()
 
     def foot_detect(positions: np.ndarray, thres: float) -> tuple[np.ndarray, np.ndarray]:
-        # Official code also defines an (unused) heightfactor=[3.0, 2.0]; the height check is
-        # commented out upstream, so only the squared-velocity threshold is applied. Kept faithful.
         velfactor = np.array([thres, thres])
 
         feet_l_x = (positions[1:, fid_l, 0] - positions[:-1, fid_l, 0]) ** 2
@@ -171,49 +127,35 @@ def process_file(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarr
 
     def get_cont6d_params(positions: np.ndarray) -> tuple[np.ndarray, ...]:
         skel = Skeleton(n_raw_offsets, kinematic_chain, "cpu")
-        # (seq_len, joints_num, 4)
         quat_params = skel.inverse_kinematics_np(positions, face_joint_indx, smooth_forward=True)
 
-        # Quaternion to continuous 6D
         cont_6d_params = quaternion_to_cont6d_np(quat_params)
-        # (seq_len, 4)
         r_rot = quat_params[:, 0].copy()
-        # Root Linear Velocity (seq_len - 1, 3)
         velocity = (positions[1:, 0] - positions[:-1, 0]).copy()
         velocity = qrot_np(r_rot[1:], velocity)
-        # Root Angular Velocity (seq_len - 1, 4)
         r_velocity = qmul_np(r_rot[1:], qinv_np(r_rot[:-1]))
         return cont_6d_params, r_velocity, velocity, r_rot
 
     cont_6d_params, r_velocity, velocity, r_rot = get_cont6d_params(positions)
 
     def get_rifke(positions: np.ndarray) -> np.ndarray:
-        # Local pose
         positions[..., 0] -= positions[:, 0:1, 0]
         positions[..., 2] -= positions[:, 0:1, 2]
-        # All pose face Z+
         positions = qrot_np(np.repeat(r_rot[:, None], positions.shape[1], axis=1), positions)
         return positions
 
     positions = get_rifke(positions)
 
-    # Root height
     root_y = positions[:, 0, 1:2]
 
-    # Root rotation and linear velocity
-    # (seq_len-1, 1) rotation velocity along y-axis
-    # (seq_len-1, 2) linear velocity on xz plane
     r_velocity = np.arcsin(r_velocity[:, 2:3])
     l_velocity = velocity[:, [0, 2]]
     root_data = np.concatenate([r_velocity, l_velocity, root_y[:-1]], axis=-1)
 
-    # Get Joint Rotation Representation (seq_len, (joints_num-1)*6)
     rot_data = cont_6d_params[:, 1:].reshape(len(cont_6d_params), -1)
 
-    # Get Joint Rotation Invariant Position Representation (seq_len, (joints_num-1)*3)
     ric_data = positions[:, 1:].reshape(len(positions), -1)
 
-    # Get Joint Velocity Representation (seq_len-1, joints_num*3)
     local_vel = qrot_np(
         np.repeat(r_rot[:-1, None], global_positions.shape[1], axis=1),
         global_positions[1:] - global_positions[:-1],
@@ -229,19 +171,9 @@ def process_file(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarr
     return data, global_positions, positions, l_velocity
 
 
-# ---------------------------------------------------------------------------------------------
-# Recovery: 263 feature -> joint positions (Guo evaluator / viz)
-# ---------------------------------------------------------------------------------------------
-# data layout reminder:
-#   root_rot_velocity (B, seq_len, 1) / root_linear_velocity (B, seq_len, 2) / root_y (B, seq_len, 1)
-#   ric_data (B, seq_len, (J-1)*3) / rot_data (B, seq_len, (J-1)*6) / local_velocity (B, seq_len, J*3)
-#   foot contact (B, seq_len, 4)
-
-
 def recover_root_rot_pos(data: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     rot_vel = data[..., 0]
     r_rot_ang = torch.zeros_like(rot_vel).to(data.device)
-    # Get Y-axis rotation from rotation velocity
     r_rot_ang[..., 1:] = rot_vel[..., :-1]
     r_rot_ang = torch.cumsum(r_rot_ang, dim=-1)
 
@@ -251,7 +183,6 @@ def recover_root_rot_pos(data: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor
 
     r_pos = torch.zeros(data.shape[:-1] + (3,)).to(data.device)
     r_pos[..., 1:, [0, 2]] = data[..., :-1, 1:3]
-    # Add Y-axis rotation to root position
     r_pos = qrot(qinv(r_rot_quat), r_pos)
 
     r_pos = torch.cumsum(r_pos, dim=-2)
@@ -265,16 +196,11 @@ def recover_from_ric(data: torch.Tensor, joints_num: int) -> torch.Tensor:
     positions = data[..., 4 : (joints_num - 1) * 3 + 4]
     positions = positions.view(positions.shape[:-1] + (-1, 3))
 
-    # Add Y-axis rotation to local joints
-    positions = qrot(
-        qinv(r_rot_quat[..., None, :]).expand(positions.shape[:-1] + (4,)), positions
-    )
+    positions = qrot(qinv(r_rot_quat[..., None, :]).expand(positions.shape[:-1] + (4,)), positions)
 
-    # Add root XZ to joints
     positions[..., 0] += r_pos[..., 0:1]
     positions[..., 2] += r_pos[..., 2:3]
 
-    # Concatenate root and joints
     positions = torch.cat([r_pos.unsqueeze(-2), positions], dim=-2)
 
     return positions

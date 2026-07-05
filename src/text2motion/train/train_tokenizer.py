@@ -1,15 +1,3 @@
-"""Train the motion tokenizer (Contribution A) and evaluate reconstruction + downstream FID.
-
-Trains either the Residual-FSQ tokenizer or the strong-RVQ baseline on fixed-length motion windows,
-logging reconstruction loss + codebook perplexity per epoch and MPJPE / downstream FID on the **val**
-split periodically (with the EMA weights). The best checkpoint (lowest **val** recon-FID) is saved;
-**test** is evaluated exactly once at the end on that val-selected best (no selection leak onto test).
-Run both and compare the recorded numbers -- that table is Contribution A's evidence.
-
-    python -m text2motion.train.train_tokenizer --config configs/default.yaml --tokenizer fsq --epochs 50
-    python -m text2motion.train.train_tokenizer --config configs/default.yaml --tokenizer rvq --epochs 50
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -137,7 +125,6 @@ def run(args: argparse.Namespace) -> None:
                 resume_path,
             )
 
-    # Test touched ONCE, at the end, on the val-selected best checkpoint -- the reported headline.
     if ckpt_path.is_file():
         tokenizer.load_state_dict(torch.load(ckpt_path, map_location=device))
         tokenizer.eval()

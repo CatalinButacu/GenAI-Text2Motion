@@ -1,20 +1,3 @@
-"""Causal token-AR motion generator -- Contribution B.
-
-Predicts residual-FSQ motion tokens autoregressively over (downsampled) time, conditioned on a text
-embedding fed as a prefix. Two interchangeable backbones behind one interface:
-  * `MambaBackbone` -- a selective SSM (S6, Gu & Dao arXiv:2312.00752). THE contribution: to our survey
-    no published motion generator is a token-autoregressive S6 (all Mamba motion work is diffusion- or
-    masked-bidirectional). Fixed-size recurrent state -> bounded memory while streaming.
-  * `TransformerBackbone` -- a causal decoder (T2M-GPT mold, arXiv:2301.06052). The controlled twin;
-    streams with a KV-cache that GROWS with sequence length.
-
-Each backbone implements `forward(seq)` (parallel, training) and `step(x_t, state)` (recurrent,
-streaming) that SHARE the same recurrence, so streamed logits == batched logits by construction
-(the bounded-memory claim is then just a property of the state shape). Built from `GeneratorCfg`.
-See ADR 0002 and `.claude/docs/references.md`. (Generator code is implementation behind the ADR-0002
-gate; the empirical FID-vs-twin validation runs once real tokens exist.)
-"""
-
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -33,15 +16,7 @@ class RMSNorm(nn.Module):
         return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps) * self.weight
 
 
-# --------------------------------------------------------------------------------------------------
-# Mamba (S6) backbone -- Contribution B
-# --------------------------------------------------------------------------------------------------
-
-
 def _parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
-    """Inclusive scan of the first-order linear recurrence st = at*st-1 + xt (s-1 = 0) over dim 1,
-    via Hillis-Steele in log2(L) affine-composition passes (Heinsen 2023, arXiv:2311.06281). Diagonal
-    at -> all elementwise. Replaces the per-timestep python loop; matches step() within fp tolerance."""
     length = a.size(1)
     shift = 1
     while shift < length:
@@ -55,8 +30,6 @@ def _parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
 
 
 class MambaMixer(nn.Module):
-    """Minimal selective-SSM mixer with a shared step()/scan recurrence (so stream == batch)."""
-
     def __init__(
         self,
         d_model: int,
@@ -107,11 +80,6 @@ class MambaMixer(nn.Module):
         return out, new_ssm, new_conv
 
     def forward(self, seq: torch.Tensor) -> torch.Tensor:
-        """(B, L, d_model) -> (B, L, d_model). Vectorizes the projections + causal conv over the whole
-        sequence (one matmul each, not one per timestep) and runs ONLY the cheap elementwise state
-        recurrence sequentially. Numerically identical to looping step() -- verified by
-        test_parity_mamba -- but tractable to train (the per-timestep matmul loop OOMs / is ~100x
-        slower). Selective SSM of Gu & Dao (arXiv:2312.00752)."""
         batch, length, _ = seq.shape
         x, z = self.in_proj(seq).chunk(2, dim=-1)  # (B, L, d_inner) each
 
@@ -175,8 +143,6 @@ class MambaBackbone(nn.Module):
         super().__init__()
         self.blocks = nn.ModuleList([MambaBlock(cfg) for _ in range(cfg.n_layers)])
         self.norm_f = RMSNorm(cfg.d_model)
-        # the fused kernel has an efficient backward of its own; checkpointing only pays for the
-        # memory-hungry eager scan (the 4GB-GPU path)
         self.checkpoint_blocks = not cfg.use_kernel
 
     def init_state(self, batch: int, device: torch.device) -> list:
@@ -192,16 +158,10 @@ class MambaBackbone(nn.Module):
         for block in self.blocks:
             if self.training and seq.requires_grad and self.checkpoint_blocks:
                 seq = checkpoint(block, seq, use_reentrant=False)  # recompute the eager scan in
-                # backward -> bounded train memory on the 4GB GPU
             else:
                 seq = block(seq)
 
         return self.norm_f(seq)
-
-
-# --------------------------------------------------------------------------------------------------
-# Transformer backbone -- the controlled twin (KV-cache grows with T)
-# --------------------------------------------------------------------------------------------------
 
 
 class TransformerBlock(nn.Module):
@@ -281,16 +241,10 @@ class TransformerBackbone(nn.Module):
         return self.norm_f(seq)
 
 
-# --------------------------------------------------------------------------------------------------
-# Generator: token embeddings + text prefix + per-codebook heads
-# --------------------------------------------------------------------------------------------------
-
-
 class MotionGenerator(nn.Module):
     def __init__(self, cfg: GeneratorCfg) -> None:
         super().__init__()
         self.cfg = cfg
-        # END is one extra id past the tokenizer vocab; the tokenizer must never decode it
         self.end_id = cfg.codebook_size if cfg.use_end_token else None
         vocab = cfg.codebook_size + (1 if cfg.use_end_token else 0)
         self.token_emb = nn.ModuleList(
@@ -304,7 +258,6 @@ class MotionGenerator(nn.Module):
         self.backbone = make_backbone(cfg)
 
     def embed_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
-        """tokens (..., num_codebooks) -> (..., d_model), summed over codebooks."""
         out = self.token_emb[0](tokens[..., 0])
 
         for r in range(1, self.cfg.num_codebooks):
@@ -313,7 +266,6 @@ class MotionGenerator(nn.Module):
         return out
 
     def text_prefix(self, text_emb: torch.Tensor) -> torch.Tensor:
-        """text_emb (B, d_text) or (B, P, d_text) -> (B, P, d_model); P = cfg.text_prefix_len."""
         if text_emb.dim() == 2:
             text_emb = text_emb.unsqueeze(1)
         if text_emb.size(1) != self.cfg.text_prefix_len:
@@ -324,12 +276,9 @@ class MotionGenerator(nn.Module):
         return self.text_proj(text_emb)
 
     def logits(self, h: torch.Tensor) -> torch.Tensor:
-        """h (..., d_model) -> (..., num_codebooks, vocab)."""
         return torch.stack([head(h) for head in self.heads], dim=-2)
 
     def forward(self, tokens: torch.Tensor, text_emb: torch.Tensor) -> torch.Tensor:
-        """tokens (B, L, R), text_emb (B, d_text) or (B, P, d_text) -> logits (B, L, R, vocab).
-        Teacher forced: the P prefix tokens then tokens[:, :i] predict tokens[:, i]."""
         emb = self.embed_tokens(tokens)  # (B, L, d_model)
         prefix = self.text_prefix(text_emb)  # (B, P, d_model)
         seq_in = torch.cat([prefix, emb[:, :-1]], dim=1)  # (B, P+L-1, d_model)
@@ -346,15 +295,6 @@ class MotionGenerator(nn.Module):
         cfg_scale: float = 1.0,
         stop_at_end: bool = False,
     ):
-        """Yield one (B, R) token step at a time, streaming with bounded state (Mamba) / KV (twin).
-
-        cfg_scale > 1 applies classifier-free guidance: a second, unconditional row (zeroed text,
-        matching the training-time `drop_text` null condition) runs in the same batch and the logits
-        are extrapolated `uncond + cfg_scale * (cond - uncond)`. State stays bounded (2B rows).
-
-        With an END-token model, `stop_at_end=False` (the GT-length eval protocol) masks END so it
-        can never be sampled; `stop_at_end=True` stops as soon as every row emits END on any
-        codebook (END itself is not yielded), with `steps` as the hard cap."""
         device = text_emb.device
         guided = cfg_scale != 1.0
         if guided:
@@ -390,8 +330,6 @@ def make_backbone(cfg: GeneratorCfg) -> nn.Module:
 
 
 def sample_logits(logits: torch.Tensor, temperature: float, top_p: float) -> torch.Tensor:
-    """Nucleus sample per codebook. logits (B, R, V) -> tokens (B, R). Non-greedy by default
-    (greedy collapses -- the T2M-GPT failure mode)."""
     if temperature <= 0:
         return logits.argmax(-1)
 
@@ -408,8 +346,6 @@ def sample_logits(logits: torch.Tensor, temperature: float, top_p: float) -> tor
 def token_ce_loss(
     logits: torch.Tensor, targets: torch.Tensor, token_lengths: torch.Tensor | None = None
 ) -> torch.Tensor:
-    """Mean cross-entropy over codebooks. logits (B, L, R, V), targets (B, L, R). When token_lengths
-    (B,) is given, padded time positions (>= length) are masked out of the mean."""
     if token_lengths is None:
         return F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
 

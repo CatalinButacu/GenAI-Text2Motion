@@ -1,18 +1,3 @@
-"""Strong RVQ baseline-to-beat for Contribution A.
-
-A residual vector-quantized VAE with the canonical EMA-codebook recipe (van den Oord EMA update,
-arXiv:1711.00937 App. A.1; T2M-GPT `ema_reset` arXiv:2301.06052; MoMask residual stack +
-quantization dropout arXiv:2312.00063; EnCodec/SoundStream mechanics arXiv:2210.13438). It is what
-the Residual-FSQ tokenizer must beat on reconstruction + downstream FID.
-
-It deliberately SHARES the conv encoder/decoder with the FSQ tokenizer (`Encoder1d`/`Decoder1d`), so
-the only difference between the two tokenizers is the quantizer (EMA-VQ vs FSQ) at matched encoder
-capacity, sequence length and loss. `encode`/`decode` return the same `(B, T', num_quantizers)` index
-contract as `ResidualFsqTokenizer`, so the generator trains on either interchangeably.
-
-Built from `RvqBaselineCfg`. See `.claude/skills/motion-tokenizer` and `.claude/docs/references.md`.
-"""
-
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -22,14 +7,6 @@ from text2motion.shared.config import RvqBaselineCfg
 
 
 class EmaVectorQuantizer(nn.Module):
-    """Single-level VQ with EMA codebook updates + dead-code reset.
-
-    The codebook is a non-gradient buffer updated by exponential moving averages of the encoder
-    vectors assigned to each code (Laplace-smoothed). Codes whose EMA cluster size falls below
-    `reset_threshold` are reinitialised to random vectors from the current batch -- the standard
-    anti-collapse trick. A commitment loss pulls the encoder toward the chosen code.
-    """
-
     def __init__(
         self, codebook_size: int, code_dim: int, ema_decay: float, reset_threshold: float
     ) -> None:
@@ -46,7 +23,6 @@ class EmaVectorQuantizer(nn.Module):
         self.register_buffer("embed_avg", embed.clone())  # EMA of summed assigned vectors
 
     def _distances(self, flat: torch.Tensor) -> torch.Tensor:
-        """(N, D) -> (N, K) squared L2 to each code."""
         return (
             flat.pow(2).sum(1, keepdim=True) - 2 * flat @ self.embed.t() + self.embed.pow(2).sum(1)
         )
@@ -74,11 +50,6 @@ class EmaVectorQuantizer(nn.Module):
         self.cluster_size[dead] = 1.0
 
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """z (B, T, D) -> (clean quantized (B, T, D), indices (B, T), commitment loss). The
-        straight-through estimator is applied once at the residual-stack level, not here."""
-        # Assignment + EMA codebook update are non-differentiable (argmin) and must not leak the
-        # autograd graph into the in-place buffer updates -- the encoder gradient comes from the
-        # straight-through `z` term and the commitment loss on `z`, not from `quant`.
         with torch.no_grad():
             flat = z.reshape(-1, self.code_dim)
             indices = self._distances(flat).argmin(1)  # (N,)
@@ -92,13 +63,10 @@ class EmaVectorQuantizer(nn.Module):
         return quant, indices.view(z.shape[:-1]), commit
 
     def lookup(self, indices: torch.Tensor) -> torch.Tensor:
-        """indices (...) -> codes (..., D)."""
         return F.embedding(indices, self.embed)
 
 
 class ResidualVQ(nn.Module):
-    """Stack of EMA-VQ levels over successive residuals, with quantization dropout."""
-
     def __init__(self, cfg: RvqBaselineCfg) -> None:
         super().__init__()
         self.num_quantizers = cfg.num_quantizers
@@ -115,7 +83,6 @@ class ResidualVQ(nn.Module):
         return self.num_quantizers
 
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """z (B, T, D) -> (quantized sum, indices (B, T, num_quantizers), summed commitment loss)."""
         residual = z
         quantized = torch.zeros_like(z)
         commit = z.new_zeros(())
@@ -132,15 +99,12 @@ class ResidualVQ(nn.Module):
             else:
                 indices.append(torch.zeros(z.shape[:-1], dtype=torch.long, device=z.device))
 
-        # Straight-through only matters for the training-time encoder gradient; in eval return the
-        # true quantized so decode(encode) == forward exactly.
         if self.training:
             quantized = z + (quantized - z).detach()
 
         return quantized, torch.stack(indices, dim=-1), commit
 
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
-        """indices (B, T, num_quantizers) -> summed codes (B, T, D)."""
         out = 0.0
 
         for i, layer in enumerate(self.layers):
@@ -150,9 +114,6 @@ class ResidualVQ(nn.Module):
 
 
 class RvqBaselineTokenizer(nn.Module):
-    """263 motion feature <-> residual-VQ tokens (the baseline). Same I/O contract as the FSQ
-    tokenizer: `encode` -> indices, `decode` -> reconstruction, `forward` -> (recon, indices, commit)."""
-
     def __init__(self, cfg: RvqBaselineCfg) -> None:
         super().__init__()
         self.cfg = cfg
@@ -167,18 +128,15 @@ class RvqBaselineTokenizer(nn.Module):
         return self.cfg.codebook_size
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
-        """x (B, T, in_dim) -> indices (B, T/downsample, num_quantizers)."""
         z = self.pre_q(self.encoder(x))
         _, indices, _ = self.rvq(z)
         return indices
 
     def decode(self, indices: torch.Tensor) -> torch.Tensor:
-        """indices (B, T', num_quantizers) -> reconstruction (B, T, in_dim)."""
         codes = self.rvq.indices_to_codes(indices)
         return self.decoder(self.post_q(codes))
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """x (B, T, in_dim) -> (reconstruction, indices (B, T', num_quantizers), commitment loss)."""
         z = self.pre_q(self.encoder(x))
         quantized, indices, commit = self.rvq(z)
         recon = self.decoder(self.post_q(quantized))

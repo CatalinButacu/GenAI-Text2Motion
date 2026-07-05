@@ -1,16 +1,3 @@
-"""Quaternion / continuous-6D rotation math -- faithful port of the official HumanML3D code.
-
-Ported verbatim (math unchanged) from:
-    https://github.com/EricGuo5513/HumanML3D/blob/main/common/quaternion.py
-which itself derives from Facebook's QuaterNet
-    (Copyright (c) 2018-present, Facebook, Inc.; licensed under the QuaterNet LICENSE).
-
-Fidelity is mandatory: these are the exact formulas the Guo evaluator and T2M-GPT's VQ-VAE
-expect. The ONLY changes versus the original are cosmetic (PEP8 names kept as-is for the
-public API the pipeline calls, explicit imports instead of ``import *``, and replacing the
-removed ``np.float`` alias with ``np.float32``/``float``). No numerical behaviour changed.
-"""
-
 import numpy as np
 import torch
 
@@ -33,10 +20,6 @@ def qnormalize(q: torch.Tensor) -> torch.Tensor:
 
 
 def qmul(q: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
-    """Multiply quaternion(s) q with quaternion(s) r.
-
-    Expects two equally-sized tensors of shape (*, 4). Returns q*r of shape (*, 4).
-    """
     assert q.shape[-1] == 4
     assert r.shape[-1] == 4
 
@@ -52,7 +35,6 @@ def qmul(q: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
 
 
 def qrot(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
-    """Rotate vector(s) v by quaternion(s) q. q is (*, 4), v is (*, 3); returns (*, 3)."""
     assert q.shape[-1] == 4
     assert v.shape[-1] == 3
     assert q.shape[:-1] == v.shape[:-1]
@@ -80,10 +62,6 @@ def qrot_np(q: np.ndarray, v: np.ndarray) -> np.ndarray:
 
 
 def qfix(q: np.ndarray) -> np.ndarray:
-    """Enforce quaternion continuity across time by flipping sign to maximise consecutive dot.
-
-    Expects (L, J, 4); returns the same shape.
-    """
     assert len(q.shape) == 3
     assert q.shape[-1] == 4
 
@@ -96,7 +74,6 @@ def qfix(q: np.ndarray) -> np.ndarray:
 
 
 def quaternion_to_matrix(quaternions: torch.Tensor) -> torch.Tensor:
-    """Quaternions (real part first), shape (..., 4) -> rotation matrices (..., 3, 3)."""
     r, i, j, k = torch.unbind(quaternions, -1)
     two_s = 2.0 / (quaternions * quaternions).sum(-1)
 
@@ -159,19 +136,17 @@ def cont6d_to_matrix_np(cont6d: np.ndarray) -> np.ndarray:
 
 
 def qbetween(v0: torch.Tensor, v1: torch.Tensor) -> torch.Tensor:
-    """Find the quaternion that rotates v0 to v1. Both are (*, 3)."""
     assert v0.shape[-1] == 3, "v0 must be of the shape (*, 3)"
     assert v1.shape[-1] == 3, "v1 must be of the shape (*, 3)"
 
     v = torch.cross(v0, v1)
-    w = torch.sqrt(
-        (v0**2).sum(dim=-1, keepdim=True) * (v1**2).sum(dim=-1, keepdim=True)
-    ) + (v0 * v1).sum(dim=-1, keepdim=True)
+    w = torch.sqrt((v0**2).sum(dim=-1, keepdim=True) * (v1**2).sum(dim=-1, keepdim=True)) + (
+        v0 * v1
+    ).sum(dim=-1, keepdim=True)
     return qnormalize(torch.cat([w, v], dim=-1))
 
 
 def qbetween_np(v0: np.ndarray, v1: np.ndarray) -> np.ndarray:
-    """Find the quaternion that rotates v0 to v1. Both are (*, 3)."""
     assert v0.shape[-1] == 3, "v0 must be of the shape (*, 3)"
     assert v1.shape[-1] == 3, "v1 must be of the shape (*, 3)"
 

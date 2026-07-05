@@ -1,18 +1,3 @@
-"""Guo et al. text+motion evaluator (the fixed FID / R-precision matcher) -- reused UNMODIFIED.
-
-Architecture is a faithful replica of the encoders in `finest.tar` from
-    Guo et al. "Generating Diverse and Natural 3D Human Motions from Text", CVPR 2022,
-    github.com/EricGuo5513/text-to-motion
-so the pretrained weights load exactly.
-
-STANDARD-263 input path (this is the citable one; NOT the donor's 168->259 diff-hack):
-  raw 263 HumanML3D feature -> normalize with the evaluator's own 263 mean/std
-  -> drop the last 4 foot-contact dims (feed [..., :259]) -> MovementEncoder -> MotionEncoder.
-The movement encoder's first conv is (512, 259, 4) in finest.tar, confirming the 259 input.
-
-All metrics live in the matcher's joint embedding space; never retrain it (ADR 0001).
-"""
-
 from pathlib import Path
 
 import numpy as np
@@ -33,9 +18,6 @@ POS_SIZE = 15
 def _bigru_final_state(
     gru: nn.GRU, x: torch.Tensor, hidden: torch.Tensor, lengths: torch.Tensor | None
 ) -> torch.Tensor:
-    """Run a 1-layer BiGRU and return the concatenated forward+backward FINAL hidden state
-    (B, 2*hidden) -- Guo et al.'s BiGRUCo pooling (NOT mean-pooling). Lengths, when given, are honoured
-    via pack_padded_sequence so padding frames never enter the final state."""
     h0 = hidden.repeat(1, x.size(0), 1)
 
     if lengths is None:
@@ -50,8 +32,6 @@ def _bigru_final_state(
 
 
 class MovementEncoder(nn.Module):
-    """(B, T, 259) -> (B, T//4, 512) stride-4 conv segments."""
-
     def __init__(self) -> None:
         super().__init__()
         self.main = nn.Sequential(
@@ -70,8 +50,6 @@ class MovementEncoder(nn.Module):
 
 
 class MotionEncoder(nn.Module):
-    """(B, T', 512) movement segments -> (B, 512) L2-normalised clip embedding."""
-
     def __init__(self) -> None:
         super().__init__()
         self.input_emb = nn.Linear(GRU_IN, GRU_HID)
@@ -90,12 +68,6 @@ class MotionEncoder(nn.Module):
 
 
 class MotionMatcher(nn.Module):
-    """Full motion feature extractor: standard 263 feature -> (B, 512) embedding.
-
-    Expects an ALREADY-NORMALISED 263 feature (normalise with `load_eval_stats`). Drops the last
-    4 foot-contact dims internally -- no velocity diff, no padding (that was the 168-track hack).
-    """
-
     def __init__(self) -> None:
         super().__init__()
         self.movement = MovementEncoder()
@@ -117,9 +89,6 @@ class MotionMatcher(nn.Module):
 
 
 class TextMatcher(nn.Module):
-    """BiGRU text encoder matching finest.tar `text_encoder`; maps text -> (B, 512) in the same
-    joint space as MotionMatcher. POS is fed as zeros (consistent constant offset; see Guo et al.)."""
-
     def __init__(self) -> None:
         super().__init__()
         self.pos_emb = nn.Linear(POS_SIZE, GLOVE_DIM)
@@ -147,7 +116,6 @@ class TextMatcher(nn.Module):
 
 
 def load_eval_stats(stats_dir: Path) -> tuple[np.ndarray, np.ndarray]:
-    """Load the canonical 263 eval mean/std (T2M Comp_v6 meta). Returns (mean, std), shape (263,)."""
     mean = np.load(Path(stats_dir) / "mean.npy")
     std = np.load(Path(stats_dir) / "std.npy")
 
@@ -160,7 +128,6 @@ def load_eval_stats(stats_dir: Path) -> tuple[np.ndarray, np.ndarray]:
 
 
 def load_matchers(finest_tar: Path, device: str = "cpu") -> tuple[MotionMatcher, TextMatcher]:
-    """Load motion + text matchers from finest.tar (fail loud if missing or shapes mismatch)."""
     ckpt = torch.load(Path(finest_tar), map_location="cpu", weights_only=False)
 
     motion = MotionMatcher()
@@ -174,7 +141,6 @@ def load_matchers(finest_tar: Path, device: str = "cpu") -> tuple[MotionMatcher,
 
 
 def _load_exact(module: nn.Module, state: dict, name: str) -> None:
-    """Load weights and FAIL LOUD if any model parameter went unfilled (no silent partial loads)."""
     missing, unexpected = module.load_state_dict(state, strict=False)
 
     if missing:

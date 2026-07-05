@@ -1,19 +1,3 @@
-"""Generator training losses -- token-CE anchor + term-split geometric losses (+ optional FK).
-
-Two families (see paper/lessons/A-loss-and-optimizer.md):
-1. **token cross-entropy** -- the discrete-choice objective; the fixed anchor (weight 1.0).
-2. **geometric, term-split** -- L1 on the soft-decoded motion, one term per named 263 channel group
-   (root / ric / rot6d / vel / foot), each weighted and logged separately so we SEE which part
-   fails. Optional **forward-kinematics consistency** (fk_self / fk_gt) enforces that the rotation
-   and position channels describe the same body (data-validated GT floor ~0.84mm).
-
-**soft-decode** keeps it differentiable: softmax over each codebook's logits -> expected FSQ code ->
-frozen decoder -> motion, so gradient reaches the generator without a non-differentiable argmax.
-
-Weighting is `fixed` (config scalars) or `uncertainty` (Kendall et al. 2018: learnable log-variance
-per term, `exp(-s)*L + s`). See `.claude/skills/t2m-losses`.
-"""
-
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -23,7 +7,6 @@ from text2motion.model.generator import token_ce_loss
 from text2motion.model.tokenizer import GroupedFSQ, ResidualFsqTokenizer
 from text2motion.shared.config import TrainCfg
 
-# HumanML3D-263 channel groups (Guo et al., J=22). One slice per term-split loss.
 SLICE_ROOT = slice(0, 4)
 SLICE_RIC = slice(4, 67)
 SLICE_ROT6D = slice(67, 193)
@@ -36,9 +19,6 @@ FK_TERMS = ("fk_self", "fk_gt")
 
 
 def soft_decode(logits: torch.Tensor, tokenizer: ResidualFsqTokenizer) -> torch.Tensor:
-    """logits (B, T', R, V) -> reconstructed motion (B, T, in_dim) via expected FSQ codes through the
-    frozen decoder. Differentiable in `logits`; the tokenizer is not updated. Grouped quantizers
-    CONCATENATE the per-token expected codes; residual quantizers SUM them."""
     quantizer = tokenizer.quantizer
     units = quantizer.groups if isinstance(quantizer, GroupedFSQ) else quantizer.layers
 
@@ -46,8 +26,6 @@ def soft_decode(logits: torch.Tensor, tokenizer: ResidualFsqTokenizer) -> torch.
     for token_index, unit in enumerate(units):
         all_idx = torch.arange(unit.codebook_size, device=logits.device)
         codebook = unit.indices_to_codes(all_idx)  # (V, fsq_dim)
-        # slice to the real vocab: an END-token generator carries one extra logit column that has
-        # no code; the expectation renormalizes over decodable codes only
         real = logits[..., token_index, : unit.codebook_size]
         expected_codes.append(real.softmax(-1) @ codebook)
 
@@ -76,8 +54,6 @@ def _masked_l1(a: torch.Tensor, b: torch.Tensor, mask: torch.Tensor | None) -> t
 def geometric_terms(
     recon: torch.Tensor, gt: torch.Tensor, frame_lengths: torch.Tensor | None = None
 ) -> dict[str, torch.Tensor]:
-    """Per-channel-group L1 on the soft-decoded reconstruction vs GT (both (B, T, 263)). Padded
-    frames (>= length) are masked out. One term per 263 channel group (the 'term split')."""
     mask = _frame_mask(recon, frame_lengths)
     return {
         "root": _masked_l1(recon[..., SLICE_ROOT], gt[..., SLICE_ROOT], mask),
@@ -89,8 +65,6 @@ def geometric_terms(
 
 
 def _recover_rot_batched(motion_raw: torch.Tensor, skeleton) -> torch.Tensor:
-    """recover_from_rot is unbatched; loop the batch and stack -> (B, T, J, 3). Cheap (FK only),
-    and only called when an fk_* weight is active."""
     return torch.stack(
         [recover_from_rot(motion_raw[b], JOINTS_NUM, skeleton) for b in range(motion_raw.size(0))]
     )
@@ -104,14 +78,10 @@ def fk_consistency_terms(
     std: torch.Tensor,
     skeleton,
 ) -> dict[str, torch.Tensor]:
-    """FK-consistency in real (denormalized) position space. fk_self = FK(recon rot6d) vs recon ric;
-    fk_gt = FK(recon rot6d) vs GT ric. Both length-masked, mean over joints+coords."""
     recon_raw = recon * std + mean
     gt_raw = gt * std + mean
     pos_ric = recover_from_ric(recon_raw, JOINTS_NUM)  # (B, T, J, 3)
     pos_gt = recover_from_ric(gt_raw, JOINTS_NUM)
-    # uniform_skeleton makes bone lengths constant across all clips, so any GT frame sets the
-    # skeleton's offsets for the FK (needed before recover_from_rot reads skeleton._offset)
     skeleton.get_offsets_joints(pos_gt[0, 0].detach())
     pos_rot = _recover_rot_batched(recon_raw, skeleton)  # (B, T, J, 3)
 
@@ -124,9 +94,6 @@ def fk_consistency_terms(
 
 
 class UncertaintyWeighter(nn.Module):
-    """Kendall et al. 2018 learnable loss weighting: one log-variance s_i per term;
-    contribution = exp(-s_i) * L_i + s_i (the +s_i term prevents collapse to zero weight)."""
-
     def __init__(self, term_names: tuple[str, ...]) -> None:
         super().__init__()
         self.term_names = term_names
@@ -141,7 +108,6 @@ class UncertaintyWeighter(nn.Module):
 
 
 def active_term_names(cfg: TrainCfg) -> tuple[str, ...]:
-    """Geometric/FK terms with a nonzero weight (the ones the weighter manages)."""
     weights = term_weights(cfg)
     return tuple(name for name in (*GEO_TERMS, *FK_TERMS) if weights[name] > 0)
 
@@ -172,9 +138,6 @@ def generator_loss(
     skeleton=None,
     weighter: UncertaintyWeighter | None = None,
 ) -> tuple[torch.Tensor, dict[str, float]]:
-    """Total loss + per-term scalars. CE is the fixed anchor; geometric terms are term-split and
-    combined by fixed config weights (default) or `weighter` (uncertainty). FK terms are computed
-    only when their weight is active and (mean, std, skeleton) are supplied."""
     if token_lengths is None and lengths is not None:
         token_lengths = (lengths // tokenizer.cfg.downsample).clamp(max=target_tokens.size(1))
 

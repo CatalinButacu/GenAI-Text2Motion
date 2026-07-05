@@ -1,19 +1,3 @@
-"""Torch Dataset over the regenerated standard HumanML3D-263 features.
-
-Loads ``new_joint_vecs/<id>.npy`` (263-dim) + ``Mean.npy``/``Std.npy`` produced by
-``regenerate.py``, applies per-channel normalization ``(x - mean) / std``, respects the official
-train/val/test split files, and returns ``(feature, length, text)`` per the paired annotation.
-
-Text annotation format (official HumanML3D ``texts/<id>.txt``), one caption per line:
-    ``caption#tokens#start_time#end_time``
-When ``start_time``/``end_time`` are nonzero the motion is cropped to ``[start*fps:end*fps]``
-(this is how the official 2-10 s clipping is realized at load time). Clips outside
-``[min_motion_len, max_motion_len]`` frames are dropped. A matching ``denormalize`` is provided.
-
-Paths come from ``PathsCfg``; representation/length policy from ``Hml3dReprCfg`` / ``DataCfg``.
-Failures are loud (missing Mean/Std, missing splits, wrong feature dim).
-"""
-
 from __future__ import annotations
 
 import random
@@ -38,7 +22,6 @@ class TextAnnotation:
 
 
 def parse_text_file(path: Path) -> list[TextAnnotation]:
-    """Parse one official ``texts/<id>.txt`` into annotations (caption#tokens#start#end)."""
     annotations: list[TextAnnotation] = []
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
@@ -64,12 +47,6 @@ def parse_text_file(path: Path) -> list[TextAnnotation]:
 
 
 class Hml3dMotionTextDataset(Dataset):
-    """263-feature + paired text dataset over the regenerated HumanML3D.
-
-    Each item is a ``(motion, length, text)`` tuple where ``motion`` is the normalized
-    (T, 263) feature, ``length`` its frame count, and ``text`` one (randomly chosen) caption.
-    """
-
     def __init__(
         self,
         paths: PathsCfg,
@@ -122,10 +99,6 @@ class Hml3dMotionTextDataset(Dataset):
         return mean, std
 
     def _index_clips(self, names: list[str]) -> list[str]:
-        """Keep clip ids whose feature + per-variant text exist and whose length is in range.
-
-        Mirrored copies (``M``-prefixed) are included only when mirror augmentation is on, and each
-        uses its OWN ``M<id>.txt`` caption (the official left<->right-swapped mirror text)."""
         kept: list[str] = []
         for name in names:
             for clip_id in self._variants(name):
@@ -172,7 +145,6 @@ class Hml3dMotionTextDataset(Dataset):
         return torch.from_numpy(feat), feat.shape[0], ann.caption
 
     def _segment(self, ann: TextAnnotation, total: int) -> tuple[int, int] | None:
-        """Frame range a caption describes; None means the whole clip (start == end == 0)."""
         if ann.start_time == 0.0 and ann.end_time == 0.0:
             return None
         start = max(int(ann.start_time * self._fps), 0)
@@ -182,11 +154,6 @@ class Hml3dMotionTextDataset(Dataset):
     def _pick_caption_segment(
         self, annotations: list[TextAnnotation], feat: np.ndarray
     ) -> tuple[TextAnnotation, np.ndarray]:
-        """Choose a caption whose segment is usable and crop the motion to it.
-
-        Captions describing a sub-``min_len`` segment are excluded (pairing them with the full clip
-        would mislabel it). Crops LONGER than ``max_len`` are kept: ``_fit_to_max_len`` then windows
-        INSIDE the crop, so text and motion stay matched (the official truncate behavior)."""
         usable = []
         for ann in annotations:
             segment = self._segment(ann, feat.shape[0])
@@ -200,8 +167,6 @@ class Hml3dMotionTextDataset(Dataset):
         return ann, feat
 
     def _fit_to_max_len(self, feat: np.ndarray) -> np.ndarray:
-        """Window a too-long clip to max_motion_len: a random window for train (augmentation), the
-        leading window for eval (deterministic). Official HumanML3D truncates rather than drops."""
         overflow = feat.shape[0] - self._max_len
         if overflow <= 0:
             return feat
@@ -212,10 +177,6 @@ class Hml3dMotionTextDataset(Dataset):
 def collate_pad(
     batch: list[tuple[torch.Tensor, int, str]],
 ) -> tuple[torch.Tensor, torch.Tensor, list[str]]:
-    """Pad variable-length (T, 263) motions to the batch maximum.
-
-    Returns (motions (B, T_max, 263) zero-padded, lengths (B,), captions). Recover a frame mask as
-    ``torch.arange(T_max)[None] < lengths[:, None]``."""
     motions, lengths, captions = zip(*batch, strict=True)
     max_len = max(motion.shape[0] for motion in motions)
     feature_dim = motions[0].shape[1]
@@ -235,7 +196,6 @@ def build_dataloader(
     num_workers: int = 0,
     seed: int = 42,
 ) -> DataLoader:
-    """Dataset + padded DataLoader for one split. Shuffles and drop-lasts the train split."""
     dataset = Hml3dMotionTextDataset(paths, repr_cfg, data_cfg, split=split, seed=seed)
     use_shuffle = (split == "train") if shuffle is None else shuffle
     return DataLoader(

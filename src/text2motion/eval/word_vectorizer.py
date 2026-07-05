@@ -1,9 +1,3 @@
-"""Vendored verbatim from Guo et al. HumanML3D / text-to-motion eval
-(Inter-X-main/evaluation/text2motion/utils/word_vectorizer.py). Kept byte-faithful (POS enum, VIP
-lists, our_vab lookup) so R-precision matches the official evaluator; do NOT refactor. Loads the
-`our_vab_{data.npy,words.pkl,idx.pkl}` GloVe+POS vocabulary. Vendored so remote runs don't depend on
-the donor path."""
-
 import pickle
 from os.path import join as pjoin
 
@@ -27,22 +21,102 @@ POS_enumerator = {
     "OTHER": 14,
 }
 
-Loc_list = ("left", "right", "clockwise", "counterclockwise", "anticlockwise", "forward", "back",
-            "backward", "up", "down", "straight", "curve")
+Loc_list = (
+    "left",
+    "right",
+    "clockwise",
+    "counterclockwise",
+    "anticlockwise",
+    "forward",
+    "back",
+    "backward",
+    "up",
+    "down",
+    "straight",
+    "curve",
+)
 
-Body_list = ("arm", "chin", "foot", "feet", "face", "hand", "mouth", "leg", "waist", "eye", "knee",
-             "shoulder", "thigh")
+Body_list = (
+    "arm",
+    "chin",
+    "foot",
+    "feet",
+    "face",
+    "hand",
+    "mouth",
+    "leg",
+    "waist",
+    "eye",
+    "knee",
+    "shoulder",
+    "thigh",
+)
 
-Obj_List = ("stair", "dumbbell", "chair", "window", "floor", "car", "ball", "handrail", "baseball",
-            "basketball")
+Obj_List = (
+    "stair",
+    "dumbbell",
+    "chair",
+    "window",
+    "floor",
+    "car",
+    "ball",
+    "handrail",
+    "baseball",
+    "basketball",
+)
 
-Act_list = ("walk", "run", "swing", "pick", "bring", "kick", "put", "squat", "throw", "hop", "dance",
-            "jump", "turn", "stumble", "dance", "stop", "sit", "lift", "lower", "raise", "wash",
-            "stand", "kneel", "stroll", "rub", "bend", "balance", "flap", "jog", "shuffle", "lean",
-            "rotate", "spin", "spread", "climb")
+Act_list = (
+    "walk",
+    "run",
+    "swing",
+    "pick",
+    "bring",
+    "kick",
+    "put",
+    "squat",
+    "throw",
+    "hop",
+    "dance",
+    "jump",
+    "turn",
+    "stumble",
+    "dance",
+    "stop",
+    "sit",
+    "lift",
+    "lower",
+    "raise",
+    "wash",
+    "stand",
+    "kneel",
+    "stroll",
+    "rub",
+    "bend",
+    "balance",
+    "flap",
+    "jog",
+    "shuffle",
+    "lean",
+    "rotate",
+    "spin",
+    "spread",
+    "climb",
+)
 
-Desc_list = ("slowly", "carefully", "fast", "careful", "slow", "quickly", "happy", "angry", "sad",
-             "happily", "angrily", "sadly")
+Desc_list = (
+    "slowly",
+    "carefully",
+    "fast",
+    "careful",
+    "slow",
+    "quickly",
+    "happy",
+    "angry",
+    "sad",
+    "happily",
+    "angrily",
+    "sadly",
+)
 
 VIP_dict = {
     "Loc_VIP": Loc_list,

@@ -1,11 +1,3 @@
-"""Mandatory sanity-overfit gate (CLAUDE.md) for the 100M final config, both backbones.
-
-One synthetic batch, N steps, expect token-CE to collapse (model+loss+optimizer wiring proof).
-Runs locally on the 4GB GPU with use_kernel=False (the cloud canary re-validates kernel parity).
-
-    PYTHONPATH=src python _sanity_100m.py
-"""
-
 from dataclasses import replace
 
 import torch

@@ -1,14 +1,3 @@
-"""Train the text-to-motion generator (Contribution B): the token-AR S6/Mamba generator or the
-controlled transformer twin, on the frozen grouped-FSQ tokens.
-
-Loss: token-CE + soft-decode reconstruction + velocity/foot/root (length-masked), CLIP text
-conditioning (last layer + projection unfrozen), CFG dropout, EMA. Periodically scores generation
-FID + R-precision with the validated Guo matcher (its own ``our_vab`` text encoder). Run ``--backbone
-mamba`` and ``--backbone transformer`` at matched data/budget/seed for the ADR-0002 twin comparison.
-
-    python -m text2motion.train.train_generator --config configs/default.yaml --backbone mamba --epochs 50
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -47,7 +36,6 @@ def run(args: argparse.Namespace) -> None:
     tokenizer.load_state_dict(torch.load(args.tokenizer_ckpt, map_location="cpu"))
     tokenizer.to(device).eval()
 
-    # Mamba uses more layers than the transformer twin to MATCH total params (ADR 0001 controlled twin)
     n_layers = cfg.generator.mamba_n_layers if args.backbone == "mamba" else cfg.generator.n_layers
     gen_cfg = replace(
         cfg.generator,
@@ -67,10 +55,8 @@ def run(args: argparse.Namespace) -> None:
     our_mean = np.load(out_dir / "Mean.npy").astype(np.float32)
     our_std = np.load(out_dir / "Std.npy").astype(np.float32)
 
-    # mean/std go to the trainer too: the FK-consistency loss denormalizes to real positions
     train_cfg = replace(cfg.train, grad_accum=args.grad_accum)
     trainer = GeneratorTrainer(generator, tokenizer, train_cfg, text_encoder, our_mean, our_std)
-    # the scheduler advances per OPTIMIZER step, of which accumulation leaves 1/grad_accum as many
     trainer.build_scheduler(args.epochs * max(1, len(loader) // args.grad_accum))
     print(
         f"generator params: {sum(p.numel() for p in generator.parameters()):,} "
@@ -101,8 +87,6 @@ def run(args: argparse.Namespace) -> None:
     best_fid = float("inf")
     start_epoch = 0
     if args.resume and resume_path.is_file():
-        # stage on CPU: map_location=device parks the whole ~390MB state file on the 4GB card and
-        # the first backward OOMs (2026-07-03); load_state_dict copies to each param's device
         state = torch.load(resume_path, map_location="cpu")
         generator.load_state_dict(state["generator"])
         text_encoder.load_state_dict(state["text_encoder"])
@@ -206,8 +190,6 @@ def main() -> None:
         default=None,
         help="pretrained generator weights to initialise from (AMASS pretrain); fresh optimizer",
     )
-    # 60, not 150: the 2026-06 run peaked at ep ~20-40 and degraded after; the cosine decay must
-    # land in that window. Scale epochs back up only with evidence (val FID still improving).
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument(

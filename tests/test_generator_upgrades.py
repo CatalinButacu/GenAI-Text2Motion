@@ -1,5 +1,3 @@
-"""Track-A upgrades: multi-token text prefix, END token, fused-kernel opt-in (all fail-loud)."""
-
 import importlib.util
 
 import pytest
@@ -51,7 +49,6 @@ def test_prefix_length_mismatch_fails_loud():
 
 
 def test_prefix_parity_with_legacy_single_token():
-    """P=1 with a 2D text condition must behave exactly like the original interface."""
     cfg = GeneratorCfg(backbone="mamba", **COMMON)
     gen = MotionGenerator(cfg).eval()
     tokens = torch.randint(0, cfg.codebook_size, (2, 8, cfg.num_codebooks))

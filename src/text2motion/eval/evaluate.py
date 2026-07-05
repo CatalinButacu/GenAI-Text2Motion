@@ -1,15 +1,3 @@
-"""THE citable generation-eval driver (promoted from the root `_twin_eval.py` scratch).
-
-20-rep protocol on a full split (Guo et al. matcher, our_vab text, Comp_v6 stats, 32-pool):
-FID, R-precision top-1/2/3, MM-Dist, Diversity -- plus **MultiModality** (Guo definition:
-``mm_repeats`` generations per caption on ``mm_clips`` clips, 10 random pairs each). Generation is
-stream-based (the deployed path) at the GT token length unless ``--length_mode end`` (END-token
-models). Every invocation writes a run manifest (CLAUDE.md logging rule). Model selection happens
-on --split val; --split test is touched once per final table.
-
-    python -m text2motion.eval.evaluate --backbone both --split test --cfg_scale 5.0 --temperature 1.1
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -93,7 +81,6 @@ def load_generator(backbone, cfg, tokenizer, device, ckpt=None):
 
 
 def stream_motion(generator, tokenizer, text_emb, token_len, args, our_mean, our_std):
-    """One stream->decode pass; text_emb (B, ...) -> list of B raw (T, 263) features."""
     steps = list(
         generator.stream(
             text_emb,
@@ -158,8 +145,6 @@ def multimodality(
     device,
     args,
 ):
-    """Guo MultiModality: per caption, mm_repeats generations -> 10 random embedding pairs ->
-    mean pairwise distance, averaged over mm_clips captions."""
     rng = np.random.default_rng(0)
     per_caption = []
     for caption, token_len in zip(captions[: args.mm_clips], token_lens[: args.mm_clips]):

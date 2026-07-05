@@ -1,14 +1,3 @@
-"""Fit SMPL-X parameters to recovered 22-joint positions (the field-standard joints2smpl path).
-
-Our 263 representation only yields joint POSITIONS cleanly (``recover_from_ric``); its rot6d are in
-the t2m-skeleton frame, not SMPL's rest pose, so feeding them straight to SMPL distorts the body
-(measured ~27 cm joint error). Instead we optimise SMPL-X (global_orient, body_pose, transl, shared
-betas) so the model's body joints match the target positions -- the same approach MDM / T2M-GPT /
-MoMask use for mesh visualisation. Optimisation (not real-time): seconds per clip.
-
-The 263 track is body-only, so hands/face stay neutral; only the 22 body joints are fit.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -58,14 +47,10 @@ def _build_model(cfg: FitConfig, t: int, device: str):
     ).to(device)
 
 
-# Public alias: builds a fitting-ready SMPL-X model for a given (gender, batch size). Callers that
-# fit many same-sized batches (e.g. equal-length streaming chunks) should cache/reuse the result
-# and pass it as ``fit_smplx_to_joints(..., model=...)`` to skip the ~1s rebuild-from-disk cost.
 build_smplx_model = _build_model
 
 
 def _yaw_init(model, target: torch.Tensor, transl: torch.Tensor, device: str) -> torch.Tensor:
-    """Pick the frame-0 yaw (of 4) whose zero-pose SMPL joints best match the target -> init orient."""
     t = target.shape[0]
     best_aa, best_err = None, float("inf")
     with torch.no_grad():
@@ -85,7 +70,6 @@ def _yaw_init(model, target: torch.Tensor, transl: torch.Tensor, device: str) ->
 
 
 def rest_pose_body(cfg: FitConfig, device: str = "cpu") -> tuple[np.ndarray, np.ndarray]:
-    """A standing zero-pose SMPL-X body (vertices (V,3), faces) -- the avatar shown before any prompt."""
     model = _build_model(cfg, 1, device)
     with torch.no_grad():
         out = model(
@@ -106,8 +90,6 @@ def mesh_from_params(
     gender: str,
     device: str = "cpu",
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Re-forward SMPL-X from stored poses with a NEW gender/betas -> (verts, faces). Drives the live
-    gender + body-weight sliders without re-fitting (pose tracks the motion; betas set the build)."""
     t = global_orient.shape[0]
     model = _build_model(replace(cfg, gender=gender), t, device)
     with torch.no_grad():
@@ -129,23 +111,6 @@ def fit_smplx_to_joints(
     warm_start: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None,
     model=None,
 ) -> FitResult:
-    """(T, 22, 3) target positions -> fitted SMPL-X. Two-stage Adam (orient/transl, then full).
-
-    ``on_progress(done_iters, total_iters)`` is called periodically (if given) so a caller can show
-    a live progress readout -- a full fit takes tens of seconds, not milliseconds.
-
-    ``model``, if given, is an already-built SMPL-X model to reuse instead of rebuilding one from
-    disk (~1s) -- ONLY valid if it was built with the same ``t = target_joints.shape[0]`` (a
-    mismatched batch size silently corrupts the smplx package's cached facial-landmark buffers).
-    Callers that fit many same-sized chunks (streaming) should cache/reuse a model per chunk size.
-
-    ``warm_start = (last_global_orient (3,), last_body_pose (63,), betas (num_betas,))`` from a
-    previous chunk's fit lets a NEW chunk continue cheaply: skips the yaw search and freezes betas
-    (shape shouldn't wobble chunk-to-chunk), so ``cfg.stage1_iters=0`` and a handful of
-    ``stage2_iters`` are enough to stay in lockstep with the previous chunk -- this is what lets the
-    live-streaming avatar in stream_viewer.py move as frames are generated, instead of only after a
-    single slow whole-clip fit at the end.
-    """
     dev = device if torch.cuda.is_available() else "cpu"
     t = target_joints.shape[0]
     target = torch.tensor(target_joints, dtype=torch.float32, device=dev)

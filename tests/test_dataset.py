@@ -1,6 +1,3 @@
-"""HumanML3D-263 dataset/dataloader over the regenerated features. Marked `slow` -- needs the
-regenerated data + donor texts on disk; skips cleanly when absent."""
-
 from pathlib import Path
 
 import pytest

@@ -1,11 +1,3 @@
-"""Run manifests -- the comparability rule: every training/eval run logs enough to reproduce it.
-
-``start_run`` creates ``<outputs_dir>/runs/<utc-stamp>_<name>/`` holding ``manifest.json`` (resolved
-config, CLI args, git commit, seed, package versions) and returns the directory; ``log_metrics``
-appends one timestamped JSON line per call to ``metrics.jsonl`` there. Any number quoted in an ADR,
-STATUS entry, or the dissertation must trace back to one of these run directories.
-"""
-
 from __future__ import annotations
 
 import json
@@ -19,8 +11,6 @@ from typing import Any
 
 
 def _git_commit() -> str:
-    # git is an external PROCESS that genuinely may be absent (not a library) -> narrow to that case
-    # and warn LOUDLY; a manifest without a commit is still useful, but we never hide it silently.
     try:
         out = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True, timeout=10
@@ -46,7 +36,6 @@ def _jsonable(value: Any) -> Any:
 
 
 def start_run(name: str, cfg: Any, outputs_dir: Path, extra: dict | None = None) -> Path:
-    """Create the run directory + manifest; call once at the top of every train/eval entrypoint."""
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     run_dir = Path(outputs_dir) / "runs" / f"{stamp}_{name}"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -73,7 +62,6 @@ def start_run(name: str, cfg: Any, outputs_dir: Path, extra: dict | None = None)
 
 
 def log_metrics(run_dir: Path, record: dict) -> None:
-    """Append one metrics record (e.g. per epoch or per eval) as a JSON line."""
     record = {"logged_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **_jsonable(record)}
     with (Path(run_dir) / "metrics.jsonl").open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record) + "\n")

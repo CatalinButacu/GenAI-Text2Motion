@@ -1,16 +1,3 @@
-"""CLIP text encoder for caption conditioning.
-
-T2M-GPT (arXiv:2301.06052), MoMask (arXiv:2312.00063) and Mogo all condition on CLIP ViT-B/32's
-pooled, projected 512-d sentence vector, fed as a single prefix token -- exactly what
-``MotionGenerator.text_prefix`` consumes. Keeping this encoder makes our FID directly comparable to
-those baselines. Unlike the field (which fully freezes CLIP), we follow the prior-plateau lesson and
-leave the last ``unfreeze_last_n`` transformer layers + final layer-norm + text projection trainable
-(a small low-LR fine-tune; see ``TrainCfg.text_encoder_lr``).
-
-``transformers`` is imported lazily so ``import text2motion`` works without it; install it with the
-core deps (it is in ``pyproject``). See .claude/docs/references.md.
-"""
-
 import torch
 from torch import nn
 
@@ -18,15 +5,6 @@ from text2motion.shared.config import TextEncoderCfg
 
 
 class CLIPTextEncoder(nn.Module):
-    """Caption (list[str]) -> (B, out_dim) pooled+projected CLIP text features.
-
-    Tokenization happens inside ``forward`` (CLIP's own tokenizer, fixed 77-token context), so the
-    trainer/data path only ever passes raw strings. Trainable params are restricted to the last
-    ``cfg.unfreeze_last_n`` encoder layers, the final layer-norm and (optionally) the text projection;
-    everything else is frozen. The output is the raw (un-normalized) projection, matching T2M-GPT's
-    ``clip.encode_text``.
-    """
-
     def __init__(self, cfg: TextEncoderCfg) -> None:
         super().__init__()
         from transformers import (  # lazy; raises if absent
@@ -72,9 +50,6 @@ class CLIPTextEncoder(nn.Module):
         return next(self.parameters()).device
 
     def forward(self, texts: list[str]) -> torch.Tensor:
-        """list[str] of length B -> (B, out_dim) when cfg.prefix_len == 1 (pooled, legacy), else
-        (B, prefix_len, out_dim): the pooled vector followed by the first prefix_len-1 token hidden
-        states (padding positions zeroed). Gradients flow into the unfrozen params."""
         tokens = self.tokenizer(
             texts,
             padding="max_length",

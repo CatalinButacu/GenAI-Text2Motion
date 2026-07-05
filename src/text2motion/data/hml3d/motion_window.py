@@ -1,12 +1,3 @@
-"""Fixed-length motion windows for tokenizer (RVQ/FSQ) training -- motion only, no text.
-
-The motion tokenizer is trained on fixed-length windows randomly cropped from each clip (the T2M-GPT
-/ MoMask recipe), which keeps batches rectangular and the conv encoder's downsampling exact. Yields
-normalized ``(window, 263)`` tensors; mirror augmentation on the train split only. Shares the
-regenerated layout + ``Mean.npy``/``Std.npy`` with the text dataset. See ``.claude/skills/
-motion-tokenizer``.
-"""
-
 from __future__ import annotations
 
 import random
@@ -22,8 +13,6 @@ _SPLIT_FILES = {"train": "train.txt", "val": "val.txt", "test": "test.txt"}
 
 
 class MotionWindowDataset(Dataset):
-    """Normalized fixed-length motion windows from the regenerated HumanML3D-263."""
-
     def __init__(
         self,
         paths: PathsCfg,
@@ -51,15 +40,15 @@ class MotionWindowDataset(Dataset):
         if self.mean.shape[-1] != self._dim:
             raise ValueError(f"Mean must be {self._dim}-dim, got {self.mean.shape}")
 
-        listed = [n.strip() for n in (out_dir / _SPLIT_FILES[split]).read_text().splitlines() if n.strip()]
+        listed = [
+            n.strip() for n in (out_dir / _SPLIT_FILES[split]).read_text().splitlines() if n.strip()
+        ]
         base_names = list(dict.fromkeys(n[1:] if n.startswith("M") else n for n in listed))
         self._ids = self._index_clips(base_names)
         if not self._ids:
             raise RuntimeError(f"no clips >= window {window} for split {split!r}")
 
     def _index_clips(self, names: list[str]) -> list[str]:
-        """Load every clip >= window into memory once (avoids per-step disk reads). Stores the raw
-        features in ``self._cache`` parallel to the returned ids; normalization happens at access."""
         variants = (lambda n: [n, f"M{n}"]) if self._mirror else (lambda n: [n])
         self._cache: list[np.ndarray] = []
         kept: list[str] = []

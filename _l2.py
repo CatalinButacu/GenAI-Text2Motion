@@ -9,10 +9,6 @@ from text2motion.eval.metrics import diversity, fid, mm_dist, r_precision
 from text2motion.eval.word_vectorizer import WordVectorizer  # vendored Guo vocab + POS (portable)
 from text2motion.shared.config import load_config
 
-# The official HumanML3D (t2m) evaluator loads `our_vab` (dataset_motion_loader.py L18,
-# eval_comp_v6.py L105) -- NOT the Inter-X `hhi_vab`. hhi_vab has different sos/eos/unk vectors and a
-# restricted word set that maps many HumanML3D words to its `unk`, displacing every text embedding
-# (MM-Dist ~9 instead of 2.97). Use the standard our_vab the matcher was trained with.
 w_vec = WordVectorizer(r"data/t2m_glove/glove", "our_vab")
 
 
@@ -21,6 +17,7 @@ def build_text(tokens):
     we = np.stack([w_vec[t][0] for t in toks]).astype(np.float32)
     pe = np.stack([w_vec[t][1] for t in toks]).astype(np.float32)
     return we, pe
+
 
 cfg = load_config("configs/default.yaml")
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -55,7 +52,9 @@ motion_matcher, text_matcher = load_matchers(official_matcher, device=device)
 
 
 def embed_motions(feature_list, batch=32):
-    feature_list = [f[: (f.shape[0] // 4) * 4] for f in feature_list]  # crop to multiple of unit_length
+    feature_list = [
+        f[: (f.shape[0] // 4) * 4] for f in feature_list
+    ]  # crop to multiple of unit_length
     embs = []
     for i in range(0, len(feature_list), batch):
         group = feature_list[i : i + batch]
@@ -65,9 +64,7 @@ def embed_motions(feature_list, batch=32):
         for j, f in enumerate(group):
             x[j, : f.shape[0]] = (f - eval_mean) / eval_std
         with torch.no_grad():
-            e = motion_matcher(
-                torch.from_numpy(x).to(device), torch.tensor(lengths, device=device)
-            )
+            e = motion_matcher(torch.from_numpy(x).to(device), torch.tensor(lengths, device=device))
         embs.append(e.cpu().numpy())
     return np.concatenate(embs)
 
@@ -119,15 +116,23 @@ for _ in range(reps):
 
 rprec = np.stack(rprec)
 half = len(motion_embs) // 2
-shuffled = np.random.default_rng(0).permutation(len(motion_embs))  # test ids are ordered: shuffle before half-split
+shuffled = np.random.default_rng(0).permutation(
+    len(motion_embs)
+)  # test ids are ordered: shuffle before half-split
 fid_real = fid(motion_embs[shuffled[:half]], motion_embs[shuffled[half:]])
 div = diversity(motion_embs, num_pairs=300)
 
 print("\n=== GT 'Real' baseline reproduction (20 reps, random caption) ===")
 print(f"{'metric':22}{'ours':>16}{'published':>14}")
-print(f"{'R-precision top-1':22}{rprec[:,0].mean():>10.3f} +/-{rprec[:,0].std():.3f}{'0.511':>14}")
-print(f"{'R-precision top-2':22}{rprec[:,1].mean():>10.3f} +/-{rprec[:,1].std():.3f}{'0.703':>14}")
-print(f"{'R-precision top-3':22}{rprec[:,2].mean():>10.3f} +/-{rprec[:,2].std():.3f}{'0.797':>14}")
+print(
+    f"{'R-precision top-1':22}{rprec[:, 0].mean():>10.3f} +/-{rprec[:, 0].std():.3f}{'0.511':>14}"
+)
+print(
+    f"{'R-precision top-2':22}{rprec[:, 1].mean():>10.3f} +/-{rprec[:, 1].std():.3f}{'0.703':>14}"
+)
+print(
+    f"{'R-precision top-3':22}{rprec[:, 2].mean():>10.3f} +/-{rprec[:, 2].std():.3f}{'0.797':>14}"
+)
 print(f"{'Matching Score':22}{np.mean(mmdist):>16.3f}{'2.974':>14}")
 print(f"{'Diversity':22}{div:>16.3f}{'9.503':>14}")
 print(f"{'FID (real)':22}{fid_real:>16.4f}{'0.002':>14}")

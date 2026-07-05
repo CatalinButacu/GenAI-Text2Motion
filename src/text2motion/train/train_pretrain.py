@@ -1,16 +1,3 @@
-"""Unconditional generator pretraining on the AMASS token pack (E7b) -> a motion prior.
-
-Trains the SAME generator (transformer or mamba) to predict the next motion token z_t | z_<t with a
-NULL text condition (the CFG unconditional branch), on the precomputed AMASS FSQ tokens. Output
-initialises the HumanML3D fine-tune (`train_generator --init_ckpt ...`). BOTH twins must be pretrained
-identically (ADR 0001 controlled twin). Tokens are precomputed by `tokenize_corpus`, so no tokenizer/
-decoder/CLIP is needed here; loss = token-CE only (the motion-prior signal). Recipe matches Lesson B
-(AdamW + warmup->cosine + grad-clip); EMA/best-by-val are the fine-tune's job.
-
-    python -m text2motion.train.train_pretrain --config configs/generator/final100m_fsq8x1024.yaml \
-        --backbone mamba --token_pack data/amass_tokens_fsq8x1024.npz --epochs 30 --batch_size 64
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -29,8 +16,6 @@ from text2motion.shared.seed import seed_everything
 
 
 class TokenPack(Dataset):
-    """The AMASS .npz token pack: each entry is a (T', R) int16 token sequence."""
-
     def __init__(self, path: str) -> None:
         self._z = np.load(path)
         self.keys = list(self._z.keys())
@@ -64,16 +49,30 @@ def run(a: argparse.Namespace) -> None:
         vocab *= lv  # FSQ implicit codebook = product of levels (no tokenizer load needed)
 
     n_layers = cfg.generator.mamba_n_layers if a.backbone == "mamba" else cfg.generator.n_layers
-    gc = replace(cfg.generator, backbone=a.backbone, n_layers=n_layers,
-                 num_codebooks=cfg.tokenizer.num_quantizers, codebook_size=vocab)
+    gc = replace(
+        cfg.generator,
+        backbone=a.backbone,
+        n_layers=n_layers,
+        num_codebooks=cfg.tokenizer.num_quantizers,
+        codebook_size=vocab,
+    )
     generator = MotionGenerator(gc).to(dev)
-    print(f"pretrain {a.backbone}: {sum(p.numel() for p in generator.parameters()):,} params, "
-          f"codebooks {gc.num_codebooks} x vocab {vocab}")
+    print(
+        f"pretrain {a.backbone}: {sum(p.numel() for p in generator.parameters()):,} params, "
+        f"codebooks {gc.num_codebooks} x vocab {vocab}"
+    )
 
-    loader = DataLoader(TokenPack(a.token_pack), batch_size=a.batch_size, shuffle=True,
-                        collate_fn=collate, drop_last=True, num_workers=a.num_workers)
-    opt = torch.optim.AdamW(generator.parameters(), lr=cfg.train.lr,
-                            weight_decay=cfg.train.weight_decay)
+    loader = DataLoader(
+        TokenPack(a.token_pack),
+        batch_size=a.batch_size,
+        shuffle=True,
+        collate_fn=collate,
+        drop_last=True,
+        num_workers=a.num_workers,
+    )
+    opt = torch.optim.AdamW(
+        generator.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.weight_decay
+    )
     total = a.epochs * len(loader)
     warm = cfg.train.warmup_steps
     floor = cfg.train.lr_min_ratio
@@ -86,11 +85,17 @@ def run(a: argparse.Namespace) -> None:
 
     out = a.out or f"checkpoints/generator_{a.backbone}_pretrained.pt"
     Path(out).parent.mkdir(parents=True, exist_ok=True)
-    resume_path = Path(out).with_name(Path(out).stem + "_last.pt")  # resume state (gen+opt+step+epoch)
+    resume_path = Path(out).with_name(
+        Path(out).stem + "_last.pt"
+    )  # resume state (gen+opt+step+epoch)
 
     run_dir = start_run(f"pretrain_{a.backbone}", cfg, cfg.paths.outputs_dir, vars(a))
-    amp_on = cfg.train.amp == "bf16" and dev == "cuda"  # match the fine-tune's precision (~2x faster)
-    print(f"segments {len(loader.dataset)}  steps/epoch {len(loader)}  device {dev}  amp {cfg.train.amp}")
+    amp_on = (
+        cfg.train.amp == "bf16" and dev == "cuda"
+    )  # match the fine-tune's precision (~2x faster)
+    print(
+        f"segments {len(loader.dataset)}  steps/epoch {len(loader)}  device {dev}  amp {cfg.train.amp}"
+    )
     step = 0
     start_epoch = 0
     if a.resume and resume_path.is_file():  # continue a crashed/stalled pretrain (no progress lost)
@@ -107,7 +112,9 @@ def run(a: argparse.Namespace) -> None:
         for tokens, lengths in loader:
             tokens, lengths = tokens.to(dev), lengths.to(dev)
             null = torch.zeros(tokens.size(0), gc.text_prefix_len, gc.d_text, device=dev)  # uncond
-            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):  # match the fine-tune
+            with torch.autocast(
+                "cuda", dtype=torch.bfloat16, enabled=amp_on
+            ):  # match the fine-tune
                 loss = token_ce_loss(generator(tokens, null), tokens, lengths)
             opt.zero_grad()
             loss.backward()
@@ -122,8 +129,14 @@ def run(a: argparse.Namespace) -> None:
         print(f"pretrain ep {epoch + 1:3d}  ce {tot / n:.4f}")
         torch.save(generator.state_dict(), out)  # the prior, kept current every epoch (crash-safe)
         torch.save(
-            {"generator": generator.state_dict(), "optimizer": opt.state_dict(),
-             "step": step, "epoch": epoch}, resume_path)
+            {
+                "generator": generator.state_dict(),
+                "optimizer": opt.state_dict(),
+                "step": step,
+                "epoch": epoch,
+            },
+            resume_path,
+        )
         if dev == "cuda":
             torch.cuda.empty_cache()  # defrag at epoch boundary (4GB-card fragmentation OOM lesson)
 
@@ -132,7 +145,9 @@ def run(a: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Unconditional AMASS-token generator pretraining (E7b).")
+    p = argparse.ArgumentParser(
+        description="Unconditional AMASS-token generator pretraining (E7b)."
+    )
     p.add_argument("--config", required=True)
     p.add_argument("--backbone", required=True, choices=["mamba", "transformer"])
     p.add_argument("--token_pack", default="data/amass_tokens_fsq8x1024.npz")

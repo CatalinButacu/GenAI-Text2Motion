@@ -1,6 +1,3 @@
-"""Exponential moving average of model weights (decay 0.999). The prior run kept noisy last-step
-weights; MDM/MoMask both evaluate an EMA copy. Use `store`/`copy_to`/`restore` around evaluation."""
-
 import torch
 from torch import nn
 
@@ -20,7 +17,6 @@ class Ema:
                 self.shadow[name].mul_(self.decay).add_(param.detach(), alpha=1 - self.decay)
 
     def copy_to(self, model: nn.Module) -> None:
-        """Swap EMA weights into the model, stashing the live weights for `restore`."""
         self.backup = {
             n: p.detach().clone() for n, p in model.named_parameters() if n in self.shadow
         }

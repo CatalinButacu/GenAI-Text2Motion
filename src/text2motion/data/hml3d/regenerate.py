@@ -1,20 +1,3 @@
-"""Regenerate standard HumanML3D-263 features from AMASS -- faithful port of the official flow.
-
-Mirrors the official three-notebook pipeline end to end:
-  1. ``raw_pose_processing.ipynb``: AMASS npz -> per-file (T, J, 3) Y-up joints (``raw_pose.py``).
-  2. ``raw_pose_processing.ipynb`` (index loop): per ``index.csv`` row, crop by dataset rule +
-     [start:end], flip x, write ``<new_name>`` and the mirrored ``M<new_name>`` joints.
-  3. ``motion_representation.ipynb``: joints -> 263 ``new_joint_vecs`` + recovered ``new_joints``.
-  4. ``cal_mean_variance.ipynb``: Mean.npy / Std.npy with the exact per-group Std smoothing.
-
-fps = 20; clips last 2-10 s (handled by the index start/end frames per the official annotation).
-Everything that varies per machine comes from ``PathsCfg`` / ``Hml3dReprCfg``; nothing hardcoded.
-Failures are loud (per-file errors are reported, not silently swallowed into a fallback path).
-
-Run order (see module-level ``main``):
-    python -m text2motion.data.hml3d.regenerate --config configs/default.yaml --stage all
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -33,7 +16,6 @@ from . import param_util
 from .feature import build_tgt_offsets, default_params, process_file, recover_from_ric
 from .raw_pose import AmassPoseExtractor
 
-# Per-dataset leading-frame trims (seconds * fps), copied EXACTLY from the official index loop.
 _DATASET_HEAD_TRIM_S = {
     "Eyes_Japan_Dataset": 3.0,
     "MPI_HDM05": 3.0,
@@ -42,11 +24,6 @@ _DATASET_HEAD_TRIM_S = {
     "Transitions_mocap": 0.5,
 }
 
-# index.csv was built for the SMPL-H AMASS release; the donor is the SMPL-X release, which renamed
-# several datasets and suffixes files '..._stageii' (not '..._poses'). Map original -> donor names so
-# the index stage can find the pose files. Datasets the donor lacks entirely (Eyes_Japan_Dataset,
-# humanact12, Transitions_mocap, BMLhandball) simply don't resolve and are skipped -> ~78% coverage;
-# see .claude/docs/STATUS.md. (Renames that point at an absent dir are harmless no-ops.)
 _AMASS_DATASET_RENAME = {
     "MPI_HDM05": "HDM05",
     "BioMotionLab_NTroje": "BMLrub",
@@ -61,9 +38,6 @@ _AMASS_DATASET_RENAME = {
 
 
 def _resolve_pose_path(source_path: str, pose_root: Path) -> Path | None:
-    """Map an index.csv './pose_data/<ORIG_DS>/.../<base>_poses.npy' entry onto the regenerated
-    pose_data, applying the SMPL-X dataset renames and trying the '_stageii' suffix. Returns None if
-    no candidate exists (an absent dataset / dropped clip), so the caller can skip it."""
     parts = [p for p in Path(source_path).parts if p not in (".", "pose_data")]
     if not parts:
         return None
@@ -79,7 +53,6 @@ def _resolve_pose_path(source_path: str, pose_root: Path) -> Path | None:
 
 
 def swap_left_right(data: np.ndarray) -> np.ndarray:
-    """Mirror joints left<->right (and negate x) -- exact port of the official function."""
     assert len(data.shape) == 3 and data.shape[-1] == 3
     data = data.copy()
     data[..., 0] *= -1
@@ -99,8 +72,6 @@ def swap_left_right(data: np.ndarray) -> np.ndarray:
 
 @dataclass(frozen=True)
 class RegenLayout:
-    """Output directory layout under ``hml3d_out_dir``."""
-
     out_dir: Path
 
     @property
@@ -124,9 +95,6 @@ class RegenLayout:
             d.mkdir(parents=True, exist_ok=True)
 
 
-# ---------------------------------------------------------------------------------------------
-# Stage 1: AMASS -> pose_data
-# ---------------------------------------------------------------------------------------------
 def stage_amass_to_pose(paths: PathsCfg, layout: RegenLayout, device: str) -> None:
     if paths.amass_dir is None:
         raise ValueError("paths.amass_dir must be set to the AMASS root for stage 'amass'")
@@ -134,7 +102,6 @@ def stage_amass_to_pose(paths: PathsCfg, layout: RegenLayout, device: str) -> No
     if paths.smplx_models is None:
         raise ValueError("paths.smplx_models must be set (SMPL-X bodies) for stage 'amass'")
 
-    # Donor AMASS is the SMPL-X release -> forward through the matching SMPL-X body model.
     extractor = AmassPoseExtractor(Path(paths.smplx_models), device=device)
 
     npz_files = [Path(r) / f for r, _, fs in os.walk(amass_root) for f in fs if f.endswith(".npz")]
@@ -149,9 +116,6 @@ def stage_amass_to_pose(paths: PathsCfg, layout: RegenLayout, device: str) -> No
             np.save(save_path, joints)
 
 
-# ---------------------------------------------------------------------------------------------
-# Stage 2: index.csv -> cropped + mirrored joints
-# ---------------------------------------------------------------------------------------------
 def _head_trim(source_path: str, fps: int) -> int:
     for name, seconds in _DATASET_HEAD_TRIM_S.items():
         if name in source_path:
@@ -175,8 +139,6 @@ def stage_index_to_joints(
         start_frame = int(index_file.loc[i]["start_frame"])
         end_frame = int(index_file.loc[i]["end_frame"])
 
-        # Resolve onto our pose_data (SMPL-X dataset renames + '_stageii' suffix). Missing clips
-        # (datasets the donor lacks) are expected at ~78% coverage -> skip, don't crash.
         load_path = _resolve_pose_path(source_path, pose_root)
         if load_path is None:
             missing += 1
@@ -198,13 +160,8 @@ def stage_index_to_joints(
     print(f"index->joints: wrote {written} clips, skipped {missing} missing (of {len(index_file)})")
 
 
-# ---------------------------------------------------------------------------------------------
-# Stage 3: joints -> 263 feature + recovered joints
-# ---------------------------------------------------------------------------------------------
 def stage_joints_to_feature(layout: RegenLayout, repr_cfg: Hml3dReprCfg) -> None:
     joints_num = repr_cfg.num_joints
-    # Official uses clip '000021' for the uniform-skeleton offsets. If it fell in a missing dataset,
-    # any clip works -- all our clips share the same SMPL-X bone lengths.
     ref_path = layout.joints / f"{param_util.t2m_tgt_skel_id}.npy"
     if not ref_path.is_file():
         available = sorted(layout.joints.glob("[0-9]*.npy"))
@@ -236,9 +193,6 @@ def stage_joints_to_feature(layout: RegenLayout, repr_cfg: Hml3dReprCfg) -> None
     )
 
 
-# ---------------------------------------------------------------------------------------------
-# Stage 4: Mean / Std (exact per-group Std smoothing from cal_mean_variance.ipynb)
-# ---------------------------------------------------------------------------------------------
 def stage_mean_std(layout: RegenLayout, joints_num: int) -> tuple[np.ndarray, np.ndarray]:
     file_list = sorted(p.name for p in layout.new_joint_vecs.glob("*.npy"))
     data_list = []

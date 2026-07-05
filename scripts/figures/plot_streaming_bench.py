@@ -1,13 +1,3 @@
-\
-\
-\
-\
-\
-\
-\
-\
-   
-
 from __future__ import annotations
 
 import argparse
@@ -44,10 +34,14 @@ def main() -> None:
     h_max = data["transformer"][-1]["horizon"]
     ax_mem.annotate(
         f"{tf / mb:.0f}x smaller\nat horizon {h_max}",
-        xy=(h_max, mb / 1e6), xytext=(h_max * 0.45, tf / 1e6 * 0.6),
-        arrowprops={"arrowstyle": "->", "color": "0.3"}, fontsize=11,
+        xy=(h_max, mb / 1e6),
+        xytext=(h_max * 0.45, tf / 1e6 * 0.6),
+        arrowprops={"arrowstyle": "->", "color": "0.3"},
+        fontsize=11,
     )
-    ax_mem.set_title("Recurrent state vs streaming horizon\n(transformer KV-cache grows; Mamba is bounded)")
+    ax_mem.set_title(
+        "Recurrent state vs streaming horizon\n(transformer KV-cache grows; Mamba is bounded)"
+    )
     ax_mem.set_xlabel("streaming horizon (tokens)")
     ax_mem.set_ylabel("recurrent state (MB)")
     ax_mem.legend()

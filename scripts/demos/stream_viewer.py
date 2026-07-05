@@ -1,20 +1,3 @@
-"""Interactive streaming text->motion studio, built by extending the aitviewer ``Viewer``.
-
-Layout (a fixed tiled studio, immune to a stale ``imgui.ini``):
-  * LEFT-top      -- Scene editor (aitviewer hierarchy + inspector), pinned.
-  * LEFT-bottom   -- Environment: background, ambient, per-light controls, shadows, floor, origin.
-  * RIGHT-top     -- Generation: runtime model/tokenizer selection, sampling params, avatar
-                     (gender + shape sliders, applied to the on-screen body in real time).
-  * RIGHT-bottom  -- Playback: play/pause, frame scrubber, speed, camera follow, render stats.
-  * BOTTOM-center -- prompt bar (chat-style) with motion + body-fit progress bars.
-  * CENTER        -- the avatar, animating LIVE as the bounded-state decoder emits frames.
-
-All custom panels are injected through ``self.gui_controls`` so their imgui calls run inside the
-viewer's frame (never outside -> no ``WithinFrameScope`` crash). All scene-node mutations happen in
-``on_render`` (main thread), fed by the background threads (generation, avatar re-mesh, model
-loading) through a lock-guarded handoff.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -53,12 +36,10 @@ GENDERS = ("neutral", "male", "female")
 BACKBONES = ("transformer", "mamba")
 N_BETAS = 10  # SMPL-X shape dims exposed as avatar-dimension sliders
 ROOT = Path(__file__).resolve().parents[2]
-# Local copy (data/ is repo-root-ignored; license-gated, never commit).
 DEFAULT_MODEL_DIR = str(ROOT / "data" / "smplx_models")
 
 
 def load_pipeline(config: str, ckpt: str, tokenizer_ckpt: str, backbone: str, device: str):
-    """Load tokenizer + generator + CLIP text encoder + normalisation stats onto ``device``."""
     cfg = load_config(config)
 
     tok = ResidualFsqTokenizer(cfg.tokenizer)
@@ -90,9 +71,6 @@ def load_pipeline(config: str, ckpt: str, tokenizer_ckpt: str, backbone: str, de
 
 @dataclass(frozen=True)
 class ModelEntry:
-    """One loadable model bundle: a checkpoint pinned to the EXACT config + tokenizer it was
-    trained with (from configs/demo_models.yaml) -- no free mixing at inference time."""
-
     label: str
     config: str
     ckpt: str
@@ -104,7 +82,6 @@ MODEL_REGISTRY = ROOT / "configs" / "demo_models.yaml"
 
 
 def load_model_registry(launch: ModelEntry) -> tuple[list[ModelEntry], int]:
-    """Registry entries + the index matching the launch args (which are appended if unknown)."""
     entries: list[ModelEntry] = []
     if MODEL_REGISTRY.is_file():
         raw = yaml.safe_load(MODEL_REGISTRY.read_text(encoding="utf-8"))
@@ -129,27 +106,22 @@ def load_model_registry(launch: ModelEntry) -> tuple[list[ModelEntry], int]:
 
 
 class StreamingStudioViewer(Viewer):
-    """aitviewer studio that streams a text prompt into a live-animating avatar."""
-
     def __init__(self, pipeline, model_dir: str, device: str, args: argparse.Namespace) -> None:
         super().__init__()
         self.tok, self.gen, self.te, self.mean, self.std = pipeline
         self.device = device
         self.model_dir = model_dir  # "" -> SMPL-X unavailable: skeleton-only mode
 
-        # --- sampling state (driven by the RIGHT panel) ---
         self.temperature = float(args.temperature)
         self.top_p = float(args.top_p)
         self.cfg_scale = float(args.cfg_scale)
         self.steps = int(args.steps)
 
-        # --- avatar personalization (applied to the on-screen body in real time) ---
         self.gender_idx = 0
         self.fit_body = bool(model_dir)
         self.skin_color = SKIN_COLOR
         self.user_betas = np.zeros(N_BETAS, dtype=np.float32)  # offsets on the fitted shape
 
-        # --- runtime model selection (registry-pinned bundles only) ---
         self.backbone = args.backbone
         launch_entry = ModelEntry(
             label=f"launch args: {Path(args.ckpt).stem}",
@@ -162,13 +134,11 @@ class StreamingStudioViewer(Viewer):
         self._loading_model = False
         self.load_status = f"active: {self._models[self._model_idx].label}"
 
-        # --- chat state ---
         self.prompt_text = ""
         self.status = "ready -- describe a motion below and press Enter"
         self.generating = False
         self.history: list[str] = []
 
-        # --- cross-thread handoff (workers produce, on_render consumes) ---
         self.lock = threading.Lock()
         self._new_chunks: list[np.ndarray] = []
         self._pending_body_chunks: list[tuple[np.ndarray, np.ndarray]] = []
@@ -183,8 +153,6 @@ class StreamingStudioViewer(Viewer):
         self._need_reset_view = False
         self._cancel = False
 
-        # --- SMPL-X params of the current motion, accumulated per fitted chunk; feeding
-        # mesh_from_params with a NEW gender/betas re-dresses the avatar without re-fitting ---
         self._fit_orient: list[np.ndarray] = []
         self._fit_pose: list[np.ndarray] = []
         self._fit_transl: list[np.ndarray] = []
@@ -195,20 +163,16 @@ class StreamingStudioViewer(Viewer):
         self._remesh_after_gen = False
         self._remesh_note = ""
 
-        # --- progress (prompt bar) ---
         self._gen_progress = 0.0
         self._fit_progress: float | None = None
 
-        # --- scene nodes we own ---
         self._rest_node = None
         self._motion_node = None
         self._body_node = None
 
-        # --- follow-cam: keep the avatar as the camera pivot as its root translates ---
         self.follow_cam = True
         self._follow_center: np.ndarray | None = None
 
-        # deterministic tiled layout; pinned, so a stale imgui.ini can't scatter the panels
         self._flags = imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_COLLAPSE
         self._styled = False
         self.playback_fps = float(args.fps)
@@ -218,16 +182,12 @@ class StreamingStudioViewer(Viewer):
         self._install_panels()
         self._add_rest_pose()
 
-    # ------------------------------------------------------------------ setup
-
     def _install_panels(self) -> None:
-        """Add the studio panels; gui_scene/gui_playback are overridden in place (same dict keys)."""
         self.gui_controls["environment"] = self.gui_environment
         self.gui_controls["params"] = self.gui_params
         self.gui_controls["prompt"] = self.gui_prompt
 
     def _add_rest_pose(self) -> None:
-        """Show a standing SMPL-X body at launch so the studio is never empty (if models are present)."""
         if not self.model_dir:
             return
         try:
@@ -246,13 +206,7 @@ class StreamingStudioViewer(Viewer):
     def gender(self) -> str:
         return GENDERS[self.gender_idx]
 
-    # --------------------------------------------------------------- geometry
-
     def _rects(self):
-        """Panel rectangles (x, y, w, h) for the tiled layout -- pure percentages of imgui's OWN
-        coordinate space. ``self.window_size`` is physical pixels while imgui positions windows in
-        logical units; under Windows display scaling (laptop at 125/150%) the two differ, so any
-        pixel-based rect overflows the screen. ``io.display_size`` is correct on every monitor."""
         w, h = imgui.get_io().display_size
         top = imgui.get_frame_height()  # main menu bar height, tracks the scaled font
         left_w = w * 0.20
@@ -272,10 +226,7 @@ class StreamingStudioViewer(Viewer):
         imgui.set_next_window_position(x, y, imgui.ALWAYS)
         imgui.set_next_window_size(w, h, imgui.ALWAYS)
 
-    # ------------------------------------------------------------------ style
-
     def _apply_style(self) -> None:
-        """One-time imgui restyle: rounded, dark-slate panels with a blue accent."""
         if self._styled:
             return
         self._styled = True
@@ -322,10 +273,7 @@ class StreamingStudioViewer(Viewer):
         imgui.text_wrapped(text)
         imgui.pop_style_color()
 
-    # ------------------------------------------------------------------ panels
-
     def gui_scene(self) -> None:
-        """LEFT-top: the default aitviewer Editor (hierarchy + inspector), pinned."""
         self._apply_style()
         editor, *_ = self._rects()
         self._dock(editor)
@@ -335,7 +283,6 @@ class StreamingStudioViewer(Viewer):
         imgui.end()
 
     def gui_environment(self) -> None:
-        """LEFT-bottom: everything about the stage -- background, lights, shadows, floor."""
         _, env, *_ = self._rects()
         self._dock(env)
         imgui.begin("Environment", False, self._flags)
@@ -393,7 +340,6 @@ class StreamingStudioViewer(Viewer):
         imgui.end()
 
     def gui_params(self) -> None:
-        """RIGHT-top: runtime model selection, sampling params, and the live avatar editor."""
         *_, params, _, _ = self._rects()
         self._dock(params)
         imgui.begin("Generation", False, self._flags)
@@ -465,7 +411,6 @@ class StreamingStudioViewer(Viewer):
         imgui.end()
 
     def _beta_slider(self, i: int, label: str) -> None:
-        """One SMPL-X shape slider; the re-mesh fires on release, not on every drag pixel."""
         changed, value = imgui.slider_float(label, float(self.user_betas[i]), -3.0, 3.0)
         if changed:
             self.user_betas[i] = value
@@ -473,7 +418,6 @@ class StreamingStudioViewer(Viewer):
             self._on_avatar_changed()
 
     def gui_playback(self) -> None:
-        """RIGHT-bottom: transport + camera + render stats (replaces the floating default)."""
         *_, playback, _ = self._rects()
         self._dock(playback)
         imgui.begin("Playback", False, self._flags)
@@ -511,7 +455,6 @@ class StreamingStudioViewer(Viewer):
         imgui.end()
 
     def gui_prompt(self) -> None:
-        """BOTTOM-center: chat-style prompt bar with live motion + body-fit progress bars."""
         *_, prompt = self._rects()
         self._dock(prompt)
         flags = self._flags | imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_SCROLLBAR
@@ -550,10 +493,7 @@ class StreamingStudioViewer(Viewer):
         self._dim_text(self.status)
         imgui.end()
 
-    # -------------------------------------------------------------- generation
-
     def submit_prompt(self) -> None:
-        """Kick off a background generation for the current prompt (main-thread, from gui_prompt)."""
         prompt = self.prompt_text.strip()
         if not prompt or self.generating:
             return
@@ -573,8 +513,6 @@ class StreamingStudioViewer(Viewer):
             "downsample": self.tok.cfg.downsample,
         }
         self._current_fit_body = fit_body
-        # the previous avatar/skeleton stays on screen (frozen) until the first new chunk streams
-        # in; _append_chunks then swaps the display in one shot -- no empty-scene flash.
         self._drop_skeleton = False
         with self.lock:
             self._new_chunks.clear()
@@ -589,8 +527,6 @@ class StreamingStudioViewer(Viewer):
         threading.Thread(target=self._worker, args=(prompt, params), daemon=True).start()
 
     def _worker(self, prompt: str, params: dict) -> None:
-        """Background thread: stream tokens -> joint chunks, fitting a SMPL-X body PER CHUNK (not
-        once at the end) so the avatar visibly grows/animates while generation is still running."""
         n_frames = 0
         total_frames = params["steps"] * params["downsample"]
         warm_start: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
@@ -612,8 +548,6 @@ class StreamingStudioViewer(Viewer):
                     joints = recover_skeleton(chunk.squeeze(0).cpu().numpy())  # (t, 22, 3)
                     n_frames += len(joints)
                     self._gen_progress = min(1.0, n_frames / total_frames)
-                    # the skeleton streams IMMEDIATELY in both modes (decode is ms-fast); the
-                    # SMPL-X body materializes behind it as each chunk's slow fit completes
                     with self.lock:
                         self._new_chunks.append(joints)
                     if params["fit_body"]:
@@ -640,8 +574,6 @@ class StreamingStudioViewer(Viewer):
         if not self.run_animations:
             self.toggle_animation(True)  # finished motions always loop
         self.generating = False
-        # gender/shape are honoured live per chunk; a full-clip remesh is only needed when
-        # options changed MID-generation (earlier chunks were fitted with the old ones)
         if params["fit_body"] and self._remesh_after_gen and self._fit_orient:
             self._remesh_after_gen = False
             self._schedule_remesh()
@@ -652,12 +584,6 @@ class StreamingStudioViewer(Viewer):
         warm_start: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
         n_frames_so_far: int,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
-        """Fit SMPL-X to a single streamed chunk, warm-started from the previous chunk (skips the
-        slow yaw search + re-optimizes only a handful of iterations), and hand the resulting mesh
-        chunk off to the render thread. Gender and shape offsets are read LIVE, so changing them
-        mid-generation shows up from the next chunk on (the end-of-run remesh unifies the clip).
-        Returns the new warm-start (or the old one, unchanged, if this chunk's fit fails -- one
-        bad chunk shouldn't derail the rest of the generation)."""
         is_first = warm_start is None
         gender = self.gender
         cfg = FitConfig(
@@ -710,9 +636,6 @@ class StreamingStudioViewer(Viewer):
             return warm_start
 
     def _shaped_vertices(self, model, res, t: int) -> np.ndarray:
-        """The chunk's display mesh with the user's shape sliders applied on top of the fitted
-        betas -- one no-grad forward of the already-built model, so the streaming body honours
-        height/build in real time instead of only after the end-of-run remesh."""
         user = self.user_betas
         if not user.any():
             return res.vertices
@@ -731,11 +654,7 @@ class StreamingStudioViewer(Viewer):
     def _on_fit_progress(self, done: int, total: int) -> None:
         self._fit_progress = done / max(1, total)
 
-    # ------------------------------------------------- live avatar re-dressing
-
     def _on_avatar_changed(self) -> None:
-        """Gender/shape edits re-dress the CURRENT body in real time (no re-generation): the stored
-        per-chunk SMPL-X params are re-forwarded with the new gender/betas via mesh_from_params."""
         if not self.model_dir or not self.fit_body:
             return
         if self.generating:
@@ -745,9 +664,6 @@ class StreamingStudioViewer(Viewer):
         self._schedule_remesh()
 
     def _on_fit_body_toggled(self) -> None:
-        """Make the checkbox act on the CURRENT display, not just the next generation: OFF hides
-        the body (the motion falls back to its skeleton); ON re-dresses instantly from stored fit
-        params, retro-fits a skeleton-only motion, or restores the rest pose."""
         if self.generating:
             self._remesh_note = "body-fit choice applies to the next generation"
             return
@@ -765,8 +681,6 @@ class StreamingStudioViewer(Viewer):
             self._start_retrofit()  # motion exists but was generated skeleton-only: fit it now
 
     def _start_retrofit(self) -> None:
-        """Fit SMPL-X to an already-generated motion, chunk by chunk with warm starts -- same
-        machinery and same growing-body visuals as a live streaming fit."""
         joints = self._accum_joints
         if joints is None or self.generating:
             return
@@ -813,9 +727,6 @@ class StreamingStudioViewer(Viewer):
         threading.Thread(target=self._remesh_worker, daemon=True).start()
 
     def _remesh_worker(self) -> None:
-        """Background thread: re-forward SMPL-X with the current gender + shape offsets. Loops
-        until the requested version is stable, so a burst of slider edits collapses into the
-        latest one instead of queueing a mesh per pixel of drag."""
         try:
             while self._remesh_done_version != self._remesh_version:
                 version = self._remesh_version
@@ -865,8 +776,6 @@ class StreamingStudioViewer(Viewer):
         if self._remesh_done_version != self._remesh_version:  # request landed while finishing
             self._schedule_remesh()
 
-    # --------------------------------------------------------- model reloading
-
     def _start_model_load(self) -> None:
         entry = self._models[self._model_idx]
         self._loading_model = True
@@ -874,7 +783,6 @@ class StreamingStudioViewer(Viewer):
         threading.Thread(target=self._load_worker, args=(entry,), daemon=True).start()
 
     def _load_worker(self, entry: ModelEntry) -> None:
-        """Background thread: build the new pipeline fully, then hand it to on_render to swap."""
         try:
             pipeline = load_pipeline(
                 entry.config, entry.ckpt, entry.tokenizer_ckpt, entry.backbone, self.device
@@ -886,25 +794,13 @@ class StreamingStudioViewer(Viewer):
             self.load_status = f"load failed: {type(exc).__name__}: {exc}"
             self._loading_model = False
 
-    # --------------------------------------------------------------- rendering
-
     def on_render(self, time, frame_time, **kwargs) -> None:
-        """Apply pending scene mutations on the main thread, then render + draw the GUI.
-
-        Playback is the base class's looping advance (``current_frame_id + frames) % n_frames``),
-        deliberately left in charge DURING generation too: every motion plays as an infinite loop,
-        wrapping over the partial clip while it still grows and over the full clip afterwards.
-        """
         self._consume()
         self._sync_display_nodes()
         self._update_follow_cam()
         super().on_render(time, frame_time, **kwargs)
 
     def _sync_display_nodes(self) -> None:
-        """Exactly ONE figure per rendered frame while skeleton and body coexist: the SMPL-X body
-        wherever its fit already reached, the skeleton only for the not-yet-fitted tail. Without
-        this, a play head past the body frontier shows the clamped (frozen) mesh AND the moving
-        skeleton at once -- two disconnected characters."""
         if self._motion_node is None or self._body_node is None:
             return
         body_frames = 0 if self._body_verts is None else len(self._body_verts)
@@ -957,11 +853,6 @@ class StreamingStudioViewer(Viewer):
             setattr(self, attr, None)
 
     def _append_chunks(self, chunks: list[np.ndarray]) -> None:
-        """Show newly-streamed joint frames as a live skeleton, in BOTH modes: decode is ms-fast,
-        so the skeleton is what makes each generated batch visible the moment it exists. In
-        fit-body mode the SMPL-X body materializes behind it, and ``_sync_display_nodes`` shows
-        exactly one figure per frame (body where fitted, skeleton for the tail). The first chunk
-        retires the previous avatar in the same render pass -- no empty-scene flash."""
         new = np.concatenate(chunks, axis=0)
         self._accum_joints = (
             new if self._accum_joints is None else np.concatenate([self._accum_joints, new], axis=0)
@@ -980,9 +871,6 @@ class StreamingStudioViewer(Viewer):
             self._need_reset_view = True
 
     def _append_body_chunks(self, chunks: list[tuple[np.ndarray, np.ndarray]]) -> None:
-        """Grow the SMPL-X avatar live, one fitted chunk at a time, trailing the streaming
-        skeleton; the play head keeps following the skeleton frontier, so the body catches up
-        without yanking playback backwards."""
         for verts, faces in chunks:
             if self._body_node is None:
                 self._body_node = Meshes(
@@ -995,7 +883,6 @@ class StreamingStudioViewer(Viewer):
                 self._body_verts = self._body_node.vertices
 
     def _apply_remesh(self, verts: np.ndarray, faces: np.ndarray, is_rest: bool) -> None:
-        """Swap the re-dressed avatar in-place, preserving the play head (main thread only)."""
         if is_rest:
             if self._body_node is not None or self._motion_node is not None:
                 return  # a motion arrived while re-meshing the rest pose; keep the motion
@@ -1013,7 +900,6 @@ class StreamingStudioViewer(Viewer):
         self.scene.current_frame_id = min(frame, len(verts) - 1)
 
     def _current_center(self) -> np.ndarray | None:
-        """World-space centroid of the avatar at the current frame (the camera pivot)."""
         frame = self.scene.current_frame_id
         body_frames = 0 if self._body_verts is None else len(self._body_verts)
         if self._body_node is not None and (self._motion_node is None or frame < body_frames):
@@ -1025,8 +911,6 @@ class StreamingStudioViewer(Viewer):
         return arr[min(frame, len(arr) - 1)].mean(axis=0)
 
     def _update_follow_cam(self) -> None:
-        """Keep the avatar centred by translating the camera rig with its per-frame motion,
-        preserving the user's current orbit/zoom (root translation is what walked it off-screen)."""
         if not self.follow_cam:
             return
         camera = self.scene.camera
@@ -1036,7 +920,6 @@ class StreamingStudioViewer(Viewer):
         if center is None:
             return
         if self._follow_center is None:
-            # first frame of a new clip: move the pivot onto the avatar, keep the viewing angle
             offset = camera.position - camera.target
             camera.target = center
             camera.position = center + offset

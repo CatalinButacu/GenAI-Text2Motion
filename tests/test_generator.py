@@ -1,7 +1,3 @@
-"""Generator core (Contribution B): stream==batch parity for BOTH backbones (the bounded-memory
-claim made testable), single-batch overfit, and the fixed-state vs growing-KV-cache contrast.
-Synthetic tokens -- no real data needed."""
-
 import torch
 
 from text2motion.model.generator import MotionGenerator, token_ce_loss
@@ -26,7 +22,6 @@ def small_cfg(backbone: str) -> GeneratorCfg:
 
 
 def streamed_logits(gen: MotionGenerator, tokens: torch.Tensor, text: torch.Tensor) -> torch.Tensor:
-    """Reproduce forward()'s teacher-forced logits by stepping one input at a time."""
     state = gen.backbone.init_state(tokens.size(0), tokens.device)
     prefix = gen.text_prefix(text)  # (B, P, d_model); P=1 here, stepped like stream() does
     for position in range(prefix.size(1)):
@@ -64,7 +59,6 @@ def test_parity_transformer():
 
 
 def test_state_is_bounded_mamba_but_kv_grows_transformer():
-    """Mamba's recurrent state is fixed-size in T (the efficiency claim); the transformer KV grows."""
     mamba = MotionGenerator(small_cfg("mamba")).eval()
     st = mamba.backbone.init_state(1, torch.device("cpu"))
     shapes0 = [(s[0].shape, s[1].shape) for s in st]
@@ -101,7 +95,6 @@ def test_single_batch_overfit_mamba():
         loss.backward()
         opt.step()
 
-    # must memorise the fixed batch: CE collapses and argmax matches the targets
     assert loss.item() < 0.2 * loss0
     acc = (gen(tokens, text).argmax(-1) == tokens).float().mean().item()
     assert acc > 0.95
