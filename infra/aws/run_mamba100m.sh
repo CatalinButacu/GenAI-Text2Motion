@@ -13,41 +13,10 @@ PACK=data/amass_tokens_fsq8x1024.npz
 PRIOR=checkpoints/generator_mamba_100m_pretrained.pt   # matches the transformer prior's naming
 FT=generator_mamba_100m.pt                             # best-by-val fine-tune; resume: *_last.pt
 
-echo "=== gate: fused selective-scan kernel ===" | tee outputs/mamba100m_gate.log
-WHEELDIR=/tmp/wheels
-mkdir -p "$WHEELDIR"
-
-have_cached_wheels() {
-    aws s3 cp "s3://$B/wheels/" "$WHEELDIR/" --recursive --region "$REGION" 2>/dev/null || return 1
-    ls "$WHEELDIR"/*.whl >/dev/null 2>&1
-}
-
-if have_cached_wheels; then
-    echo "using cached kernel wheels from s3://$B/wheels" | tee -a outputs/mamba100m_gate.log
-    $PY -m pip install -q "$WHEELDIR"/*.whl pytest
-else
-    echo "no cached wheels -> one-time source build (then cached)" | tee -a outputs/mamba100m_gate.log
-    TORCH_CU=$($PY -c "import torch; print(torch.version.cuda)")
-    if [ -d "/usr/local/cuda-$TORCH_CU" ]; then
-        export CUDA_HOME="/usr/local/cuda-$TORCH_CU"
-    elif [ -d /usr/local/cuda ]; then
-        export CUDA_HOME=/usr/local/cuda
-    else
-        echo "no CUDA toolkit matching torch $TORCH_CU" | tee -a outputs/mamba100m_gate.log
-        exit 1
-    fi
-    export PATH="$CUDA_HOME/bin:$PATH"
-    export MAMBA_FORCE_BUILD=TRUE
-    export CAUSAL_CONV1D_FORCE_BUILD=TRUE
-    export TORCH_CUDA_ARCH_LIST=8.6
-    export MAX_JOBS=4
-    echo "building against $CUDA_HOME (torch cuda $TORCH_CU)" | tee -a outputs/mamba100m_gate.log
-    $PY -m pip wheel --no-deps --no-build-isolation -w "$WHEELDIR" causal-conv1d mamba-ssm 2>&1 | tail -3 | tee -a outputs/mamba100m_gate.log
-    aws s3 cp "$WHEELDIR/" "s3://$B/wheels/" --recursive --exclude "*" --include "*.whl" --region "$REGION"
-    $PY -m pip install -q "$WHEELDIR"/*.whl pytest
-fi
-
-$PY -m pytest tests/test_generator_upgrades.py::test_kernel_matches_eager_scan -q 2>&1 | tee -a outputs/mamba100m_gate.log
+# EAGER training (config use_kernel: false): the fused mamba-ssm kernel fails ABI-link on this DLAMI
+# (torch 2.7 / cu128, undefined symbol c10_cuda_check_implementation). The eager parallel-scan trains
+# the identical weights; the kernel only affects inference latency, benchmarked separately. So there
+# is no kernel-build gate here -- training goes busy within minutes of boot.
 
 sync_outputs() {
     while true; do
@@ -73,7 +42,7 @@ for f in "$PRIOR" "${PRIOR%.pt}_last.pt" "$PRIOR.done" "checkpoints/$FT" "checkp
 done
 
 if [ ! -f "$PRIOR.done" ]; then
-    echo "=== STAGE A: 100M mamba AMASS pretrain ===" | tee -a outputs/mamba100m.log
+    echo "=== STAGE A: 100M mamba AMASS pretrain (eager) ===" | tee -a outputs/mamba100m.log
     $PY -u -m text2motion.train.train_pretrain \
         --config "$CFG" \
         --backbone mamba \
@@ -87,7 +56,7 @@ else
     echo "STAGE A skipped: $PRIOR.done present" | tee -a outputs/mamba100m.log
 fi
 
-echo "=== STAGE B: 100M mamba fine-tune (from prior) ===" | tee -a outputs/mamba100m.log
+echo "=== STAGE B: 100M mamba fine-tune from prior (eager) ===" | tee -a outputs/mamba100m.log
 $PY -u -m text2motion.train.train_generator \
     --config "$CFG" \
     --backbone mamba \

@@ -42,7 +42,7 @@ generator:
   max_seq_len: 96           # 16 prefix + 49 motion + END + headroom
   text_prefix_len: 16
   use_end_token: true
-  use_kernel: true          # cloud: mamba-ssm fused scan (import must succeed -- fail-loud)
+  use_kernel: false         # eager parallel-scan: the fused mamba-ssm kernel fails ABI-link on the current DLAMI torch 2.7/cu128 (undefined symbol c10_cuda_check_implementation); eager trains the identical weights, kernel only affects inference latency
 
 train:
   amp: bf16                 # A10G bf16 autocast; optimizer/EMA stay fp32
