@@ -25,12 +25,30 @@ FT=generator_mamba_100m.pt                             # best-by-val fine-tune; 
 # The plan forbids training mamba on cloud WITHOUT the kernel (14x slower). Self-contained so this is
 # safe even if the canary was skipped; cached after the canary -> a fast re-check then. (== canary gate 1.)
 echo "=== gate: fused selective-scan kernel ===" | tee outputs/mamba100m_gate.log
-if [ ! -d /usr/local/cuda-13.0 ]; then
-  apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cuda-toolkit-13-0
+# Kernel wheels are CACHED in S3: a ~30s install vs a ~35 min source compile that otherwise idles the
+# GPU toward the never-busy cost-watchdog (which twice reclaimed the box before training started,
+# 2026-07-04). Build once, cache, reuse on every future box. Wheels are torch-ABI-specific, so the
+# cache key would ideally include the torch version; on a stable DLAMI one build serves all runs.
+WHEELDIR=/tmp/wheels; mkdir -p $WHEELDIR
+if aws s3 cp "s3://$B/wheels/" $WHEELDIR/ --recursive --region $REGION 2>/dev/null && ls $WHEELDIR/*.whl >/dev/null 2>&1; then
+  echo "using cached kernel wheels from s3://$B/wheels" | tee -a outputs/mamba100m_gate.log
+  $PY -m pip install -q $WHEELDIR/*.whl pytest
+else
+  echo "no cached wheels -> one-time source build (then cached)" | tee -a outputs/mamba100m_gate.log
+  # Build against the CUDA toolkit MATCHING torch's build -- cpp_extension hard-fails on a
+  # major-version nvcc mismatch (this DLAMI: torch cu128 + /usr/local/cuda-12.8; a stale canary
+  # recipe hardcoded cuda-13.0 and broke the build).
+  TORCH_CU=$($PY -c "import torch; print(torch.version.cuda)")
+  if [ -d "/usr/local/cuda-$TORCH_CU" ]; then export CUDA_HOME="/usr/local/cuda-$TORCH_CU"
+  elif [ -d /usr/local/cuda ]; then export CUDA_HOME=/usr/local/cuda
+  else echo "no CUDA toolkit matching torch $TORCH_CU" | tee -a outputs/mamba100m_gate.log; exit 1; fi
+  export PATH="$CUDA_HOME/bin:$PATH"
+  export MAMBA_FORCE_BUILD=TRUE CAUSAL_CONV1D_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST=8.6 MAX_JOBS=4
+  echo "building against $CUDA_HOME (torch cuda $TORCH_CU)" | tee -a outputs/mamba100m_gate.log
+  $PY -m pip wheel --no-deps --no-build-isolation -w $WHEELDIR causal-conv1d mamba-ssm 2>&1 | tail -3 | tee -a outputs/mamba100m_gate.log
+  aws s3 cp $WHEELDIR/ "s3://$B/wheels/" --recursive --exclude "*" --include "*.whl" --region $REGION
+  $PY -m pip install -q $WHEELDIR/*.whl pytest
 fi
-export CUDA_HOME=/usr/local/cuda-13.0 PATH=/usr/local/cuda-13.0/bin:$PATH
-export MAMBA_FORCE_BUILD=TRUE CAUSAL_CONV1D_FORCE_BUILD=TRUE TORCH_CUDA_ARCH_LIST=8.6 MAX_JOBS=4
-$PY -m pip install -q --no-build-isolation --no-cache-dir causal-conv1d mamba-ssm pytest 2>&1 | tail -2 | tee -a outputs/mamba100m_gate.log
 $PY -m pytest tests/test_generator_upgrades.py::test_kernel_matches_eager_scan -q 2>&1 | tee -a outputs/mamba100m_gate.log
 
 # --- sync loops: a spot-kill or the idle/lifetime watchdog must never lose weights or logs ---

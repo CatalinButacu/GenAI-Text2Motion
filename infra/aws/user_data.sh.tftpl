@@ -10,9 +10,11 @@ cat >/usr/local/bin/idle_watchdog.sh <<'EOF'
 #!/bin/bash
 THRESH=5            # percent GPU util considered "active"
 NEED=${idle_minutes}
-NEVER_BUSY_MAX=90   # minutes: if the GPU was NEVER busy by then, the job failed pre-training ->
-                    # terminate. (2026-06-11 lesson: a gate-1 canary failure left an idle box
-                    # running ~15h because arming required first seeing the GPU busy.)
+NEVER_BUSY_MAX=150  # minutes: if the GPU was NEVER busy by then, the job failed pre-training ->
+                    # terminate. (2026-06-11: a gate-1 canary failure left an idle box ~15h because
+                    # arming needs first seeing the GPU busy. 2026-07-04: raised 90->150 -- the
+                    # one-time from-source mamba-ssm kernel build idles the GPU ~35 min and, with any
+                    # setup hiccup, brushed the old 90 min ceiling; cached wheels make reruns fast.)
 armed=0
 count=0
 uptime_min=0
