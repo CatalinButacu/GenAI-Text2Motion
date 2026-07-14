@@ -10,6 +10,13 @@
 # configs/generator/eval_pilot31m.yaml and their original tokenizer checkpoint; add them here
 # once that pairing is pinned from the run manifest.
 
+mamba-100m:
+  label: Mamba 100M (eager, ep25 val FID 0.93)
+  config: configs/generator/final100m_fsq8x1024.yaml
+  ckpt: checkpoints/generator/generator_mamba_100m.pt
+  tokenizer_ckpt: checkpoints/tokenizer/fsq_g8_v1024.pt
+  backbone: mamba
+
 transformer-100m:
   label: Transformer 100M (final, best val FID)
   config: configs/generator/final100m_fsq8x1024.yaml

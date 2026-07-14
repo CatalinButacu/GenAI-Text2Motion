@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import argparse
 import threading
+import time
 import traceback
 from array import array
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import imgui
@@ -15,9 +16,6 @@ from aitviewer.renderables.meshes import Meshes
 from aitviewer.scene.camera import ViewerCamera
 from aitviewer.viewer import Viewer
 
-from text2motion.model.generator import MotionGenerator
-from text2motion.model.text_encoder import CLIPTextEncoder
-from text2motion.model.tokenizer import ResidualFsqTokenizer
 from text2motion.render.joints2smpl import (
     FitConfig,
     build_smplx_model,
@@ -25,48 +23,19 @@ from text2motion.render.joints2smpl import (
     mesh_from_params,
     rest_pose_body,
 )
-from text2motion.render.studio import build_skeleton_seq, recover_skeleton
-from text2motion.shared.config import load_config
+from text2motion.render.studio import build_skeleton_seq
 from text2motion.shared.seed import seed_everything
-from text2motion.stream.decode import StreamingMotionDecoder
+from text2motion.stream.service import DEFAULT_HOST, DEFAULT_PORT, connect_or_spawn
 
 SKIN_COLOR = (0.86, 0.72, 0.61, 1.0)  # SMPL-X body tone
 SKY_COLOR = (240 / 255, 182 / 255, 182 / 255, 1.0)  # default background: soft pink
 GENDERS = ("neutral", "male", "female")
 BACKBONES = ("transformer", "mamba")
 N_BETAS = 10  # SMPL-X shape dims exposed as avatar-dimension sliders
+LIVE_STEPS = 20  # short clip while typing: fewer tokens -> faster preview than the full 49
+LIVE_DEBOUNCE_S = 0.35  # wait this long after the last keystroke before regenerating
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL_DIR = str(ROOT / "data" / "smplx_models")
-
-
-def load_pipeline(config: str, ckpt: str, tokenizer_ckpt: str, backbone: str, device: str):
-    cfg = load_config(config)
-
-    tok = ResidualFsqTokenizer(cfg.tokenizer)
-    tok.load_state_dict(torch.load(tokenizer_ckpt, map_location="cpu"))
-    tok.to(device).eval()
-
-    n_layers = cfg.generator.mamba_n_layers if backbone == "mamba" else cfg.generator.n_layers
-    gen_cfg = replace(
-        cfg.generator,
-        backbone=backbone,
-        n_layers=n_layers,
-        num_codebooks=cfg.tokenizer.num_quantizers,
-        codebook_size=tok.codebook_size,
-        use_kernel=False,
-    )
-    gen = MotionGenerator(gen_cfg).to(device).eval()
-    state = torch.load(ckpt, map_location="cpu")
-    gen.load_state_dict(
-        state["generator"] if isinstance(state, dict) and "generator" in state else state
-    )
-
-    te = CLIPTextEncoder(cfg.text_encoder).to(device).eval()
-
-    out = Path(cfg.paths.hml3d_out_dir)
-    mean = torch.from_numpy(np.load(out / "Mean.npy").astype("float32")).to(device)
-    std = torch.from_numpy(np.load(out / "Std.npy").astype("float32")).to(device)
-    return tok, gen, te, mean, std
 
 
 @dataclass(frozen=True)
@@ -106,10 +75,13 @@ def load_model_registry(launch: ModelEntry) -> tuple[list[ModelEntry], int]:
 
 
 class StreamingStudioViewer(Viewer):
-    def __init__(self, pipeline, model_dir: str, device: str, args: argparse.Namespace) -> None:
+    def __init__(self, client, model_dir: str, device: str, args: argparse.Namespace) -> None:
         super().__init__()
-        self.tok, self.gen, self.te, self.mean, self.std = pipeline
-        self.device = device
+        self.client = (
+            client  # generation runs in the motion-service PROCESS (own GIL -> smooth GUI)
+        )
+        self.downsample = int(client.hello["downsample"])
+        self.device = device  # local GPU: SMPL-X fitting + rendering only
         self.model_dir = model_dir  # "" -> SMPL-X unavailable: skeleton-only mode
 
         self.temperature = float(args.temperature)
@@ -138,6 +110,17 @@ class StreamingStudioViewer(Viewer):
         self.status = "ready -- describe a motion below and press Enter"
         self.generating = False
         self.history: list[str] = []
+
+        self.live_mode = False  # regenerate a fast preview on every (debounced) text change
+        self._prev_prompt = ""
+        self._prompt_dirty_at = 0.0
+        self._regen_pending = False  # a newer prompt arrived mid-generation: restart once it stops
+        self._last_live_prompt = ""
+        self._sampling_sig = (
+            self.temperature,
+            self.top_p,
+            self.steps,
+        )  # live-mode watches these too
 
         self.lock = threading.Lock()
         self._new_chunks: list[np.ndarray] = []
@@ -361,9 +344,9 @@ class StreamingStudioViewer(Viewer):
         _, self.top_p = imgui.slider_float("top_p", self.top_p, 0.1, 1.0)
         _, self.cfg_scale = imgui.slider_float("cfg_scale", self.cfg_scale, 1.0, 12.0)
         _, self.steps = imgui.slider_int("steps (tokens)", self.steps, 8, 100)
-        seconds = self.steps * self.tok.cfg.downsample / self.playback_fps
+        seconds = self.steps * self.downsample / self.playback_fps
         self._dim_text(
-            f"= {self.steps * self.tok.cfg.downsample} frames (~{seconds:.1f}s @"
+            f"= {self.steps * self.downsample} frames (~{seconds:.1f}s @"
             f" {self.playback_fps:.0f} fps). Trained at 49 steps (~9.8s); much lower looks"
             " clipped, much higher is out-of-distribution."
         )
@@ -469,18 +452,22 @@ class StreamingStudioViewer(Viewer):
             256,
             imgui.INPUT_TEXT_ENTER_RETURNS_TRUE,
         )
+        if self.prompt_text != self._prev_prompt:  # a keystroke: (re)start the debounce clock
+            self._prev_prompt = self.prompt_text
+            self._prompt_dirty_at = time.perf_counter()
         imgui.pop_item_width()
         imgui.same_line()
-        if self.generating:
+        if self.generating and not self.live_mode:
             if imgui.button("Stop", width=button_w):
                 self._cancel = True
         elif imgui.button("Generate", width=button_w) or enter:
             self.submit_prompt()
+        _, self.live_mode = imgui.checkbox("live (regenerate as you type)", self.live_mode)
 
         if self.generating:
             avail = imgui.get_content_region_available()[0]
-            done = int(self._gen_progress * self.steps * self.tok.cfg.downsample)
-            total = self.steps * self.tok.cfg.downsample
+            done = int(self._gen_progress * self.steps * self.downsample)
+            total = self.steps * self.downsample
             if self._current_fit_body:
                 imgui.progress_bar(
                     self._gen_progress, (avail * 0.55, 15), f"motion {done}/{total} frames"
@@ -497,20 +484,32 @@ class StreamingStudioViewer(Viewer):
         prompt = self.prompt_text.strip()
         if not prompt or self.generating:
             return
+        self._last_live_prompt = prompt  # a manual Generate also satisfies the live watcher
+        self._start_generation(prompt, live=False)
+
+    def _start_generation(self, prompt: str, live: bool) -> None:
         self.generating = True
         self._cancel = False
         self._gen_progress = 0.0
         self._fit_progress = None
-        self.status = f'generating: "{prompt}"'
-        self.history.append(prompt)
-        fit_body = self.fit_body and bool(self.model_dir)
+        if live:
+            steps = min(self.steps, LIVE_STEPS)  # short preview clip
+            cfg_scale = 1.0  # cfg 1.0 -> single forward/step (~2x faster; no unconditional branch)
+            fit_body = False  # skeleton only: skip the seconds-per-chunk SMPL-X fit
+            self.status = f'live: "{prompt}"'
+        else:
+            steps = self.steps
+            cfg_scale = self.cfg_scale
+            fit_body = self.fit_body and bool(self.model_dir)
+            self.status = f'generating: "{prompt}"'
+            self.history.append(prompt)
         params = {
             "temperature": self.temperature,
             "top_p": self.top_p,
-            "cfg_scale": self.cfg_scale,
-            "steps": self.steps,
+            "cfg_scale": cfg_scale,
+            "steps": steps,
             "fit_body": fit_body,
-            "downsample": self.tok.cfg.downsample,
+            "downsample": self.downsample,
         }
         self._current_fit_body = fit_body
         self._drop_skeleton = False
@@ -526,44 +525,83 @@ class StreamingStudioViewer(Viewer):
             self._fit_betas = None
         threading.Thread(target=self._worker, args=(prompt, params), daemon=True).start()
 
+    def _tick_live(self) -> None:
+        if not self.live_mode:
+            return
+        sig = (self.temperature, self.top_p, self.steps)  # cfg is forced to 1.0 in live preview
+        if sig != self._sampling_sig:  # a sampling slider moved: re-run current prompt like an edit
+            self._sampling_sig = sig
+            if self.prompt_text.strip():
+                self._prev_prompt = self.prompt_text
+                self._prompt_dirty_at = time.perf_counter()
+                self._last_live_prompt = ""
+        prompt = self.prompt_text.strip()
+        ready = (
+            self._prev_prompt != ""
+            and (time.perf_counter() - self._prompt_dirty_at) >= LIVE_DEBOUNCE_S
+        )
+        if prompt and ready and prompt != self._last_live_prompt:
+            self._prev_prompt = ""  # consume this edit so we fire once per settle
+            self._last_live_prompt = prompt
+            if self.generating:
+                self._cancel = True  # abandon the stale preview, restart when its worker stops
+                self._regen_pending = True
+            else:
+                self._start_generation(prompt, live=True)
+        if self._regen_pending and not self.generating:
+            self._regen_pending = False
+            if self.prompt_text.strip():
+                self._start_generation(self.prompt_text.strip(), live=True)
+
     def _worker(self, prompt: str, params: dict) -> None:
         n_frames = 0
         total_frames = params["steps"] * params["downsample"]
         warm_start: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
         try:
-            with torch.no_grad():
-                emb = self.te([prompt]).to(self.device)
-                decoder = StreamingMotionDecoder(self.tok, self.mean, self.std)
-                token_iter = self.gen.stream(
-                    emb,
-                    params["steps"],
-                    temperature=params["temperature"],
-                    top_p=params["top_p"],
-                    cfg_scale=params["cfg_scale"],
-                    stop_at_end=False,
+            print(
+                f"[GEN] request prompt={prompt!r} steps={params['steps']} "
+                f"cfg={params['cfg_scale']} temp={params['temperature']} "
+                f"fit_body={params['fit_body']} -> motion service",
+                flush=True,
+            )
+            chunk_iter = self.client.generate(
+                prompt,
+                steps=params["steps"],
+                temperature=params["temperature"],
+                top_p=params["top_p"],
+                cfg_scale=params["cfg_scale"],
+                should_cancel=lambda: self._cancel,
+            )
+            for joints in chunk_iter:  # (t, 22, 3) float32, produced in the service process
+                assert joints.ndim == 3 and joints.shape[1:] == (22, 3), (
+                    f"bad joints {joints.shape}"
                 )
-                for chunk in decoder.stream_tokens(token_iter):
-                    if self._cancel:
-                        break
-                    joints = recover_skeleton(chunk.squeeze(0).cpu().numpy())  # (t, 22, 3)
-                    n_frames += len(joints)
-                    self._gen_progress = min(1.0, n_frames / total_frames)
-                    with self.lock:
-                        self._new_chunks.append(joints)
-                    if params["fit_body"]:
-                        self.status = f"streaming... {n_frames} frames"
-                        warm_start = self._fit_chunk(joints, warm_start, n_frames)
-                    else:
-                        self.status = (
-                            f"streaming... {n_frames} frames (skeleton only -- tick"
-                            " 'avatar skin' for the body)"
-                        )
+                n_frames += len(joints)
+                print(
+                    f"[GEN] chunk joints={joints.shape} n_frames={n_frames} "
+                    f"finite={np.isfinite(joints).all()}",
+                    flush=True,
+                )
+                self._gen_progress = min(1.0, n_frames / total_frames)
+                with self.lock:
+                    self._new_chunks.append(joints)
+                if params["fit_body"]:
+                    self.status = f"streaming... {n_frames} frames"
+                    warm_start = self._fit_chunk(joints, warm_start, n_frames)
+                else:
+                    self.status = (
+                        f"streaming... {n_frames} frames (skeleton only -- tick"
+                        " 'avatar skin' for the body)"
+                    )
         except Exception as exc:  # noqa: BLE001 - full traceback to console; short summary in the GUI
             traceback.print_exc()
             self.status = f"error after {n_frames} frames: {type(exc).__name__}: {exc}"
             self.generating = False
             return
 
+        print(
+            f"[GEN] worker DONE total_frames={n_frames} fit_body={params['fit_body']}", flush=True
+        )
         duration = n_frames / self.playback_fps
         verb = "stopped" if self._cancel else "done"
         suffix = "" if params["fit_body"] else ", skeleton"
@@ -784,17 +822,20 @@ class StreamingStudioViewer(Viewer):
 
     def _load_worker(self, entry: ModelEntry) -> None:
         try:
-            pipeline = load_pipeline(
-                entry.config, entry.ckpt, entry.tokenizer_ckpt, entry.backbone, self.device
-            )
-            with self.lock:
-                self._pending_pipeline = (pipeline, entry.backbone, entry.label)
+            hello = self.client.load(
+                entry.config, entry.ckpt, entry.tokenizer_ckpt, entry.backbone
+            )  # the service swaps the model in ITS process; the viewer stays light
+            self.backbone = entry.backbone
+            self.downsample = int(hello["downsample"])
+            self.load_status = f"active: {entry.label}"
         except Exception as exc:  # noqa: BLE001 - a missing/mismatched bundle must not crash the studio
             traceback.print_exc()
             self.load_status = f"load failed: {type(exc).__name__}: {exc}"
+        finally:
             self._loading_model = False
 
     def on_render(self, time, frame_time, **kwargs) -> None:
+        self._tick_live()
         self._consume()
         self._sync_display_nodes()
         self._update_follow_cam()
@@ -816,13 +857,7 @@ class StreamingStudioViewer(Viewer):
             self._pending_body_chunks = []
             remesh = self._pending_remesh
             self._pending_remesh = None
-            pipeline = self._pending_pipeline
-            self._pending_pipeline = None
 
-        if pipeline is not None:
-            (self.tok, self.gen, self.te, self.mean, self.std), self.backbone, name = pipeline
-            self.load_status = f"active: {name}"
-            self._loading_model = False
         if chunks:
             self._append_chunks(chunks)
         if body_chunks:
@@ -846,6 +881,10 @@ class StreamingStudioViewer(Viewer):
     def _remove(self, attr: str) -> None:
         node = getattr(self, attr)
         if node is not None:
+            if (
+                self.scene.selected_object is node
+            ):  # else the outline pass renders a removed VAO -> crash
+                self.scene.select(None)
             try:
                 self.scene.remove(node)
             except Exception:  # noqa: BLE001
@@ -861,6 +900,11 @@ class StreamingStudioViewer(Viewer):
         self._motion_node = build_skeleton_seq(self._accum_joints)
         self._motion_node.name = "Motion (streaming)"
         self.scene.add(self._motion_node)
+        print(
+            f"[DISP] skeleton node added: accum={self._accum_joints.shape} "
+            f"scene_frames={self.scene.n_frames} started={self._started}",
+            flush=True,
+        )
         if not self._started:
             self._started = True
             self._remove("_body_node")
@@ -948,6 +992,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--top_p", type=float, default=0.9)
     p.add_argument("--fps", type=int, default=20)
+    p.add_argument("--host", default=DEFAULT_HOST)
+    p.add_argument("--port", type=int, default=DEFAULT_PORT)
     return p
 
 
@@ -956,13 +1002,15 @@ def main() -> None:
     seed_everything(2026, False)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print(f"[load] pipeline on {device} (backbone={args.backbone})...")
-    pipeline = load_pipeline(args.config, args.ckpt, args.tokenizer_ckpt, args.backbone, device)
+    print(f"[load] connecting to the motion service (backbone={args.backbone})...")
+    client = connect_or_spawn(
+        args.config, args.ckpt, args.tokenizer_ckpt, args.backbone, args.host, args.port
+    )  # separate process owns the model: generation never fights the render loop for the GIL
     model_dir = args.model_dir if args.model_dir and Path(args.model_dir).exists() else ""
     if not model_dir:
         print("[load] SMPL-X model dir not found -> skeleton-only studio")
 
-    viewer = StreamingStudioViewer(pipeline=pipeline, model_dir=model_dir, device=device, args=args)
+    viewer = StreamingStudioViewer(client=client, model_dir=model_dir, device=device, args=args)
     viewer.run()
 
 
