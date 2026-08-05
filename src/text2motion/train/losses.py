@@ -4,7 +4,7 @@ from torch.nn import functional as F
 
 from text2motion.data.hml3d.feature import recover_from_ric, recover_from_rot
 from text2motion.model.generator import token_ce_loss
-from text2motion.model.tokenizer import GroupedFSQ, ResidualFsqTokenizer
+from text2motion.model.tokenizer import ResidualFsqTokenizer
 from text2motion.shared.config import TrainCfg
 
 SLICE_ROOT = slice(0, 4)
@@ -18,22 +18,28 @@ GEO_TERMS = ("root", "ric", "rot6d", "vel", "foot")
 FK_TERMS = ("fk_self", "fk_gt")
 
 
+def codebook_tables(tokenizer: ResidualFsqTokenizer, device: torch.device) -> list[torch.Tensor]:
+    cached = getattr(tokenizer, "_codebook_tables", None)
+    if cached is not None and cached[0].device == device:
+        return cached
+
+    tables = []
+    for unit in tokenizer.quantizer.units:
+        all_idx = torch.arange(unit.codebook_size, device=device)
+        tables.append(unit.indices_to_codes(all_idx))
+    tokenizer._codebook_tables = tables
+    return tables
+
+
 def soft_decode(logits: torch.Tensor, tokenizer: ResidualFsqTokenizer) -> torch.Tensor:
-    quantizer = tokenizer.quantizer
-    units = quantizer.groups if isinstance(quantizer, GroupedFSQ) else quantizer.layers
+    tables = codebook_tables(tokenizer, logits.device)
 
     expected_codes: list[torch.Tensor] = []
-    for token_index, unit in enumerate(units):
-        all_idx = torch.arange(unit.codebook_size, device=logits.device)
-        codebook = unit.indices_to_codes(all_idx)  # (V, fsq_dim)
-        real = logits[..., token_index, : unit.codebook_size]
+    for token_index, codebook in enumerate(tables):
+        real = logits[..., token_index, : codebook.size(0)]
         expected_codes.append(real.softmax(-1) @ codebook)
 
-    if isinstance(quantizer, GroupedFSQ):
-        soft_codes = torch.cat(expected_codes, dim=-1)
-    else:
-        soft_codes = torch.stack(expected_codes, dim=0).sum(0)
-
+    soft_codes = tokenizer.quantizer.combine_codes(expected_codes)
     return tokenizer.decoder(tokenizer.post_q(soft_codes))
 
 

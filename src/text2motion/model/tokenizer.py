@@ -49,6 +49,13 @@ class ResidualFSQ(nn.Module):
         self.num_quantizers = num_quantizers
         self.dropout_p = dropout_p
 
+    @property
+    def units(self) -> nn.ModuleList:
+        return self.layers
+
+    def combine_codes(self, codes: list[torch.Tensor]) -> torch.Tensor:
+        return torch.stack(codes, dim=0).sum(0)
+
     def active_levels(self) -> int:
         if self.training and self.dropout_p > 0 and torch.rand(()) < self.dropout_p:
             return int(torch.randint(1, self.num_quantizers + 1, ()).item())
@@ -87,6 +94,13 @@ class GroupedFSQ(nn.Module):
         self.groups = nn.ModuleList([FSQ(levels) for _ in range(num_groups)])
         self.num_groups = num_groups
         self.dim = len(levels)
+
+    @property
+    def units(self) -> nn.ModuleList:
+        return self.groups
+
+    def combine_codes(self, codes: list[torch.Tensor]) -> torch.Tensor:
+        return torch.cat(codes, dim=-1)
 
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         codes: list[torch.Tensor] = []
@@ -172,11 +186,7 @@ class ResidualFsqTokenizer(nn.Module):
 
     @property
     def codebook_size(self) -> int:
-        return (
-            self.quantizer.groups[0].codebook_size
-            if self.cfg.quantizer == "grouped"
-            else self.quantizer.layers[0].codebook_size
-        )
+        return self.quantizer.units[0].codebook_size
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         _, indices = self.quantizer(self.pre_q(self.encoder(x)))
