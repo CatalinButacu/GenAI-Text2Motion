@@ -2,11 +2,15 @@ import queue as queue_mod
 
 import torch
 
+from text2motion.data.hml3d.joints import kinematic_bones, recover_skeleton
 from text2motion.model.generator import MotionGenerator
 from text2motion.model.tokenizer import ResidualFsqTokenizer
-from text2motion.render.studio import collect_stream, kinematic_bones, recover_skeleton
 from text2motion.shared.config import GeneratorCfg, TokenizerCfg
-from text2motion.stream.decode import StreamingMotionDecoder, run_producer
+from text2motion.stream.decode import (
+    StreamingMotionDecoder,
+    collect_stream,
+    run_producer,
+)
 
 TOK = TokenizerCfg(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorCfg(

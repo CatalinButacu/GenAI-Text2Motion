@@ -1,6 +1,7 @@
 import queue as queue_mod
 from collections.abc import Iterable, Iterator
 
+import numpy as np
 import torch
 
 from text2motion.model.generator import MotionGenerator
@@ -79,3 +80,16 @@ def run_producer(
         _put_drop_oldest(out_queue, chunk)
 
     _put_drop_oldest(out_queue, STREAM_END)  # sentinel must never block either
+
+def collect_stream(out_queue: "queue_mod.Queue") -> np.ndarray:
+    chunks: list[np.ndarray] = []
+
+    while True:
+        item = out_queue.get()
+
+        if item is STREAM_END:
+            break
+
+        chunks.append(item.squeeze(0).cpu().numpy())  # (chunk_frames, 263), batch size 1
+
+    return np.concatenate(chunks, axis=0) if chunks else np.zeros((0, 263), dtype=np.float32)
