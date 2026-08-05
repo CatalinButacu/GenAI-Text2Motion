@@ -15,10 +15,21 @@ from text2motion.shared.run_log import log_metrics, start_run
 from text2motion.shared.seed import seed_everything
 
 
+def split_keys_by_clip(keys: list[str], val_fraction: float, seed: int) -> tuple[list, list]:
+    stems = sorted({key.rsplit("__", 1)[0] for key in keys})
+    rng = np.random.default_rng(seed)
+    shuffled = rng.permutation(len(stems))
+    n_val = int(round(len(stems) * val_fraction))
+    val_stems = {stems[i] for i in shuffled[:n_val]}
+    train_keys = [key for key in keys if key.rsplit("__", 1)[0] not in val_stems]
+    val_keys = [key for key in keys if key.rsplit("__", 1)[0] in val_stems]
+    return train_keys, val_keys
+
+
 class TokenPack(Dataset):
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, keys: list[str] | None = None) -> None:
         self._z = np.load(path)
-        self.keys = list(self._z.keys())
+        self.keys = list(self._z.keys()) if keys is None else list(keys)
         if not self.keys:
             raise RuntimeError(f"empty token pack: {path}")
 
@@ -62,14 +73,26 @@ def run(a: argparse.Namespace) -> None:
         f"codebooks {gc.num_codebooks} x vocab {vocab}"
     )
 
+    all_keys = list(np.load(a.token_pack).keys())
+    train_keys, val_keys = split_keys_by_clip(all_keys, a.val_fraction, cfg.seed)
     loader = DataLoader(
-        TokenPack(a.token_pack),
+        TokenPack(a.token_pack, train_keys),
         batch_size=a.batch_size,
         shuffle=True,
         collate_fn=collate,
         drop_last=True,
         num_workers=a.num_workers,
     )
+    val_loader = None
+    if val_keys:
+        val_loader = DataLoader(
+            TokenPack(a.token_pack, val_keys),
+            batch_size=a.batch_size,
+            shuffle=False,
+            collate_fn=collate,
+            num_workers=a.num_workers,
+        )
+    print(f"pretrain split by clip: {len(train_keys)} train windows, {len(val_keys)} val windows")
     opt = torch.optim.AdamW(
         generator.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.weight_decay
     )
@@ -125,8 +148,24 @@ def run(a: argparse.Namespace) -> None:
             step += 1
             tot += loss.item()
             n += 1
-        log_metrics(run_dir, {"epoch": epoch + 1, "ce": tot / n})
-        print(f"pretrain ep {epoch + 1:3d}  ce {tot / n:.4f}")
+        record = {"epoch": epoch + 1, "ce": tot / n}
+        line = f"pretrain ep {epoch + 1:3d}  ce {tot / n:.4f}"
+        if val_loader is not None:
+            generator.eval()
+            val_tot = 0.0
+            val_n = 0
+            with torch.no_grad():
+                for tokens, lengths in val_loader:
+                    tokens, lengths = tokens.to(dev), lengths.to(dev)
+                    null = torch.zeros(tokens.size(0), gc.text_prefix_len, gc.d_text, device=dev)
+                    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):
+                        val_tot += float(token_ce_loss(generator(tokens, null), tokens, lengths))
+                    val_n += 1
+            record["val_ce"] = val_tot / val_n
+            record["gap"] = record["val_ce"] - record["ce"]
+            line += f"  val_ce {record['val_ce']:.4f}  gap {record['gap']:+.4f}"
+        log_metrics(run_dir, record)
+        print(line)
         torch.save(generator.state_dict(), out)  # the prior, kept current every epoch (crash-safe)
         torch.save(
             {
@@ -154,6 +193,12 @@ def main() -> None:
     p.add_argument("--epochs", type=int, default=30)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--num_workers", type=int, default=0)
+    p.add_argument(
+        "--val_fraction",
+        type=float,
+        default=0.05,
+        help="clips held out for val CE; split by clip stem so windows of one clip never straddle",
+    )
     p.add_argument("--out", default=None)
     p.add_argument("--resume", action="store_true", help="continue from <out stem>_last.pt")
     run(p.parse_args())
