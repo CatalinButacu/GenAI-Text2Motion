@@ -111,3 +111,38 @@ def test_kernel_matches_eager_scan():
     text = torch.randn(2, cfg_eager.d_text, device="cuda")
     with torch.no_grad():
         assert torch.allclose(eager(tokens, text), kernel(tokens, text), atol=1e-4)
+
+
+def test_config_rejects_prefix_len_mismatch():
+    import dataclasses
+
+    import pytest
+
+    from text2motion.shared.config import Config, GeneratorCfg, TextEncoderCfg, validate_config
+
+    good = Config(
+        text_encoder=TextEncoderCfg(prefix_len=16),
+        generator=GeneratorCfg(text_prefix_len=16, max_seq_len=96),
+    )
+    validate_config(good)
+
+    bad = dataclasses.replace(
+        good, generator=dataclasses.replace(good.generator, text_prefix_len=1)
+    )
+    with pytest.raises(ValueError, match="text_prefix_len"):
+        validate_config(bad)
+
+
+def test_config_rejects_position_budget_overflow():
+    import dataclasses
+
+    import pytest
+
+    from text2motion.shared.config import Config, GeneratorCfg, validate_config
+
+    cfg = Config(generator=GeneratorCfg(text_prefix_len=1, max_seq_len=8))
+    with pytest.raises(ValueError, match="max_seq_len"):
+        validate_config(cfg)
+
+    ok = dataclasses.replace(cfg, generator=dataclasses.replace(cfg.generator, max_seq_len=96))
+    validate_config(ok)

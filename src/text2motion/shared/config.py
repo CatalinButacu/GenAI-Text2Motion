@@ -226,7 +226,7 @@ def load_config(path: str | Path) -> Config:
     if "fsq_levels" in tok_raw:
         tok_raw["fsq_levels"] = tuple(int(v) for v in tok_raw["fsq_levels"])
 
-    return Config(
+    cfg = Config(
         seed=raw.get("seed", 42),
         device=raw.get("device", "cuda"),
         hml3d=Hml3dReprCfg(**raw.get("hml3d", {})),
@@ -239,3 +239,25 @@ def load_config(path: str | Path) -> Config:
         generator=GeneratorCfg(**raw.get("generator", {})),
         train=TrainCfg(**raw.get("train", {})),
     )
+    validate_config(cfg, path)
+    return cfg
+
+
+def validate_config(cfg: Config, source: str | Path = "<config>") -> None:
+    if cfg.generator.text_prefix_len != cfg.text_encoder.prefix_len:
+        raise ValueError(
+            f"{source}: generator.text_prefix_len ({cfg.generator.text_prefix_len}) must equal "
+            f"text_encoder.prefix_len ({cfg.text_encoder.prefix_len}) -- the generator reserves "
+            f"exactly the prefix positions the encoder emits. A silent mismatch changes the text "
+            f"conditioning, which confounds any capacity comparison run against this config."
+        )
+
+    prefix_and_motion = cfg.generator.text_prefix_len + cfg.data.max_motion_len // (
+        cfg.tokenizer.downsample or 1
+    )
+    if cfg.generator.max_seq_len < prefix_and_motion:
+        raise ValueError(
+            f"{source}: generator.max_seq_len ({cfg.generator.max_seq_len}) is smaller than "
+            f"text_prefix_len + max_motion_len/downsample ({prefix_and_motion}); the longest "
+            f"training clip would be truncated by the position budget."
+        )
