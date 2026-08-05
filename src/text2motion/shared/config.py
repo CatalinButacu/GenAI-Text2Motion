@@ -70,6 +70,9 @@ class PathsCfg:
     hml3d_index_csv: Path | None = None  # official HumanML3D index.csv (AMASS->clip mapping)
     hml3d_out_dir: Path | None = None  # regenerated 263 output (new_joint_vecs, Mean/Std, ...)
     texts_dir: Path | None = None  # official HumanML3D texts/<id>.txt (+ M<id>.txt mirror captions)
+    our_vab_dir: Path = Path(
+        "data/t2m_glove/glove"
+    )  # Guo our_vab word vectors for R-precision text
     cache_dir: Path = Path("data/.cache")
     checkpoints_dir: Path = Path("checkpoints")
     outputs_dir: Path = Path("outputs")

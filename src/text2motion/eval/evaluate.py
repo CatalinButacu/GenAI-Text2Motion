@@ -8,24 +8,14 @@ import numpy as np
 import torch
 
 from text2motion.data.hml3d.dataset import parse_text_file
-from text2motion.eval.matcher import load_eval_stats, load_matchers
+from text2motion.eval.context import EvalContext, GenerationPipeline, SamplingCfg
 from text2motion.eval.metrics import diversity, fid, mm_dist, r_precision
-from text2motion.eval.word_vectorizer import WordVectorizer
 from text2motion.model.generator import MotionGenerator
 from text2motion.model.text_encoder import CLIPTextEncoder
 from text2motion.model.tokenizer import ResidualFsqTokenizer
 from text2motion.shared.config import load_config
 from text2motion.shared.run_log import log_metrics, start_run
-
-
-def make_build_text(w_vec):
-    def build_text(tokens):
-        items = ["sos/OTHER"] + tokens[:20] + ["eos/OTHER"]
-        word_embs = np.stack([w_vec[item][0] for item in items]).astype(np.float32)
-        pos_onehots = np.stack([w_vec[item][1] for item in items]).astype(np.float32)
-        return word_embs, pos_onehots
-
-    return build_text
+from text2motion.shared.seed import seed_everything
 
 
 def embed_motions(matcher, feats, mean, std, device, batch=32):
@@ -80,107 +70,61 @@ def load_generator(backbone, cfg, tokenizer, device, ckpt=None):
     return generator
 
 
-def stream_motion(generator, tokenizer, text_emb, token_len, args, our_mean, our_std):
-    steps = list(
-        generator.stream(
-            text_emb,
-            token_len,
-            temperature=args.temperature,
-            top_p=args.top_p,
-            cfg_scale=args.cfg_scale,
-            stop_at_end=args.length_mode == "end",
-        )
-    )
-    if not steps:  # END on the very first step: no usable motion (counted by the caller)
-        return None
-    tokens = torch.stack(steps, dim=1)
-    decoded = tokenizer.decode(tokens).cpu().numpy() * our_std + our_mean
-    return [decoded[row] for row in range(decoded.shape[0])]
-
-
 @torch.no_grad()
-def generate_split(
-    generator, tokenizer, text_encoder, cfg, ids, out_dir, text_dir, our_mean, our_std, args
-):
+def generate_split(pipeline, ctx, sampling, ids, max_clips):
     gt_feats, gen_feats, tok_lists, captions = [], [], [], []
-    for clip_id in ids[: args.max_clips]:
-        vec_path = out_dir / "new_joint_vecs" / f"{clip_id}.npy"
-        text_path = text_dir / f"{clip_id}.txt"
+    for clip_id in ids[:max_clips]:
+        vec_path = ctx.out_dir / "new_joint_vecs" / f"{clip_id}.npy"
+        text_path = ctx.text_dir / f"{clip_id}.txt"
         if not vec_path.is_file() or not text_path.is_file():
             continue
         feat = np.load(vec_path).astype(np.float32)
         if np.isnan(feat).any():
             continue
-        token_len = min(feat.shape[0], 196) // cfg.tokenizer.downsample
+        token_len = min(feat.shape[0], 196) // ctx.downsample
         if token_len < 2:
             continue
-        feat = feat[: token_len * cfg.tokenizer.downsample]
+        feat = feat[: token_len * ctx.downsample]
         annotations = parse_text_file(text_path)
         token_lists = [a.tokens for a in annotations if a.tokens]
         if not token_lists:
             continue
-        text_emb = text_encoder([annotations[0].caption])  # condition on the first caption
-        decoded = stream_motion(generator, tokenizer, text_emb, token_len, args, our_mean, our_std)
+        caption = annotations[0].caption  # condition on the first caption
+        decoded = pipeline.generate_batch([caption], token_len, sampling, ctx)
         if decoded is None:
             continue
         gt_feats.append(feat)
         gen_feats.append(decoded[0])
         tok_lists.append(token_lists)
-        captions.append(annotations[0].caption)
+        captions.append(caption)
     return gt_feats, gen_feats, tok_lists, captions
 
 
 @torch.no_grad()
-def multimodality(
-    generator,
-    tokenizer,
-    text_encoder,
-    captions,
-    token_lens,
-    motion_matcher,
-    eval_mean,
-    eval_std,
-    our_mean,
-    our_std,
-    device,
-    args,
-):
+def multimodality(pipeline, ctx, sampling, captions, token_lens, mm_clips, mm_repeats):
     rng = np.random.default_rng(0)
     per_caption = []
-    for caption, token_len in zip(captions[: args.mm_clips], token_lens[: args.mm_clips]):
-        text_emb = text_encoder([caption] * args.mm_repeats)
-        decoded = stream_motion(generator, tokenizer, text_emb, token_len, args, our_mean, our_std)
+    for caption, token_len in zip(captions[:mm_clips], token_lens[:mm_clips]):
+        decoded = pipeline.generate_batch([caption] * mm_repeats, token_len, sampling, ctx)
         if decoded is None or len(decoded) < 2:
             continue
-        emb = embed_motions(motion_matcher, decoded, eval_mean, eval_std, device)
+        emb = embed_motions(ctx.motion_matcher, decoded, ctx.eval_mean, ctx.eval_std, ctx.device)
         first = rng.integers(0, len(emb), 10)
         second = rng.integers(0, len(emb), 10)
         per_caption.append(float(np.linalg.norm(emb[first] - emb[second], axis=1).mean()))
     return float(np.mean(per_caption)) if per_caption else float("nan")
 
 
-def score(
-    name,
-    gt_feats,
-    gen_feats,
-    tok_lists,
-    motion_matcher,
-    text_matcher,
-    build_text,
-    eval_mean,
-    eval_std,
-    device,
-    reps=20,
-):
-    gt_emb = embed_motions(motion_matcher, gt_feats, eval_mean, eval_std, device)
-    gen_emb = embed_motions(motion_matcher, gen_feats, eval_mean, eval_std, device)
+def score(name, gt_feats, gen_feats, tok_lists, ctx, reps=20):
+    gt_emb = embed_motions(ctx.motion_matcher, gt_feats, ctx.eval_mean, ctx.eval_std, ctx.device)
+    gen_emb = embed_motions(ctx.motion_matcher, gen_feats, ctx.eval_mean, ctx.eval_std, ctx.device)
 
     flat, owner = [], []
     for clip_index, token_lists in enumerate(tok_lists):
         for tokens in token_lists:
-            flat.append(build_text(tokens))
+            flat.append(ctx.build_text(tokens))
             owner.append(clip_index)
-    text_emb = embed_texts(text_matcher, flat, device)
+    text_emb = embed_texts(ctx.text_matcher, flat, ctx.device)
     owner = np.array(owner)
     per_clip = [np.where(owner == c)[0] for c in range(len(gen_feats))]
 
@@ -223,26 +167,55 @@ def main() -> None:
         default="checkpoints/tokenizer/tokenizer_fsq.pt",
         help="frozen tokenizer state_dict to load; must match cfg.tokenizer architecture",
     )
+    parser.add_argument(
+        "--text_encoder_ckpt",
+        default=None,
+        help="trainer <name>_last.pt holding the co-adapted CLIP; omit only for a fully frozen encoder",
+    )
     parser.add_argument("--device", default=None)
+    parser.add_argument(
+        "--seed", type=int, default=None, help="overrides cfg.seed; fixes the sampling RNG"
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
-    device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
-    out_dir = Path(cfg.paths.hml3d_out_dir)
-    text_dir = Path(cfg.paths.texts_dir) if cfg.paths.texts_dir else out_dir / "texts"
-    our_mean = np.load(out_dir / "Mean.npy").astype(np.float32)
-    our_std = np.load(out_dir / "Std.npy").astype(np.float32)
-    eval_mean, eval_std = load_eval_stats(cfg.paths.eval_stats_dir)
-    motion_matcher, text_matcher = load_matchers(cfg.paths.eval_matcher, device=device)
-    build_text = make_build_text(WordVectorizer(r"data/t2m_glove/glove", "our_vab"))
+    seed = cfg.seed if args.seed is None else args.seed
+    seed_everything(
+        seed, cfg.deterministic
+    )  # sampling is torch-RNG driven: unseeded eval is NOT reproducible
+    ctx = EvalContext.from_config(cfg, device=args.device)
+    sampling = SamplingCfg.from_args(args)
+    device = ctx.device
 
     tokenizer = ResidualFsqTokenizer(cfg.tokenizer)
     tokenizer.load_state_dict(torch.load(args.tokenizer_ckpt, map_location="cpu"))
     tokenizer.to(device).eval()
     text_encoder = CLIPTextEncoder(cfg.text_encoder).to(device).eval()
+    encoder_ckpt = args.text_encoder_ckpt
+    if encoder_ckpt is None and args.ckpt:
+        sidecar = Path(args.ckpt).with_name(Path(args.ckpt).stem + "_text_encoder.pt")
+        if sidecar.is_file():
+            encoder_ckpt = str(sidecar)
+            print(f"auto-discovered co-adapted text encoder: {sidecar.name}")
+    if encoder_ckpt:
+        args.text_encoder_ckpt = encoder_ckpt
+        state = torch.load(encoder_ckpt, map_location=device, weights_only=False)
+        if "text_encoder" not in state:
+            raise KeyError(
+                f"{args.text_encoder_ckpt} has no 'text_encoder' entry (keys: {list(state)}); "
+                f"pass the trainer's <name>_last.pt, which stores the co-adapted encoder"
+            )
+        text_encoder.load_state_dict(state["text_encoder"])
+        text_encoder.to(device).eval()
+        print(f"loaded co-adapted text encoder from {args.text_encoder_ckpt}")
+    elif cfg.text_encoder.unfreeze_last_n > 0 or cfg.text_encoder.unfreeze_projection:
+        print(
+            "WARNING: config unfreezes the text encoder during training but no --text_encoder_ckpt "
+            "was given, so generation runs against PRISTINE CLIP -- not the encoder this generator "
+            "was trained with. Numbers are not comparable to in-training eval."
+        )
 
-    ids = [n.strip() for n in (out_dir / f"{args.split}.txt").read_text().splitlines() if n.strip()]
-    ids = list(dict.fromkeys(i[1:] if i.startswith("M") else i for i in ids))
+    ids = ctx.clip_ids(args.split)
 
     run_dir = start_run(f"evaluate_{args.split}", cfg, cfg.paths.outputs_dir, vars(args))
     backbones = ["transformer", "mamba"] if args.backbone == "both" else [args.backbone]
@@ -256,45 +229,15 @@ def main() -> None:
             print(f"{backbone:12s} SKIP (no checkpoint yet)")
             continue
         generator = load_generator(backbone, cfg, tokenizer, device, ckpt)
+        pipeline = GenerationPipeline(generator, text_encoder, tokenizer).eval()
         gt_feats, gen_feats, tok_lists, captions = generate_split(
-            generator,
-            tokenizer,
-            text_encoder,
-            cfg,
-            ids,
-            out_dir,
-            text_dir,
-            our_mean,
-            our_std,
-            args,
+            pipeline, ctx, sampling, ids, args.max_clips
         )
-        metrics = score(
-            backbone,
-            gt_feats,
-            gen_feats,
-            tok_lists,
-            motion_matcher,
-            text_matcher,
-            build_text,
-            eval_mean,
-            eval_std,
-            device,
-        )
+        metrics = score(backbone, gt_feats, gen_feats, tok_lists, ctx)
         if args.mm_clips > 0:
-            token_lens = [min(f.shape[0], 196) // cfg.tokenizer.downsample for f in gt_feats]
+            token_lens = [min(f.shape[0], 196) // ctx.downsample for f in gt_feats]
             metrics["multimodality"] = multimodality(
-                generator,
-                tokenizer,
-                text_encoder,
-                captions,
-                token_lens,
-                motion_matcher,
-                eval_mean,
-                eval_std,
-                our_mean,
-                our_std,
-                device,
-                args,
+                pipeline, ctx, sampling, captions, token_lens, args.mm_clips, args.mm_repeats
             )
         log_metrics(run_dir, {"backbone": backbone, "ckpt": ckpt, **metrics})
         print(

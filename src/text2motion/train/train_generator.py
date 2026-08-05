@@ -8,8 +8,8 @@ import numpy as np
 import torch
 
 from text2motion.data.hml3d.dataset import build_dataloader
+from text2motion.eval.context import EvalContext, GenerationPipeline, SamplingCfg
 from text2motion.eval.generation_eval import evaluate_generation
-from text2motion.eval.matcher import load_eval_stats, load_matchers
 from text2motion.model.generator import MotionGenerator
 from text2motion.model.text_encoder import CLIPTextEncoder
 from text2motion.model.tokenizer import ResidualFsqTokenizer
@@ -17,12 +17,6 @@ from text2motion.shared.config import load_config
 from text2motion.shared.run_log import log_metrics, start_run
 from text2motion.shared.seed import seed_everything
 from text2motion.train.trainer import GeneratorTrainer
-
-
-def _load_word_vectorizer(our_vab_dir: str):
-    from text2motion.eval.word_vectorizer import WordVectorizer  # vendored Guo our_vab (portable)
-
-    return WordVectorizer(our_vab_dir, "our_vab")
 
 
 def run(args: argparse.Namespace) -> None:
@@ -51,7 +45,6 @@ def run(args: argparse.Namespace) -> None:
     text_encoder = CLIPTextEncoder(cfg.text_encoder).to(device)
 
     out_dir = Path(cfg.paths.hml3d_out_dir)
-    text_dir = Path(cfg.paths.texts_dir) if cfg.paths.texts_dir is not None else out_dir / "texts"
     our_mean = np.load(out_dir / "Mean.npy").astype(np.float32)
     our_std = np.load(out_dir / "Std.npy").astype(np.float32)
 
@@ -63,15 +56,9 @@ def run(args: argparse.Namespace) -> None:
         f"(backbone {args.backbone}, {n_layers} layers)"
     )
 
-    eval_mean, eval_std = load_eval_stats(cfg.paths.eval_stats_dir)
-    motion_matcher, text_matcher = load_matchers(cfg.paths.eval_matcher, device=device)
-    w_vectorizer = _load_word_vectorizer(args.our_vab_dir)
-
-    def build_text(tokens: list[str]) -> tuple[np.ndarray, np.ndarray]:
-        items = ["sos/OTHER"] + tokens[:20] + ["eos/OTHER"]
-        word_embs = np.stack([w_vectorizer[item][0] for item in items]).astype(np.float32)
-        pos_onehots = np.stack([w_vectorizer[item][1] for item in items]).astype(np.float32)
-        return word_embs, pos_onehots
+    eval_ctx = EvalContext.from_config(cfg, device=device, our_vab_dir=args.our_vab_dir)
+    eval_pipeline = GenerationPipeline(generator, text_encoder, tokenizer)
+    eval_sampling = SamplingCfg(temperature=args.temperature, cfg_scale=args.cfg_scale)
 
     ckpt_dir = Path(cfg.paths.checkpoints_dir)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
@@ -124,23 +111,10 @@ def run(args: argparse.Namespace) -> None:
         if (epoch + 1) % args.eval_every == 0 or epoch + 1 == args.epochs:
             trainer.ema.copy_to(generator)
             metrics = evaluate_generation(
-                generator,
-                text_encoder,
-                tokenizer,
-                out_dir,
-                text_dir,
-                our_mean,
-                our_std,
-                motion_matcher,
-                text_matcher,
-                build_text,
-                eval_mean,
-                eval_std,
-                downsample=cfg.tokenizer.downsample,
-                device=device,
+                eval_pipeline,
+                eval_ctx,
+                sampling=eval_sampling,
                 max_clips=args.max_eval_clips,
-                temperature=args.temperature,
-                cfg_scale=args.cfg_scale,
                 split=args.eval_split,
             )
             trainer.ema.restore(generator)
@@ -155,7 +129,9 @@ def run(args: argparse.Namespace) -> None:
                 trainer.ema.copy_to(generator)
                 torch.save(generator.state_dict(), ckpt_path)
                 trainer.ema.restore(generator)
-                print(f"  saved best -> {ckpt_path} (FID {best_fid:.4f})")
+                encoder_path = Path(ckpt_path).with_name(Path(ckpt_path).stem + "_text_encoder.pt")
+                torch.save({"text_encoder": text_encoder.state_dict()}, encoder_path)
+                print(f"  saved best -> {ckpt_path} (FID {best_fid:.4f}) + {encoder_path.name}")
 
         torch.save(
             {
