@@ -48,6 +48,36 @@ def test_windowed_decode_covers_all_frames_and_is_deterministic():
     assert torch.allclose(torch.cat(chunks, 1), torch.cat(again, 1))
 
 
+def test_streamed_decode_equals_whole_sequence_decode():
+    dec = make_decoder()
+    steps = 24
+    tokens = [
+        torch.randint(0, TOK.fsq_levels[0] ** 2, (1, TOK.num_quantizers)) for _ in range(steps)
+    ]
+
+    streamed = torch.cat(list(dec.stream_tokens(iter(tokens))), dim=1)
+    whole = dec.decode_tokens(torch.stack(tokens, dim=1))
+
+    assert streamed.shape == whole.shape
+    assert torch.allclose(streamed, whole, atol=1e-4)
+
+
+def test_decoder_context_is_measured_and_state_stays_bounded():
+    dec = make_decoder()
+
+    assert dec.left_context > 0 and dec.lookahead > 0  # padded convs look both ways
+    assert dec.lookahead_frames == dec.lookahead * TOK.downsample
+
+    long_stream = dec.state_tokens * 10
+    tokens = [
+        torch.randint(0, TOK.fsq_levels[0] ** 2, (1, TOK.num_quantizers))
+        for _ in range(long_stream)
+    ]
+    chunks = list(dec.stream_tokens(iter(tokens)))
+
+    assert sum(c.shape[1] for c in chunks) == long_stream * TOK.downsample  # horizon-independent
+
+
 def test_end_to_end_stream_from_generator():
     dec = make_decoder()
     gen = MotionGenerator(GEN).eval()
