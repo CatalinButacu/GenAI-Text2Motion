@@ -16,10 +16,10 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from text2motion.data.hml3d.joints import recover_skeleton
 from text2motion.model.generator import MotionGenerator
 from text2motion.model.text_encoder import CLIPTextEncoder
 from text2motion.model.tokenizer import ResidualFsqTokenizer
-from text2motion.render.studio import recover_skeleton
 from text2motion.shared.config import load_config
 from text2motion.shared.seed import seed_everything
 from text2motion.stream.decode import StreamingMotionDecoder
@@ -36,7 +36,7 @@ def write_msg(io, obj: dict) -> None:
 def read_msg(io) -> dict:
     line = io.readline()
     if not line:
-        raise ConnectionError("peer closed")  # fail loud, no silent None
+        raise ConnectionError("peer closed")
     return json.loads(line.decode("utf-8"))
 
 
@@ -56,7 +56,7 @@ def read_exact(io, n_bytes: int) -> bytes:
 
 def read_array(io, msg: dict) -> np.ndarray:
     count = int(np.prod(msg["shape"]))
-    raw = read_exact(io, count * 4)  # float32 payload follows its JSON header
+    raw = read_exact(io, count * 4)
     return np.frombuffer(raw, dtype=np.float32).reshape(msg["shape"]).copy()
 
 
@@ -87,6 +87,8 @@ class Pipeline:
         self.std = torch.from_numpy(np.load(out / "Std.npy").astype("float32")).to(device)
         self.device = device
         self.downsample = int(cfg.tokenizer.downsample)
+        self.max_steps = int(cfg.generator.max_seq_len + 1 - cfg.generator.text_prefix_len)
+
         self.config = str(config)
         self.ckpt = str(ckpt)
         self.tokenizer_ckpt = str(tokenizer_ckpt)
@@ -98,12 +100,13 @@ class Pipeline:
             "ckpt": self.ckpt,
             "backbone": self.backbone,
             "downsample": self.downsample,
+            "max_steps": self.max_steps,
             "device": self.device,
         }
 
 
 def cancel_requested(sock: socket.socket, io) -> bool:
-    readable, _, _ = select.select([sock], [], [], 0)  # non-blocking peek between chunks
+    readable, _, _ = select.select([sock], [], [], 0)
     if not readable:
         return False
     return read_msg(io).get("cmd") == "cancel"
@@ -125,7 +128,7 @@ def handle_generate(pipe: Pipeline, sock: socket.socket, io, req: dict) -> None:
             stop_at_end=False,
         )
         for chunk in decoder.stream_tokens(token_iter):
-            joints = recover_skeleton(chunk.squeeze(0).cpu().numpy())  # (t, 22, 3)
+            joints = recover_skeleton(chunk.squeeze(0).cpu().numpy())
             n_frames += len(joints)
             write_array(io, "chunk", joints)
             if cancel_requested(sock, io):
@@ -165,7 +168,7 @@ def serve(pipeline_args: dict, host: str, port: int, idle_seconds: int) -> None:
                         handle_generate(pipe, conn, io, req)
                     except (ConnectionError, BrokenPipeError):
                         raise
-                    except Exception as exc:  # noqa: BLE001 - report to the client, keep serving
+                    except Exception as exc:
                         traceback.print_exc()
                         write_msg(io, {"type": "error", "message": f"{type(exc).__name__}: {exc}"})
                 elif cmd == "load":
@@ -176,12 +179,12 @@ def serve(pipeline_args: dict, host: str, port: int, idle_seconds: int) -> None:
                             req["tokenizer_ckpt"],
                             req["backbone"],
                             pipe.device,
-                        )  # old pipeline dropped on success only
+                        )
                         if pipe.device == "cuda":
                             torch.cuda.empty_cache()
                         print(f"[service] loaded {pipe.ckpt} ({pipe.backbone})", flush=True)
                         write_msg(io, {**pipe.hello(), "type": "loaded"})
-                    except Exception as exc:  # noqa: BLE001 - a bad bundle must not kill the service
+                    except Exception as exc:
                         traceback.print_exc()
                         write_msg(io, {"type": "error", "message": f"{type(exc).__name__}: {exc}"})
                 elif cmd == "shutdown":
@@ -200,9 +203,9 @@ def serve(pipeline_args: dict, host: str, port: int, idle_seconds: int) -> None:
 class MotionServiceClient:
     def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
         self.sock = socket.create_connection((host, port), timeout=5)
-        self.sock.settimeout(None)  # model (re)loads block for tens of seconds
+        self.sock.settimeout(None)
         self.io = self.sock.makefile("rwb")
-        self.lock = threading.Lock()  # one in-flight command per connection
+        self.lock = threading.Lock()
         self.hello = read_msg(self.io)
 
     def load(self, config: str, ckpt: str, tokenizer_ckpt: str, backbone: str) -> dict:
@@ -302,10 +305,8 @@ def connect_or_spawn(
             str(port),
         ]
         Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-        log = open(log_path, "ab")  # noqa: SIM115 - handle must outlive this function
-        flags = getattr(
-            subprocess, "DETACHED_PROCESS", 0
-        )  # survives the viewer closing (warm restarts)
+        log = open(log_path, "ab")
+        flags = getattr(subprocess, "DETACHED_PROCESS", 0)
         env = dict(os.environ)
         env["PYTHONPATH"] = env.get("PYTHONPATH") or "src"
         subprocess.Popen(cmd, stdout=log, stderr=log, creationflags=flags, env=env)
