@@ -5,28 +5,8 @@ import torch
 
 from text2motion.data.hml3d.dataset import parse_text_file
 from text2motion.eval.context import EvalContext, GenerationPipeline, SamplingCfg
+from text2motion.eval.embedding import embed_motions, embed_texts
 from text2motion.eval.metrics import diversity, fid, mm_dist, r_precision
-from text2motion.eval.tokenizer_eval import _embed_motions
-
-
-def _embed_texts(text_matcher, pairs, device, batch=32):
-    embeddings = []
-    for start in range(0, len(pairs), batch):
-        group = pairs[start : start + batch]
-        max_len = max(we.shape[0] for we, _ in group)
-        we_pad = np.zeros((len(group), max_len, 300), np.float32)
-        pe_pad = np.zeros((len(group), max_len, 15), np.float32)
-        lengths = [we.shape[0] for we, _ in group]
-        for row, (we, pe) in enumerate(group):
-            we_pad[row, : we.shape[0]] = we
-            pe_pad[row, : pe.shape[0]] = pe
-        emb = text_matcher(
-            torch.from_numpy(we_pad).to(device),
-            torch.from_numpy(pe_pad).to(device),
-            lengths=torch.tensor(lengths, device=device),
-        )
-        embeddings.append(emb.cpu().numpy())
-    return np.concatenate(embeddings)
 
 
 @torch.no_grad()
@@ -61,9 +41,9 @@ def evaluate_generation(
         gen_feats.append(gen)
         text_pairs.append(ctx.build_text(caption_ann.tokens))
 
-    gt_emb = _embed_motions(ctx.motion_matcher, gt_feats, ctx.eval_mean, ctx.eval_std, ctx.device)
-    gen_emb = _embed_motions(ctx.motion_matcher, gen_feats, ctx.eval_mean, ctx.eval_std, ctx.device)
-    text_emb_match = _embed_texts(ctx.text_matcher, text_pairs, ctx.device)
+    gt_emb = embed_motions(ctx.motion_matcher, gt_feats, ctx.eval_mean, ctx.eval_std, ctx.device)
+    gen_emb = embed_motions(ctx.motion_matcher, gen_feats, ctx.eval_mean, ctx.eval_std, ctx.device)
+    text_emb_match = embed_texts(ctx.text_matcher, text_pairs, ctx.device)
 
     rng = np.random.default_rng(0)
     perm = rng.permutation(len(gen_emb))

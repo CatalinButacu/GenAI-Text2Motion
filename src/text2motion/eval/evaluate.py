@@ -9,6 +9,7 @@ import torch
 
 from text2motion.data.hml3d.dataset import parse_text_file
 from text2motion.eval.context import EvalContext, GenerationPipeline, SamplingCfg
+from text2motion.eval.embedding import embed_motions, embed_texts
 from text2motion.eval.metrics import diversity, fid, mm_dist, r_precision
 from text2motion.model.generator import MotionGenerator
 from text2motion.model.text_encoder import CLIPTextEncoder
@@ -16,43 +17,6 @@ from text2motion.model.tokenizer import ResidualFsqTokenizer
 from text2motion.shared.config import load_config
 from text2motion.shared.run_log import log_metrics, start_run
 from text2motion.shared.seed import seed_everything
-
-
-def embed_motions(matcher, feats, mean, std, device, batch=32):
-    feats = [f[: (f.shape[0] // 4) * 4] for f in feats]
-    out = []
-    for start in range(0, len(feats), batch):
-        group = feats[start : start + batch]
-        max_t = max(f.shape[0] for f in group)
-        x = np.zeros((len(group), max_t, 263), np.float32)
-        lengths = [f.shape[0] for f in group]
-        for row, feat in enumerate(group):
-            x[row, : feat.shape[0]] = (feat - mean) / std
-        with torch.no_grad():
-            emb = matcher(torch.from_numpy(x).to(device), torch.tensor(lengths, device=device))
-        out.append(emb.cpu().numpy())
-    return np.concatenate(out)
-
-
-def embed_texts(matcher, pairs, device, batch=32):
-    out = []
-    for start in range(0, len(pairs), batch):
-        group = pairs[start : start + batch]
-        max_l = max(we.shape[0] for we, _ in group)
-        we_pad = np.zeros((len(group), max_l, 300), np.float32)
-        pe_pad = np.zeros((len(group), max_l, 15), np.float32)
-        lengths = [we.shape[0] for we, _ in group]
-        for row, (we, pe) in enumerate(group):
-            we_pad[row, : we.shape[0]] = we
-            pe_pad[row, : pe.shape[0]] = pe
-        with torch.no_grad():
-            emb = matcher(
-                torch.from_numpy(we_pad).to(device),
-                torch.from_numpy(pe_pad).to(device),
-                lengths=torch.tensor(lengths, device=device),
-            )
-        out.append(emb.cpu().numpy())
-    return np.concatenate(out)
 
 
 def load_generator(backbone, cfg, tokenizer, device, ckpt=None):

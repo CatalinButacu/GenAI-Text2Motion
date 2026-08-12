@@ -61,18 +61,6 @@ def qrot_np(q: np.ndarray, v: np.ndarray) -> np.ndarray:
     return qrot(q, v).numpy()
 
 
-def qfix(q: np.ndarray) -> np.ndarray:
-    assert len(q.shape) == 3
-    assert q.shape[-1] == 4
-
-    result = q.copy()
-    dot_products = np.sum(q[1:] * q[:-1], axis=2)
-    mask = dot_products < 0
-    mask = (np.cumsum(mask, axis=0) % 2).astype(bool)
-    result[1:][mask] *= -1
-    return result
-
-
 def quaternion_to_matrix(quaternions: torch.Tensor) -> torch.Tensor:
     r, i, j, k = torch.unbind(quaternions, -1)
     two_s = 2.0 / (quaternions * quaternions).sum(-1)

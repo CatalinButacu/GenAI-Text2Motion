@@ -18,8 +18,8 @@ GEO_TERMS = ("root", "ric", "rot6d", "vel", "foot")
 FK_TERMS = ("fk_self", "fk_gt")
 
 
-def codebook_tables(tokenizer: ResidualFsqTokenizer, device: torch.device) -> list[torch.Tensor]:
-    cached = getattr(tokenizer, "_codebook_tables", None)
+def _codebook_tables(tokenizer: ResidualFsqTokenizer, device: torch.device) -> list[torch.Tensor]:
+    cached = getattr(tokenizer, "_codebook_tables_cache", None)
     if cached is not None and cached[0].device == device:
         return cached
 
@@ -27,12 +27,12 @@ def codebook_tables(tokenizer: ResidualFsqTokenizer, device: torch.device) -> li
     for unit in tokenizer.quantizer.units:
         all_idx = torch.arange(unit.codebook_size, device=device)
         tables.append(unit.indices_to_codes(all_idx))
-    tokenizer._codebook_tables = tables
+    tokenizer._codebook_tables_cache = tables
     return tables
 
 
 def soft_decode(logits: torch.Tensor, tokenizer: ResidualFsqTokenizer) -> torch.Tensor:
-    tables = codebook_tables(tokenizer, logits.device)
+    tables = _codebook_tables(tokenizer, logits.device)
 
     expected_codes: list[torch.Tensor] = []
     for token_index, codebook in enumerate(tables):
@@ -57,7 +57,7 @@ def _masked_l1(a: torch.Tensor, b: torch.Tensor, mask: torch.Tensor | None) -> t
     return (torch.abs(a - b) * mask).sum() / (mask.sum().clamp(min=1.0) * a.size(-1))
 
 
-def geometric_terms(
+def _geometric_terms(
     recon: torch.Tensor, gt: torch.Tensor, frame_lengths: torch.Tensor | None = None
 ) -> dict[str, torch.Tensor]:
     mask = _frame_mask(recon, frame_lengths)
@@ -76,7 +76,7 @@ def _recover_rot_batched(motion_raw: torch.Tensor, skeleton) -> torch.Tensor:
     )
 
 
-def fk_consistency_terms(
+def _fk_consistency_terms(
     recon: torch.Tensor,
     gt: torch.Tensor,
     frame_lengths: torch.Tensor | None,
@@ -114,11 +114,11 @@ class UncertaintyWeighter(nn.Module):
 
 
 def active_term_names(cfg: TrainCfg) -> tuple[str, ...]:
-    weights = term_weights(cfg)
+    weights = _term_weights(cfg)
     return tuple(name for name in (*GEO_TERMS, *FK_TERMS) if weights[name] > 0)
 
 
-def term_weights(cfg: TrainCfg) -> dict[str, float]:
+def _term_weights(cfg: TrainCfg) -> dict[str, float]:
     return {
         "root": cfg.w_root,
         "ric": cfg.w_ric,
@@ -151,10 +151,10 @@ def generator_loss(
     motion_logits = logits[:, :-1] if has_end else logits  # END slot decodes no motion
     recon = soft_decode(motion_logits, tokenizer)
 
-    terms = geometric_terms(recon, gt_motion, lengths)
-    weights = term_weights(cfg)
+    terms = _geometric_terms(recon, gt_motion, lengths)
+    weights = _term_weights(cfg)
     if (weights["fk_self"] > 0 or weights["fk_gt"] > 0) and skeleton is not None:
-        terms.update(fk_consistency_terms(recon, gt_motion, lengths, mean, std, skeleton))
+        terms.update(_fk_consistency_terms(recon, gt_motion, lengths, mean, std, skeleton))
 
     if weighter is not None:
         total = ce + weighter(terms)

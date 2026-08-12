@@ -6,21 +6,8 @@ import numpy as np
 import torch
 
 from text2motion.data.hml3d.feature import recover_from_ric
+from text2motion.eval.embedding import embed_motions
 from text2motion.eval.metrics import fid
-
-
-def _embed_motions(matcher, feats_raw, eval_mean, eval_std, device, batch=32):
-    embeddings = []
-    for start in range(0, len(feats_raw), batch):
-        group = feats_raw[start : start + batch]
-        max_t = max(f.shape[0] for f in group)
-        padded = np.zeros((len(group), max_t, 263), np.float32)
-        lengths = [f.shape[0] for f in group]
-        for row, feat in enumerate(group):
-            padded[row, : feat.shape[0]] = (feat - eval_mean) / eval_std
-        emb = matcher(torch.from_numpy(padded).to(device), torch.tensor(lengths, device=device))
-        embeddings.append(emb.cpu().numpy())
-    return np.concatenate(embeddings)
 
 
 @torch.no_grad()
@@ -69,8 +56,8 @@ def evaluate_tokenizer(
         rc_joints = recover_from_ric(torch.from_numpy(recon).float(), joints_num).numpy()
         joint_errors.append(float(np.sqrt(((gt_joints - rc_joints) ** 2).sum(-1)).mean()))
 
-    gt_emb = _embed_motions(matcher, gt_feats, eval_mean, eval_std, device)
-    recon_emb = _embed_motions(matcher, recon_feats, eval_mean, eval_std, device)
+    gt_emb = embed_motions(matcher, gt_feats, eval_mean, eval_std, device)
+    recon_emb = embed_motions(matcher, recon_feats, eval_mean, eval_std, device)
 
     return {
         "clips": len(gt_feats),
