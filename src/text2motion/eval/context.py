@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from text2motion.data.hml3d.stats import MotionScaler
 from text2motion.eval.matcher import load_eval_stats, load_matchers
 from text2motion.shared.config import Config
 
@@ -94,8 +95,7 @@ class EvalContext:
     device: str
     out_dir: Path
     text_dir: Path
-    our_mean: np.ndarray
-    our_std: np.ndarray
+    scaler: MotionScaler
     eval_mean: np.ndarray
     eval_std: np.ndarray
     motion_matcher: Any
@@ -120,8 +120,7 @@ class EvalContext:
             device=resolved_device,
             out_dir=out_dir,
             text_dir=text_dir,
-            our_mean=np.load(out_dir / "Mean.npy").astype(np.float32),
-            our_std=np.load(out_dir / "Std.npy").astype(np.float32),
+            scaler=MotionScaler.load(out_dir, dim=cfg.hml3d.dim),
             eval_mean=eval_mean,
             eval_std=eval_std,
             motion_matcher=motion_matcher,
@@ -135,8 +134,16 @@ class EvalContext:
         present = [name.strip() for name in raw if name.strip()]
         return list(dict.fromkeys(i[1:] if i.startswith("M") else i for i in present))
 
-    def normalize(self, feats: np.ndarray) -> np.ndarray:
-        return (feats - self.our_mean) / self.our_std
+    @property
+    def our_mean(self) -> np.ndarray:
+        return self.scaler.mean
 
-    def denormalize(self, feats: np.ndarray) -> np.ndarray:
-        return feats * self.our_std + self.our_mean
+    @property
+    def our_std(self) -> np.ndarray:
+        return self.scaler.std
+
+    def normalize(self, feats):
+        return self.scaler.normalize(feats)
+
+    def denormalize(self, feats):
+        return self.scaler.denormalize(feats)

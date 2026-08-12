@@ -3,10 +3,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import numpy as np
 import torch
 
 from text2motion.data.hml3d.motion_window import build_window_loader
+from text2motion.data.hml3d.stats import MotionScaler
 from text2motion.eval.matcher import load_eval_stats, load_matchers
 from text2motion.eval.tokenizer_eval import evaluate_tokenizer
 from text2motion.model.rvq_baseline import RvqBaselineTokenizer
@@ -44,8 +44,8 @@ def run(args: argparse.Namespace) -> None:
     )
 
     out_dir = Path(cfg.paths.hml3d_out_dir)
-    our_mean = np.load(out_dir / "Mean.npy").astype(np.float32)
-    our_std = np.load(out_dir / "Std.npy").astype(np.float32)
+    scaler = MotionScaler.load(out_dir, dim=cfg.hml3d.dim)
+    our_mean, our_std = scaler.mean, scaler.std
     eval_mean, eval_std = load_eval_stats(cfg.paths.eval_stats_dir)
     matcher, _ = load_matchers(cfg.paths.eval_matcher, device=device)
 
@@ -71,6 +71,7 @@ def run(args: argparse.Namespace) -> None:
         print(f"resumed from {resume_path} at epoch {start_epoch} (best recon-FID {best_fid:.4f})")
 
     for epoch in range(start_epoch, args.epochs):
+        loader.dataset.set_epoch(epoch)
         tokenizer.train()
         totals: dict[str, float] = {}
         steps = 0

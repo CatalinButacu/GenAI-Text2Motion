@@ -44,3 +44,70 @@ def test_matcher_loads_without_dropping_keys():
     pos_onehots = torch.zeros(2, 8, 15)
     temb = text(word_embs, pos_onehots, lengths=torch.tensor([8, 5]))
     assert temb.shape == (2, 512) and torch.isfinite(temb).all()
+
+
+def test_fid_rejects_degenerate_input():
+    import pytest
+
+    from text2motion.eval.metrics import fid as _fid
+
+    with pytest.raises(ValueError, match="at least|>= 2|needs"):
+        _fid(np.zeros((1, 8), np.float32), np.zeros((5, 8), np.float32))
+
+
+def test_fid_warns_when_covariance_is_rank_deficient(capsys):
+    from text2motion.eval.metrics import fid as _fid
+
+    rng = np.random.default_rng(0)
+    a = rng.normal(size=(20, 64)).astype(np.float32)
+    b = rng.normal(size=(20, 64)).astype(np.float32)
+
+    _fid(a, b)
+    assert "rank-deficient" in capsys.readouterr().out
+
+    big_a = rng.normal(size=(80, 8)).astype(np.float32)
+    big_b = rng.normal(size=(80, 8)).astype(np.float32)
+    _fid(big_a, big_b)
+    assert "rank-deficient" not in capsys.readouterr().out
+
+
+def test_bootstrap_fid_reports_a_usable_interval():
+    from text2motion.eval.metrics import bootstrap_fid
+
+    rng = np.random.default_rng(0)
+    real = rng.normal(size=(120, 16)).astype(np.float32)
+    gen = real * 0.9 + rng.normal(size=(120, 16)).astype(np.float32) * 0.4
+
+    out = bootstrap_fid(real, gen, resamples=40)
+
+    assert out["fid_resamples"] == 40
+    assert out["fid_std"] > 0
+    assert out["fid_ci_lo"] < out["fid_boot_mean"] < out["fid_ci_hi"]
+
+
+def test_paired_delta_separates_a_real_gap_and_not_an_identical_pair():
+    from text2motion.eval.metrics import paired_fid_delta
+
+    rng = np.random.default_rng(0)
+    real = rng.normal(size=(150, 16)).astype(np.float32)
+    close = real * 0.95 + rng.normal(size=(150, 16)).astype(np.float32) * 0.20
+    far = real * 0.70 + rng.normal(size=(150, 16)).astype(np.float32) * 0.90
+
+    gap = paired_fid_delta(real, close, far, resamples=40)
+    assert gap["delta_mean"] < 0
+    assert gap["separates"]
+
+    same = paired_fid_delta(real, close, close, resamples=40)
+    assert abs(same["delta_mean"]) < 1e-9
+    assert not same["separates"]
+
+
+def test_paired_delta_requires_aligned_clips():
+    import pytest
+
+    from text2motion.eval.metrics import paired_fid_delta
+
+    rng = np.random.default_rng(0)
+    real = rng.normal(size=(20, 8)).astype(np.float32)
+    with pytest.raises(ValueError, match="same clips"):
+        paired_fid_delta(real, real, rng.normal(size=(19, 8)).astype(np.float32), resamples=5)

@@ -118,3 +118,49 @@ def test_recover_skeleton_and_bones():
     bones = kinematic_bones()
     assert bones.ndim == 2 and bones.shape[1] == 2
     assert bones.min() >= 0 and bones.max() < 22
+
+
+def test_explicit_context_skips_the_probe():
+    import text2motion.stream.decode as decode_mod
+
+    calls = []
+    original = decode_mod.measure_decoder_context
+
+    def counting(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    decode_mod.measure_decoder_context = counting
+    try:
+        tok = ResidualFsqTokenizer(TOK)
+        mean = torch.zeros(263)
+        std = torch.ones(263)
+
+        decode_mod.StreamingMotionDecoder(tok, mean, std, left_context=4, lookahead=4)
+        assert calls == [], "explicit context must not pay for the probe"
+
+        decode_mod.StreamingMotionDecoder(tok, mean, std)
+        assert len(calls) == 1
+    finally:
+        decode_mod.measure_decoder_context = original
+
+
+def test_stream_forwards_guidance_and_end_stopping():
+    seen = {}
+
+    class FakeGenerator:
+        def stream(self, text_emb, steps, **kwargs):
+            seen.update(kwargs)
+            for _ in range(steps):
+                yield torch.zeros(1, 8, dtype=torch.long)
+
+    tok = ResidualFsqTokenizer(TOK)
+    decoder = StreamingMotionDecoder(
+        tok, torch.zeros(263), torch.ones(263), left_context=1, lookahead=1
+    )
+    list(
+        decoder.stream(FakeGenerator(), torch.zeros(1, 1, 512), 4, cfg_scale=6.0, stop_at_end=True)
+    )
+
+    assert seen["cfg_scale"] == 6.0
+    assert seen["stop_at_end"] is True

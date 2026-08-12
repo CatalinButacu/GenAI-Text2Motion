@@ -220,3 +220,35 @@ def recover_from_rot(data: torch.Tensor, joints_num: int, skeleton: Skeleton) ->
     positions = skeleton.forward_kinematics_cont6d(cont6d_params, r_pos)
 
     return positions
+
+
+def normalization_stats(clips: list[np.ndarray], joints_num: int) -> tuple[np.ndarray, np.ndarray]:
+    if not clips:
+        raise ValueError("normalization_stats received no clips")
+
+    data = np.concatenate(clips, axis=0)
+    mean = data.mean(axis=0)
+    std = data.std(axis=0)
+
+    expected_dim = 8 + (joints_num - 1) * 9 + joints_num * 3
+    if std.shape[-1] != expected_dim:
+        raise ValueError(
+            f"feature dim {std.shape[-1]} != expected {expected_dim} for {joints_num=}"
+        )
+
+    ric_end = 4 + (joints_num - 1) * 3
+    rot_end = 4 + (joints_num - 1) * 9
+    vel_end = rot_end + joints_num * 3
+    groups = (
+        (0, 1),
+        (1, 3),
+        (3, 4),
+        (4, ric_end),
+        (ric_end, rot_end),
+        (rot_end, vel_end),
+        (vel_end, expected_dim),
+    )
+    for start, stop in groups:
+        std[start:stop] = std[start:stop].mean()
+
+    return mean, std

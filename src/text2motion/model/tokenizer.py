@@ -2,6 +2,13 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from text2motion.model.contracts import (
+    DROPPED_CODE,
+    MotionQuantizer,
+    MotionTokenizer,
+    TokenizerOutput,
+    reject_dropped_codes,
+)
 from text2motion.shared.config import TokenizerCfg
 
 
@@ -10,7 +17,7 @@ def round_ste(z: torch.Tensor) -> torch.Tensor:
 
 
 class FSQ(nn.Module):
-    def __init__(self, levels: tuple[int, ...]) -> None:
+    def __init__(self, levels: tuple[int, ...], eps: float = 1e-3) -> None:
         super().__init__()
         levels_t = torch.tensor(levels, dtype=torch.float32)
         self.register_buffer("levels", levels_t)
@@ -18,14 +25,18 @@ class FSQ(nn.Module):
         self.register_buffer("half_width", torch.div(levels_t, 2, rounding_mode="floor"))  # L//2
         basis = torch.cumprod(torch.tensor([1] + list(levels[:-1]), dtype=torch.long), dim=0)
         self.register_buffer("basis", basis)
+
+        half_l = (levels_t - 1) * 0.5 * (1 - eps)
+        offset = torch.where(levels_t % 2 == 0, 0.5, 0.0)
+        self.register_buffer("bound_scale", half_l, persistent=False)
+        self.register_buffer("bound_offset", offset, persistent=False)
+        self.register_buffer("bound_shift", torch.atanh(offset / half_l), persistent=False)
+
         self.dim = len(levels)
         self.codebook_size = int(torch.prod(levels_t).item())
 
-    def bound(self, z: torch.Tensor, eps: float = 1e-3) -> torch.Tensor:
-        half_l = self.half_l_bound * (1 - eps)
-        offset = torch.where(self.levels % 2 == 0, 0.5, 0.0)
-        shift = torch.atanh(offset / half_l)
-        return torch.tanh(z + shift) * half_l - offset
+    def bound(self, z: torch.Tensor) -> torch.Tensor:
+        return torch.tanh(z + self.bound_shift) * self.bound_scale - self.bound_offset
 
     def quantize(self, z: torch.Tensor) -> torch.Tensor:
         quantized = round_ste(self.bound(z))
@@ -42,7 +53,7 @@ class FSQ(nn.Module):
         return (digits.float() - self.half_width) / self.half_width
 
 
-class ResidualFSQ(nn.Module):
+class ResidualFSQ(MotionQuantizer):
     def __init__(self, levels: tuple[int, ...], num_quantizers: int, dropout_p: float) -> None:
         super().__init__()
         self.layers = nn.ModuleList([FSQ(levels) for _ in range(num_quantizers)])
@@ -74,8 +85,10 @@ class ResidualFSQ(nn.Module):
                 residual = residual - code
                 quantized = quantized + code
                 indices.append(layer.codes_to_indices(code))
-            else:
-                indices.append(torch.zeros(z.shape[:-1], dtype=torch.long, device=z.device))
+            else:  # sentinel, never a valid code: a dropped level must not read as code 0
+                indices.append(
+                    torch.full(z.shape[:-1], DROPPED_CODE, dtype=torch.long, device=z.device)
+                )
 
         return quantized, torch.stack(indices, dim=-1)
 
@@ -88,11 +101,11 @@ class ResidualFSQ(nn.Module):
         return out
 
 
-class GroupedFSQ(nn.Module):
-    def __init__(self, levels: tuple[int, ...], num_groups: int) -> None:
+class GroupedFSQ(MotionQuantizer):
+    def __init__(self, levels: tuple[int, ...], num_quantizers: int) -> None:
         super().__init__()
-        self.groups = nn.ModuleList([FSQ(levels) for _ in range(num_groups)])
-        self.num_groups = num_groups
+        self.groups = nn.ModuleList([FSQ(levels) for _ in range(num_quantizers)])
+        self.num_quantizers = num_quantizers
         self.dim = len(levels)
 
     @property
@@ -118,6 +131,15 @@ class GroupedFSQ(nn.Module):
         )
 
 
+def resample_stages(downsample: int) -> int:
+    if downsample < 1 or downsample & (downsample - 1):
+        raise ValueError(
+            f"tokenizer downsample must be a power of two, got {downsample}; the encoder builds "
+            f"stride-2 stages and any other value would silently change the frame rate per token"
+        )
+    return downsample.bit_length() - 1
+
+
 class ResBlock1d(nn.Module):
     def __init__(self, ch: int) -> None:
         super().__init__()
@@ -130,7 +152,7 @@ class ResBlock1d(nn.Module):
 class Encoder1d(nn.Module):
     def __init__(self, in_dim: int, width: int, downsample: int, n_resblocks: int) -> None:
         super().__init__()
-        n_down = downsample.bit_length() - 1  # downsample=4 -> 2 stride-2 convs
+        n_down = resample_stages(downsample)  # downsample=4 -> 2 stride-2 convs
         layers: list[nn.Module] = [nn.Conv1d(in_dim, width, 3, padding=1), nn.ReLU()]
 
         for _ in range(n_down):
@@ -148,7 +170,7 @@ class Encoder1d(nn.Module):
 class Decoder1d(nn.Module):
     def __init__(self, in_dim: int, width: int, downsample: int, n_resblocks: int) -> None:
         super().__init__()
-        n_up = downsample.bit_length() - 1
+        n_up = resample_stages(downsample)
         layers: list[nn.Module] = []
 
         for _ in range(n_resblocks):
@@ -164,7 +186,7 @@ class Decoder1d(nn.Module):
         return self.net(x.transpose(1, 2)).transpose(1, 2)
 
 
-class ResidualFsqTokenizer(nn.Module):
+class ResidualFsqTokenizer(MotionTokenizer):
     def __init__(self, cfg: TokenizerCfg) -> None:
         super().__init__()
         self.cfg = cfg
@@ -190,15 +212,15 @@ class ResidualFsqTokenizer(nn.Module):
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         _, indices = self.quantizer(self.pre_q(self.encoder(x)))
-        return indices
+        return reject_dropped_codes(indices)
 
     def decode(self, indices: torch.Tensor) -> torch.Tensor:
         return self.decoder(self.post_q(self.quantizer.indices_to_codes(indices)))
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> TokenizerOutput:
         quantized, indices = self.quantizer(self.pre_q(self.encoder(x)))
         recon = self.decoder(self.post_q(quantized))
-        return recon, indices
+        return TokenizerOutput(recon=recon, indices=indices, commit=x.new_zeros(()))
 
 
 def reconstruction_loss(recon: torch.Tensor, target: torch.Tensor) -> torch.Tensor:

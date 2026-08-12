@@ -4,6 +4,12 @@ import random
 import numpy as np
 import torch
 
+_MIX = 1_000_003
+
+
+def item_rng(seed: int, epoch: int, index: int) -> random.Random:
+    return random.Random((seed * _MIX + epoch) * _MIX + index)
+
 
 def seed_everything(seed: int, deterministic: bool = False) -> int:
     os.environ["PYTHONHASHSEED"] = str(seed)

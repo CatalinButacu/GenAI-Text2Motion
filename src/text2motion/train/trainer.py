@@ -13,6 +13,36 @@ from text2motion.shared.config import TrainCfg
 from text2motion.train.ema import Ema
 from text2motion.train.losses import UncertaintyWeighter, active_term_names, generator_loss
 
+NO_DECAY_SUFFIXES = ("a_log",)
+
+
+def undecayed_param_ids(module: nn.Module) -> set[int]:
+    ids: set[int] = set()
+    for sub in module.modules():
+        if isinstance(sub, (nn.Embedding, nn.LayerNorm, nn.GroupNorm, nn.BatchNorm1d)):
+            ids |= {id(p) for p in sub.parameters(recurse=False)}
+        elif type(sub).__name__ == "RMSNorm":
+            ids |= {id(p) for p in sub.parameters(recurse=False)}
+    return ids
+
+
+def split_decay(module: nn.Module, only: list[nn.Parameter] | None = None) -> tuple[list, list]:
+    exempt_ids = undecayed_param_ids(module)
+    allowed = None if only is None else {id(p) for p in only}
+
+    decay: list[nn.Parameter] = []
+    no_decay: list[nn.Parameter] = []
+    for name, param in module.named_parameters():
+        if not param.requires_grad:
+            continue
+        if allowed is not None and id(param) not in allowed:
+            continue
+        if param.ndim <= 1 or id(param) in exempt_ids or name.endswith(NO_DECAY_SUFFIXES):
+            no_decay.append(param)
+        else:
+            decay.append(param)
+    return decay, no_decay
+
 
 class GeneratorTrainer:
     def __init__(
@@ -31,13 +61,27 @@ class GeneratorTrainer:
         self.text_encoder = text_encoder
         self.cfg = cfg
 
-        groups: list[dict] = [{"params": list(generator.parameters()), "lr": cfg.lr}]
+        groups: list[dict] = []
         self._clip_params = list(generator.parameters())
+
+        if cfg.decay_groups:
+            gen_decay, gen_plain = split_decay(generator)
+            groups.append({"params": gen_decay, "lr": cfg.lr})
+            groups.append({"params": gen_plain, "lr": cfg.lr, "weight_decay": 0.0})
+        else:  # pre-2026-08 behaviour: one group, decay on everything (sec. 5.9)
+            groups.append({"params": list(generator.parameters()), "lr": cfg.lr})
 
         if text_encoder is not None:
             enc_trainable = [p for p in text_encoder.parameters() if p.requires_grad]
             if enc_trainable:  # fully-frozen encoder adds nothing to the optimiser
-                groups.append({"params": enc_trainable, "lr": cfg.text_encoder_lr})
+                if cfg.decay_groups:
+                    enc_decay, enc_plain = split_decay(text_encoder, only=enc_trainable)
+                    groups.append({"params": enc_decay, "lr": cfg.text_encoder_lr})
+                    groups.append(
+                        {"params": enc_plain, "lr": cfg.text_encoder_lr, "weight_decay": 0.0}
+                    )
+                else:
+                    groups.append({"params": enc_trainable, "lr": cfg.text_encoder_lr})
                 self._clip_params += enc_trainable
 
         self.weighter: UncertaintyWeighter | None = None
@@ -164,7 +208,7 @@ class GeneratorTrainer:
         self._accum_count += 1
         if self._accum_count >= accum:
             self._accum_count = 0
-            nn.utils.clip_grad_norm_(self._clip_params, 1.0)
+            nn.utils.clip_grad_norm_(self._clip_params, self.cfg.grad_clip)
             self.opt.step()
             if self.scheduler is not None:
                 self.scheduler.step()

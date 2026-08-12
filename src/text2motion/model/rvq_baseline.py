@@ -2,6 +2,13 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from text2motion.model.contracts import (
+    DROPPED_CODE,
+    MotionQuantizer,
+    MotionTokenizer,
+    TokenizerOutput,
+    reject_dropped_codes,
+)
 from text2motion.model.tokenizer import Decoder1d, Encoder1d
 from text2motion.shared.config import RvqBaselineCfg
 
@@ -65,8 +72,11 @@ class EmaVectorQuantizer(nn.Module):
     def lookup(self, indices: torch.Tensor) -> torch.Tensor:
         return F.embedding(indices, self.embed)
 
+    def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
+        return self.lookup(indices)
 
-class ResidualVQ(nn.Module):
+
+class ResidualVQ(MotionQuantizer):
     def __init__(self, cfg: RvqBaselineCfg) -> None:
         super().__init__()
         self.num_quantizers = cfg.num_quantizers
@@ -75,6 +85,13 @@ class ResidualVQ(nn.Module):
             EmaVectorQuantizer(cfg.codebook_size, cfg.code_dim, cfg.ema_decay, cfg.reset_threshold)
             for _ in range(cfg.num_quantizers)
         )
+
+    @property
+    def units(self) -> nn.ModuleList:
+        return self.layers
+
+    def combine_codes(self, codes: list[torch.Tensor]) -> torch.Tensor:
+        return torch.stack(codes, dim=0).sum(0)
 
     def active_levels(self) -> int:
         if self.training and self.dropout_p > 0 and torch.rand(()) < self.dropout_p:
@@ -96,8 +113,10 @@ class ResidualVQ(nn.Module):
                 quantized = quantized + code
                 commit = commit + c
                 indices.append(idx)
-            else:
-                indices.append(torch.zeros(z.shape[:-1], dtype=torch.long, device=z.device))
+            else:  # sentinel, never a valid code: a dropped level must not read as code 0
+                indices.append(
+                    torch.full(z.shape[:-1], DROPPED_CODE, dtype=torch.long, device=z.device)
+                )
 
         if self.training:
             quantized = z + (quantized - z).detach()
@@ -113,7 +132,7 @@ class ResidualVQ(nn.Module):
         return out
 
 
-class RvqBaselineTokenizer(nn.Module):
+class RvqBaselineTokenizer(MotionTokenizer):
     def __init__(self, cfg: RvqBaselineCfg) -> None:
         super().__init__()
         self.cfg = cfg
@@ -127,17 +146,21 @@ class RvqBaselineTokenizer(nn.Module):
     def codebook_size(self) -> int:
         return self.cfg.codebook_size
 
+    @property
+    def quantizer(self) -> ResidualVQ:  # checkpoints keep the historical `rvq` submodule name
+        return self.rvq
+
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         z = self.pre_q(self.encoder(x))
         _, indices, _ = self.rvq(z)
-        return indices
+        return reject_dropped_codes(indices)
 
     def decode(self, indices: torch.Tensor) -> torch.Tensor:
         codes = self.rvq.indices_to_codes(indices)
         return self.decoder(self.post_q(codes))
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> TokenizerOutput:
         z = self.pre_q(self.encoder(x))
         quantized, indices, commit = self.rvq(z)
         recon = self.decoder(self.post_q(quantized))
-        return recon, indices, commit
+        return TokenizerOutput(recon=recon, indices=indices, commit=commit)

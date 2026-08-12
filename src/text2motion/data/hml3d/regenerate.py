@@ -13,43 +13,15 @@ from tqdm import tqdm
 from text2motion.shared.config import Config, Hml3dReprCfg, PathsCfg, load_config
 
 from . import param_util
-from .feature import build_tgt_offsets, default_params, process_file, recover_from_ric
+from .amass_paths import head_trim_frames, resolve_pose_path
+from .feature import (
+    build_tgt_offsets,
+    default_params,
+    process_file,
+    recover_from_ric,
+)
 from .raw_pose import AmassPoseExtractor
-
-_DATASET_HEAD_TRIM_S = {
-    "Eyes_Japan_Dataset": 3.0,
-    "MPI_HDM05": 3.0,
-    "TotalCapture": 1.0,
-    "MPI_Limits": 1.0,
-    "Transitions_mocap": 0.5,
-}
-
-_AMASS_DATASET_RENAME = {
-    "MPI_HDM05": "HDM05",
-    "BioMotionLab_NTroje": "BMLrub",
-    "MPI_Limits": "PosePrior",
-    "MPI_mosh": "MoSh",
-    "DFaust_67": "DFaust",
-    "SSM_synced": "SSM",
-    "TCD_handMocap": "TCDHands",
-    "Transitions_mocap": "Transitions",
-    "Eyes_Japan_Dataset": "EyesJapanDataset",
-}
-
-
-def _resolve_pose_path(source_path: str, pose_root: Path) -> Path | None:
-    parts = [p for p in Path(source_path).parts if p not in (".", "pose_data")]
-    if not parts:
-        return None
-    dataset = _AMASS_DATASET_RENAME.get(parts[0], parts[0])
-    rel = Path(dataset, *parts[1:])
-    stem = rel.stem
-    base = stem[:-6] if stem.endswith("_poses") else stem
-    folder = pose_root / rel.parent
-    for cand in (f"{base}_stageii.npy", f"{base}_poses.npy", f"{stem}.npy", f"{base}.npy"):
-        if (folder / cand).is_file():
-            return folder / cand
-    return None
+from .stats import fit_train_stats, read_split_names
 
 
 def swap_left_right(data: np.ndarray) -> np.ndarray:
@@ -116,13 +88,6 @@ def stage_amass_to_pose(paths: PathsCfg, layout: RegenLayout, device: str) -> No
             np.save(save_path, joints)
 
 
-def _head_trim(source_path: str, fps: int) -> int:
-    for name, seconds in _DATASET_HEAD_TRIM_S.items():
-        if name in source_path:
-            return int(round(seconds * fps))
-    return 0
-
-
 def stage_index_to_joints(
     paths: PathsCfg, layout: RegenLayout, fps: int, pose_root: Path | None = None
 ) -> None:
@@ -139,14 +104,14 @@ def stage_index_to_joints(
         start_frame = int(index_file.loc[i]["start_frame"])
         end_frame = int(index_file.loc[i]["end_frame"])
 
-        load_path = _resolve_pose_path(source_path, pose_root)
+        load_path = resolve_pose_path(source_path, pose_root)
         if load_path is None:
             missing += 1
             continue
         data = np.load(load_path)
 
         if "humanact12" not in source_path:
-            trim = _head_trim(source_path, fps)
+            trim = head_trim_frames(source_path, fps)
             if trim:
                 data = data[trim:]
             data = data[start_frame:end_frame]
@@ -194,38 +159,8 @@ def stage_joints_to_feature(layout: RegenLayout, repr_cfg: Hml3dReprCfg) -> None
 
 
 def stage_mean_std(layout: RegenLayout, joints_num: int) -> tuple[np.ndarray, np.ndarray]:
-    file_list = sorted(p.name for p in layout.new_joint_vecs.glob("*.npy"))
-    data_list = []
-    for file in file_list:
-        arr = np.load(layout.new_joint_vecs / file)
-        if np.isnan(arr).any():
-            print(f"NaN feature, skipping: {file}")
-            continue
-        data_list.append(arr)
-
-    data = np.concatenate(data_list, axis=0)
-    mean = data.mean(axis=0)
-    std = data.std(axis=0)
-    std[0:1] = std[0:1].mean() / 1.0
-    std[1:3] = std[1:3].mean() / 1.0
-    std[3:4] = std[3:4].mean() / 1.0
-    std[4 : 4 + (joints_num - 1) * 3] = std[4 : 4 + (joints_num - 1) * 3].mean() / 1.0
-    std[4 + (joints_num - 1) * 3 : 4 + (joints_num - 1) * 9] = (
-        std[4 + (joints_num - 1) * 3 : 4 + (joints_num - 1) * 9].mean() / 1.0
-    )
-    std[4 + (joints_num - 1) * 9 : 4 + (joints_num - 1) * 9 + joints_num * 3] = (
-        std[4 + (joints_num - 1) * 9 : 4 + (joints_num - 1) * 9 + joints_num * 3].mean() / 1.0
-    )
-    std[4 + (joints_num - 1) * 9 + joints_num * 3 :] = (
-        std[4 + (joints_num - 1) * 9 + joints_num * 3 :].mean() / 1.0
-    )
-
-    assert 8 + (joints_num - 1) * 9 + joints_num * 3 == std.shape[-1]
-
-    np.save(layout.out_dir / "Mean.npy", mean)
-    np.save(layout.out_dir / "Std.npy", std)
-    print(f"Mean/Std saved: feature shape {data.shape}")
-    return mean, std
+    train_names = read_split_names(layout.out_dir / "train.txt")
+    return fit_train_stats(layout.new_joint_vecs, train_names, layout.out_dir, joints_num)
 
 
 def run(cfg: Config, stage: str) -> None:

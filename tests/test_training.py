@@ -125,3 +125,27 @@ def test_ema_tracks_and_restores():
     assert torch.allclose(dict(gen.named_parameters())[name], ema.shadow[name])
     ema.restore(gen)
     assert torch.allclose(dict(gen.named_parameters())[name], param)
+
+
+def test_decay_groups_exempt_norms_biases_and_the_ssm_memory_params():
+    from dataclasses import replace as _replace
+
+    from text2motion.shared.config import GeneratorCfg
+    from text2motion.train.trainer import split_decay
+
+    gen_cfg = GeneratorCfg(num_codebooks=2, codebook_size=64, d_model=64, n_layers=2)
+    mamba = MotionGenerator(_replace(gen_cfg, backbone="mamba"))
+    transformer = MotionGenerator(_replace(gen_cfg, backbone="transformer"))
+
+    for model in (mamba, transformer):
+        decay, no_decay = split_decay(model)
+        assert decay and no_decay
+        assert all(p.ndim >= 2 for p in decay)
+        decayed_ids = {id(p) for p in decay}
+        for name, param in model.named_parameters():
+            if name.endswith("a_log") or name.endswith("d_skip"):
+                assert id(param) not in decayed_ids, f"{name} must not be weight-decayed"
+
+    m_names = {n for n, _ in mamba.named_parameters()}
+    assert any(n.endswith("a_log") for n in m_names)
+    assert not any(n.endswith("a_log") for n, _ in transformer.named_parameters())

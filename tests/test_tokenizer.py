@@ -19,8 +19,9 @@ def test_fsq_index_code_roundtrip():
 def test_tokenizer_shapes_and_index_range():
     tok = ResidualFsqTokenizer(CFG).eval()
     x = torch.randn(3, 64, 263)
-    recon, idx = tok(x)
+    recon, idx, commit = tok(x)
 
+    assert float(commit) == 0.0
     assert recon.shape == x.shape
     assert idx.shape == (3, 64 // CFG.downsample, CFG.num_quantizers)
     assert idx.dtype == torch.long
@@ -34,11 +35,11 @@ def test_single_batch_overfit():
     opt = torch.optim.Adam(tok.parameters(), lr=1e-3)
     x = torch.randn(2, 32, 263)
 
-    recon0, _ = tok(x)
+    recon0 = tok(x).recon
     loss0 = reconstruction_loss(recon0, x).item()
 
     for _ in range(200):
-        recon, _ = tok(x)
+        recon = tok(x).recon
         loss = reconstruction_loss(recon, x)
         opt.zero_grad()
         loss.backward()

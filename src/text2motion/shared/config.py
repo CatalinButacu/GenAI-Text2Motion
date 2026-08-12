@@ -179,6 +179,10 @@ class TrainCfg:
     w_fk_self: float = 0.0
     w_fk_gt: float = 0.0
     loss_weighting: str = "fixed"  # "fixed" (config weights) | "uncertainty" (Kendall learnable)
+    grad_clip: float = 1.0  # max grad norm at each optimizer step
+    decay_groups: bool = True  # exempt biases/norms/embeddings and the SSM a_log from AdamW decay;
+    # set false to reproduce runs before 2026-08 (see sec. 5.9: decaying a_log shortens the SSM's
+    # memory horizon, penalising only the Mamba twin)
 
 
 @dataclass(frozen=True)

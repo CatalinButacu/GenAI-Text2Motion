@@ -7,6 +7,8 @@ import numpy as np
 import pyarrow.parquet as pq
 from tqdm import tqdm
 
+from .stats import fit_train_stats
+
 FEATURE_DIM = 263
 JOINTS_NUM = 22
 SPLITS = ("train", "val", "test")
@@ -49,36 +51,7 @@ def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
 
 
 def compute_mean_std(out_dir: Path, train_names: list[str]) -> None:
-    vec_dir = out_dir / "new_joint_vecs"
-    clips = []
-    for name in train_names:
-        feature = np.load(vec_dir / f"{name}.npy")
-        if np.isnan(feature).any():
-            continue
-        clips.append(feature)
-
-    data = np.concatenate(clips, axis=0)
-    mean = data.mean(axis=0)
-    std = data.std(axis=0)
-
-    joints_num = JOINTS_NUM
-    std[0:1] = std[0:1].mean() / 1.0
-    std[1:3] = std[1:3].mean() / 1.0
-    std[3:4] = std[3:4].mean() / 1.0
-    std[4 : 4 + (joints_num - 1) * 3] = std[4 : 4 + (joints_num - 1) * 3].mean() / 1.0
-    rot_slice = slice(4 + (joints_num - 1) * 3, 4 + (joints_num - 1) * 9)
-    std[rot_slice] = std[rot_slice].mean() / 1.0
-    vel_slice = slice(4 + (joints_num - 1) * 9, 4 + (joints_num - 1) * 9 + joints_num * 3)
-    std[vel_slice] = std[vel_slice].mean() / 1.0
-    std[4 + (joints_num - 1) * 9 + joints_num * 3 :] = (
-        std[4 + (joints_num - 1) * 9 + joints_num * 3 :].mean() / 1.0
-    )
-
-    assert 8 + (joints_num - 1) * 9 + joints_num * 3 == std.shape[-1]
-
-    np.save(out_dir / "Mean.npy", mean)
-    np.save(out_dir / "Std.npy", std)
-    print(f"Mean/Std saved from {len(clips)} train clips, feature shape {data.shape}")
+    fit_train_stats(out_dir / "new_joint_vecs", train_names, out_dir, JOINTS_NUM)
 
 
 def run(src: Path, out: Path) -> None:

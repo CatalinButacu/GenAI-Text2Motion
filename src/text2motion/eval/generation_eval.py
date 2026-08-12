@@ -22,24 +22,33 @@ def evaluate_generation(
     ids = ctx.clip_ids(split)[:max_clips]
 
     gt_feats, gen_feats, text_pairs = [], [], []
+    dropped = {"missing_files": 0, "too_short": 0, "empty_generation": 0}
     for clip_id in ids:
         vec_path = ctx.out_dir / "new_joint_vecs" / f"{clip_id}.npy"
         text_path = ctx.text_dir / f"{clip_id}.txt"
         if not vec_path.is_file() or not text_path.is_file():
+            dropped["missing_files"] += 1
             continue
         feat = np.load(vec_path).astype(np.float32)
         token_len = min(feat.shape[0], 196) // ctx.downsample
         if token_len < 2:
+            dropped["too_short"] += 1
             continue
         feat = feat[: token_len * ctx.downsample]
         caption_ann = parse_text_file(text_path)[0]
         gen = pipeline.generate(caption_ann.caption, token_len, sampling, ctx)
-        if gen is None:
+        if gen is None:  # END on step 1: excluding it would flatter a badly-terminating model
+            dropped["empty_generation"] += 1
             continue
 
         gt_feats.append(feat)
         gen_feats.append(gen)
         text_pairs.append(ctx.build_text(caption_ann.tokens))
+
+    if not gt_feats:
+        raise RuntimeError(f"no scorable clips in split {split!r}; dropped {dropped}")
+    if sum(dropped.values()):
+        print(f"  [gen-eval] scored {len(gt_feats)}/{len(ids)} clips, dropped {dropped}")
 
     gt_emb = embed_motions(ctx.motion_matcher, gt_feats, ctx.eval_mean, ctx.eval_std, ctx.device)
     gen_emb = embed_motions(ctx.motion_matcher, gen_feats, ctx.eval_mean, ctx.eval_std, ctx.device)
@@ -50,6 +59,8 @@ def evaluate_generation(
     rp = r_precision(text_emb_match[perm], gen_emb[perm], pool_size=32, top_k=3)
     return {
         "clips": len(gen_feats),
+        "requested_clips": len(ids),
+        "dropped": sum(dropped.values()),
         "fid": fid(gt_emb, gen_emb),
         "r_top1": float(rp[0]),
         "r_top3": float(rp[2]),

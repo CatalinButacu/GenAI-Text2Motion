@@ -9,6 +9,10 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from text2motion.shared.config import DataCfg, Hml3dReprCfg, PathsCfg
+from text2motion.shared.seed import item_rng
+
+from .clip_index import clip_lengths
+from .stats import MotionScaler
 
 _SPLIT_FILES = {"train": "train.txt", "val": "val.txt", "test": "test.txt"}
 
@@ -66,13 +70,14 @@ class Hml3dMotionTextDataset(Dataset):
         self._max_len = data_cfg.max_motion_len
         self._train = split == "train"
         self._mirror = data_cfg.mirror_augment and self._train
-        self._rng = random.Random(seed)
+        self._seed = seed
+        self._epoch = 0
 
         out_dir = Path(paths.hml3d_out_dir)
         self._vec_dir = out_dir / "new_joint_vecs"
         self._text_dir = Path(paths.texts_dir) if paths.texts_dir is not None else out_dir / "texts"
 
-        self.mean, self.std = self._load_stats(out_dir)
+        self.scaler = MotionScaler.load(out_dir, dim=self._dim)
 
         split_path = out_dir / _SPLIT_FILES[split]
         if not split_path.is_file():
@@ -86,27 +91,25 @@ class Hml3dMotionTextDataset(Dataset):
         if not self._ids:
             raise RuntimeError(f"no usable clips for split {split!r} under {self._vec_dir}")
 
-    def _load_stats(self, out_dir: Path) -> tuple[np.ndarray, np.ndarray]:
-        mean_path, std_path = out_dir / "Mean.npy", out_dir / "Std.npy"
-        if not mean_path.is_file() or not std_path.is_file():
-            raise FileNotFoundError(
-                f"Mean.npy/Std.npy missing under {out_dir}; run regenerate.py --stage stats first"
-            )
-        mean = np.load(mean_path).astype(np.float32)
-        std = np.load(std_path).astype(np.float32)
-        if mean.shape[-1] != self._dim or std.shape[-1] != self._dim:
-            raise ValueError(f"Mean/Std must be {self._dim}-dim, got {mean.shape} / {std.shape}")
-        return mean, std
+    @property
+    def mean(self) -> np.ndarray:
+        return self.scaler.mean
+
+    @property
+    def std(self) -> np.ndarray:
+        return self.scaler.std
 
     def _index_clips(self, names: list[str]) -> list[str]:
+        candidates = [clip_id for name in names for clip_id in self._variants(name)]
+        lengths = clip_lengths(self._vec_dir, candidates)
+
         kept: list[str] = []
         for name in names:
             for clip_id in self._variants(name):
-                vec_path = self._vec_dir / f"{clip_id}.npy"
                 text_path = self._text_dir / f"{clip_id}.txt"
-                if not vec_path.is_file() or not text_path.is_file():
+                length = lengths.get(clip_id)
+                if length is None or not text_path.is_file():
                     continue
-                length = int(np.load(vec_path, mmap_mode="r").shape[0])
                 if length >= self._min_len:
                     kept.append(clip_id)
         return kept
@@ -114,18 +117,17 @@ class Hml3dMotionTextDataset(Dataset):
     def _variants(self, name: str) -> list[str]:
         return [name, f"M{name}"] if self._mirror else [name]
 
+    def set_epoch(self, epoch: int) -> None:
+        self._epoch = int(epoch)
+
     def __len__(self) -> int:
         return len(self._ids)
 
-    def normalize(self, feat: np.ndarray) -> np.ndarray:
-        return (feat - self.mean) / self.std
+    def normalize(self, feat):
+        return self.scaler.normalize(feat)
 
-    def denormalize(self, feat: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
-        if isinstance(feat, torch.Tensor):
-            mean = torch.as_tensor(self.mean, device=feat.device, dtype=feat.dtype)
-            std = torch.as_tensor(self.std, device=feat.device, dtype=feat.dtype)
-            return feat * std + mean
-        return feat * self.std + self.mean
+    def denormalize(self, feat):
+        return self.scaler.denormalize(feat)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int, str]:
         clip_id = self._ids[idx]
@@ -137,10 +139,11 @@ class Hml3dMotionTextDataset(Dataset):
                 f"{clip_id}: non-finite values in feature; drop it from the split list"
             )
 
+        rng = item_rng(self._seed, self._epoch, idx)
         annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
-        ann, feat = self._pick_caption_segment(annotations, feat)
+        ann, feat = self._pick_caption_segment(annotations, feat, rng)
 
-        feat = self._fit_to_max_len(feat)
+        feat = self._fit_to_max_len(feat, rng)
         feat = self.normalize(feat)
         return torch.from_numpy(feat), feat.shape[0], ann.caption
 
@@ -152,7 +155,7 @@ class Hml3dMotionTextDataset(Dataset):
         return start, end
 
     def _pick_caption_segment(
-        self, annotations: list[TextAnnotation], feat: np.ndarray
+        self, annotations: list[TextAnnotation], feat: np.ndarray, rng: random.Random
     ) -> tuple[TextAnnotation, np.ndarray]:
         usable = []
         for ann in annotations:
@@ -160,17 +163,17 @@ class Hml3dMotionTextDataset(Dataset):
             if segment is None or segment[1] - segment[0] >= self._min_len:
                 usable.append((ann, segment))
         if not usable:  # every caption covers a sub-min segment; full clip is the least-bad pairing
-            return self._rng.choice(annotations), feat
-        ann, segment = self._rng.choice(usable)
+            return rng.choice(annotations), feat
+        ann, segment = rng.choice(usable)
         if segment is not None:
             feat = feat[segment[0] : segment[1]]
         return ann, feat
 
-    def _fit_to_max_len(self, feat: np.ndarray) -> np.ndarray:
+    def _fit_to_max_len(self, feat: np.ndarray, rng: random.Random) -> np.ndarray:
         overflow = feat.shape[0] - self._max_len
         if overflow <= 0:
             return feat
-        start = self._rng.randint(0, overflow) if self._train else 0
+        start = rng.randint(0, overflow) if self._train else 0
         return feat[start : start + self._max_len]
 
 

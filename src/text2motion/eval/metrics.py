@@ -14,11 +14,73 @@ def frechet_distance(
     return float(diff @ diff + np.trace(sigma1 + sigma2 - 2.0 * covmean))
 
 
-def fid(real_feats: np.ndarray, gen_feats: np.ndarray) -> float:
+def fid(real_feats: np.ndarray, gen_feats: np.ndarray, warn_rank_deficient: bool = True) -> float:
+    n_real, n_gen = len(real_feats), len(gen_feats)
+    if n_real < 2 or n_gen < 2:
+        raise ValueError(f"FID needs >= 2 samples per side, got {n_real} real / {n_gen} generated")
+
+    dim = real_feats.shape[-1]
+    if warn_rank_deficient and min(n_real, n_gen) <= dim:
+        print(
+            f"WARNING: FID over {min(n_real, n_gen)} samples of {dim}-dim features -- the "
+            f"covariance is rank-deficient, so this value carries a large sample-size-dependent "
+            f"bias. It is comparable ONLY to other FIDs at the same sample count."
+        )
+
     mu_r, cov_r = real_feats.mean(0), np.cov(real_feats, rowvar=False)
     mu_g, cov_g = gen_feats.mean(0), np.cov(gen_feats, rowvar=False)
 
     return frechet_distance(mu_r, cov_r, mu_g, cov_g)
+
+
+def bootstrap_fid(
+    real_feats: np.ndarray, gen_feats: np.ndarray, resamples: int = 200, seed: int = 0
+) -> dict[str, float]:
+    n = len(gen_feats)
+    rng = np.random.default_rng(seed)
+    values = []
+    for _ in range(resamples):
+        pick = rng.integers(0, n, n)  # same n keeps the sample-size bias fixed across resamples
+        values.append(fid(real_feats[pick], gen_feats[pick], warn_rank_deficient=False))
+
+    arr = np.array(values)
+    return {
+        "fid_boot_mean": float(arr.mean()),
+        "fid_std": float(arr.std(ddof=1)),
+        "fid_ci_lo": float(np.percentile(arr, 2.5)),
+        "fid_ci_hi": float(np.percentile(arr, 97.5)),
+        "fid_resamples": int(resamples),
+    }
+
+
+def paired_fid_delta(
+    real_feats: np.ndarray,
+    gen_a: np.ndarray,
+    gen_b: np.ndarray,
+    resamples: int = 200,
+    seed: int = 0,
+) -> dict[str, float]:
+    n = len(gen_a)
+    if len(gen_b) != n or len(real_feats) != n:
+        raise ValueError("paired FID needs the same clips, in the same order, for both models")
+
+    rng = np.random.default_rng(seed)
+    deltas = []
+    for _ in range(resamples):
+        pick = rng.integers(0, n, n)  # one resample shared by both models: paired, not independent
+        deltas.append(
+            fid(real_feats[pick], gen_a[pick], warn_rank_deficient=False)
+            - fid(real_feats[pick], gen_b[pick], warn_rank_deficient=False)
+        )
+
+    arr = np.array(deltas)
+    lo, hi = float(np.percentile(arr, 2.5)), float(np.percentile(arr, 97.5))
+    return {
+        "delta_mean": float(arr.mean()),
+        "delta_ci_lo": lo,
+        "delta_ci_hi": hi,
+        "separates": bool(lo > 0.0 or hi < 0.0),
+    }
 
 
 def r_precision(

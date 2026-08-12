@@ -10,7 +10,7 @@ import torch
 from text2motion.data.hml3d.dataset import parse_text_file
 from text2motion.eval.context import EvalContext, GenerationPipeline, SamplingCfg
 from text2motion.eval.embedding import embed_motions, embed_texts
-from text2motion.eval.metrics import diversity, fid, mm_dist, r_precision
+from text2motion.eval.metrics import bootstrap_fid, diversity, fid, mm_dist, r_precision
 from text2motion.model.generator import MotionGenerator
 from text2motion.model.text_encoder import CLIPTextEncoder
 from text2motion.model.tokenizer import ResidualFsqTokenizer
@@ -37,7 +37,8 @@ def load_generator(backbone, cfg, tokenizer, device, ckpt=None):
 @torch.no_grad()
 def generate_split(pipeline, ctx, sampling, ids, max_clips):
     gt_feats, gen_feats, tok_lists, captions = [], [], [], []
-    for clip_id in ids[:max_clips]:
+    requested = list(ids[:max_clips])
+    for clip_id in requested:
         vec_path = ctx.out_dir / "new_joint_vecs" / f"{clip_id}.npy"
         text_path = ctx.text_dir / f"{clip_id}.txt"
         if not vec_path.is_file() or not text_path.is_file():
@@ -61,6 +62,13 @@ def generate_split(pipeline, ctx, sampling, ids, max_clips):
         gen_feats.append(decoded[0])
         tok_lists.append(token_lists)
         captions.append(caption)
+
+    if len(gt_feats) != len(requested):
+        print(
+            f"WARNING: scored {len(gt_feats)} of {len(requested)} requested clips "
+            f"({len(requested) - len(gt_feats)} dropped: missing file, non-finite, too short, "
+            f"no caption tokens, or empty generation). FID is only comparable at equal clip counts."
+        )
     return gt_feats, gen_feats, tok_lists, captions
 
 
@@ -79,7 +87,7 @@ def multimodality(pipeline, ctx, sampling, captions, token_lens, mm_clips, mm_re
     return float(np.mean(per_caption)) if per_caption else float("nan")
 
 
-def score(name, gt_feats, gen_feats, tok_lists, ctx, reps=20):
+def score(name, gt_feats, gen_feats, tok_lists, ctx, reps=20, bootstrap=200):
     gt_emb = embed_motions(ctx.motion_matcher, gt_feats, ctx.eval_mean, ctx.eval_std, ctx.device)
     gen_emb = embed_motions(ctx.motion_matcher, gen_feats, ctx.eval_mean, ctx.eval_std, ctx.device)
 
@@ -104,6 +112,7 @@ def score(name, gt_feats, gen_feats, tok_lists, ctx, reps=20):
     return {
         "clips": len(gen_feats),
         "fid": fid(gt_emb, gen_emb),
+        **bootstrap_fid(gt_emb, gen_emb, resamples=bootstrap),
         "r_top1": float(rprec[:, 0].mean()),
         "r_top1_std": float(rprec[:, 0].std()),
         "r_top2": float(rprec[:, 1].mean()),
@@ -125,6 +134,12 @@ def main() -> None:
     parser.add_argument("--length_mode", default="fixed", choices=["fixed", "end"])
     parser.add_argument("--mm_clips", type=int, default=100, help="0 disables MultiModality")
     parser.add_argument("--mm_repeats", type=int, default=30)
+    parser.add_argument(
+        "--bootstrap",
+        type=int,
+        default=200,
+        help="clip-level bootstrap resamples for the FID interval (0 disables)",
+    )
     parser.add_argument("--ckpt", default=None, help="explicit checkpoint (single-backbone only)")
     parser.add_argument(
         "--tokenizer_ckpt",
@@ -197,7 +212,7 @@ def main() -> None:
         gt_feats, gen_feats, tok_lists, captions = generate_split(
             pipeline, ctx, sampling, ids, args.max_clips
         )
-        metrics = score(backbone, gt_feats, gen_feats, tok_lists, ctx)
+        metrics = score(backbone, gt_feats, gen_feats, tok_lists, ctx, bootstrap=args.bootstrap)
         if args.mm_clips > 0:
             token_lens = [min(f.shape[0], 196) // ctx.downsample for f in gt_feats]
             metrics["multimodality"] = multimodality(

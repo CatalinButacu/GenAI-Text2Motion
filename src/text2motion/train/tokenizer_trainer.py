@@ -36,12 +36,7 @@ class TokenizerTrainer:
         return sum(perplexities) / n, sum(usages) / n
 
     def train_step(self, motion: torch.Tensor) -> dict[str, float]:
-        out = self.tokenizer(motion)
-        if len(out) == 3:
-            recon, indices, commit = out
-        else:
-            recon, indices = out
-            commit = motion.new_zeros(())
+        recon, indices, commit = self.tokenizer(motion)
 
         recon_loss = reconstruction_loss(recon, motion)
         total = recon_loss + self.commit_beta * commit

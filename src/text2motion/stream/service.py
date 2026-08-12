@@ -17,6 +17,7 @@ import numpy as np
 import torch
 
 from text2motion.data.hml3d.joints import recover_skeleton
+from text2motion.data.hml3d.stats import MotionScaler
 from text2motion.model.generator import MotionGenerator
 from text2motion.model.text_encoder import CLIPTextEncoder
 from text2motion.model.tokenizer import ResidualFsqTokenizer
@@ -82,12 +83,13 @@ class Pipeline:
         )
         self.gen = gen
         self.te = CLIPTextEncoder(cfg.text_encoder).to(device).eval()
-        out = Path(cfg.paths.hml3d_out_dir)
-        self.mean = torch.from_numpy(np.load(out / "Mean.npy").astype("float32")).to(device)
-        self.std = torch.from_numpy(np.load(out / "Std.npy").astype("float32")).to(device)
+        scaler = MotionScaler.load(Path(cfg.paths.hml3d_out_dir), dim=cfg.hml3d.dim)
+        self.mean = torch.from_numpy(scaler.mean).to(device)
+        self.std = torch.from_numpy(scaler.std).to(device)
         self.device = device
         self.downsample = int(cfg.tokenizer.downsample)
         self.max_steps = int(cfg.generator.max_seq_len + 1 - cfg.generator.text_prefix_len)
+        self.decoder = StreamingMotionDecoder(self.tok, self.mean, self.std)  # probe once, not/req
 
         self.config = str(config)
         self.ckpt = str(ckpt)
@@ -118,7 +120,7 @@ def handle_generate(pipe: Pipeline, sock: socket.socket, io, req: dict) -> None:
     started = time.perf_counter()
     with torch.no_grad():
         emb = pipe.te([req["prompt"]]).to(pipe.device)
-        decoder = StreamingMotionDecoder(pipe.tok, pipe.mean, pipe.std)
+        decoder = pipe.decoder
         token_iter = pipe.gen.stream(
             emb,
             int(req["steps"]),

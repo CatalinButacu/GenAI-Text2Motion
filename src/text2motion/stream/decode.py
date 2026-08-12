@@ -78,9 +78,12 @@ class StreamingMotionDecoder:
         self.std = std  # (263,)
         self.chunk_tokens = chunk_tokens
 
-        measured_left, measured_right = measure_decoder_context(tokenizer)
-        self.left_context = measured_left if left_context is None else left_context
-        self.lookahead = measured_right if lookahead is None else lookahead
+        if left_context is None or lookahead is None:  # probing costs ~50 ms; skip when both given
+            measured_left, measured_right = measure_decoder_context(tokenizer)
+            left_context = measured_left if left_context is None else left_context
+            lookahead = measured_right if lookahead is None else lookahead
+        self.left_context = left_context
+        self.lookahead = lookahead
 
     @property
     def lookahead_frames(self) -> int:
@@ -130,8 +133,19 @@ class StreamingMotionDecoder:
         num_steps: int,
         temperature: float = 1.0,
         top_p: float = 0.9,
+        cfg_scale: float = 1.0,
+        stop_at_end: bool = False,
     ) -> Iterator[torch.Tensor]:
-        yield from self.stream_tokens(generator.stream(text_emb, num_steps, temperature, top_p))
+        yield from self.stream_tokens(
+            generator.stream(
+                text_emb,
+                num_steps,
+                temperature=temperature,
+                top_p=top_p,
+                cfg_scale=cfg_scale,
+                stop_at_end=stop_at_end,
+            )
+        )
 
 
 def run_producer(
@@ -142,8 +156,18 @@ def run_producer(
     out_queue: "queue_mod.Queue",
     temperature: float = 1.0,
     top_p: float = 0.9,
+    cfg_scale: float = 1.0,
+    stop_at_end: bool = False,
 ) -> None:
-    for chunk in decoder.stream(generator, text_emb, num_steps, temperature, top_p):
+    for chunk in decoder.stream(
+        generator,
+        text_emb,
+        num_steps,
+        temperature=temperature,
+        top_p=top_p,
+        cfg_scale=cfg_scale,
+        stop_at_end=stop_at_end,
+    ):
         _put_drop_oldest(out_queue, chunk)
 
     _put_drop_oldest(out_queue, STREAM_END)  # sentinel must never block either

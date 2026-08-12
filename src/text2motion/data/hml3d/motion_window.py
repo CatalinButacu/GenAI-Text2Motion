@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from pathlib import Path
 
 import numpy as np
@@ -8,6 +7,9 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from text2motion.shared.config import DataCfg, Hml3dReprCfg, PathsCfg
+from text2motion.shared.seed import item_rng
+
+from .stats import MotionScaler
 
 _SPLIT_FILES = {"train": "train.txt", "val": "val.txt", "test": "test.txt"}
 
@@ -31,14 +33,12 @@ class MotionWindowDataset(Dataset):
         self._window = window
         self._train = split == "train"
         self._mirror = data_cfg.mirror_augment and self._train
-        self._rng = random.Random(seed)
+        self._seed = seed
+        self._epoch = 0
 
         out_dir = Path(paths.hml3d_out_dir)
         self._vec_dir = out_dir / "new_joint_vecs"
-        self.mean = np.load(out_dir / "Mean.npy").astype(np.float32)
-        self.std = np.load(out_dir / "Std.npy").astype(np.float32)
-        if self.mean.shape[-1] != self._dim:
-            raise ValueError(f"Mean must be {self._dim}-dim, got {self.mean.shape}")
+        self.scaler = MotionScaler.load(out_dir, dim=self._dim)
 
         listed = [
             n.strip() for n in (out_dir / _SPLIT_FILES[split]).read_text().splitlines() if n.strip()
@@ -72,19 +72,31 @@ class MotionWindowDataset(Dataset):
             )
         return kept
 
+    def set_epoch(self, epoch: int) -> None:
+        self._epoch = int(epoch)
+
     def __len__(self) -> int:
         return len(self._ids)
 
+    @property
+    def mean(self) -> np.ndarray:
+        return self.scaler.mean
+
+    @property
+    def std(self) -> np.ndarray:
+        return self.scaler.std
+
     def denormalize(self, feat: torch.Tensor) -> torch.Tensor:
-        mean = torch.as_tensor(self.mean, device=feat.device, dtype=feat.dtype)
-        std = torch.as_tensor(self.std, device=feat.device, dtype=feat.dtype)
-        return feat * std + mean
+        return self.scaler.denormalize(feat)
 
     def __getitem__(self, idx: int) -> torch.Tensor:
         feat = self._cache[idx]
         overflow = feat.shape[0] - self._window
-        start = self._rng.randint(0, overflow) if self._train else overflow // 2
-        window = (feat[start : start + self._window] - self.mean) / self.std
+        if self._train:
+            start = item_rng(self._seed, self._epoch, idx).randint(0, overflow)
+        else:
+            start = overflow // 2
+        window = self.scaler.normalize(feat[start : start + self._window])
         return torch.from_numpy(window)
 
 

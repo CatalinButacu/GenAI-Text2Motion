@@ -28,15 +28,24 @@ def split_keys_by_clip(keys: list[str], val_fraction: float, seed: int) -> tuple
 
 class TokenPack(Dataset):
     def __init__(self, path: str, keys: list[str] | None = None) -> None:
-        self._z = np.load(path)
-        self.keys = list(self._z.keys()) if keys is None else list(keys)
+        self._path = path
+        if keys is None:
+            with np.load(path) as pack:
+                keys = list(pack.keys())
+        self.keys = list(keys)
         if not self.keys:
             raise RuntimeError(f"empty token pack: {path}")
+        self._z: np.lib.npyio.NpzFile | None = None  # opened per worker, never across a fork
 
     def __len__(self) -> int:
         return len(self.keys)
 
+    def __getstate__(self) -> dict:  # the open zip handle must never cross into a worker
+        return {**self.__dict__, "_z": None}
+
     def __getitem__(self, i: int) -> torch.Tensor:
+        if self._z is None:
+            self._z = np.load(self._path)
         return torch.from_numpy(self._z[self.keys[i]].astype(np.int64))  # (T', R)
 
 
@@ -52,9 +61,9 @@ def collate(batch: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
 
 
 def run(a: argparse.Namespace) -> None:
-    seed_everything(2026, False)
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
     cfg = load_config(a.config)
+    seed_everything(cfg.seed, cfg.deterministic)  # twin fairness: the config owns the seed
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
     vocab = 1
     for lv in cfg.tokenizer.fsq_levels:
         vocab *= lv  # FSQ implicit codebook = product of levels (no tokenizer load needed)
@@ -73,7 +82,8 @@ def run(a: argparse.Namespace) -> None:
         f"codebooks {gc.num_codebooks} x vocab {vocab}"
     )
 
-    all_keys = list(np.load(a.token_pack).keys())
+    with np.load(a.token_pack) as pack:
+        all_keys = list(pack.keys())
     train_keys, val_keys = split_keys_by_clip(all_keys, a.val_fraction, cfg.seed)
     loader = DataLoader(
         TokenPack(a.token_pack, train_keys),

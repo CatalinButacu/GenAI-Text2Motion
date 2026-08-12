@@ -4,10 +4,10 @@ import argparse
 from dataclasses import replace
 from pathlib import Path
 
-import numpy as np
 import torch
 
 from text2motion.data.hml3d.dataset import build_dataloader
+from text2motion.data.hml3d.stats import MotionScaler
 from text2motion.eval.context import EvalContext, GenerationPipeline, SamplingCfg
 from text2motion.eval.generation_eval import evaluate_generation
 from text2motion.model.generator import MotionGenerator
@@ -45,8 +45,8 @@ def run(args: argparse.Namespace) -> None:
     text_encoder = CLIPTextEncoder(cfg.text_encoder).to(device)
 
     out_dir = Path(cfg.paths.hml3d_out_dir)
-    our_mean = np.load(out_dir / "Mean.npy").astype(np.float32)
-    our_std = np.load(out_dir / "Std.npy").astype(np.float32)
+    scaler = MotionScaler.load(out_dir, dim=cfg.hml3d.dim)
+    our_mean, our_std = scaler.mean, scaler.std
 
     train_cfg = replace(cfg.train, grad_accum=args.grad_accum)
     trainer = GeneratorTrainer(generator, tokenizer, train_cfg, text_encoder, our_mean, our_std)
@@ -89,6 +89,7 @@ def run(args: argparse.Namespace) -> None:
         print(f"resumed from {resume_path} at epoch {start_epoch} (best FID {best_fid:.4f})")
 
     for epoch in range(start_epoch, args.epochs):
+        loader.dataset.set_epoch(epoch)
         generator.train()
         text_encoder.train()
         totals: dict[str, float] = {}
@@ -179,7 +180,11 @@ def main() -> None:
     parser.add_argument(
         "--eval_every", type=int, default=5
     )  # the peak sits early; sample it densely
-    parser.add_argument("--max_eval_clips", type=int, default=200)
+    parser.add_argument(
+        "--max_eval_clips",
+        type=int,
+        default=600,  # above the 512-dim matcher embedding: below it FID's covariance is singular
+    )
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--our_vab_dir", default="data/t2m_glove/glove")
     parser.add_argument(

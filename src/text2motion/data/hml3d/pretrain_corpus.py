@@ -4,43 +4,22 @@ import argparse
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
 
 from text2motion.shared.config import Config, load_config
 from text2motion.shared.run_log import log_metrics, start_run
 
 from . import param_util
+from .amass_paths import head_trim_frames, heldout_sources
 from .feature import build_tgt_offsets, default_params, process_file
-from .regenerate import _DATASET_HEAD_TRIM_S, _resolve_pose_path
 
 
-def heldout_sources(cfg: Config, pose_root: Path) -> set[Path]:
+def resolve_heldout(cfg: Config, pose_root: Path) -> set[Path]:
     if cfg.paths.hml3d_index_csv is None:
         raise ValueError("paths.hml3d_index_csv must be set (leakage guard needs the index)")
-    out_dir = Path(cfg.paths.hml3d_out_dir)
-    held_ids: set[str] = set()
-    for split in ("val", "test"):
-        names = (out_dir / f"{split}.txt").read_text().splitlines()
-        held_ids |= {
-            n.strip()[1:] if n.strip().startswith("M") else n.strip() for n in names if n.strip()
-        }
-
-    index = pd.read_csv(cfg.paths.hml3d_index_csv)
-    excluded: set[Path] = set()
-    for i in range(index.shape[0]):
-        if Path(str(index.loc[i]["new_name"])).stem in held_ids:
-            resolved = _resolve_pose_path(index.loc[i]["source_path"], pose_root)
-            if resolved is not None:
-                excluded.add(resolved.resolve())
-    return excluded
-
-
-def head_trim_frames(rel_path: Path, fps: int) -> int:
-    renames = {"HDM05": "MPI_HDM05", "PosePrior": "MPI_Limits", "Transitions": "Transitions_mocap"}
-    dataset = rel_path.parts[0]
-    official = renames.get(dataset, dataset)
-    return int(round(_DATASET_HEAD_TRIM_S.get(official, 0.0) * fps))
+    return heldout_sources(
+        Path(cfg.paths.hml3d_index_csv), Path(cfg.paths.hml3d_out_dir), pose_root
+    )
 
 
 def build_corpus(
@@ -60,7 +39,7 @@ def build_corpus(
     reference = np.load(ref_path)[:, : cfg.hml3d.num_joints].reshape(-1, cfg.hml3d.num_joints, 3)
     params = default_params(build_tgt_offsets(reference))
 
-    excluded = heldout_sources(cfg, pose_root)
+    excluded = resolve_heldout(cfg, pose_root)
     vec_dir = out_dir / "new_joint_vecs"
     vec_dir.mkdir(parents=True, exist_ok=True)
     run_dir = start_run(

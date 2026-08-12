@@ -54,8 +54,17 @@ def test_trainer_includes_encoder_and_grad_flows():
     gen = MotionGenerator(GEN)
     trainer = GeneratorTrainer(gen, tok, TrainCfg(cfg_dropout=0.0), text_encoder=enc)
 
-    assert len(trainer.opt.param_groups) == 2
-    assert trainer.opt.param_groups[1]["lr"] == TrainCfg().text_encoder_lr
+    optimised = {id(p) for group in trainer.opt.param_groups for p in group["params"]}
+    trainable_encoder = [p for p in enc.parameters() if p.requires_grad]
+    assert trainable_encoder
+    assert all(id(p) in optimised for p in trainable_encoder)
+
+    encoder_lrs = {
+        group["lr"]
+        for group in trainer.opt.param_groups
+        if any(id(p) in {id(q) for q in trainable_encoder} for p in group["params"])
+    }
+    assert encoder_lrs == {TrainCfg().text_encoder_lr}
 
     text_emb = trainer.encode(["a person jumps", "a person sits down"])  # keeps grad to CLIP
     trainer.train_step(torch.randn(2, 32, 263), text_emb)
