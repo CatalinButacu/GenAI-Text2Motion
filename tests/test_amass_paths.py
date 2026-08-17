@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from text2motion.data.hml3d.amass_paths import (
+from text2motion.motion.preparation import (
     AMASS_DATASET_RENAME,
     DATASET_HEAD_TRIM_S,
     dataset_of,

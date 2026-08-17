@@ -50,7 +50,7 @@ function Invoke-Eval([string]$backbone, [string]$ckpt) {
         return
     }
     Write-Output "`n=== TEST eval: $backbone  ($ckpt)  $(Get-Date -Format u) ==="
-    & $py -u -m text2motion.eval.evaluate `
+    & $py -u -m text2motion.app.cli evaluate `
         --config $config --backbone $backbone --ckpt $ckpt --tokenizer_ckpt $tok `
         --split test --cfg_scale 6.0 --temperature 1.0 --length_mode fixed `
         --mm_clips 100 --mm_repeats 30 *>&1 | Tee-Object "outputs/twin_test_$backbone.log"

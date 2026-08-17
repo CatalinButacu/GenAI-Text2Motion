@@ -1,14 +1,19 @@
 import pytest
 import torch
 
-from text2motion.model.generator import MotionGenerator
-from text2motion.model.text_encoder import CLIPTextEncoder
-from text2motion.model.tokenizer import ResidualFsqTokenizer
-from text2motion.shared.config import GeneratorCfg, TextEncoderCfg, TokenizerCfg, TrainCfg
-from text2motion.train.trainer import GeneratorTrainer
+from text2motion.app.config import (
+    GeneratorConfig,
+    TextEncoderConfig,
+    TokenizerConfig,
+    TrainingConfig,
+)
+from text2motion.generation.model import MotionGeneratorModule
+from text2motion.generation.text import CLIPTextEncoder
+from text2motion.generation.trainer import GeneratorTrainer
+from text2motion.tokenization.model import ResidualFsqTokenizer
 
-TOK = TokenizerCfg(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
-GEN = GeneratorCfg(
+TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
+GEN = GeneratorConfig(
     backbone="mamba",
     d_model=64,
     n_layers=2,
@@ -25,7 +30,7 @@ GEN = GeneratorCfg(
 
 def _encoder(unfreeze_last_n: int = 1) -> CLIPTextEncoder:
     try:
-        return CLIPTextEncoder(TextEncoderCfg(unfreeze_last_n=unfreeze_last_n))
+        return CLIPTextEncoder(TextEncoderConfig(unfreeze_last_n=unfreeze_last_n))
     except Exception as exc:  # noqa: BLE001 - any load failure (offline / no weights) -> skip
         pytest.skip(f"CLIP weights unavailable: {exc}")
 
@@ -51,8 +56,10 @@ def test_encode_shape_and_partial_unfreeze():
 def test_trainer_includes_encoder_and_grad_flows():
     enc = _encoder(unfreeze_last_n=1)
     tok = ResidualFsqTokenizer(TOK)
-    gen = MotionGenerator(GEN)
-    trainer = GeneratorTrainer(gen, tok, TrainCfg(cfg_dropout=0.0), text_encoder=enc)
+    gen = MotionGeneratorModule(GEN)
+    trainer = GeneratorTrainer(
+        gen, tok, TrainingConfig(cfg_dropout=0.0), downsample=4, text_encoder=enc
+    )
 
     optimised = {id(p) for group in trainer.opt.param_groups for p in group["params"]}
     trainable_encoder = [p for p in enc.parameters() if p.requires_grad]
@@ -64,7 +71,7 @@ def test_trainer_includes_encoder_and_grad_flows():
         for group in trainer.opt.param_groups
         if any(id(p) in {id(q) for q in trainable_encoder} for p in group["params"])
     }
-    assert encoder_lrs == {TrainCfg().text_encoder_lr}
+    assert encoder_lrs == {TrainingConfig().text_encoder_lr}
 
     text_emb = trainer.encode(["a person jumps", "a person sits down"])  # keeps grad to CLIP
     trainer.train_step(torch.randn(2, 32, 263), text_emb)

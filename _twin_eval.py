@@ -1,4 +1,6 @@
-from text2motion.eval.evaluate import main
+import sys
+
+from text2motion.app.cli import main
 
 if __name__ == "__main__":
-    main()
+    main(["evaluate", *sys.argv[1:]])

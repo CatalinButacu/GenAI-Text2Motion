@@ -102,19 +102,28 @@ git commit, seed, and library versions.
 
 ## Layout
 
+The package is organised by pipeline stage, and dependencies point strictly inward
+(`app -> studio/streaming/evaluation -> generation -> tokenization -> motion`):
+
 ```
 src/text2motion/
-  data/     HumanML3D-263 pipeline, AMASS, splits, normalization
-  model/    FSQ/RVQ tokenizer, transformer + Mamba generators, text encoder
-  train/    tokenizer / AMASS-pretrain / generator trainers, loss recipe
-  eval/     FID, R-precision, MM-Dist, Diversity, MultiModality, streaming bench
-  stream/   bounded-memory incremental decode loop
-  render/   SMPL-X forward kinematics + aitviewer studio
-configs/    YAML hyperparameters (single source of truth)
-scripts/    data prep, training launchers, watchdog, figures
-tests/      shape / round-trip / parity / sanity contracts
-paper/      dissertation draft
+  motion/         canonical motion domain: 263 layout, kinematics, dataset, AMASS preparation
+  tokenization/   FSQ/RVQ tokenizer, its trainer, corpus encoding, reconstruction eval
+  generation/     transformer + Mamba generators, CLIP text encoder, trainers, loss recipe
+  evaluation/     FID, R-precision, MM-Dist, Diversity, MultiModality, streaming bench
+  streaming/      bounded-memory incremental decode loop, service, wire protocol
+  studio/         SMPL-X fitting + aitviewer studio
+  app/            config, checkpoint schemas, composition root, unified CLI
+configs/          YAML hyperparameters (single source of truth)
+scripts/          sweep launchers, watchdog, one-off analyses, figures
+tests/            shape / round-trip / parity / sanity contracts
+paper/            dissertation draft
 ```
+
+Each stage exchanges named domain objects (`MotionClip`, `MotionTokens`, `MotionBatch`,
+`GeneratedMotion`, `MotionChunk`) rather than bare tuples, and exposes one facade —
+`MotionRepository`, `MotionTokenizer`, `MotionGenerator`, `MotionEvaluator`, `StreamingService`.
+Object construction happens in exactly one place, `app.container.ApplicationFactory`.
 
 ## Setup
 
@@ -123,6 +132,26 @@ uv sync                  # core
 uv sync --extra viewer   # aitviewer studio
 uv sync --extra dev      # ruff + pytest
 pytest                   # shape and parity contracts
+```
+
+## Running
+
+Every stage is a subcommand of one entry point (`python -m text2motion.app.cli <command>`, or
+`text2motion <command>` once installed):
+
+```bash
+text2motion prepare          --config configs/default.yaml --stage all
+text2motion train-tokenizer  --config configs/tokenizer/fsq_g8_v1024.yaml --tokenizer fsq
+text2motion tokenize         --config configs/default.yaml --out data/amass_tokens.npz
+text2motion sanity-overfit   --config configs/default.yaml --backbone mamba \
+                             --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt --out gate.json
+text2motion pretrain         --config configs/generator/final100m.yaml --backbone mamba
+text2motion train-generator  --config configs/generator/final100m.yaml --backbone mamba \
+                             --overfit_gate gate.json
+text2motion evaluate         --config configs/default.yaml --backbone both --split test
+text2motion benchmark        --config configs/generator/final100m.yaml
+text2motion serve            --config configs/generator/final100m_fsq8x1024.yaml
+text2motion studio           --config configs/generator/final100m_fsq8x1024.yaml
 ```
 
 Datasets and SMPL-X body models are license-gated and are not distributed here; paths are configured

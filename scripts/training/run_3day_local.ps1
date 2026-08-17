@@ -87,7 +87,7 @@ if (Test-Path checkpoints/tokenizer/tokenizer_isovocab.pt) {
     Write-Output "`n=== PHASE 1  [$(Hrs)h] SKIP iso-vocab (already done; tokenizer_isovocab.pt exists) ==="
 } else {
     Write-Output "`n=== PHASE 1  [$(Hrs)h] iso-vocab tokenizer ==="
-    & $py -u -m text2motion.train.train_tokenizer --config configs/tokenizer/tokenizer_isovocab.yaml `
+    & $py -u -m text2motion.app.cli train-tokenizer --config configs/tokenizer/tokenizer_isovocab.yaml `
         --tokenizer fsq --ckpt_name tokenizer_isovocab.pt --epochs 50 --eval_every 5 *>&1 |
         Tee-Object outputs/phase1_isovocab.log
 }
@@ -96,8 +96,14 @@ if (Test-Path checkpoints/generator/generator_transformer_bs8.pt) {
     Write-Output "`n=== PHASE 2  [$(Hrs)h] SKIP transformer-bs8 (done; generator_transformer_bs8.pt exists) ==="
 } else {
     Write-Output "`n=== PHASE 2  [$(Hrs)h] transformer-34M bs8 (matched twin partner) ==="
-    & $py -u -m text2motion.train.train_generator --config configs/generator/gen_pilot_fsq8x1024.yaml `
+    if (-not (Test-Path outputs/gates/transformer_34m_overfit.json)) {
+        & $py -u -m text2motion.app.cli sanity-overfit --config configs/generator/gen_pilot_fsq8x1024.yaml `
+            --backbone transformer --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt `
+            --out outputs/gates/transformer_34m_overfit.json
+    }
+    & $py -u -m text2motion.app.cli train-generator --config configs/generator/gen_pilot_fsq8x1024.yaml `
         --backbone transformer --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt `
+        --overfit_gate outputs/gates/transformer_34m_overfit.json `
         --init_ckpt checkpoints/generator/generator_transformer_pretrained.pt `
         --ckpt_name generator_transformer_bs8.pt --epochs 18 --batch_size 8 `
         --eval_every 6 --cfg_scale 6.0 --temperature 1.0 --resume *>&1 |
@@ -117,7 +123,7 @@ for ($try = 1; $try -le 6; $try++) {
     Write-Output "`n=== PHASE 3  [$(Hrs)h, $(Left)h left] mamba pretrain (try $try) ==="
     $maxHours = [math]::Min(14, (Left))
     $code = Invoke-Guarded "phase3_mamba_pretrain" `
-        "text2motion.train.train_pretrain --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --token_pack data/amass_tokens_fsq8x1024.npz --epochs 20 --batch_size 8 --out checkpoints/generator/generator_mamba_pretrained.pt --resume" `
+        "text2motion.app.cli pretrain --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --token_pack data/amass_tokens_fsq8x1024.npz --epochs 20 --batch_size 8 --grad_accum 8 --out checkpoints/generator/generator_mamba_pretrained.pt --resume" `
         "outputs/phase3_mamba_pretrain.log" $maxHours
     if ($code -eq 0 -and (Test-Path $P3_DONE)) {
         Write-Output "PHASE 3 complete (clean exit)"
@@ -128,6 +134,11 @@ for ($try = 1; $try -le 6; $try++) {
 if (-not (Test-Path $P3_DONE)) {
     Write-Output "`n=== PHASE 4 SKIP: mamba prior incomplete (no .done marker) ==="
 } else {
+    if (-not (Test-Path outputs/gates/mamba_34m_overfit.json)) {
+        & $py -u -m text2motion.app.cli sanity-overfit --config configs/generator/gen_pilot_fsq8x1024.yaml `
+            --backbone mamba --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt `
+            --out outputs/gates/mamba_34m_overfit.json
+    }
     for ($try = 1; $try -le 4; $try++) {
         if ((Left) -le 1) {
             Write-Output "PHASE 4 stop: budget exhausted"
@@ -135,7 +146,7 @@ if (-not (Test-Path $P3_DONE)) {
         }
         Write-Output "`n=== PHASE 4  [$(Hrs)h, $(Left)h left] mamba bs8 finetune (try $try) ==="
         $code = Invoke-Guarded "phase4_mamba_finetune" `
-            "text2motion.train.train_generator --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt --init_ckpt checkpoints/generator/generator_mamba_pretrained.pt --ckpt_name generator_mamba_bs8.pt --epochs 18 --batch_size 4 --grad_accum 2 --eval_every 6 --cfg_scale 6.0 --temperature 1.0 --resume" `
+            "text2motion.app.cli train-generator --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt --overfit_gate outputs/gates/mamba_34m_overfit.json --init_ckpt checkpoints/generator/generator_mamba_pretrained.pt --ckpt_name generator_mamba_bs8.pt --epochs 18 --batch_size 4 --grad_accum 2 --eval_every 6 --cfg_scale 6.0 --temperature 1.0 --resume" `
             "outputs/phase4_mamba_finetune.log" (Left)
         if ($code -eq 0) {
             Write-Output "PHASE 4 complete (clean exit)"

@@ -3,21 +3,23 @@ import threading
 
 import numpy as np
 
-from text2motion.stream.service import MotionServiceClient, read_msg, write_array, write_msg
+from text2motion.streaming.protocol import MotionServiceClient, Wire
 
 
 def _stub_server(server: socket.socket, script: str, chunks: list[np.ndarray]) -> None:
     conn, _ = server.accept()
     io = conn.makefile("rwb")
-    write_msg(io, {"type": "hello", "ckpt": "stub.pt", "backbone": "transformer", "downsample": 4})
-    req = read_msg(io)
+    Wire.send_json(
+        io, {"type": "hello", "ckpt": "stub.pt", "backbone": "transformer", "downsample": 4}
+    )
+    req = Wire.recv_json(io)
     assert req["cmd"] == "generate"
     if script == "ok":
         for chunk in chunks:
-            write_array(io, "chunk", chunk)
-        write_msg(io, {"type": "done", "frames": sum(len(c) for c in chunks)})
+            Wire.send_array(io, "chunk", chunk)
+        Wire.send_json(io, {"type": "done", "frames": sum(len(c) for c in chunks)})
     elif script == "error":
-        write_msg(io, {"type": "error", "message": "boom"})
+        Wire.send_json(io, {"type": "error", "message": "boom"})
     io.close()
     conn.close()
     server.close()

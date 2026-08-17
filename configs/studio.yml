@@ -1,0 +1,67 @@
+fit:
+  model_dir: data/smplx_models
+  num_betas: 10
+  lr: 0.05
+  w_smooth: 0.05
+  w_reg: 0.0005
+  stage1_iters: 150
+  stage2_iters: 300
+  progress_every: 10
+  verbose_every: 100
+  yaw_candidates_deg: [0.0, 90.0, 180.0, 270.0]
+
+schedule:
+  first_stage1_iters: 30
+  first_stage2_iters: 75
+  continuation_stage1_iters: 0
+  continuation_stage2_iters: 25
+  retrofit_window: 16
+
+live:
+  steps: 20
+  debounce_seconds: 0.35
+
+appearance:
+  skin_color: [0.86, 0.72, 0.61, 1.0]
+  sky_color: [0.9411764705882353, 0.7137254901960784, 0.7137254901960784, 1.0]
+
+layout:
+  left_width: 0.20
+  right_width: 0.24
+  prompt_height: 0.11
+  editor_height: 0.52
+  playback_height: 0.30
+
+theme:
+  window_rounding: 8.0
+  child_rounding: 6.0
+  frame_rounding: 5.0
+  grab_rounding: 5.0
+  popup_rounding: 6.0
+  scrollbar_rounding: 6.0
+  window_border_size: 0.0
+  window_padding: [12.0, 10.0]
+  frame_padding: [8.0, 4.0]
+  item_spacing: [8.0, 6.0]
+  section_label_color: [0.55, 0.75, 1.0, 1.0]
+  colors:
+    window_background: [0.09, 0.10, 0.13, 0.94]
+    title_background: [0.07, 0.08, 0.11, 1.0]
+    title_background_active: [0.12, 0.19, 0.32, 1.0]
+    frame_background: [0.16, 0.18, 0.23, 1.0]
+    frame_background_hovered: [0.22, 0.25, 0.32, 1.0]
+    frame_background_active: [0.26, 0.30, 0.38, 1.0]
+    button: [0.20, 0.34, 0.60, 1.0]
+    button_hovered: [0.26, 0.44, 0.78, 1.0]
+    button_active: [0.30, 0.52, 0.92, 1.0]
+    header: [0.18, 0.26, 0.42, 1.0]
+    header_hovered: [0.24, 0.34, 0.54, 1.0]
+    header_active: [0.28, 0.40, 0.62, 1.0]
+    slider_grab: [0.42, 0.62, 0.98, 1.0]
+    slider_grab_active: [0.55, 0.72, 1.0, 1.0]
+    check_mark: [0.42, 0.66, 1.0, 1.0]
+    separator: [0.25, 0.28, 0.36, 1.0]
+    plot_lines: [0.42, 0.66, 1.0, 1.0]
+    plot_histogram: [0.42, 0.66, 1.0, 1.0]
+
+model_registry: configs/demo_models.yaml

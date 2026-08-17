@@ -34,7 +34,7 @@ cd infra/aws; terraform init; terraform apply
 #                              idle watchdog auto-terminates the box.
 # 5) Harvest + Table 1:
 aws s3 cp s3://$b/results/ . --recursive
-#   then: python -m text2motion.eval.evaluate --split test  (20-rep, both backbones)
+#   then: python -m text2motion.app.cli evaluate --split test  (20-rep, both backbones)
 ```
 
 ### Mamba-only 100M (transformer twin already done) -- cheaper, do THIS one
@@ -64,7 +64,7 @@ aws ssm start-session --target (terraform output -raw instance_id)
 #      bash run_mamba100m.sh     # STAGE A pretrain -> STAGE B finetune; MAMBA100M_DONE -> s3://<b>/results/
 # 4) Harvest + finish the twin table:
 aws s3 cp s3://$b/results/generator_mamba_100m.pt checkpoints/generator/ --region eu-north-1
-python -m text2motion.eval.evaluate --backbone mamba --ckpt checkpoints/generator/generator_mamba_100m.pt `
+python -m text2motion.app.cli evaluate --backbone mamba --ckpt checkpoints/generator/generator_mamba_100m.pt `
   --config configs/generator/final100m_fsq8x1024.yaml --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt `
   --split test --cfg_scale 6.0 --temperature 1.0 --length_mode fixed --mm_clips 100 --mm_repeats 30
 ```
@@ -105,8 +105,10 @@ aws s3 cp s3://thesis-t2m-<name>/bundle.tar . && tar -xf bundle.tar
 pip install -q transformers   # plus anything else requirements lists
 export PYTHONPATH=src
 tmux new -s train             # detach with Ctrl-b d; reattach: tmux attach -t train
-python -u -m text2motion.train.train_generator --config configs/aws.yaml --backbone transformer --epochs 150 --batch_size 64 &> outputs/tf.log
-python -u -m text2motion.train.train_generator --config configs/aws.yaml --backbone mamba       --epochs 150 --batch_size 64 &> outputs/mm.log
+for bb in transformer mamba; do
+  python -u -m text2motion.app.cli sanity-overfit --config configs/aws.yaml --backbone $bb       --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt --out outputs/gates/$bb.json
+  python -u -m text2motion.app.cli train-generator --config configs/aws.yaml --backbone $bb       --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt --overfit_gate outputs/gates/$bb.json       --epochs 150 --batch_size 64 --resume &> outputs/$bb.log
+done
 # results back to S3 when done:
 aws s3 cp checkpoints/ s3://thesis-t2m-<name>/results/ --recursive --exclude "*" --include "generator_*.pt"
 aws s3 cp outputs/ s3://thesis-t2m-<name>/results/ --recursive

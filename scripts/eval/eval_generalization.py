@@ -6,11 +6,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from text2motion.eval.matcher import load_eval_stats, load_matchers
-from text2motion.eval.tokenizer_eval import evaluate_tokenizer
-from text2motion.shared.config import load_config
-from text2motion.shared.seed import seed_everything
-from text2motion.train.train_tokenizer import build_tokenizer
+from text2motion.app.config import load_config
+from text2motion.app.runtime import seed_everything
+from text2motion.evaluation.matcher import load_eval_stats, load_matchers
+from text2motion.tokenization.evaluation import evaluate_reconstruction
+from text2motion.tokenization.model import build_tokenizer_module
 
 CKPT_CONFIGS: dict[str, tuple[str, str]] = {
     "rvq_l4_512": ("configs/tokenizer/rvq_l4_512.yaml", "rvq"),
@@ -58,11 +58,11 @@ def run(args: argparse.Namespace) -> None:
         cfg_path, mech = CKPT_CONFIGS[stem]
         cfg = load_config(cfg_path)
         seed_everything(cfg.seed, cfg.deterministic)
-        tok, _ = build_tokenizer(mech, cfg)
+        tok, _ = build_tokenizer_module(mech, cfg)
         tok.load_state_dict(torch.load(path, map_location=device))
         tok.to(device).eval()
         fids = {
-            sp: evaluate_tokenizer(
+            sp: evaluate_reconstruction(
                 tok,
                 out_dir,
                 our_mean,

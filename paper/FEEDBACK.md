@@ -64,7 +64,7 @@ to a run directory under `outputs/runs/` (seed 2026, manifests record config + g
 ## 5. Where to read the evidence
 - Twin test: `outputs/runs/20260704T044653Z_evaluate_test` (transformer),
   `outputs/runs/20260704T050118Z_evaluate_test` (mamba). Command:
-  `python -m text2motion.eval.evaluate --backbone <b> --ckpt <ckpt> --split test --cfg_scale 6.0 --temperature 1.0 --length_mode fixed --mm_clips 100 --mm_repeats 30`.
+  `python -m text2motion.app.cli evaluate --backbone <b> --ckpt <ckpt> --split test --cfg_scale 6.0 --temperature 1.0 --length_mode fixed --mm_clips 100 --mm_repeats 30`.
 - Tokenizer matrix: `outputs/runs/*tokenizer_<stem>/metrics.jsonl` (e.g. `*tokenizer_fsq_g8_v1024` = 0.0170).
 - 100M transformer val: `outputs/runs/evaluate/20260624T062231Z_evaluate_val`.
 - Streaming bench: `scripts/figures/plot_streaming_bench.py` from `eval.streaming_bench` -> `paper/figures/streaming.png`.

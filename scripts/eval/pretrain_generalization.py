@@ -7,11 +7,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from text2motion.model.generator import MotionGenerator, token_ce_loss
-from text2motion.model.tokenizer import ResidualFsqTokenizer
-from text2motion.shared.config import load_config
-from text2motion.shared.run_log import log_metrics, start_run
-from text2motion.shared.seed import seed_everything
+from text2motion.app.config import load_config
+from text2motion.app.run_log import log_metrics, start_run
+from text2motion.app.runtime import seed_everything
+from text2motion.generation.model import MotionGeneratorModule, token_ce_loss
+from text2motion.tokenization.model import ResidualFsqTokenizer
 
 
 def seen_clip_stems(token_pack: str) -> set[str]:
@@ -87,7 +87,7 @@ def run(args: argparse.Namespace) -> None:
         num_codebooks=cfg.tokenizer.num_quantizers,
         codebook_size=vocab,
     )
-    generator = MotionGenerator(gen_cfg).to(device)
+    generator = MotionGeneratorModule(gen_cfg).to(device)
     generator.load_state_dict(torch.load(args.ckpt, map_location=device))
     generator.eval()
     params = sum(p.numel() for p in generator.parameters())

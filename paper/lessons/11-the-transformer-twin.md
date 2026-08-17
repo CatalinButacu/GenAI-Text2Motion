@@ -4,7 +4,7 @@
 > (T2M-GPT mold, arXiv:2301.06052): same objective, same heads, same loss, same sampler -- only the
 > function that turns history into $h_t$ differs. Its defining property is the one Contribution B sets
 > out to beat: a streaming state that **grows with the sequence**. Grounded in
-> `TransformerBlock` / `TransformerBackbone` (`src/text2motion/model/generator.py`).
+> `TransformerBlock` / `TransformerBackbone` (`src/text2motion/generation/model.py`).
 
 ## 11.0 The picture
 

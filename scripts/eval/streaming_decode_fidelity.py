@@ -6,14 +6,14 @@ import os
 import numpy as np
 import torch
 
-from text2motion.shared.config import load_config
-from text2motion.shared.run_log import log_metrics, start_run
-from text2motion.stream.decode import StreamingMotionDecoder, measure_decoder_context
-from text2motion.train.train_tokenizer import build_tokenizer
+from text2motion.app.config import load_config
+from text2motion.app.run_log import log_metrics, start_run
+from text2motion.streaming.decoder import StreamingMotionDecoder, measure_decoder_context
+from text2motion.tokenization.model import build_tokenizer_module
 
 
 def load_tokenizer(cfg, ckpt_path: str, kind: str):
-    tokenizer, _ = build_tokenizer(kind, cfg)
+    tokenizer, _ = build_tokenizer_module(kind, cfg)
     state = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     if isinstance(state, dict):
         for key in ("model", "state_dict", "tokenizer"):

@@ -1,15 +1,20 @@
 import pytest
 import torch
 
-from text2motion.model.contracts import DROPPED_CODE, MotionQuantizer, MotionTokenizer
-from text2motion.model.rvq_baseline import RvqBaselineTokenizer
-from text2motion.model.tokenizer import ResidualFsqTokenizer, resample_stages
-from text2motion.shared.config import RvqBaselineCfg, TokenizerCfg
+from text2motion.app.config import RvqConfig, TokenizerConfig
+from text2motion.tokenization.model import (
+    DROPPED_CODE,
+    MotionQuantizer,
+    ResidualFsqTokenizer,
+    RvqBaselineTokenizer,
+    TokenizerModule,
+    resample_stages,
+)
 
-FSQ_CFG = TokenizerCfg(
+FSQ_CFG = TokenizerConfig(
     in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(8, 8, 4, 4), n_resblocks=1
 )
-RVQ_CFG = RvqBaselineCfg(
+RVQ_CFG = RvqConfig(
     in_dim=263,
     width=64,
     downsample=4,
@@ -26,7 +31,7 @@ def both_tokenizers():
 
 @pytest.mark.parametrize("tok", both_tokenizers())
 def test_both_families_satisfy_one_contract(tok):
-    assert isinstance(tok, MotionTokenizer)
+    assert isinstance(tok, TokenizerModule)
     assert isinstance(tok.quantizer, MotionQuantizer)
 
     x = torch.randn(2, 32, 263)
@@ -47,7 +52,7 @@ def test_quantizer_exposes_units_and_combine(tok):
 
 
 def test_dropped_levels_use_a_sentinel_not_code_zero():
-    cfg = TokenizerCfg(
+    cfg = TokenizerConfig(
         in_dim=263,
         width=64,
         downsample=4,
@@ -75,7 +80,7 @@ def test_dropped_levels_use_a_sentinel_not_code_zero():
 
 def test_eval_mode_never_drops_levels():
     tok = ResidualFsqTokenizer(
-        TokenizerCfg(
+        TokenizerConfig(
             in_dim=263,
             width=64,
             downsample=4,

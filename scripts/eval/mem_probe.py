@@ -7,11 +7,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from text2motion.model.generator import MotionGenerator
-from text2motion.model.text_encoder import CLIPTextEncoder
-from text2motion.model.tokenizer import ResidualFsqTokenizer
-from text2motion.shared.config import load_config
-from text2motion.train.trainer import GeneratorTrainer
+from text2motion.app.config import load_config
+from text2motion.generation.model import MotionGeneratorModule
+from text2motion.generation.text import CLIPTextEncoder
+from text2motion.generation.trainer import GeneratorTrainer
+from text2motion.tokenization.model import ResidualFsqTokenizer
 
 
 def run(a: argparse.Namespace) -> None:
@@ -35,7 +35,7 @@ def run(a: argparse.Namespace) -> None:
         codebook_size=tok.codebook_size,
         use_kernel=False,
     )
-    generator = MotionGenerator(gc).to(dev)
+    generator = MotionGeneratorModule(gc).to(dev)
     te = CLIPTextEncoder(cfg.text_encoder).to(dev)
     out = Path(cfg.paths.hml3d_out_dir)
     mean = np.load(out / "Mean.npy").astype(np.float32)

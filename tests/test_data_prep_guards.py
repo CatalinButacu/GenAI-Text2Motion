@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from text2motion.data.hml3d.feature import normalization_stats
-from text2motion.data.hml3d.stats import fit_train_stats, read_split_names
+from text2motion.motion.dataset import fit_train_stats, read_split_names
+from text2motion.motion.representation import normalization_stats
 
 JOINTS = 22
 DIM = 8 + (JOINTS - 1) * 9 + JOINTS * 3
@@ -57,7 +57,7 @@ def test_normalization_stats_rejects_empty_input():
 
 
 def test_item_rng_is_deterministic_and_varies_by_epoch_and_index():
-    from text2motion.shared.seed import item_rng
+    from text2motion.motion.dataset import item_rng
 
     a = item_rng(2026, 0, 5).random()
     b = item_rng(2026, 0, 5).random()
@@ -69,7 +69,7 @@ def test_item_rng_is_deterministic_and_varies_by_epoch_and_index():
 
 
 def test_item_rng_does_not_depend_on_call_order():
-    from text2motion.shared.seed import item_rng
+    from text2motion.motion.dataset import item_rng
 
     forward = [item_rng(2026, 3, i).randint(0, 10_000) for i in range(20)]
     backward = [item_rng(2026, 3, i).randint(0, 10_000) for i in reversed(range(20))][::-1]

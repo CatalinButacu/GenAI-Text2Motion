@@ -4,7 +4,7 @@
 > Now we model the codes. This lesson defines the **probabilistic object** the generator is -- the
 > objective that **both twins optimise identically**. Lessons 11 (transformer) and 12 (Mamba) are
 > then *only two implementations of the function $f_\theta$ in this lesson*; lesson 13 is a property
-> of that function's state. Every equation here is grounded in `src/text2motion/model/generator.py`.
+> of that function's state. Every equation here is grounded in `src/text2motion/generation/model.py`.
 
 ## 8.0 The picture
 

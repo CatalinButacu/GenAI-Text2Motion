@@ -3,7 +3,12 @@ import pickle
 import numpy as np
 import pytest
 
-from text2motion.train.train_pretrain import TokenPack, collate, split_keys_by_clip
+from text2motion.generation.pretrain import (
+    PretrainingBudget,
+    TokenPack,
+    collate_tokens,
+    split_keys_by_clip,
+)
 
 
 def make_pack(tmp_path, clips=("clipA", "clipB", "clipC", "clipD"), windows=3):
@@ -57,10 +62,27 @@ def test_collate_pads_and_reports_true_lengths(tmp_path):
     pack = TokenPack(str(make_pack(tmp_path)))
     batch = [pack[0], pack[1], pack[2]]
 
-    padded, lengths = collate(batch)
+    padded, lengths = collate_tokens(batch)
 
     assert padded.shape[0] == 3
     assert padded.shape[1] == max(int(b.shape[0]) for b in batch)
     assert lengths.tolist() == [int(b.shape[0]) for b in batch]
     for row, length in enumerate(lengths.tolist()):
         assert padded[row, length:].sum() == 0
+
+
+def test_pretraining_budget_matches_different_physical_batches():
+    transformer = PretrainingBudget.build(8_303, physical_batch=64, gradient_accumulation=1)
+    mamba = PretrainingBudget.build(8_303, physical_batch=8, gradient_accumulation=8)
+
+    transformer.assert_equivalent(mamba)
+    assert transformer.optimizer_steps == 129
+    assert transformer.microbatches == 129
+    assert mamba.microbatches == 1_032
+    assert transformer.consumed_examples == mamba.consumed_examples == 8_256
+
+
+@pytest.mark.parametrize("batch_size,grad_accum", [(0, 1), (1, 0), (-1, 1)])
+def test_pretraining_budget_rejects_invalid_accumulation(batch_size, grad_accum):
+    with pytest.raises(ValueError, match="must be positive"):
+        PretrainingBudget.build(100, batch_size, grad_accum)

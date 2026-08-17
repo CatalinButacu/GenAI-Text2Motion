@@ -59,22 +59,40 @@ sampling * scale the generator (50-150M, not 5M) * **compute FID early and often
 - `.claude/decisions/` -- ADRs. ADR 0002 (architecture) gates all model code.
 - `.claude/hooks/` -- `post_edit.py` auto-formats/lints Python after every edit.
 
+## Package layout -- one package per pipeline stage, dependencies point inward
+`motion` -> `tokenization` -> `generation` -> `evaluation` / `streaming` / `studio` -> `app`.
+Nothing imports a stage above itself (enforceable: zero upward imports today). `app` is the only
+layer allowed to construct anything.
+- `motion/` -- `model.py` (domain objects), `representation.py` (263 layout + recovery),
+  `kinematics.py`, `dataset.py` (`MotionRepository`, `Split`), `preparation.py` (AMASS -> 263).
+- `tokenization/` -- `model.py` (FSQ/RVQ + `MotionTokenizer` facade), `trainer.py`, `corpus.py`,
+  `evaluation.py`.
+- `generation/` -- `model.py` (backbones + `GeneratorArchitecture`), `text.py`, `losses.py`,
+  `trainer.py`, `pretrain.py`, `pipeline.py` (`MotionGenerator` facade).
+- `evaluation/` -- `metrics.py`, `matcher.py` (frozen Guo evaluator), `evaluator.py`, `benchmark.py`.
+- `streaming/` -- `decoder.py`, `service.py`, `protocol.py`. `studio/` -- `avatar.py`, `scene.py`, `viewer.py`.
+- `app/` -- `config.py`, `checkpoint.py` (external schemas), `runtime.py`, `run_log.py`,
+  `container.py` (`ApplicationFactory`), `cli.py` (every stage is a subcommand).
+Stage boundaries exchange named objects (`MotionClip`, `MotionTokens`, `MotionBatch`,
+`GeneratedMotion`, `MotionChunk`), never bare tuples. Backbone/quantizer selection lives in one
+registry per subsystem, not in scattered `if backbone == ...` branches.
+
 ## Golden rules
 - Before any stage, open its skill. Before modeling, ADR 0002 must be accepted.
 - **Overfit one batch before any real run** (`sanity-overfit`) -- catches plateaus on day 1.
 - Assert tensor shapes at module boundaries; canonical shapes live in `motion-representation`.
 - Data/SMPL-X files are license-gated -- never commit; load from configured paths.
 - **snake_case** (PEP8) everywhere -- the donor's camelCase is NOT inherited. Python 3.12, ruff (line 100).
-- **Config-driven via typed dataclasses** (`shared/config.py`): instantiate one `Config`, pass a
+- **Config-driven via typed dataclasses** (`app/config.py`): instantiate one `Config`, pass a
   function only the sub-config it needs. No module-level global constants, no magic numbers in code.
-- **Guard every local run** (`scripts/ps1/local_guard.ps1`): launch long local jobs WITH the watchdog --
+- **Guard every local run** (`scripts/training/local_guard.ps1`): launch long local jobs WITH the watchdog --
   stall-kill on a stale `metrics.jsonl` heartbeat + a max-hours budget (the laptop twin of the
   cloud cost guards; a frozen tokenizer run once burned 10.6 h unnoticed). Inspect
   `outputs/GUARD_KILL.txt` before any relaunch. Long python jobs always run with `-u`.
-- **Log every run** (`shared/run_log.py`): `start_run()` at every train/eval entrypoint (config +
+- **Log every run** (`app/run_log.py`): `start_run()` at every train/eval entrypoint (config +
   git commit + seed + versions manifest), `log_metrics()` per epoch/eval. Any number quoted in an
   ADR/STATUS/the dissertation must trace to a run dir. Model selection on **val** only; `test` is
-  touched once per final table (the 20-rep `_twin_eval.py` protocol).
+  touched once per final table (the 20-rep `text2motion evaluate` protocol).
 
 ## Status
 - [ ] Repo scaffolded * [ ] Donor assets mapped * [ ] Motion representation round-trips

@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from text2motion.shared.config import load_config
+from text2motion.app.config import load_config
 
 
 @pytest.mark.slow
@@ -17,7 +17,7 @@ def test_smplx_amass_extractor_real_file():
     if not amass_dir or not Path(amass_dir).exists():
         pytest.skip("AMASS unavailable")
 
-    from text2motion.data.hml3d.raw_pose import AmassPoseExtractor
+    from text2motion.motion.preparation import AmassPoseExtractor
 
     ext = AmassPoseExtractor(Path(smplx_dir))
 

@@ -6,7 +6,7 @@ if ($busy.Count -gt 0) {
     Write-Host "ABORT: a tokenizer trainer is already running (PID $($busy[0].ProcessId)). 4GB GPU fits one." -ForegroundColor Red
     exit 1
 }
-& ".venv\Scripts\python.exe" -u -m text2motion.train.train_tokenizer `
+& ".venv\Scripts\python.exe" -u -m text2motion.app.cli train-tokenizer `
     --config configs/tokenizer/fsq_g4_v1024.yaml --tokenizer fsq `
     --epochs 500 --batch_size 128 --eval_every 25 --ckpt_name fsq_g4_v1024.pt --resume `
     2>&1 | Tee-Object -FilePath outputs/sweep_fsq_g4_v1024.log -Append

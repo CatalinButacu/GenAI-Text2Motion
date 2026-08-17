@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from text2motion.shared.config import load_config
-from text2motion.shared.run_log import log_metrics, start_run
+from text2motion.app.config import load_config
+from text2motion.app.run_log import log_metrics, start_run
 
 
 def base_ids(split_file: Path) -> list[str]:

@@ -25,10 +25,19 @@ sync_checkpoints &
 CKPT_SYNC=$!
 
 for bb in transformer mamba; do
-    $PY -u -m text2motion.train.train_generator \
+    GATE="outputs/gates/${bb}_100m_overfit.json"
+    mkdir -p outputs/gates
+    [ -f "$GATE" ] || $PY -u -m text2motion.app.cli sanity-overfit \
         --config configs/generator/final100m_fsq8x1024.yaml \
         --backbone "$bb" \
         --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt \
+        --out "$GATE" \
+        > "outputs/gate_$bb.log" 2>&1
+    $PY -u -m text2motion.app.cli train-generator \
+        --config configs/generator/final100m_fsq8x1024.yaml \
+        --backbone "$bb" \
+        --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt \
+        --overfit_gate "$GATE" \
         --epochs 60 \
         --batch_size 64 \
         --eval_every 5 \

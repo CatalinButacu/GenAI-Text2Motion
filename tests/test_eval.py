@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 import torch
 
-from text2motion.eval.metrics import diversity, fid, mm_dist, r_precision
-from text2motion.shared.config import load_config
+from text2motion.app.config import load_config
+from text2motion.evaluation.metrics import diversity, fid, mm_dist, r_precision
 
 
 def test_metric_math():
@@ -29,7 +29,7 @@ def test_matcher_loads_without_dropping_keys():
     if not cfg.paths.eval_matcher or not Path(cfg.paths.eval_matcher).is_file():
         pytest.skip("finest.tar unavailable")
 
-    from text2motion.eval.matcher import load_matchers
+    from text2motion.evaluation.matcher import load_matchers
 
     motion, text = load_matchers(cfg.paths.eval_matcher, device="cpu")
 
@@ -49,14 +49,14 @@ def test_matcher_loads_without_dropping_keys():
 def test_fid_rejects_degenerate_input():
     import pytest
 
-    from text2motion.eval.metrics import fid as _fid
+    from text2motion.evaluation.metrics import fid as _fid
 
     with pytest.raises(ValueError, match="at least|>= 2|needs"):
         _fid(np.zeros((1, 8), np.float32), np.zeros((5, 8), np.float32))
 
 
 def test_fid_warns_when_covariance_is_rank_deficient(capsys):
-    from text2motion.eval.metrics import fid as _fid
+    from text2motion.evaluation.metrics import fid as _fid
 
     rng = np.random.default_rng(0)
     a = rng.normal(size=(20, 64)).astype(np.float32)
@@ -72,7 +72,7 @@ def test_fid_warns_when_covariance_is_rank_deficient(capsys):
 
 
 def test_bootstrap_fid_reports_a_usable_interval():
-    from text2motion.eval.metrics import bootstrap_fid
+    from text2motion.evaluation.metrics import bootstrap_fid
 
     rng = np.random.default_rng(0)
     real = rng.normal(size=(120, 16)).astype(np.float32)
@@ -86,7 +86,7 @@ def test_bootstrap_fid_reports_a_usable_interval():
 
 
 def test_paired_delta_separates_a_real_gap_and_not_an_identical_pair():
-    from text2motion.eval.metrics import paired_fid_delta
+    from text2motion.evaluation.metrics import paired_fid_delta
 
     rng = np.random.default_rng(0)
     real = rng.normal(size=(150, 16)).astype(np.float32)
@@ -105,7 +105,7 @@ def test_paired_delta_separates_a_real_gap_and_not_an_identical_pair():
 def test_paired_delta_requires_aligned_clips():
     import pytest
 
-    from text2motion.eval.metrics import paired_fid_delta
+    from text2motion.evaluation.metrics import paired_fid_delta
 
     rng = np.random.default_rng(0)
     real = rng.normal(size=(20, 8)).astype(np.float32)

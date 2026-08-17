@@ -12,14 +12,15 @@ import numpy as np
 import torch
 from matplotlib.animation import PillowWriter
 
-from text2motion.model.generator import MotionGenerator
-from text2motion.model.text_encoder import CLIPTextEncoder
-from text2motion.model.tokenizer import ResidualFsqTokenizer
-from text2motion.render.joints2smpl import FitConfig, fit_smplx_to_joints
-from text2motion.render.studio import recover_skeleton
-from text2motion.shared.config import load_config
-from text2motion.shared.seed import seed_everything
-from text2motion.stream.decode import StreamingMotionDecoder
+from text2motion.app.config import load_config
+from text2motion.app.runtime import seed_everything
+from text2motion.generation.model import MotionGeneratorModule
+from text2motion.generation.text import CLIPTextEncoder
+from text2motion.motion.representation import recover_skeleton
+from text2motion.streaming.decoder import StreamingMotionDecoder
+from text2motion.studio.avatar import fit_smplx_to_joints
+from text2motion.studio.config import FitConfig
+from text2motion.tokenization.model import ResidualFsqTokenizer
 
 MODEL_DIR = r"D:\Facultate\dissertation\data\arctic\unpack\models"
 
@@ -60,7 +61,7 @@ def run(a):
         codebook_size=tok.codebook_size,
         use_kernel=False,
     )
-    gen = MotionGenerator(gc).to(dev).eval()
+    gen = MotionGeneratorModule(gc).to(dev).eval()
     st = torch.load(a.ckpt, map_location="cpu")
     gen.load_state_dict(st["generator"] if isinstance(st, dict) and "generator" in st else st)
     te = CLIPTextEncoder(cfg.text_encoder).to(dev).eval()

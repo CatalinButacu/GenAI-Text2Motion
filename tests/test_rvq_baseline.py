@@ -1,10 +1,9 @@
 import torch
 
-from text2motion.model.rvq_baseline import RvqBaselineTokenizer
-from text2motion.model.tokenizer import reconstruction_loss
-from text2motion.shared.config import RvqBaselineCfg
+from text2motion.app.config import RvqConfig
+from text2motion.tokenization.model import RvqBaselineTokenizer, reconstruction_loss
 
-CFG = RvqBaselineCfg(
+CFG = RvqConfig(
     in_dim=263,
     width=32,
     downsample=4,

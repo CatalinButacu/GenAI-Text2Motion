@@ -1,9 +1,11 @@
 import torch
 
-from text2motion.model.tokenizer import FSQ, ResidualFsqTokenizer, reconstruction_loss
-from text2motion.shared.config import TokenizerCfg
+from text2motion.app.config import TokenizerConfig
+from text2motion.tokenization.model import FSQ, ResidualFsqTokenizer, reconstruction_loss
 
-CFG = TokenizerCfg(in_dim=263, width=128, downsample=4, num_quantizers=4, fsq_levels=(8, 5, 5, 5))
+CFG = TokenizerConfig(
+    in_dim=263, width=128, downsample=4, num_quantizers=4, fsq_levels=(8, 5, 5, 5)
+)
 
 
 def test_fsq_index_code_roundtrip():

@@ -1,15 +1,14 @@
 import pytest
 
-from text2motion.render.studio_viewer.avatar import Avatar
-from text2motion.render.studio_viewer.display import Display
-from text2motion.render.studio_viewer.generation import GenerationControl
-from text2motion.render.studio_viewer.gui_panels import GuiPanels
-from text2motion.render.studio_viewer.scene_nodes import (
+from text2motion.studio.avatar import Avatar
+from text2motion.studio.scene import (
+    Display,
     FitState,
     LiveRegen,
     SceneNodes,
     StreamBuffers,
 )
+from text2motion.studio.viewer import GenerationControl, GuiPanels
 
 
 class FakeScene:
@@ -101,7 +100,7 @@ def test_display_consume_runs_against_a_stub_host(wired):
 def test_viewer_no_longer_uses_mixin_inheritance():
     from aitviewer.viewer import Viewer
 
-    from text2motion.render.studio_viewer.viewer import StreamingStudioViewer
+    from text2motion.studio.viewer import StreamingStudioViewer
 
     assert StreamingStudioViewer.__bases__ == (Viewer,)
     for hook in ("gui_scene", "gui_playback", "on_render"):

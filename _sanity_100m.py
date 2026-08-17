@@ -2,10 +2,10 @@ from dataclasses import replace
 
 import torch
 
-from text2motion.model.generator import MotionGenerator
-from text2motion.model.tokenizer import ResidualFsqTokenizer
-from text2motion.shared.config import load_config
-from text2motion.train.trainer import GeneratorTrainer
+from text2motion.app.config import load_config
+from text2motion.generation.model import MotionGeneratorModule
+from text2motion.generation.trainer import GeneratorTrainer
+from text2motion.tokenization.model import ResidualFsqTokenizer
 
 cfg = load_config("configs/final100m.yaml")
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -27,9 +27,12 @@ for backbone in ["transformer", "mamba"]:
         codebook_size=tokenizer.codebook_size,
     )
     torch.manual_seed(cfg.seed)
-    generator = MotionGenerator(gen_cfg).to(device)
+    generator = MotionGeneratorModule(gen_cfg).to(device)
     trainer = GeneratorTrainer(
-        generator, tokenizer, replace(cfg.train, lr=3e-4, cfg_dropout=0.0, pkeep=1.0)
+        generator,
+        tokenizer,
+        replace(cfg.train, lr=3e-4, cfg_dropout=0.0, pkeep=1.0),
+        downsample=cfg.tokenizer.downsample,
     )
     n_params = sum(p.numel() for p in generator.parameters())
 

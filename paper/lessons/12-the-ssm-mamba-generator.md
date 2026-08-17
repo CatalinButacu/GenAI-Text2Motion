@@ -6,7 +6,7 @@
 > so streaming memory is $O(1)$ in the horizon. To our literature survey, no published motion
 > generator is a **token-autoregressive selective SSM** (Mamba motion work is diffusion- or
 > masked-bidirectional) -- that unoccupied cell is the novelty. Grounded in `MambaMixer`
-> (`src/text2motion/model/generator.py`), selective SSM of Gu & Dao (arXiv:2312.00752).
+> (`src/text2motion/generation/model.py`), selective SSM of Gu & Dao (arXiv:2312.00752).
 
 ## 12.0 The picture
 

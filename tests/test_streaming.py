@@ -2,18 +2,18 @@ import queue as queue_mod
 
 import torch
 
-from text2motion.data.hml3d.joints import kinematic_bones, recover_skeleton
-from text2motion.model.generator import MotionGenerator
-from text2motion.model.tokenizer import ResidualFsqTokenizer
-from text2motion.shared.config import GeneratorCfg, TokenizerCfg
-from text2motion.stream.decode import (
+from text2motion.app.config import GeneratorConfig, TokenizerConfig
+from text2motion.generation.model import MotionGeneratorModule
+from text2motion.motion.representation import kinematic_bones, recover_skeleton
+from text2motion.streaming.decoder import (
     StreamingMotionDecoder,
     collect_stream,
     run_producer,
 )
+from text2motion.tokenization.model import ResidualFsqTokenizer
 
-TOK = TokenizerCfg(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
-GEN = GeneratorCfg(
+TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
+GEN = GeneratorConfig(
     backbone="mamba",
     d_model=64,
     n_layers=2,
@@ -32,7 +32,7 @@ def make_decoder() -> StreamingMotionDecoder:
     tok = ResidualFsqTokenizer(TOK)
     mean = torch.zeros(263)
     std = torch.ones(263)
-    return StreamingMotionDecoder(tok, mean, std, chunk_tokens=4)
+    return StreamingMotionDecoder(tok, 4, mean, std, chunk_tokens=4)
 
 
 def test_windowed_decode_covers_all_frames_and_is_deterministic():
@@ -80,7 +80,7 @@ def test_decoder_context_is_measured_and_state_stays_bounded():
 
 def test_end_to_end_stream_from_generator():
     dec = make_decoder()
-    gen = MotionGenerator(GEN).eval()
+    gen = MotionGeneratorModule(GEN).eval()
     text = torch.randn(1, GEN.d_text)
 
     chunks = list(dec.stream(gen, text, num_steps=8, temperature=0.0))  # greedy -> deterministic
@@ -91,7 +91,7 @@ def test_end_to_end_stream_from_generator():
 
 def test_queue_producer_pushes_chunks_then_sentinel():
     dec = make_decoder()
-    gen = MotionGenerator(GEN).eval()
+    gen = MotionGeneratorModule(GEN).eval()
     q: queue_mod.Queue = queue_mod.Queue(maxsize=4)
     run_producer(dec, gen, torch.randn(1, GEN.d_text), num_steps=8, out_queue=q, temperature=0.0)
 
@@ -102,7 +102,7 @@ def test_queue_producer_pushes_chunks_then_sentinel():
 
 def test_producer_never_stalls_on_a_full_queue():
     dec = make_decoder()
-    gen = MotionGenerator(GEN).eval()
+    gen = MotionGeneratorModule(GEN).eval()
     q: queue_mod.Queue = queue_mod.Queue(maxsize=1)
     run_producer(dec, gen, torch.randn(1, GEN.d_text), num_steps=8, out_queue=q, temperature=0.0)
 
@@ -121,7 +121,7 @@ def test_recover_skeleton_and_bones():
 
 
 def test_explicit_context_skips_the_probe():
-    import text2motion.stream.decode as decode_mod
+    import text2motion.streaming.decoder as decode_mod
 
     calls = []
     original = decode_mod.measure_decoder_context
@@ -136,10 +136,10 @@ def test_explicit_context_skips_the_probe():
         mean = torch.zeros(263)
         std = torch.ones(263)
 
-        decode_mod.StreamingMotionDecoder(tok, mean, std, left_context=4, lookahead=4)
+        decode_mod.StreamingMotionDecoder(tok, 4, mean, std, left_context=4, lookahead=4)
         assert calls == [], "explicit context must not pay for the probe"
 
-        decode_mod.StreamingMotionDecoder(tok, mean, std)
+        decode_mod.StreamingMotionDecoder(tok, 4, mean, std)
         assert len(calls) == 1
     finally:
         decode_mod.measure_decoder_context = original
@@ -156,7 +156,7 @@ def test_stream_forwards_guidance_and_end_stopping():
 
     tok = ResidualFsqTokenizer(TOK)
     decoder = StreamingMotionDecoder(
-        tok, torch.zeros(263), torch.ones(263), left_context=1, lookahead=1
+        tok, 4, torch.zeros(263), torch.ones(263), left_context=1, lookahead=1
     )
     list(
         decoder.stream(FakeGenerator(), torch.zeros(1, 1, 512), 4, cfg_scale=6.0, stop_at_end=True)

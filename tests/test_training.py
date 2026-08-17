@@ -1,15 +1,15 @@
 import numpy as np
 import torch
 
-from text2motion.model.generator import MotionGenerator
-from text2motion.model.tokenizer import ResidualFsqTokenizer
-from text2motion.shared.config import GeneratorCfg, TokenizerCfg, TrainCfg
-from text2motion.train.ema import Ema
-from text2motion.train.losses import soft_decode
-from text2motion.train.trainer import GeneratorTrainer
+from text2motion.app.config import GeneratorConfig, TokenizerConfig, TrainingConfig
+from text2motion.generation.losses import LossWeights, soft_decode
+from text2motion.generation.model import MotionGeneratorModule
+from text2motion.generation.trainer import GeneratorTrainer
+from text2motion.tokenization.model import ResidualFsqTokenizer
+from text2motion.tokenization.trainer import Ema
 
-TOK = TokenizerCfg(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
-GEN = GeneratorCfg(
+TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
+GEN = GeneratorConfig(
     backbone="mamba",
     d_model=64,
     n_layers=2,
@@ -26,7 +26,7 @@ GEN = GeneratorCfg(
 
 def test_soft_decode_shape_and_grad():
     tok = ResidualFsqTokenizer(TOK).eval().requires_grad_(False)
-    gen = MotionGenerator(GEN)
+    gen = MotionGeneratorModule(GEN)
     tokens = torch.randint(0, GEN.codebook_size, (2, 8, GEN.num_codebooks))
     logits = gen(tokens, torch.randn(2, GEN.d_text))
     recon = soft_decode(logits, tok)
@@ -39,8 +39,10 @@ def test_soft_decode_shape_and_grad():
 def test_train_step_learns():
     torch.manual_seed(0)
     tok = ResidualFsqTokenizer(TOK)
-    gen = MotionGenerator(GEN)
-    trainer = GeneratorTrainer(gen, tok, TrainCfg(lr=3e-3, cfg_dropout=0.0, pkeep=1.0))
+    gen = MotionGeneratorModule(GEN)
+    trainer = GeneratorTrainer(
+        gen, tok, TrainingConfig(lr=3e-3, cfg_dropout=0.0, pkeep=1.0), downsample=4
+    )
     gt = torch.randn(2, 32, 263)
     text = torch.randn(2, GEN.d_text)
 
@@ -57,8 +59,10 @@ def test_train_step_learns():
 
 def test_cfg_dropout_step_is_finite():
     tok = ResidualFsqTokenizer(TOK)
-    gen = MotionGenerator(GEN)
-    trainer = GeneratorTrainer(gen, tok, TrainCfg(cfg_dropout=1.0))  # always drop text
+    gen = MotionGeneratorModule(GEN)
+    trainer = GeneratorTrainer(
+        gen, tok, TrainingConfig(cfg_dropout=1.0), downsample=4
+    )  # always drop text
     parts = trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
 
     assert all(v == v for v in parts.values())  # no NaNs
@@ -66,8 +70,8 @@ def test_cfg_dropout_step_is_finite():
 
 def test_term_split_reports_each_group():
     tok = ResidualFsqTokenizer(TOK)
-    gen = MotionGenerator(GEN)
-    trainer = GeneratorTrainer(gen, tok, TrainCfg(cfg_dropout=0.0, pkeep=1.0))
+    gen = MotionGeneratorModule(GEN)
+    trainer = GeneratorTrainer(gen, tok, TrainingConfig(cfg_dropout=0.0, pkeep=1.0), downsample=4)
     parts = trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
 
     for term in ("ce", "root", "ric", "rot6d", "vel", "foot", "total"):
@@ -76,11 +80,13 @@ def test_term_split_reports_each_group():
 
 def test_fk_consistency_terms_finite():
     tok = ResidualFsqTokenizer(TOK)
-    gen = MotionGenerator(GEN)
-    cfg = TrainCfg(cfg_dropout=0.0, pkeep=1.0, w_fk_self=0.5, w_fk_gt=0.5)
+    gen = MotionGeneratorModule(GEN)
+    cfg = TrainingConfig(
+        cfg_dropout=0.0, pkeep=1.0, loss_weights=LossWeights(fk_self=0.5, fk_gt=0.5)
+    )
     mean = np.zeros(263, np.float32)
     std = np.ones(263, np.float32)
-    trainer = GeneratorTrainer(gen, tok, cfg, mean=mean, std=std)
+    trainer = GeneratorTrainer(gen, tok, cfg, mean=mean, std=std, downsample=4)
     parts = trainer.train_step(
         torch.randn(2, 32, 263), torch.randn(2, GEN.d_text), torch.tensor([32, 24])
     )
@@ -91,9 +97,12 @@ def test_fk_consistency_terms_finite():
 
 def test_uncertainty_weighting_optimizes_log_vars():
     tok = ResidualFsqTokenizer(TOK)
-    gen = MotionGenerator(GEN)
+    gen = MotionGeneratorModule(GEN)
     trainer = GeneratorTrainer(
-        gen, tok, TrainCfg(cfg_dropout=0.0, pkeep=1.0, loss_weighting="uncertainty")
+        gen,
+        tok,
+        TrainingConfig(cfg_dropout=0.0, pkeep=1.0, loss_weighting="uncertainty"),
+        downsample=4,
     )
     assert trainer.weighter is not None
 
@@ -103,7 +112,7 @@ def test_uncertainty_weighting_optimizes_log_vars():
 
 
 def test_ema_tracks_and_restores():
-    gen = MotionGenerator(GEN)
+    gen = MotionGeneratorModule(GEN)
     ema = Ema(gen, decay=0.9)
     opt = torch.optim.SGD(gen.parameters(), lr=0.1)
 
@@ -130,15 +139,16 @@ def test_ema_tracks_and_restores():
 def test_decay_groups_exempt_norms_biases_and_the_ssm_memory_params():
     from dataclasses import replace as _replace
 
-    from text2motion.shared.config import GeneratorCfg
-    from text2motion.train.trainer import split_decay
+    from text2motion.app.config import GeneratorConfig
+    from text2motion.generation.trainer import partition_parameters
 
-    gen_cfg = GeneratorCfg(num_codebooks=2, codebook_size=64, d_model=64, n_layers=2)
-    mamba = MotionGenerator(_replace(gen_cfg, backbone="mamba"))
-    transformer = MotionGenerator(_replace(gen_cfg, backbone="transformer"))
+    gen_cfg = GeneratorConfig(num_codebooks=2, codebook_size=64, d_model=64, n_layers=2)
+    mamba = MotionGeneratorModule(_replace(gen_cfg, backbone="mamba"))
+    transformer = MotionGeneratorModule(_replace(gen_cfg, backbone="transformer"))
 
     for model in (mamba, transformer):
-        decay, no_decay = split_decay(model)
+        partition = partition_parameters(model)
+        decay, no_decay = partition.decay, partition.no_decay
         assert decay and no_decay
         assert all(p.ndim >= 2 for p in decay)
         decayed_ids = {id(p) for p in decay}
@@ -149,3 +159,29 @@ def test_decay_groups_exempt_norms_biases_and_the_ssm_memory_params():
     m_names = {n for n, _ in mamba.named_parameters()}
     assert any(n.endswith("a_log") for n in m_names)
     assert not any(n.endswith("a_log") for n, _ in transformer.named_parameters())
+
+
+def test_pretraining_optimizer_groups_do_not_decay_ssm_memory_params():
+    from dataclasses import replace as _replace
+
+    from text2motion.generation.trainer import adamw_groups
+
+    mamba = MotionGeneratorModule(_replace(GEN, backbone="mamba"))
+    cfg = TrainingConfig(weight_decay=0.01, decay_groups=True)
+    opt = torch.optim.AdamW(
+        adamw_groups(mamba, cfg.lr, cfg.decay_groups),
+        lr=cfg.lr,
+        weight_decay=cfg.weight_decay,
+    )
+    decay_by_id = {
+        id(param): float(group["weight_decay"])
+        for group in opt.param_groups
+        for param in group["params"]
+    }
+
+    assert len(decay_by_id) == len(list(mamba.parameters()))
+    for name, param in mamba.named_parameters():
+        if name.endswith(("a_log", "d_skip")):
+            assert decay_by_id[id(param)] == 0.0, (
+                f"{name} must not be weight-decayed in pretraining"
+            )

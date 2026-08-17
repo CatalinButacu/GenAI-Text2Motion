@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 
-from text2motion.data.hml3d import param_util
-from text2motion.data.hml3d.feature import (
+from text2motion.motion import representation as param_util
+from text2motion.motion.representation import (
     build_tgt_offsets,
     default_params,
     process_file,
@@ -57,7 +57,7 @@ def test_param_constants_exact() -> None:
     assert param_util.fid_l == [7, 10]
     assert param_util.fid_r == [8, 11]
     assert (param_util.l_idx1, param_util.l_idx2) == (5, 8)
-    assert param_util.joints_num == 22
+    assert param_util.JOINTS == 22
     assert param_util.feet_threshold == 0.002
     assert param_util.t2m_raw_offsets.shape == (22, 3)
     assert param_util.t2m_kinematic_chain == [

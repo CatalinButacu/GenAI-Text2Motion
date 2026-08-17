@@ -3,11 +3,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from text2motion.data.hml3d.dataset import parse_text_file
-from text2motion.eval.matcher import load_eval_stats, load_matchers
-from text2motion.eval.metrics import diversity, fid, mm_dist, r_precision
-from text2motion.eval.word_vectorizer import WordVectorizer  # vendored Guo vocab + POS (portable)
-from text2motion.shared.config import load_config
+from text2motion.app.config import load_config
+from text2motion.evaluation.matcher import (
+    WordVectorizer,  # vendored Guo vocab + POS (portable)
+    load_eval_stats,
+    load_matchers,
+)
+from text2motion.evaluation.metrics import diversity, fid, mm_dist, r_precision
+from text2motion.motion.dataset import parse_text_file
 
 w_vec = WordVectorizer(r"data/t2m_glove/glove", "our_vab")
 

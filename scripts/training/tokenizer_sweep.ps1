@@ -10,7 +10,7 @@ foreach ($v in $variants) {
     $stem = [System.IO.Path]::GetFileNameWithoutExtension($v.name)
     $log = "outputs/sweep_$stem.log"
     "=== $(Get-Date -Format o)  training $stem ===" | Out-File -Append $log -Encoding utf8
-    & $py -u -m text2motion.train.train_tokenizer --config $v.cfg --tokenizer fsq `
+    & $py -u -m text2motion.app.cli train-tokenizer --config $v.cfg --tokenizer fsq `
         --epochs 500 --batch_size 128 --eval_every 25 --ckpt_name $v.name --resume `
         2>&1 | Out-File -Append $log -Encoding utf8
     "=== $(Get-Date -Format o)  done $stem ===" | Out-File -Append $log -Encoding utf8

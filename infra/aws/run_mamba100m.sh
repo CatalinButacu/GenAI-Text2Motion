@@ -43,7 +43,7 @@ done
 
 if [ ! -f "$PRIOR.done" ]; then
     echo "=== STAGE A: 100M mamba AMASS pretrain (eager) ===" | tee -a outputs/mamba100m.log
-    $PY -u -m text2motion.train.train_pretrain \
+    $PY -u -m text2motion.app.cli pretrain \
         --config "$CFG" \
         --backbone mamba \
         --token_pack "$PACK" \
@@ -57,10 +57,20 @@ else
 fi
 
 echo "=== STAGE B: 100M mamba fine-tune from prior (eager) ===" | tee -a outputs/mamba100m.log
-$PY -u -m text2motion.train.train_generator \
+GATE="outputs/gates/mamba_100m_overfit.json"
+mkdir -p outputs/gates
+[ -f "$GATE" ] || $PY -u -m text2motion.app.cli sanity-overfit \
     --config "$CFG" \
     --backbone mamba \
     --tokenizer_ckpt "$TOK" \
+    --out "$GATE" \
+    > outputs/mamba100m_gate.log 2>&1
+
+$PY -u -m text2motion.app.cli train-generator \
+    --config "$CFG" \
+    --backbone mamba \
+    --tokenizer_ckpt "$TOK" \
+    --overfit_gate "$GATE" \
     --init_ckpt "$PRIOR" \
     --ckpt_name "$FT" \
     --epochs 60 \

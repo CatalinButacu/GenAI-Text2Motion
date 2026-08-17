@@ -19,6 +19,9 @@ dependencies = [
 viewer = ["aitviewer"]
 dev = ["ruff", "pytest"]
 
+[project.scripts]
+text2motion = "text2motion.app.cli:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

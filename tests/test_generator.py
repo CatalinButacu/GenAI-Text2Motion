@@ -1,11 +1,11 @@
 import torch
 
-from text2motion.model.generator import MotionGenerator, token_ce_loss
-from text2motion.shared.config import GeneratorCfg
+from text2motion.app.config import GeneratorConfig
+from text2motion.generation.model import MotionGeneratorModule, token_ce_loss
 
 
-def small_cfg(backbone: str) -> GeneratorCfg:
-    return GeneratorCfg(
+def small_cfg(backbone: str) -> GeneratorConfig:
+    return GeneratorConfig(
         backbone=backbone,
         d_model=64,
         n_layers=2,
@@ -21,7 +21,9 @@ def small_cfg(backbone: str) -> GeneratorCfg:
     )
 
 
-def streamed_logits(gen: MotionGenerator, tokens: torch.Tensor, text: torch.Tensor) -> torch.Tensor:
+def streamed_logits(
+    gen: MotionGeneratorModule, tokens: torch.Tensor, text: torch.Tensor
+) -> torch.Tensor:
     state = gen.backbone.init_state(tokens.size(0), tokens.device)
     prefix = gen.text_prefix(text)  # (B, P, d_model); P=1 here, stepped like stream() does
     for position in range(prefix.size(1)):
@@ -38,7 +40,7 @@ def streamed_logits(gen: MotionGenerator, tokens: torch.Tensor, text: torch.Tens
 def _parity(backbone: str) -> None:
     torch.manual_seed(0)
     cfg = small_cfg(backbone)
-    gen = MotionGenerator(cfg).eval()
+    gen = MotionGeneratorModule(cfg).eval()
     tokens = torch.randint(0, cfg.codebook_size, (2, 8, cfg.num_codebooks))
     text = torch.randn(2, cfg.d_text)
 
@@ -59,7 +61,7 @@ def test_parity_transformer():
 
 
 def test_state_is_bounded_mamba_but_kv_grows_transformer():
-    mamba = MotionGenerator(small_cfg("mamba")).eval()
+    mamba = MotionGeneratorModule(small_cfg("mamba")).eval()
     st = mamba.backbone.init_state(1, torch.device("cpu"))
     shapes0 = [(s[0].shape, s[1].shape) for s in st]
     x = torch.randn(1, mamba.cfg.d_model)
@@ -70,7 +72,7 @@ def test_state_is_bounded_mamba_but_kv_grows_transformer():
     shapes1 = [(s[0].shape, s[1].shape) for s in st]
     assert shapes0 == shapes1  # fixed-size state regardless of steps taken
 
-    tf = MotionGenerator(small_cfg("transformer")).eval()
+    tf = MotionGeneratorModule(small_cfg("transformer")).eval()
     tst = tf.backbone.init_state(1, torch.device("cpu"))
     _, tst = tf.backbone.step(x, tst)
     after1 = tst[0][0].size(2)
@@ -82,7 +84,7 @@ def test_state_is_bounded_mamba_but_kv_grows_transformer():
 def test_single_batch_overfit_mamba():
     torch.manual_seed(0)
     cfg = small_cfg("mamba")
-    gen = MotionGenerator(cfg).train()
+    gen = MotionGeneratorModule(cfg).train()
     opt = torch.optim.Adam(gen.parameters(), lr=3e-3)
     tokens = torch.randint(0, cfg.codebook_size, (2, 8, cfg.num_codebooks))
     text = torch.randn(2, cfg.d_text)

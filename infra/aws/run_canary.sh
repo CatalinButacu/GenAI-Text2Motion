@@ -37,10 +37,19 @@ $PY -m pytest tests/test_generator_upgrades.py::test_kernel_matches_eager_scan -
 echo "=== gate 2: 5-epoch twins at 100M ===" | tee outputs/canary_timing.log
 for bb in transformer mamba; do
     start=$(date +%s)
-    $PY -u -m text2motion.train.train_generator \
+    GATE="outputs/gates/${bb}_100m_overfit.json"
+    mkdir -p outputs/gates
+    [ -f "$GATE" ] || $PY -u -m text2motion.app.cli sanity-overfit \
         --config configs/generator/final100m_fsq8x1024.yaml \
         --backbone "$bb" \
         --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt \
+        --out "$GATE" \
+        > "outputs/gate_$bb.log" 2>&1
+    $PY -u -m text2motion.app.cli train-generator \
+        --config configs/generator/final100m_fsq8x1024.yaml \
+        --backbone "$bb" \
+        --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt \
+        --overfit_gate "$GATE" \
         --epochs 5 \
         --batch_size 64 \
         --eval_every 5 \

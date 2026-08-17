@@ -20,7 +20,7 @@ foreach ($v in $variants) {
     $log  = "outputs/sweep_$stem.log"
     Write-Host "=== $(Get-Date -Format o)  training $stem ($($v.mech)) ===" -ForegroundColor Cyan
     "=== $(Get-Date -Format o)  training $stem ($($v.mech)) ===" | Out-File -Append $log -Encoding utf8
-    & $py -u -m text2motion.train.train_tokenizer --config $v.cfg --tokenizer $v.mech `
+    & $py -u -m text2motion.app.cli train-tokenizer --config $v.cfg --tokenizer $v.mech `
         --epochs 500 --batch_size 128 --eval_every 25 --ckpt_name $v.name --resume `
         2>&1 | Tee-Object -FilePath $log -Append
     "=== $(Get-Date -Format o)  done $stem ===" | Out-File -Append $log -Encoding utf8

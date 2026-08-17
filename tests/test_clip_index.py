@@ -2,7 +2,7 @@ import json
 
 import numpy as np
 
-from text2motion.data.hml3d.clip_index import CACHE_NAME, clip_lengths
+from text2motion.motion.dataset import CLIP_LENGTHS_FILE, clip_lengths
 
 
 def make_clip(vec_dir, name, frames, dim=263):
@@ -23,7 +23,7 @@ def test_lengths_are_correct_and_cached(tmp_path):
     first = clip_lengths(vec_dir, ["a", "b"])
     assert first == {"a": 40, "b": 77}
 
-    cache_path = tmp_path / CACHE_NAME
+    cache_path = tmp_path / CLIP_LENGTHS_FILE
     assert cache_path.is_file()
     assert set(json.loads(cache_path.read_text())) == {"a", "b"}
 
@@ -51,7 +51,7 @@ def test_stale_cache_entry_is_recomputed(tmp_path):
     make_clip(vec_dir, "a", 40)
     clip_lengths(vec_dir, ["a"])
 
-    cache_path = tmp_path / CACHE_NAME
+    cache_path = tmp_path / CLIP_LENGTHS_FILE
     cache_path.write_text(json.dumps({"a": [9999, 1]}), encoding="utf-8")
 
     assert clip_lengths(vec_dir, ["a"]) == {"a": 40}
