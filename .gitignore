@@ -28,6 +28,7 @@ __pycache__/
 
 # Claude Code tooling -- local only (agents, skills, ADRs, hooks, settings)
 .claude/
+CLAUDE.md/
 
 # editor
 .vscode/
@@ -59,3 +60,4 @@ infra/azure/*.tfstate.*
 infra/azure/terraform.tfvars
 infra/azure/.terraform.lock.hcl
 .ropeproject/
+CLAUDE.md
