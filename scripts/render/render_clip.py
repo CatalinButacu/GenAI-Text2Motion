@@ -13,18 +13,23 @@ import matplotlib.pyplot as plt
 
 from text2motion.app.config import load_config
 from text2motion.app.runtime import seed_everything
-from text2motion.generation.model import MotionGeneratorModule
+from text2motion.generation.model import MotionTokenGenerator
 from text2motion.generation.text import CLIPTextEncoder
-from text2motion.motion.representation import kinematic_bones, recover_skeleton
+from text2motion.motion.representation import DIM, FPS, kinematic_bones, recover_skeleton
 from text2motion.streaming.decoder import StreamingMotionDecoder
-from text2motion.tokenization.model import ResidualFsqTokenizer
+from text2motion.tokenization.model import FsqTokenizer
 
 
 def run(a: argparse.Namespace) -> None:
-    seed_everything(2026, False)
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
     cfg = load_config(a.config)
-    tok = ResidualFsqTokenizer(cfg.tokenizer)
+    seed_everything(cfg.seed, cfg.deterministic)
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    steps = (
+        a.steps
+        if a.steps is not None
+        else cfg.data.max_motion_len // cfg.tokenizer.downsample
+    )
+    tok = FsqTokenizer(cfg.tokenizer)
     tok.load_state_dict(torch.load(a.tokenizer_ckpt, map_location="cpu"))
     tok.to(dev).eval()
     nl = cfg.generator.mamba_n_layers if a.backbone == "mamba" else cfg.generator.n_layers
@@ -36,7 +41,7 @@ def run(a: argparse.Namespace) -> None:
         codebook_size=tok.codebook_size,
         use_kernel=False,
     )
-    gen = MotionGeneratorModule(gc).to(dev).eval()
+    gen = MotionTokenGenerator(gc).to(dev).eval()
     st = torch.load(a.ckpt, map_location="cpu")
     gen.load_state_dict(st["generator"] if isinstance(st, dict) and "generator" in st else st)
     te = CLIPTextEncoder(cfg.text_encoder).to(dev).eval()
@@ -45,10 +50,10 @@ def run(a: argparse.Namespace) -> None:
     out = Path(cfg.paths.hml3d_out_dir)
     mean = torch.from_numpy(np.load(out / "Mean.npy").astype("float32")).to(dev)
     std = torch.from_numpy(np.load(out / "Std.npy").astype("float32")).to(dev)
-    dec = StreamingMotionDecoder(tok, mean, std)
-    it = gen.stream(
+    dec = StreamingMotionDecoder(tok, cfg.tokenizer.downsample, mean, std)
+    it = gen.stream_token_indices(
         emb,
-        a.steps,
+        steps,
         temperature=a.temperature,
         top_p=a.top_p,
         cfg_scale=a.cfg_scale,
@@ -58,7 +63,7 @@ def run(a: argparse.Namespace) -> None:
     with torch.no_grad():
         for ch in dec.stream_tokens(it):
             chunks.append(ch.squeeze(0).cpu().numpy())
-    feat = np.concatenate(chunks, 0) if chunks else np.zeros((0, 263), "float32")
+    feat = np.concatenate(chunks, 0) if chunks else np.zeros((0, DIM), "float32")
     joints = recover_skeleton(feat)
     np.save(a.npy, joints)
     print(f"frames {joints.shape[0]}  -> saved {a.npy}")
@@ -67,8 +72,8 @@ def run(a: argparse.Namespace) -> None:
         return
 
     bones = kinematic_bones()
-    T = joints.shape[0]
-    idx = np.linspace(0, T - 1, min(a.frames, T)).astype(int)
+    frame_count = joints.shape[0]
+    idx = np.linspace(0, frame_count - 1, min(a.frames, frame_count)).astype(int)
 
     lo, hi = joints.min((0, 1)), joints.max((0, 1))
     fig = plt.figure(figsize=(2.6 * len(idx), 3.2))
@@ -91,7 +96,9 @@ def run(a: argparse.Namespace) -> None:
         ax.set_axis_off()
         ax.view_init(elev=12, azim=-75)
     fig.suptitle(
-        f'{a.backbone} pilot, cfg {a.cfg_scale}: "{a.prompt}"  ({T} frames @20fps)', fontsize=11
+        f'{a.backbone} pilot, cfg {a.cfg_scale}: "{a.prompt}"  '
+        f"({frame_count} frames @{FPS}fps)",
+        fontsize=11,
     )
     fig.tight_layout()
     fig.savefig(a.out, dpi=110)
@@ -107,7 +114,7 @@ def main() -> None:
     p.add_argument("--ckpt", default="checkpoints/generator/generator_transformer.pt")
     p.add_argument("--tokenizer_ckpt", default="checkpoints/tokenizer/fsq_g8_v1024.pt")
     p.add_argument("--prompt", required=True)
-    p.add_argument("--steps", type=int, default=49)
+    p.add_argument("--steps", type=int)
     p.add_argument("--cfg_scale", type=float, default=3.0)
     p.add_argument("--temperature", type=float, default=1.1)
     p.add_argument("--top_p", type=float, default=0.9)

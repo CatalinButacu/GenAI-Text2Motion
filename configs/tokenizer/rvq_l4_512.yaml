@@ -1,5 +1,3 @@
-# RVQ hypertune: 4 residual levels x 512 codes, code_dim 512. Fewer levels = coarser, fewer
-# codes/step. Enc/dec held at width 512 / downsample 4 / 3 resblocks (constant across the RVQ sweep).
 seed: 2026
 device: cuda
 data:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,10 +8,15 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from text2motion.generation.model import GeneratorArchitecture, token_ce_loss
-from text2motion.generation.trainer import Amp, TrainingConfig, adamw_groups
+from text2motion.generation.contracts import (
+    GeneratorPretrainingRequest,
+    GeneratorTrainingConfig,
+    MixedPrecisionMode,
+)
+from text2motion.generation.model import GeneratorModelSpec, token_ce_loss
+from text2motion.generation.trainer import adamw_groups, warmup_cosine_factor
 
-MetricSink = Callable[[dict[str, object]], None]
+_MetricSink = Callable[[dict[str, object]], None]
 
 
 @dataclass(frozen=True)
@@ -63,18 +67,6 @@ class PretrainingBudget:
             raise RuntimeError(f"pretraining budgets differ in {', '.join(mismatches)}")
 
 
-@dataclass(frozen=True)
-class PretrainingRequest:
-    token_pack: Path
-    epochs: int = 30
-    batch_size: int = 64
-    grad_accum: int = 1
-    num_workers: int = 0
-    val_fraction: float = 0.05
-    out_path: Path | None = None
-    resume: bool = False
-
-
 def split_keys_by_clip(keys: list[str], val_fraction: float, seed: int) -> tuple[list, list]:
     stems = sorted({key.rsplit("__", 1)[0] for key in keys})
     rng = np.random.default_rng(seed)
@@ -121,7 +113,7 @@ def collate_tokens(batch: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tenso
 
 
 def build_token_loaders(
-    request: PretrainingRequest, seed: int
+    request: GeneratorPretrainingRequest, seed: int
 ) -> tuple[DataLoader, DataLoader | None, PretrainingBudget]:
     with np.load(request.token_pack) as pack:
         all_keys = list(pack.keys())
@@ -149,13 +141,13 @@ def build_token_loaders(
 
 
 def pretrain_generator(
-    architecture: GeneratorArchitecture,
+    architecture: GeneratorModelSpec,
     generator,
-    request: PretrainingRequest,
-    train: TrainingConfig,
+    request: GeneratorPretrainingRequest,
+    train: GeneratorTrainingConfig,
     device: str,
     out_path: Path,
-    on_metrics: MetricSink = lambda metrics: None,
+    on_metrics: _MetricSink = lambda metrics: None,
     seed: int = 2026,
 ) -> None:
     loader, val_loader, budget = build_token_loaders(request, seed)
@@ -171,16 +163,13 @@ def pretrain_generator(
     floor = train.lr_min_ratio
 
     def lr_multiplier(step: int) -> float:
-        if step < warmup:
-            return step / max(1, warmup)
-        progress = (step - warmup) / max(1, total_steps - warmup)
-        return floor + (1 - floor) * 0.5 * (1 + math.cos(math.pi * progress))
+        return warmup_cosine_factor(step, warmup, total_steps, floor)
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     resume_path = out_path.with_name(out_path.stem + "_last.pt")
 
-    amp_on = train.amp == Amp.BF16 and device == "cuda"
+    amp_on = train.amp == MixedPrecisionMode.BF16 and device == "cuda"
     print(
         f"segments {len(loader.dataset)}  examples/epoch {budget.consumed_examples}  "
         f"microbatches/epoch {budget.microbatches}  "

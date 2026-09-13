@@ -1,25 +1,26 @@
 from __future__ import annotations
 
 import argparse
-import queue
-import threading
 import time
 import traceback
 from array import array
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import imgui
 import numpy as np
 from aitviewer.renderables.meshes import Meshes
 from aitviewer.viewer import Viewer
 
-from text2motion.studio.avatar import Avatar, rest_pose_body
+from text2motion.studio.actions import log_action, log_result, log_toggle
+from text2motion.studio.avatar import SmplxAvatarController, create_smplx_rest_pose_mesh
 from text2motion.studio.config import StudioConfig
-from text2motion.studio.contracts import MotionClient, ViewerHost
-from text2motion.studio.scene import Display, ModelEntry, StudioState
+from text2motion.studio.contracts import MotionInferenceClientPort, ViewerHost
+from text2motion.studio.generation import StudioGenerationController
+from text2motion.studio.scene import StreamSceneUpdater, StudioSession
 
-IMGUI_COLOR_SLOTS = {
+_COLOR_SLOTS = {
     "window_background": imgui.COLOR_WINDOW_BACKGROUND,
     "title_background": imgui.COLOR_TITLE_BACKGROUND,
     "title_background_active": imgui.COLOR_TITLE_BACKGROUND_ACTIVE,
@@ -40,9 +41,9 @@ IMGUI_COLOR_SLOTS = {
     "plot_histogram": imgui.COLOR_PLOT_HISTOGRAM,
 }
 
-WINDOW_FLAGS = imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_COLLAPSE
+_WINDOW_FLAGS = imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_COLLAPSE
 
-THEME_STYLE_FIELDS = (
+_STYLE_FIELDS = (
     "window_rounding",
     "child_rounding",
     "frame_rounding",
@@ -56,202 +57,13 @@ THEME_STYLE_FIELDS = (
 )
 
 
-class GenerationControl:
-    def __init__(self, host: ViewerHost, state, avatar: Avatar) -> None:
-        self.host = host
-        self.state = state
-        self.avatar = avatar
-
-    def submit_prompt(self) -> None:
-        prompt = self.state.prompt_text.strip()
-        if not prompt or self.state.generating:
-            return
-        self.state.live.last_dispatched = prompt
-        self._start_generation(prompt, live=False)
-
-    def _start_generation(self, prompt: str, live: bool) -> None:
-        self.state.generating = True
-        self.state.buf.cancel = False
-        self.state.buf.gen_progress = 0.0
-        self.state.buf.fit_progress = None
-        if live:
-            steps = min(self.state.steps, self.state.config.live.steps)
-            cfg_scale = 1.0
-            fit_body = False
-            self.state.status = f'live: "{prompt}"'
-        else:
-            steps = self.state.steps
-            cfg_scale = self.state.cfg_scale
-            fit_body = self.state.fit_body and bool(self.state.model_dir)
-            self.state.status = f'generating: "{prompt}"'
-            self.state.history.append(prompt)
-        params = {
-            "temperature": self.state.temperature,
-            "top_p": self.state.top_p,
-            "cfg_scale": cfg_scale,
-            "steps": steps,
-            "fit_body": fit_body,
-            "downsample": self.state.downsample,
-        }
-        self.state.buf.current_fit_body = fit_body
-        self.state.buf.drop_skeleton = False
-        with self.state.buf.lock:
-            self.state.buf.new_chunks.clear()
-            self.state.buf.pending_body_chunks = []
-            self.state.buf.pending_remesh = None
-            self.state.buf.started = False
-            self.state.buf.accum_joints = None
-            self.state.fit.orient = []
-            self.state.fit.pose = []
-            self.state.fit.transl = []
-            self.state.fit.betas = None
-        threading.Thread(target=self._worker, args=(prompt, params), daemon=True).start()
-
-    def _tick_live(self) -> None:
-        if not self.state.live.enabled:
-            return
-        sig = (self.state.temperature, self.state.top_p, self.state.steps)
-        if sig != self.state.live.signature:
-            self.state.live.signature = sig
-            if self.state.prompt_text.strip():
-                self.state.live.mark_dirty(self.state.prompt_text, time.perf_counter())
-                self.state.live.last_dispatched = ""
-        prompt = self.state.prompt_text.strip()
-        ready = self.state.live.debounce_elapsed(
-            time.perf_counter(), self.state.config.live.debounce_seconds
-        )
-        if prompt and ready and prompt != self.state.live.last_dispatched:
-            self.state.live.prev_prompt = ""
-            self.state.live.last_dispatched = prompt
-            if self.state.generating:
-                self.state.buf.cancel = True
-                self.state.live.regen_pending = True
-            else:
-                self._start_generation(prompt, live=True)
-        if self.state.live.regen_pending and not self.state.generating:
-            self.state.live.regen_pending = False
-            if self.state.prompt_text.strip():
-                self._start_generation(self.state.prompt_text.strip(), live=True)
-
-    def _finish(self, n_frames: int, params: dict) -> None:
-        duration = n_frames / self.host.playback_fps
-        verb = "stopped" if self.state.buf.cancel else "done"
-        suffix = "" if params["fit_body"] else ", skeleton"
-        self.state.status = f"{verb} -- {n_frames} frames (~{duration:.1f}s{suffix})"
-        self.state.buf.fit_progress = None
-        if params["fit_body"] and not self.state.buf.cancel:
-            self.state.buf.drop_skeleton = True
-        if not self.host.run_animations:
-            self.host.toggle_animation(True)
-        self.state.generating = False
-        if params["fit_body"] and self.state.fit.after_gen and self.state.fit.orient:
-            self.state.fit.after_gen = False
-            self.avatar._schedule_remesh()
-
-    def _fit_worker(self, fit_queue: "queue.Queue", params: dict) -> None:
-        warm_start: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
-        n_frames = 0
-        try:
-            while True:
-                joints = fit_queue.get()
-                if joints is None:
-                    break
-                if self.state.buf.cancel:
-                    continue
-                n_frames += len(joints)
-                warm_start = self.avatar._fit_chunk(joints, warm_start, n_frames)
-        except Exception as exc:
-            traceback.print_exc()
-            self.state.status = f"body fit failed: {type(exc).__name__}: {exc}"
-        finally:
-            self._finish(n_frames, params)
-
-    def _worker(self, prompt: str, params: dict) -> None:
-        n_frames = 0
-        total_frames = params["steps"] * params["downsample"]
-        fit_queue: queue.Queue | None = None
-        if params["fit_body"]:
-            fit_queue = queue.Queue()
-            threading.Thread(target=self._fit_worker, args=(fit_queue, params), daemon=True).start()
-        try:
-            print(
-                f"[GEN] request prompt={prompt!r} steps={params['steps']} "
-                f"cfg={params['cfg_scale']} temp={params['temperature']} "
-                f"fit_body={params['fit_body']} -> motion service",
-                flush=True,
-            )
-            chunk_iter = self.state.client.generate(
-                prompt,
-                steps=params["steps"],
-                temperature=params["temperature"],
-                top_p=params["top_p"],
-                cfg_scale=params["cfg_scale"],
-                should_cancel=lambda: self.state.buf.cancel,
-            )
-            for joints in chunk_iter:
-                assert joints.ndim == 3 and joints.shape[1:] == (22, 3), (
-                    f"bad joints {joints.shape}"
-                )
-                n_frames += len(joints)
-                print(
-                    f"[GEN] chunk joints={joints.shape} n_frames={n_frames} "
-                    f"finite={np.isfinite(joints).all()}",
-                    flush=True,
-                )
-                self.state.buf.gen_progress = min(1.0, n_frames / total_frames)
-                with self.state.buf.lock:
-                    self.state.buf.new_chunks.append(joints)
-                if fit_queue is not None:
-                    fit_queue.put(joints)
-                    self.state.status = f"streaming... {n_frames} frames"
-                else:
-                    self.state.status = (
-                        f"streaming... {n_frames} frames (skeleton only -- tick"
-                        " 'avatar skin' for the body)"
-                    )
-        except Exception as exc:
-            traceback.print_exc()
-            self.state.status = f"error after {n_frames} frames: {type(exc).__name__}: {exc}"
-            if fit_queue is not None:
-                fit_queue.put(None)
-                return
-            self.state.generating = False
-            return
-
-        print(
-            f"[GEN] worker DONE total_frames={n_frames} fit_body={params['fit_body']}", flush=True
-        )
-        if fit_queue is not None:
-            fit_queue.put(None)
-            return
-        self._finish(n_frames, params)
-
-    def _start_model_load(self) -> None:
-        entry = self.state.models[self.state.model_idx]
-        self.state.loading_model = True
-        self.state.load_status = f"loading {entry.label}..."
-        threading.Thread(target=self._load_worker, args=(entry,), daemon=True).start()
-
-    def _load_worker(self, entry: ModelEntry) -> None:
-        try:
-            hello = self.state.client.load(
-                entry.config, entry.ckpt, entry.tokenizer_ckpt, entry.backbone
-            )
-            self.state.backbone = entry.backbone
-            self.state.downsample = int(hello["downsample"])
-            self.state.max_steps = int(hello["max_steps"])
-            self.state.steps = min(self.state.steps, self.state.max_steps)
-            self.state.load_status = f"active: {entry.label}"
-        except Exception as exc:
-            traceback.print_exc()
-            self.state.load_status = f"load failed: {type(exc).__name__}: {exc}"
-        finally:
-            self.state.loading_model = False
-
-
 class GuiPanels:
     def __init__(
-        self, host: ViewerHost, state, avatar: Avatar, generation: GenerationControl
+        self,
+        host: ViewerHost,
+        state,
+        avatar: SmplxAvatarController,
+        generation: StudioGenerationController,
     ) -> None:
         self.host = host
         self.state = state
@@ -290,13 +102,13 @@ class GuiPanels:
         self.state.styled = True
         theme = self.state.config.theme
         style = imgui.get_style()
-        for name in THEME_STYLE_FIELDS:
+        for name in _STYLE_FIELDS:
             setattr(style, name, getattr(theme, name))
         for name, rgba in theme.colors.items():
-            slot = IMGUI_COLOR_SLOTS.get(name)
+            slot = _COLOR_SLOTS.get(name)
             if slot is None:
                 raise KeyError(
-                    f"unknown imgui colour slot {name!r}; known slots: {sorted(IMGUI_COLOR_SLOTS)}"
+                    f"unknown imgui colour slot {name!r}; known slots: {sorted(_COLOR_SLOTS)}"
                 )
             style.colors[slot] = rgba
 
@@ -316,7 +128,7 @@ class GuiPanels:
         self._apply_style()
         editor, *_ = self._rects()
         self._dock(editor)
-        expanded, _ = imgui.begin("Scene", False, WINDOW_FLAGS)
+        expanded, _ = imgui.begin("Scene", False, _WINDOW_FLAGS)
         if expanded:
             self.host.scene.gui_editor(imgui, self.host.viewports, self.host.viewport_mode)
         imgui.end()
@@ -324,7 +136,7 @@ class GuiPanels:
     def gui_environment(self) -> None:
         _, env, *_ = self._rects()
         self._dock(env)
-        imgui.begin("Environment", False, WINDOW_FLAGS)
+        imgui.begin("Environment", False, _WINDOW_FLAGS)
 
         self._section("scene")
         changed, color = imgui.color_edit4("background", *self.host.scene.background_color)
@@ -368,7 +180,9 @@ class GuiPanels:
 
         self._section("floor & origin")
         floor = self.host.scene.floor
-        _, floor.enabled = imgui.checkbox("show floor", floor.enabled)
+        changed, floor.enabled = imgui.checkbox("show floor", floor.enabled)
+        if changed:
+            log_toggle("show floor", floor.enabled)
         changed, col = imgui.color_edit3("tile a", *[float(v) for v in floor.c1[:3]])
         if changed:
             floor.c1[:3] = col
@@ -383,12 +197,20 @@ class GuiPanels:
     def gui_params(self) -> None:
         *_, params, _, _ = self._rects()
         self._dock(params)
-        imgui.begin("Generation", False, WINDOW_FLAGS)
+        imgui.begin("Generation", False, _WINDOW_FLAGS)
+        self._model_controls()
+        self._sampling_controls()
+        self._avatar_controls()
+        self._prompt_history()
+        imgui.end()
 
+    def _model_controls(self) -> None:
         self._section("model")
-        _, self.state.model_idx = imgui.combo(
+        picked, self.state.model_idx = imgui.combo(
             "model", self.state.model_idx, [e.label for e in self.state.models]
         )
+        if picked:
+            log_action("select model", self.state.models[self.state.model_idx].key)
         entry = self.state.models[self.state.model_idx]
         self._dim_text(
             f"pinned from training: {entry.backbone} backbone, tokenizer"
@@ -396,29 +218,56 @@ class GuiPanels:
         )
         busy = self.state.generating or self.state.loading_model
         if imgui.button("Load model", width=-1) and not busy:
-            self.generation._start_model_load()
+            log_action("press Load model", self.state.models[self.state.model_idx].key)
+            self.generation.start_model_load()
+        if imgui.button("Reload settings + models (R)", width=-1) and not busy:
+            log_action("press Reload settings")
+            self.host.reload_settings()
         self._dim_text(self.state.load_status)
 
+    def _sampling_controls(self) -> None:
         self._section("sampling")
         _, self.state.temperature = imgui.slider_float(
             "temperature", self.state.temperature, 0.1, 2.0
         )
         _, self.state.top_p = imgui.slider_float("top_p", self.state.top_p, 0.1, 1.0)
         _, self.state.cfg_scale = imgui.slider_float("cfg_scale", self.state.cfg_scale, 1.0, 12.0)
-        _, self.state.steps = imgui.slider_int(
-            "steps (tokens)", self.state.steps, 8, self.state.max_steps
-        )
-        seconds = self.state.steps * self.state.downsample / self.host.playback_fps
-        self._dim_text(
-            f"= {self.state.steps * self.state.downsample} frames (~{seconds:.1f}s @"
-            f" {self.host.playback_fps:.0f} fps). Trained at 49 steps (~9.8s); much lower looks"
-            f" clipped; {self.state.max_steps} is the model's position-table hard cap."
-        )
+        if self.state.max_steps == 0:
+            forever = self.state.steps == 0
+            clicked, forever = imgui.checkbox("run forever (bounded state)", forever)
+            if clicked:
+                self.state.steps = 0 if forever else self.state.default_steps
+                log_toggle("run forever", forever)
+        if self.state.steps == 0:
+            self._dim_text(
+                "unbounded: this recurrent backbone streams until you press stop. "
+                f"The viewer keeps the last {self.state.window_frames} frames."
+            )
+        else:
+            upper = self.state.max_steps or self.state.window_steps
+            _, self.state.steps = imgui.slider_int("steps (tokens)", self.state.steps, 8, upper)
+            seconds = self.state.steps * self.state.downsample / self.host.playback_fps
+            cap = (
+                f"{self.state.max_steps} is the model's position-table hard cap."
+                if self.state.max_steps
+                else "this backbone has no position cap -- tick 'run forever' for unbounded."
+            )
+            trained_seconds = (
+                self.state.trained_steps * self.state.downsample / self.host.playback_fps
+            )
+            self._dim_text(
+                f"= {self.state.steps * self.state.downsample} frames (~{seconds:.1f}s @"
+                f" {self.host.playback_fps:.0f} fps). Trained at {self.state.trained_steps} steps "
+                f"(~{trained_seconds:.1f}s); much lower looks clipped; {cap}"
+            )
 
+    def _avatar_controls(self) -> None:
         self._section("avatar")
         clicked, self.state.fit_body = imgui.checkbox(
             "avatar skin (SMPL-X body)", self.state.fit_body
         )
+        if clicked:
+            log_toggle("avatar skin (fit body)", self.state.fit_body)
         if clicked and self.state.fit_body and not self.state.model_dir:
             self.state.fit_body = False
         elif clicked:
@@ -444,20 +293,22 @@ class GuiPanels:
                 self._beta_slider(i, f"shape {i}")
         half = imgui.get_content_region_available()[0] / 2 - 4
         if imgui.button("reset shape", width=half) and self.state.user_betas.any():
+            log_action("press reset shape")
             self.state.user_betas[:] = 0.0
             self.avatar._on_avatar_changed()
         imgui.same_line()
         if imgui.button("refresh avatar", width=half):
+            log_action("press refresh avatar")
             self.avatar._on_avatar_changed()
-        if self.state.fit.note:
-            self._dim_text(self.state.fit.note)
+        if self.state.smplx_fit.note:
+            self._dim_text(self.state.smplx_fit.note)
 
+    def _prompt_history(self) -> None:
         if len(self.state.history) > 0 and imgui.collapsing_header("prompt history")[0]:
             for i, past in enumerate(reversed(self.state.history[-10:])):
                 clicked, _ = imgui.selectable(f"{past[:44]}##hist{i}")
                 if clicked:
                     self.state.prompt_text = past
-        imgui.end()
 
     def _beta_slider(self, i: int, label: str) -> None:
         changed, value = imgui.slider_float(label, float(self.state.user_betas[i]), -3.0, 3.0)
@@ -469,10 +320,11 @@ class GuiPanels:
     def gui_playback(self) -> None:
         *_, playback, _ = self._rects()
         self._dock(playback)
-        imgui.begin("Playback", False, WINDOW_FLAGS)
+        imgui.begin("Playback", False, _WINDOW_FLAGS)
 
         changed, run = imgui.checkbox("play [space]", self.host.run_animations)
         if changed:
+            log_toggle("play", run)
             self.host.toggle_animation(run)
         imgui.same_line()
         n_frames = max(1, self.host.scene.n_frames)
@@ -493,10 +345,14 @@ class GuiPanels:
             format="%.1f",
         )
 
-        _, self.state.follow_cam = imgui.checkbox("camera follows avatar", self.state.follow_cam)
+        changed, self.state.follow_cam = imgui.checkbox(
+            "camera follows avatar", self.state.follow_cam
+        )
+        if changed:
+            log_toggle("camera follows avatar", self.state.follow_cam)
         imgui.same_line()
         if imgui.small_button("center view"):
-            self.state.buf.need_reset_view = True
+            self.state.stream_buffers.need_reset_view = True
 
         valid = self.host._past_frametimes[self.host._past_frametimes > 0.0]
         if valid.size > 0:
@@ -513,7 +369,7 @@ class GuiPanels:
     def gui_prompt(self) -> None:
         *_, prompt = self._rects()
         self._dock(prompt)
-        flags = WINDOW_FLAGS | imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_SCROLLBAR
+        flags = _WINDOW_FLAGS | imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_SCROLLBAR
         imgui.begin("##prompt_bar", False, flags)
 
         button_w = 96.0
@@ -531,46 +387,56 @@ class GuiPanels:
         imgui.same_line()
         if self.state.generating and not self.state.live.enabled:
             if imgui.button("Stop", width=button_w):
-                self.state.buf.cancel = True
+                log_action("press Stop", f"at {self.state.stream_buffers.frames_emitted} frames")
+                self.generation.stop()
         elif imgui.button("Generate", width=button_w) or enter:
             self.generation.submit_prompt()
-        _, self.state.live.enabled = imgui.checkbox(
+        changed, self.state.live.enabled = imgui.checkbox(
             "live (regenerate as you type)", self.state.live.enabled
         )
+        if changed:
+            log_toggle("live regenerate", self.state.live.enabled)
+        imgui.same_line()
+        label = "hide skin (S)" if self.state.show_skin else "show skin (S)"
+        if imgui.button(label):
+            self.state.show_skin = not self.state.show_skin
+            log_toggle("skin", self.state.show_skin)
 
         if self.state.generating:
             avail = imgui.get_content_region_available()[0]
-            done = int(self.state.buf.gen_progress * self.state.steps * self.state.downsample)
+            done = self.state.stream_buffers.frames_emitted
             total = self.state.steps * self.state.downsample
-            if self.state.buf.current_fit_body:
-                imgui.progress_bar(
-                    self.state.buf.gen_progress, (avail * 0.55, 15), f"motion {done}/{total} frames"
-                )
+            label = f"motion {done}/{total} frames" if total else f"motion {done} frames (forever)"
+            bar = self.state.stream_buffers.gen_progress if total else (done % 100) / 100.0
+            if self.state.stream_buffers.current_fit_body:
+                imgui.progress_bar(bar, (avail * 0.55, 15), label)
                 imgui.same_line()
-                fit = self.state.buf.fit_progress or 0.0
+                fit = self.state.stream_buffers.fit_progress or 0.0
                 imgui.progress_bar(fit, (-1, 15), f"body fit {int(fit * 100)}%")
             else:
-                imgui.progress_bar(
-                    self.state.buf.gen_progress, (-1, 15), f"motion {done}/{total} frames"
-                )
+                imgui.progress_bar(bar, (-1, 15), label)
         self._dim_text(self.state.status)
         imgui.end()
 
 
 class StreamingStudioViewer(Viewer):
+    scene: Any
+
     def __init__(
         self,
-        client: MotionClient,
+        client: MotionInferenceClientPort,
         model_dir: str,
         device: str,
         args: argparse.Namespace,
         config: StudioConfig,
+        reload_config=None,
     ) -> None:
         super().__init__()
-        self.state = StudioState(client, model_dir, device, args, self.scene, config)
-        self.display = Display(self, self.state)
-        self.avatar = Avatar(self, self.state)
-        self.generation = GenerationControl(self, self.state, self.avatar)
+        self._reload_config = reload_config
+        self.state = StudioSession(client, model_dir, device, args, self.scene, config)
+        self.scene_updater = StreamSceneUpdater(self, self.state)
+        self.avatar = SmplxAvatarController(self, self.state)
+        self.generation = StudioGenerationController(self, self.state, self.avatar)
         self.panels = GuiPanels(self, self.state, self.avatar, self.generation)
 
         self.playback_fps = float(args.fps)
@@ -585,13 +451,13 @@ class StreamingStudioViewer(Viewer):
         if not state.model_dir:
             return
         try:
-            verts, faces = rest_pose_body(
+            verts, faces = create_smplx_rest_pose_mesh(
                 replace(state.config.fit, model_dir=state.model_dir, gender=state.gender), "cpu"
             )
             state.nodes.show_rest(
                 Meshes(verts, faces, color=state.skin_color, name="Avatar (rest)")
             )
-            state.buf.need_reset_view = True
+            state.stream_buffers.need_reset_view = True
         except Exception as exc:
             print(f"[warn] rest-pose SMPL-X unavailable ({exc}); skeleton-only until first prompt")
             state.model_dir = ""
@@ -603,9 +469,34 @@ class StreamingStudioViewer(Viewer):
     def gui_playback(self) -> None:
         self.panels.gui_playback()
 
-    def on_render(self, time, frame_time, **kwargs) -> None:
-        self.generation._tick_live()
-        self.display._consume()
-        self.display._sync_display_nodes()
-        self.display._update_follow_cam()
-        super().on_render(time, frame_time, **kwargs)
+    def reload_settings(self) -> None:
+        if self._reload_config is None:
+            self.state.load_status = "no config file to reload"
+            return
+        try:
+            self.state.load_status = self.state.apply_config(self._reload_config())
+            log_result("reload settings", True, self.state.load_status)
+        except Exception as exc:
+            traceback.print_exc()
+            log_result("reload settings", False, f"{type(exc).__name__}: {exc}")
+            self.state.load_status = f"reload failed: {type(exc).__name__}: {exc}"
+
+    def key_event(self, key, action, modifiers) -> None:
+        super().key_event(key, action, modifiers)
+        if action != self.wnd.keys.ACTION_PRESS or imgui.get_io().want_capture_keyboard:
+            return
+        if key == self.wnd.keys.S:
+            self.state.show_skin = not self.state.show_skin
+            log_toggle("skin [S]", self.state.show_skin)
+        elif key == self.wnd.keys.R:
+            log_action("key R")
+            self.reload_settings()
+
+    def on_render(self, time, frame_time, export=False, transparent_background=False) -> None:
+        self.generation.tick_live()
+        self.scene_updater._consume()
+        self.scene_updater._sync_display_nodes()
+        self.scene_updater._update_follow_cam()
+        super().on_render(
+            time, frame_time, export=export, transparent_background=transparent_background
+        )

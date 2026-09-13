@@ -5,7 +5,7 @@ import random
 import numpy as np
 import torch
 
-from text2motion.app.config import Device, Precision
+from text2motion.app.config import ComputeDevice, Float32Precision
 
 
 def seed_everything(seed: int, deterministic: bool = False) -> None:
@@ -20,18 +20,18 @@ def seed_everything(seed: int, deterministic: bool = False) -> None:
         torch.backends.cudnn.deterministic = deterministic
 
 
-def apply_precision(precision: Precision | str) -> None:
-    precision = Precision(precision)
-    allow_tf32 = precision is Precision.TF32
+def apply_precision(precision: Float32Precision | str) -> None:
+    precision = Float32Precision(precision)
+    allow_tf32 = precision is Float32Precision.TF32
     torch.backends.cuda.matmul.allow_tf32 = allow_tf32
     torch.backends.cudnn.allow_tf32 = allow_tf32
     torch.set_float32_matmul_precision("high" if allow_tf32 else "highest")
 
 
-def resolve_device(requested: Device | str, override: str | None = None) -> str:
+def resolve_device(requested: ComputeDevice | str, override: str | None = None) -> str:
     if override:
         return override
-    requested = Device(requested)
-    if requested is Device.CUDA and not torch.cuda.is_available():
-        return Device.CPU.value
+    requested = ComputeDevice(requested)
+    if requested is ComputeDevice.CUDA and not torch.cuda.is_available():
+        return ComputeDevice.CPU.value
     return requested.value

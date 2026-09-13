@@ -1,12 +1,16 @@
 from text2motion.streaming.decoder import StreamingMotionDecoder
-from text2motion.streaming.protocol import MotionServiceClient, Wire, connect_or_spawn
-from text2motion.streaming.service import ServiceModel, StreamingService
+from text2motion.streaming.protocol import (
+    MotionInferenceClient,
+    MotionStreamProtocol,
+    connect_or_start_motion_server,
+)
+from text2motion.streaming.service import LoadedInferencePipeline, MotionInferenceServer
 
 __all__ = [
-    "MotionServiceClient",
-    "ServiceModel",
+    "MotionInferenceClient",
+    "LoadedInferencePipeline",
     "StreamingMotionDecoder",
-    "StreamingService",
-    "Wire",
-    "connect_or_spawn",
+    "MotionInferenceServer",
+    "MotionStreamProtocol",
+    "connect_or_start_motion_server",
 ]

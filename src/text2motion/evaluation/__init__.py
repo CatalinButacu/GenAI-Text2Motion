@@ -1,14 +1,15 @@
-from text2motion.evaluation.evaluator import (
-    EvaluationReport,
-    EvaluationRequest,
-    MotionEvaluator,
+from text2motion.evaluation.contracts import (
+    GenerationEvaluationProtocol,
+    GenerationEvaluationReport,
+    GenerationLengthPolicy,
 )
-from text2motion.evaluation.matcher import EvaluationContext, LengthMode
+from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
+from text2motion.evaluation.matcher import GuoEvaluationResources
 
 __all__ = [
-    "EvaluationContext",
-    "EvaluationReport",
-    "EvaluationRequest",
-    "LengthMode",
-    "MotionEvaluator",
+    "GuoEvaluationResources",
+    "GenerationEvaluationReport",
+    "GenerationEvaluationProtocol",
+    "GenerationLengthPolicy",
+    "HumanMl3dGenerationEvaluator",
 ]

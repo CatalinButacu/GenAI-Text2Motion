@@ -153,7 +153,7 @@ FSQ-1000 (round vocab, $(8,5,5,5)$) tracks between 512 and 1024, as expected fro
 ## 7.5 Pending (extends this section)
 - **DONE -- the full matrix:** the codes/step x vocab sweep is complete and seeded (sec. 7.2); the old
   pre-manifest 0.0266 / 0.0382 numbers are superseded by the manifest-logged cells.
-- **Generalization gap:** run `scripts/eval/eval_generalization.py` -> train/val/test columns into sec. 7.2.
+- **Generalization gap:** run `scripts/evaluation/eval_generalization.py` -> train/val/test columns into sec. 7.2.
 - **Multi-seed + downstream gen-FID** (FSQ-tokens vs RVQ-tokens generator) to make the claim airtight.
 
 ## 7.6 Where each number lives (reproducibility)

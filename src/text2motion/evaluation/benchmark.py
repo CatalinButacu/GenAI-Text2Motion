@@ -3,31 +3,20 @@ from __future__ import annotations
 import json
 import statistics
 import time
-from dataclasses import dataclass
 from pathlib import Path
 
 import torch
 
+from text2motion.evaluation.contracts import StreamingBenchmarkProtocol
 from text2motion.generation.model import (
     Backbone,
-    GeneratorArchitecture,
     GeneratorConfig,
-    MotionGeneratorModule,
+    GeneratorModelSpec,
+    MotionTokenGenerator,
 )
 
 
-@dataclass(frozen=True)
-class BenchmarkRequest:
-    horizons: tuple[int, ...] = (64, 128, 256, 512, 1024)
-    warmup: int = 32
-    streams: tuple[int, ...] = ()
-    streams_horizon: int = 256
-    out_path: Path = Path("outputs/streaming_bench.json")
-    label: str = "streaming_bench"
-    headroom: int = 8
-
-
-def state_bytes(state) -> int:
+def streaming_state_size_bytes(state) -> int:
     total = 0
     for layer_state in state:
         if layer_state is None:
@@ -38,22 +27,22 @@ def state_bytes(state) -> int:
 
 
 @torch.no_grad()
-def _advance(generator: MotionGeneratorModule, tokens: torch.Tensor, state):
-    h, state = generator.backbone.step(generator.embed_tokens(tokens), state)
-    nxt = generator.logits(h).argmax(-1)
+def _advance(generator: MotionTokenGenerator, tokens: torch.Tensor, state):
+    h, state = generator.backbone.step(generator.embed_motion_tokens(tokens), state)
+    nxt = generator.predict_token_logits(h).argmax(-1)
     if generator.end_id is not None:
         nxt = nxt.clamp(max=generator.cfg.codebook_size - 1)
     return nxt, state
 
 
 @torch.no_grad()
-def warmup(generator: MotionGeneratorModule, device: str, steps: int, batch: int = 1) -> None:
+def warm_up_streaming_generator(generator: MotionTokenGenerator, device: str, steps: int, batch: int = 1) -> None:
     if steps <= 0:
         return
     cfg = generator.cfg
     state = generator.backbone.init_state(batch, torch.device(device))
     text = torch.randn(batch, cfg.text_prefix_len, cfg.d_text, device=device)
-    prefix = generator.text_prefix(text)
+    prefix = generator.project_text_prefix(text)
     for position in range(prefix.size(1)):
         _, state = generator.backbone.step(prefix[:, position], state)
     tokens = torch.zeros(batch, cfg.num_codebooks, dtype=torch.long, device=device)
@@ -64,18 +53,21 @@ def warmup(generator: MotionGeneratorModule, device: str, steps: int, batch: int
 
 
 @torch.no_grad()
-def bench_backbone(
-    generator: MotionGeneratorModule, horizons: list[int], device: str, warmup_steps: int = 32
+def benchmark_streaming_horizons(
+    generator: MotionTokenGenerator,
+    horizons: list[int],
+    device: str,
+    warmup_steps: int = StreamingBenchmarkProtocol().warmup,
 ) -> list[dict[str, float]]:
     cfg = generator.cfg
     cuda = device == "cuda"
-    warmup(generator, device, warmup_steps)
+    warm_up_streaming_generator(generator, device, warmup_steps)
     if cuda:
         torch.cuda.reset_peak_memory_stats()
 
     state = generator.backbone.init_state(1, torch.device(device))
     text = torch.randn(1, cfg.text_prefix_len, cfg.d_text, device=device)
-    prefix = generator.text_prefix(text)
+    prefix = generator.project_text_prefix(text)
     for position in range(prefix.size(1)):
         h, state = generator.backbone.step(prefix[:, position], state)
 
@@ -99,7 +91,7 @@ def bench_backbone(
                     "ms_per_step": statistics.median(segment),
                     "ms_p10": segment[int(0.10 * (len(segment) - 1))],
                     "ms_p90": segment[int(0.90 * (len(segment) - 1))],
-                    "state_bytes": state_bytes(state),
+                    "state_bytes": streaming_state_size_bytes(state),
                     "cuda_peak_bytes": torch.cuda.max_memory_allocated() if cuda else 0,
                 }
             )
@@ -107,8 +99,8 @@ def bench_backbone(
 
 
 @torch.no_grad()
-def bench_concurrency(
-    generator: MotionGeneratorModule,
+def benchmark_concurrent_streams(
+    generator: MotionTokenGenerator,
     batch_sizes: list[int],
     horizon: int,
     device: str,
@@ -119,14 +111,14 @@ def bench_concurrency(
     rows: list[dict[str, float]] = []
 
     for batch in batch_sizes:
-        warmup(generator, device, warmup_steps, batch=batch)
+        warm_up_streaming_generator(generator, device, warmup_steps, batch=batch)
         if cuda:
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
 
         state = generator.backbone.init_state(batch, torch.device(device))
         text = torch.randn(batch, cfg.text_prefix_len, cfg.d_text, device=device)
-        prefix = generator.text_prefix(text)
+        prefix = generator.project_text_prefix(text)
         for position in range(prefix.size(1)):
             _, state = generator.backbone.step(prefix[:, position], state)
 
@@ -147,8 +139,8 @@ def bench_concurrency(
                 "streams": batch,
                 "horizon": horizon,
                 "ms_per_step": median_ms,
-                "state_bytes": state_bytes(state),
-                "state_bytes_per_stream": state_bytes(state) / batch,
+                "state_bytes": streaming_state_size_bytes(state),
+                "state_bytes_per_stream": streaming_state_size_bytes(state) / batch,
                 "cuda_peak_bytes": torch.cuda.max_memory_allocated() if cuda else 0,
                 "streams_per_second": batch / (median_ms / 1000.0),
             }
@@ -159,8 +151,8 @@ def bench_concurrency(
     return rows
 
 
-def run_benchmark(
-    request: BenchmarkRequest,
+def run_streaming_state_latency_benchmark(
+    request: StreamingBenchmarkProtocol,
     generator: GeneratorConfig,
     codebook_size: int,
     num_codebooks: int,
@@ -173,7 +165,7 @@ def run_benchmark(
 
     for backbone in Backbone:
         bench_seq_len = max(horizons) + generator.text_prefix_len + request.headroom
-        architecture = GeneratorArchitecture.resolve(
+        architecture = GeneratorModelSpec.resolve(
             generator,
             backbone,
             codebook_size,
@@ -181,8 +173,8 @@ def run_benchmark(
             max_seq_len=bench_seq_len,
         )
         torch.manual_seed(seed)
-        module = architecture.build(device).eval()
-        results[backbone.value] = bench_backbone(
+        module = architecture.create_model(device).eval()
+        results[backbone.value] = benchmark_streaming_horizons(
             module, horizons, device, warmup_steps=request.warmup
         )
         params = sum(p.numel() for p in module.parameters())
@@ -198,7 +190,7 @@ def run_benchmark(
             )
 
         if request.streams:
-            rows = bench_concurrency(
+            rows = benchmark_concurrent_streams(
                 module, sorted(request.streams), request.streams_horizon, device
             )
             concurrency[backbone.value] = rows

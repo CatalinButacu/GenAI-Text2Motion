@@ -1,0 +1,4 @@
+subscription_id     = "5b993c40-3d0a-444f-980f-227810e7f7c9"
+location            = "germanywestcentral"
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+allowed_ssh_cidr    = "YOUR.PUBLIC.IP.HERE/32"

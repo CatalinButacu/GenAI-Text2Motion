@@ -12,7 +12,7 @@ and `checkpoints/<name>.pt`.
 
 **COMPLETE (2026-06-18).** All 15 cells seed-2026, 500-epoch, test recon-FID from run manifests. FSQ
 dominates RVQ at every matched cell; best FSQ 8x1024 = 0.0170 beats MoMask's 0.019. Remaining: run
-`scripts/eval/eval_generalization.py` (GPU free) for the train/val/test generalization gap.
+`scripts/evaluation/eval_generalization.py` (GPU free) for the train/val/test generalization gap.
 
 Matched-bits head-to-head reads **down each column**: RVQ-1024 vs FSQ-1024 are bit-for-bit
 matched (40 / 60 / 80 bits/step for 4 / 6 / 8 codes), same for the 512 columns. FSQ-1000 is the

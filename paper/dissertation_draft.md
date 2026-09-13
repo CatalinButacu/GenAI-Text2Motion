@@ -188,7 +188,7 @@ RVQ-tokens generator) is the open confirmation.
 ### 4.5 Generalization audit (no overfit)
 Train/val/test recon-FID gaps computed per checkpoint at equal N: **13/15 cells gap <= 0**; the two
 positive gaps are both RVQ -> the FSQ advantage is not memorization. *(Method + full table:
-`scripts/eval/eval_generalization.py`, lessons/07.0a.)*
+`scripts/evaluation/eval_generalization.py`, lessons/07.0a.)*
 
 ---
 
@@ -418,7 +418,7 @@ clips against a whole-sequence decode:
 *Chunk size 4 tokens; relative MAE in denormalized 263-feature space. Without the ring buffer at all,
 the same configuration reads 6.16%[*], and shrinking the chunk makes it worse, not better (17.9%[*] at
 one token per chunk), because a smaller chunk is proportionally more boundary. Reproduced by
-`scripts/eval/streaming_decode_fidelity.py`, run `20260728T084648Z_streaming_decode_fidelity`.*
+`scripts/evaluation/streaming_decode_fidelity.py`, run `20260728T084648Z_streaming_decode_fidelity`.*
 
 **Why this strengthens rather than weakens the claim.** At $r=4$ the streamed motion is **bit-exact**
 with the whole-sequence decode that produces every number in sec. 5.6 -- so the demonstrated system and
@@ -541,7 +541,7 @@ One caveat, and why it does not rescue the original reading: the never-seen clip
 shift. But that shift is **identical for all three priors**, so it cannot explain why the gap is +1.12
 for one model and +5.81 for another on the same clips, nor why held-out CE moves in the opposite
 direction to training CE. The *differential* is the memorisation signal, and it is unconfounded.
-Reproduced by `scripts/eval/pretrain_generalization.py` (runs `20260728T092426Z`, `20260728T092624Z`,
+Reproduced by `scripts/evaluation/pretrain_generalization.py` (runs `20260728T092426Z`, `20260728T092624Z`,
 `20260728T092857Z`); `train_pretrain.py` now holds out `--val_fraction` of clips **by clip stem**, so
 no future pretrain reports a training CE alone.
 
@@ -638,7 +638,7 @@ official HumanML3D train split this is $1{,}631{,}508$ frames over 11,692 base c
 $D = \mathbf{6.53\ \text{M}}$ tokens[*] -- **6.5 million, not billions**. The unconditional AMASS prior
 (sec. 5.4) adds 3.25 M[*]; tokenizing all 40.6 h[*] of our AMASS re-derivation rather than the 8,303
 windows actually used would raise the ceiling only to $\approx 18$ M. All counts are reproduced by
-`scripts/eval/scaling_budget.py` (run `20260727T145249Z_scaling_budget`).
+`scripts/benchmarks/scaling_budget.py` (run `20260727T145249Z_scaling_budget`).
 
 **Against compute-optimal scaling.** [Chinchilla] minimises $L(N,D) = E + AN^{-\alpha} + BD^{-\beta}$
 subject to $C \approx 6ND$; because $\alpha \approx \beta$, the optimum sits near $D^\star \approx 20N$.

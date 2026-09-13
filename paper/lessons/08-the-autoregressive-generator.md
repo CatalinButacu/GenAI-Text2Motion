@@ -11,7 +11,7 @@
 ```mermaid
 flowchart LR
   T["text"] --> CLIP["CLIP encoder"] --> PFX["text prefix (P x d)"]
-  ZP["past tokens z_1..z_(t-1)"] --> EMB["embed_tokens: sum over R codebooks"]
+  ZP["past tokens z_1..z_(t-1)"] --> EMB["embed_motion_tokens: sum over R codebooks"]
   PFX --> F["causal backbone f_theta"]
   EMB --> F
   F --> H["hidden state h_t"]
@@ -50,7 +50,7 @@ $$
 Read it precisely: across **time** the model is strictly causal ($z_t$ may see only the past); across
 the **$R$ codebooks of the same step** there is no inner ordering $z_t^{<r}$ -- they share one
 hidden state $h_t$ and are read out by $R$ parallel heads (sec. 8.4). This is a deliberate modelling
-choice (`MotionGenerator.logits` stacks $R$ independent heads): it makes a step a single parallel
+choice (`MotionTokenGenerator.predict_token_logits` stacks $R$ independent heads): it makes a step a single parallel
 prediction (cheap, streaming-friendly) at the cost of not modelling intra-step residual ordering the
 way a masked bidirectional model (MoMask) would. State the trade-off; do not hide it.
 
@@ -63,14 +63,14 @@ c \in \mathbb{R}^{P\times d_{\text{text}}}
 \tilde c = W_{\text{text}}\,c \in \mathbb{R}^{P\times d_{\text{model}}},
 \qquad P=\texttt{text\_prefix\_len}
 $$
-(`text_prefix`, with a hard shape assert that $P$ matches the encoder). The prefix is consumed
+(`project_text_prefix`, with a hard shape assert that $P$ matches the encoder). The prefix is consumed
 **once**, before any motion token. For the transformer twin it stays in the KV-cache; for Mamba it is
 absorbed into the fixed-size recurrent state -- the bounded-memory story of lesson 13 starts here.
 
 ## 8.4 Embedding, the shared state, and the heads
 
 Each codebook $r$ has its own embedding table $E_r$; the $R$ tokens of a step are **summed** into one
-$d_{\text{model}}$ vector (`embed_tokens`):
+$d_{\text{model}}$ vector (`embed_motion_tokens`):
 $$
 e(z_t) \;=\; \sum_{r=1}^{R} E_r\big(z_t^{\,r}\big) \;\in\; \mathbb{R}^{d_{\text{model}}}.
 $$
@@ -88,7 +88,7 @@ $f_\theta$**; sec. 8.4 is identical for both twins. That is what makes the compa
 ## 8.5 Training: teacher forcing + the cross-entropy anchor
 
 During training the *true* tokens are fed and the model predicts the next step at every position
-(teacher forcing). Concretely (`MotionGenerator.forward`) the input sequence is the prefix followed
+(teacher forcing). Concretely (`MotionTokenGenerator.forward`) the input sequence is the prefix followed
 by the ground-truth tokens shifted by one,
 $$
 \text{seq\_in} = \big[\,\tilde c_1,\dots,\tilde c_P,\; e(z_1),\dots,e(z_{L-1})\,\big],

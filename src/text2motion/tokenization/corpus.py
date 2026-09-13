@@ -1,30 +1,22 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import torch
 from tqdm import tqdm
 
-from text2motion.motion.dataset import MotionScaler
 from text2motion.motion.model import MotionClip
+from text2motion.motion.normalization import MotionScaler
+from text2motion.tokenization.contracts import TokenPackRequest
 from text2motion.tokenization.model import MotionTokenizer
 
 
-@dataclass(frozen=True)
-class CorpusRequest:
-    features_dir: Path
-    out_path: Path
-    segment_frames: int = 196
-    stride: int = 196
-
-
 @torch.no_grad()
-def tokenize_corpus(
+def build_token_pack(
     tokenizer: MotionTokenizer,
     scaler: MotionScaler,
-    request: CorpusRequest,
+    request: TokenPackRequest,
 ) -> dict[str, float]:
     features = sorted(Path(request.features_dir).glob("*.npy"))
     if not features:

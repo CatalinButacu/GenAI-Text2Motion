@@ -1,19 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import torch
 from torch import nn
 
-
-@dataclass(frozen=True)
-class TextEncoderConfig:
-    model_id: str = "openai/clip-vit-base-patch32"
-    out_dim: int = 512
-    max_length: int = 77
-    unfreeze_last_n: int = 1
-    unfreeze_projection: bool = True
-    prefix_len: int = 1
+from text2motion.generation.contracts import TextEncoderConfig
 
 
 class CLIPTextEncoder(nn.Module):

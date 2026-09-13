@@ -1,65 +1,34 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from enum import StrEnum
-
 import torch
 from torch import nn
 from torch.nn import functional as F
 
+from text2motion.generation.contracts import LossWeights as LossWeights
 from text2motion.generation.model import token_ce_loss
 from text2motion.motion.representation import (
-    FK_TERMS,
-    GEO_TERMS,
     JOINTS,
     SLICES,
     recover_from_ric,
     recover_from_rot,
 )
-from text2motion.tokenization.model import TokenizerModule
+from text2motion.tokenization.model import MotionTokenizerNetwork
 
 
-class LossWeighting(StrEnum):
-    FIXED = "fixed"
-    UNCERTAINTY = "uncertainty"
-
-
-@dataclass(frozen=True)
-class LossWeights:
-    root: float = 0.3
-    ric: float = 0.5
-    rot6d: float = 0.5
-    vel: float = 0.3
-    foot: float = 0.1
-    fk_self: float = 0.0
-    fk_gt: float = 0.0
-
-    def as_dict(self) -> dict[str, float]:
-        return asdict(self)
-
-    def active_terms(self) -> tuple[str, ...]:
-        weights = self.as_dict()
-        return tuple(name for name in (*GEO_TERMS, *FK_TERMS) if weights[name] > 0)
-
-    @property
-    def fk_enabled(self) -> bool:
-        return self.fk_self > 0 or self.fk_gt > 0
-
-
-def _codebook_tables(tokenizer: TokenizerModule, device: torch.device) -> list[torch.Tensor]:
+def _codebook_tables(tokenizer: MotionTokenizerNetwork, device: torch.device) -> list[torch.Tensor]:
     cached = getattr(tokenizer, "_codebook_tables_cache", None)
     if cached is not None and cached[0].device == device:
         return cached
 
     tables = []
-    for unit in tokenizer.quantizer.units:
+    for unit in tokenizer.quantizer.quantizer_units:
         all_idx = torch.arange(unit.codebook_size, device=device)
         tables.append(unit.indices_to_codes(all_idx))
     tokenizer._codebook_tables_cache = tables
     return tables
 
 
-def soft_decode(logits: torch.Tensor, tokenizer: TokenizerModule) -> torch.Tensor:
+def soft_decode(logits: torch.Tensor, tokenizer: MotionTokenizerNetwork) -> torch.Tensor:
     tables = _codebook_tables(tokenizer, logits.device)
 
     expected_codes: list[torch.Tensor] = []
@@ -67,7 +36,7 @@ def soft_decode(logits: torch.Tensor, tokenizer: TokenizerModule) -> torch.Tenso
         real = logits[..., token_index, : codebook.size(0)]
         expected_codes.append(real.softmax(-1) @ codebook)
 
-    soft_codes = tokenizer.quantizer.combine_codes(expected_codes)
+    soft_codes = tokenizer.quantizer.compose_latent_codes(expected_codes)
     return tokenizer.decoder(tokenizer.post_q(soft_codes))
 
 
@@ -139,7 +108,7 @@ def generator_loss(
     logits: torch.Tensor,
     target_tokens: torch.Tensor,
     gt_motion: torch.Tensor,
-    tokenizer: TokenizerModule,
+    tokenizer: MotionTokenizerNetwork,
     weights: LossWeights,
     downsample: int,
     lengths: torch.Tensor | None = None,

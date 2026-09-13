@@ -2,12 +2,14 @@ import numpy as np
 import torch
 from scipy import linalg
 
+from text2motion.evaluation.contracts import DIVERSITY_PAIRS, R_PRECISION_POOL
 
-def frechet_distance(
+
+def frechet_gaussian_distance(
     mu1: np.ndarray, sigma1: np.ndarray, mu2: np.ndarray, sigma2: np.ndarray
 ) -> float:
     diff = mu1 - mu2
-    covmean, _ = linalg.sqrtm(sigma1 @ sigma2, disp=False)
+    covmean = linalg.sqrtm(sigma1 @ sigma2)
 
     if np.iscomplexobj(covmean):
         covmean = covmean.real
@@ -31,7 +33,7 @@ def fid(real_feats: np.ndarray, gen_feats: np.ndarray, warn_rank_deficient: bool
     mu_r, cov_r = real_feats.mean(0), np.cov(real_feats, rowvar=False)
     mu_g, cov_g = gen_feats.mean(0), np.cov(gen_feats, rowvar=False)
 
-    return frechet_distance(mu_r, cov_r, mu_g, cov_g)
+    return frechet_gaussian_distance(mu_r, cov_r, mu_g, cov_g)
 
 
 def bootstrap_fid(
@@ -87,7 +89,7 @@ def paired_fid_delta(
 def r_precision(
     text_feats: np.ndarray,
     motion_feats: np.ndarray,
-    pool_size: int = 32,
+    pool_size: int = R_PRECISION_POOL,
     top_k: int = 3,
     seed: int = 0,
 ) -> np.ndarray:
@@ -105,9 +107,7 @@ def r_precision(
             dists = np.linalg.norm(text_feats[idx[i]] - motion_feats[pool], axis=1)
             rank = int(np.argsort(dists).tolist().index(0))
 
-            for k in range(top_k):
-                if rank <= k:
-                    hits[k] += 1
+            hits[rank:] += 1
 
             groups += 1
 
@@ -118,7 +118,7 @@ def mm_dist(text_feats: np.ndarray, motion_feats: np.ndarray) -> float:
     return float(np.linalg.norm(text_feats - motion_feats, axis=1).mean())
 
 
-def diversity(motion_feats: np.ndarray, num_pairs: int = 300, seed: int = 0) -> float:
+def diversity(motion_feats: np.ndarray, num_pairs: int = DIVERSITY_PAIRS, seed: int = 0) -> float:
     n = len(motion_feats)
     rng = np.random.default_rng(seed)
     a = rng.integers(0, n, num_pairs)
@@ -128,25 +128,29 @@ def diversity(motion_feats: np.ndarray, num_pairs: int = 300, seed: int = 0) -> 
 
 
 @torch.no_grad()
-def embed_motions(matcher, feats, eval_mean, eval_std, device, batch=32):
+def compute_guo_motion_embeddings(
+    motion_embedder, motion_features, guo_motion_mean, guo_motion_std, device, batch_size=32
+):
     out = []
-    for start in range(0, len(feats), batch):
-        group = feats[start : start + batch]
+    for start in range(0, len(motion_features), batch_size):
+        group = motion_features[start : start + batch_size]
         max_t = max(f.shape[0] for f in group)
         padded = np.zeros((len(group), max_t, group[0].shape[-1]), np.float32)
         lengths = [f.shape[0] for f in group]
         for row, feat in enumerate(group):
-            padded[row, : feat.shape[0]] = (feat - eval_mean) / eval_std
-        emb = matcher(torch.from_numpy(padded).to(device), torch.tensor(lengths, device=device))
+            padded[row, : feat.shape[0]] = (feat - guo_motion_mean) / guo_motion_std
+        emb = motion_embedder(
+            torch.from_numpy(padded).to(device), torch.tensor(lengths, device=device)
+        )
         out.append(emb.cpu().numpy())
     return np.concatenate(out)
 
 
 @torch.no_grad()
-def embed_texts(matcher, pairs, device, batch=32):
+def compute_guo_text_embeddings(text_embedder, text_inputs, device, batch_size=32):
     out = []
-    for start in range(0, len(pairs), batch):
-        group = pairs[start : start + batch]
+    for start in range(0, len(text_inputs), batch_size):
+        group = text_inputs[start : start + batch_size]
         max_l = max(we.shape[0] for we, _ in group)
         we_pad = np.zeros((len(group), max_l, group[0][0].shape[-1]), np.float32)
         pe_pad = np.zeros((len(group), max_l, group[0][1].shape[-1]), np.float32)
@@ -154,7 +158,7 @@ def embed_texts(matcher, pairs, device, batch=32):
         for row, (we, pe) in enumerate(group):
             we_pad[row, : we.shape[0]] = we
             pe_pad[row, : pe.shape[0]] = pe
-        emb = matcher(
+        emb = text_embedder(
             torch.from_numpy(we_pad).to(device),
             torch.from_numpy(pe_pad).to(device),
             lengths=torch.tensor(lengths, device=device),

@@ -52,16 +52,16 @@ if ! $PY -c "from mamba_ssm.ops.selective_scan_interface import selective_scan_f
 fi
 
 echo "--- parity: fused kernel vs eager scan ---" | tee -a "$LOG/gate1.log"
-$PY -m pytest tests/test_generator_upgrades.py::test_kernel_matches_eager_scan -q 2>&1 \
+$PY -m pytest tests/generation/test_generator_upgrades.py::test_kernel_matches_eager_scan -q 2>&1 \
     | tee -a "$LOG/gate1.log"
 echo "GATE 1 PASSED" | tee -a "$LOG/gate1.log"
 
 echo "=== gate 2: training step, eager vs fused (interleaved A/B) ===" | tee "$LOG/gate2.log"
-$PY -u scripts/eval/perf_probe.py --probe kernel --config "${CANARY_CONFIG:-configs/generator/gen_pilot_fsq8x1024.yaml}" \
+$PY -u scripts/benchmarks/perf_probe.py --probe kernel --config "${CANARY_CONFIG:-configs/generator/gen_pilot_fsq8x1024.yaml}" \
     --batch_size "${CANARY_BATCH:-8}" --repeats 6 2>&1 | tee -a "$LOG/gate2.log"
 
 echo "=== gate 3: rollout latency, eager vs fused ===" | tee "$LOG/gate3.log"
-$PY -u scripts/eval/perf_probe.py --probe kernel --rollout_only \
+$PY -u scripts/benchmarks/perf_probe.py --probe kernel --rollout_only \
     --config "${CANARY_CONFIG:-configs/generator/gen_pilot_fsq8x1024.yaml}" --steps 49 2>&1 \
     | tee -a "$LOG/gate3.log"
 

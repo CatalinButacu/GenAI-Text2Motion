@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
-from enum import StrEnum
 from typing import Any
 
 import torch
@@ -10,37 +9,11 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.checkpoint import checkpoint
 
-
-class Backbone(StrEnum):
-    TRANSFORMER = "transformer"
-    MAMBA = "mamba"
-
-
-class BackboneChoice(StrEnum):
-    TRANSFORMER = "transformer"
-    MAMBA = "mamba"
-    BOTH = "both"
-
-
-@dataclass(frozen=True)
-class GeneratorConfig:
-    backbone: Backbone = Backbone.MAMBA
-    d_model: int = 512
-    n_layers: int = 8
-    mamba_n_layers: int = 15
-    d_text: int = 512
-    num_codebooks: int = 6
-    codebook_size: int = 1000
-    max_seq_len: int = 96
-    dropout: float = 0.1
-    text_prefix_len: int = 1
-    use_end_token: bool = False
-    use_kernel: bool = False
-    d_state: int = 16
-    d_conv: int = 4
-    expand: int = 2
-    dt_rank: int = 32
-    n_heads: int = 8
+from text2motion.generation.contracts import (
+    Backbone,
+    GeneratorConfig,
+)
+from text2motion.generation.contracts import BackboneChoice as BackboneChoice
 
 
 class RMSNorm(nn.Module):
@@ -189,6 +162,10 @@ class MambaBackbone(nn.Module):
         self.norm_f = RMSNorm(cfg.d_model)
         self.checkpoint_blocks = not cfg.use_kernel
 
+    @property
+    def max_positions(self) -> int | None:
+        return None
+
     def init_state(self, batch: int, device: torch.device) -> list:
         return [b.init_state(batch, device) for b in self.blocks]
 
@@ -267,6 +244,10 @@ class TransformerBackbone(nn.Module):
         self.blocks = nn.ModuleList([TransformerBlock(cfg) for _ in range(cfg.n_layers)])
         self.norm_f = RMSNorm(cfg.d_model)
 
+    @property
+    def max_positions(self) -> int | None:
+        return self.pos.num_embeddings
+
     def init_state(self, batch: int, device: torch.device) -> list:
         return [None for _ in self.blocks]
 
@@ -298,7 +279,7 @@ class TransformerBackbone(nn.Module):
         return self.norm_f(seq)
 
 
-class MotionGeneratorModule(nn.Module):
+class MotionTokenGenerator(nn.Module):
     def __init__(self, cfg: GeneratorConfig) -> None:
         super().__init__()
         self.cfg = cfg
@@ -312,9 +293,9 @@ class MotionGeneratorModule(nn.Module):
             [nn.Linear(cfg.d_model, vocab) for _ in range(cfg.num_codebooks)]
         )
         self.emb_drop = nn.Dropout(cfg.dropout)
-        self.backbone = make_backbone(cfg)
+        self.backbone = _instantiate_backbone(cfg)
 
-    def embed_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
+    def embed_motion_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
         out = self.token_emb[0](tokens[..., 0])
 
         for r in range(1, self.cfg.num_codebooks):
@@ -322,7 +303,7 @@ class MotionGeneratorModule(nn.Module):
 
         return out
 
-    def text_prefix(self, text_emb: torch.Tensor) -> torch.Tensor:
+    def project_text_prefix(self, text_emb: torch.Tensor) -> torch.Tensor:
         if text_emb.dim() == 2:
             text_emb = text_emb.unsqueeze(1)
         if text_emb.size(1) != self.cfg.text_prefix_len:
@@ -332,18 +313,40 @@ class MotionGeneratorModule(nn.Module):
             )
         return self.text_proj(text_emb)
 
-    def logits(self, h: torch.Tensor) -> torch.Tensor:
+    def predict_token_logits(self, h: torch.Tensor) -> torch.Tensor:
         return torch.stack([head(h) for head in self.heads], dim=-2)
 
     def forward(self, tokens: torch.Tensor, text_emb: torch.Tensor) -> torch.Tensor:
-        emb = self.embed_tokens(tokens)
-        prefix = self.text_prefix(text_emb)
+        emb = self.embed_motion_tokens(tokens)
+        prefix = self.project_text_prefix(text_emb)
         seq_in = torch.cat([prefix, emb[:, :-1]], dim=1)
         h = self.backbone(self.emb_drop(seq_in))[:, prefix.size(1) - 1 :]
-        return self.logits(h)
+        return self.predict_token_logits(h)
+
+    def _check_stream_budget(self, steps: int, prefix_len: int, uniforms) -> None:
+        if steps < 0:
+            raise ValueError(f"steps must be >= 0 (0 means unbounded), got {steps}")
+        if steps == 0 and uniforms is not None:
+            raise ValueError("unbounded streaming cannot consume a fixed uniforms tensor")
+        limit = getattr(self.backbone, "max_positions", None)
+        if limit is None:
+            return
+        available = limit - prefix_len
+        if steps == 0:
+            raise RuntimeError(
+                f"{type(self.backbone).__name__} cannot stream unboundedly: it has "
+                f"{limit} learned positions, so generation stops after {available} steps. "
+                "Unbounded streaming requires a recurrent backbone (mamba); "
+                "for this backbone pass a positive step budget instead."
+            )
+        if steps > available:
+            raise ValueError(
+                f"{type(self.backbone).__name__} supports at most {available} steps after a "
+                f"{prefix_len}-token text prefix ({limit} learned positions), got {steps}"
+            )
 
     @torch.no_grad()
-    def stream(
+    def stream_token_indices(
         self,
         text_emb: torch.Tensor,
         steps: int,
@@ -357,7 +360,8 @@ class MotionGeneratorModule(nn.Module):
         guided = cfg_scale != 1.0
         if guided:
             text_emb = torch.cat([text_emb, torch.zeros_like(text_emb)], dim=0)
-        prefix = self.text_prefix(text_emb)
+        prefix = self.project_text_prefix(text_emb)
+        self._check_stream_budget(steps, prefix.size(1), uniforms)
         if hasattr(self.backbone, "prefill"):
             h, state = self.backbone.prefill(prefix)
         else:
@@ -365,8 +369,9 @@ class MotionGeneratorModule(nn.Module):
             for position in range(prefix.size(1)):
                 h, state = self.backbone.step(prefix[:, position], state)
 
-        for index in range(steps):
-            logits = self.logits(h)
+        index = 0
+        while steps == 0 or index < steps:
+            logits = self.predict_token_logits(h)
             if guided:
                 cond, uncond = logits.chunk(2, dim=0)
                 logits = uncond + cfg_scale * (cond - uncond)
@@ -378,17 +383,18 @@ class MotionGeneratorModule(nn.Module):
                 return
             yield tokens
             feed = torch.cat([tokens, tokens], dim=0) if guided else tokens
-            h, state = self.backbone.step(self.embed_tokens(feed), state)
+            h, state = self.backbone.step(self.embed_motion_tokens(feed), state)
+            index += 1
 
 
-BACKBONE_FACTORIES = {
+_BACKBONE_FACTORIES = {
     Backbone.MAMBA: MambaBackbone,
     Backbone.TRANSFORMER: TransformerBackbone,
 }
 
 
-def make_backbone(cfg: GeneratorConfig) -> nn.Module:
-    build = BACKBONE_FACTORIES.get(Backbone(cfg.backbone))
+def _instantiate_backbone(cfg: GeneratorConfig) -> nn.Module:
+    build = _BACKBONE_FACTORIES.get(Backbone(cfg.backbone))
     if build is None:
         raise ValueError(
             f"unknown backbone {cfg.backbone!r} (expected one of {[b.value for b in Backbone]})"
@@ -396,7 +402,7 @@ def make_backbone(cfg: GeneratorConfig) -> nn.Module:
     return build(cfg)
 
 
-def rollout_uniforms(
+def seeded_sampling_uniforms(
     seeds: Sequence[int], steps: int, codebooks: int, device: torch.device | str
 ) -> torch.Tensor:
     rows = []
@@ -447,7 +453,7 @@ def token_ce_loss(
 
 
 @dataclass(frozen=True)
-class GeneratorArchitecture:
+class GeneratorModelSpec:
     config: GeneratorConfig
 
     @property
@@ -455,14 +461,14 @@ class GeneratorArchitecture:
         return self.config.backbone
 
     @property
-    def parameter_label(self) -> str:
+    def architecture_label(self) -> str:
         return f"{self.backbone}-{self.config.d_model}d-{self.config.n_layers}l"
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self.config)
 
-    def build(self, device: str | torch.device) -> MotionGeneratorModule:
-        return MotionGeneratorModule(self.config).to(device)
+    def create_model(self, device: str | torch.device) -> MotionTokenGenerator:
+        return MotionTokenGenerator(self.config).to(device)
 
     @classmethod
     def resolve(
@@ -475,7 +481,7 @@ class GeneratorArchitecture:
         dropout: float | None = None,
         use_kernel: bool | None = None,
         max_seq_len: int | None = None,
-    ) -> GeneratorArchitecture:
+    ) -> GeneratorModelSpec:
         backbone = Backbone(backbone)
         layer_count = generator.mamba_n_layers if backbone is Backbone.MAMBA else generator.n_layers
         overrides: dict[str, Any] = {

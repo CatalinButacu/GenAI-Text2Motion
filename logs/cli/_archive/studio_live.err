@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "C:\Users\ic.butacu\Documents\thessis\src\text2motion\studio\viewer.py", line 277, in _load_worker
+    hello = self.state.client.load(
+            ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ic.butacu\Documents\thessis\src\text2motion\streaming\protocol.py", line 71, in load
+    raise RuntimeError(msg["message"])
+RuntimeError: MemoryError: 

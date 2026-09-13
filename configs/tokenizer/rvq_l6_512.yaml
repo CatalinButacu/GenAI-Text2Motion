@@ -1,5 +1,3 @@
-# RVQ hypertune: 6 residual levels x 512 codes, code_dim 512 = the strong-RVQ BASELINE (also the
-# foundational manifest re-run; target 0.0382). Enc/dec width 512 / downsample 4 / 3 resblocks.
 seed: 2026
 device: cuda
 data:

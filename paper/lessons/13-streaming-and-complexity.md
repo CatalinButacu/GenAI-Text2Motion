@@ -33,9 +33,10 @@ repeat -- without re-reading the whole past. Formally the generator must admit a
 $$
 (y_t, h_t) = g_\theta(h_{t-1}, x_t),\qquad \dim(h_t)\ \text{bounded in } t,
 $$
-so that producing step $t$ costs the same whether $t=10$ or $t=10^4$. `MotionGenerator.stream` is
-exactly this loop: initialise a state, consume the text prefix once, then yield one $(B,R)$ token step
-per iteration. The entire question is the size of $h_t$.
+so that producing step $t$ costs the same whether $t=10$ or $t=10^4$.
+`MotionTokenGenerator.stream_token_indices` implements this loop: initialise a state, consume the
+text prefix once, then yield one $(B,R)$ token step per iteration. The entire question is the size
+of $h_t$.
 
 ## 13.2 The two state shapes, in bytes
 

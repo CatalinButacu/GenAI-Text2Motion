@@ -10,9 +10,10 @@ from typing import Any
 import torch
 from torch import nn
 
-from text2motion.generation.model import Backbone
+from text2motion.generation.contracts import Backbone, OverfitCriteria
 
-BUNDLE_VERSION = 1
+_BUNDLE_FORMAT = "text2motion.generator_bundle"
+_BUNDLE_VERSION = 1
 
 
 def sha256_file(path: str | Path) -> str:
@@ -60,8 +61,8 @@ class GeneratorBundle:
 
     def payload(self) -> dict[str, Any]:
         return {
-            "format": "text2motion.generator_bundle",
-            "version": BUNDLE_VERSION,
+            "format": _BUNDLE_FORMAT,
+            "version": _BUNDLE_VERSION,
             "backbone": self.backbone.value,
             "generator": self.generator_state,
             "text_encoder": self.text_encoder_state,
@@ -87,10 +88,10 @@ class GeneratorBundle:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> GeneratorBundle:
-        if payload.get("version") != BUNDLE_VERSION:
+        if payload.get("version") != _BUNDLE_VERSION:
             raise ValueError(
                 f"unsupported generator bundle version {payload.get('version')}; "
-                f"expected {BUNDLE_VERSION}"
+                f"expected {_BUNDLE_VERSION}"
             )
         tokenizer = payload["tokenizer"]
         return cls(
@@ -122,7 +123,7 @@ def load_generator_checkpoint(
     map_location: str | torch.device = "cpu",
 ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor] | None, GeneratorBundle | None]:
     state = torch.load(path, map_location=map_location, weights_only=False)
-    if isinstance(state, dict) and state.get("format") == "text2motion.generator_bundle":
+    if isinstance(state, dict) and state.get("format") == _BUNDLE_FORMAT:
         bundle = GeneratorBundle.from_payload(state)
         return bundle.generator_state, bundle.text_encoder_state, bundle
     if isinstance(state, dict) and "generator" in state:
@@ -136,11 +137,8 @@ def load_generator_checkpoint(
     raise ValueError(f"{path} is not a recognized generator checkpoint")
 
 
-GATE_FORMAT = "text2motion.real_batch_overfit_gate"
-GATE_VERSION = 1
-MIN_TOKEN_ACCURACY = 0.99
-MAX_CE = 0.1
-MAX_TOTAL_RATIO = 0.05
+_GATE_FORMAT = "text2motion.real_batch_overfit_gate"
+_GATE_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -163,14 +161,14 @@ class OverfitGate:
     def total_ratio(self) -> float:
         return self.final_total / self.first_total
 
-    def validate_metrics(self) -> None:
+    def validate_metrics(self, criteria: OverfitCriteria = OverfitCriteria()) -> None:
         if self.first_total <= 0:
             raise RuntimeError("overfit gate first_total must be positive")
-        if self.token_accuracy < MIN_TOKEN_ACCURACY:
+        if self.token_accuracy < criteria.min_token_accuracy:
             raise RuntimeError("overfit gate token accuracy is below 99%")
-        if self.ce > MAX_CE:
+        if self.ce > criteria.max_ce:
             raise RuntimeError("overfit gate CE is above 0.1")
-        if self.total_ratio > MAX_TOTAL_RATIO:
+        if self.total_ratio > criteria.max_total_ratio:
             raise RuntimeError("overfit gate total loss did not fall by 95%")
 
     def verify_setup(
@@ -202,8 +200,8 @@ class OverfitGate:
         destination = Path(path)
         destination.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "format": GATE_FORMAT,
-            "version": GATE_VERSION,
+            "format": _GATE_FORMAT,
+            "version": _GATE_VERSION,
             **asdict(self),
             "backbone": self.backbone.value,
             "total_ratio": self.total_ratio,
@@ -213,9 +211,9 @@ class OverfitGate:
     @classmethod
     def load(cls, path: str | Path) -> OverfitGate:
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
-        if payload.get("format") not in (None, GATE_FORMAT):
+        if payload.get("format") not in (None, _GATE_FORMAT):
             raise ValueError(f"unrecognized overfit gate format {payload.get('format')!r}")
-        if payload.get("version", GATE_VERSION) != GATE_VERSION:
+        if payload.get("version", _GATE_VERSION) != _GATE_VERSION:
             raise ValueError(f"unsupported overfit gate version {payload.get('version')}")
         fields = {name: payload[name] for name in cls.__dataclass_fields__}
         fields["backbone"] = Backbone(fields["backbone"])

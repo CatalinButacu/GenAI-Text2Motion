@@ -1,0 +1,80 @@
+python.exe : Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher 
+rate limits and faster downloads.
+At C:\Users\ic.butacu\Documents\thessis\scripts\eval\twin_test_eval.ps1:56 char:5
++     & $py -u -m text2motion.eval.evaluate `
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Warning: You ar...ster downloads.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Loading weights:   0%|          | 0/197 [00:00<?, ?it/s]
+Loading weights: 100%|##########| 197/197 [00:00<00:00, 30658.52it/s]
+[transformers] [1mCLIPTextModelWithProjection LOAD REPORT[0m from: openai/clip-vit-base-patch32
+Key                                                            | Status     |  | 
+---------------------------------------------------------------+------------+--+-
+vision_model.encoder.layers.{0...11}.self_attn.k_proj.weight   | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.mlp.fc2.bias              | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.out_proj.bias   | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.q_proj.bias     | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.k_proj.bias     | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.v_proj.weight   | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.mlp.fc2.weight            | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.layer_norm2.bias          | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.out_proj.weight | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.q_proj.weight   | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.v_proj.bias     | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.mlp.fc1.bias              | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.layer_norm1.weight        | UNEXPECTED |  | 
+logit_scale                                                    | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.layer_norm1.bias          | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.layer_norm2.weight        | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.mlp.fc1.weight            | UNEXPECTED |  | 
+vision_model.embeddings.position_embedding.weight              | UNEXPECTED |  | 
+vision_model.embeddings.class_embedding                        | UNEXPECTED |  | 
+vision_model.embeddings.patch_embedding.weight                 | UNEXPECTED |  | 
+vision_model.post_layernorm.weight                             | UNEXPECTED |  | 
+vision_model.pre_layrnorm.weight                               | UNEXPECTED |  | 
+vision_model.post_layernorm.bias                               | UNEXPECTED |  | 
+vision_model.pre_layrnorm.bias                                 | UNEXPECTED |  | 
+visual_projection.weight                                       | UNEXPECTED |  | 
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+python.exe : Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher 
+rate limits and faster downloads.
+At C:\Users\ic.butacu\Documents\thessis\scripts\eval\twin_test_eval.ps1:56 char:5
++     & $py -u -m text2motion.eval.evaluate `
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Warning: You ar...ster downloads.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Loading weights:   0%|          | 0/197 [00:00<?, ?it/s]
+Loading weights: 100%|##########| 197/197 [00:00<00:00, 26278.60it/s]
+[transformers] [1mCLIPTextModelWithProjection LOAD REPORT[0m from: openai/clip-vit-base-patch32
+Key                                                            | Status     |  | 
+---------------------------------------------------------------+------------+--+-
+vision_model.encoder.layers.{0...11}.mlp.fc1.bias              | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.layer_norm1.bias          | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.layer_norm2.weight        | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.out_proj.weight | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.mlp.fc2.bias              | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.v_proj.bias     | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.mlp.fc2.weight            | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.k_proj.bias     | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.layer_norm2.bias          | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.layer_norm1.weight        | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.k_proj.weight   | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.v_proj.weight   | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.q_proj.weight   | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.q_proj.bias     | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.self_attn.out_proj.bias   | UNEXPECTED |  | 
+vision_model.embeddings.patch_embedding.weight                 | UNEXPECTED |  | 
+vision_model.encoder.layers.{0...11}.mlp.fc1.weight            | UNEXPECTED |  | 
+visual_projection.weight                                       | UNEXPECTED |  | 
+vision_model.embeddings.position_embedding.weight              | UNEXPECTED |  | 
+vision_model.embeddings.class_embedding                        | UNEXPECTED |  | 
+vision_model.pre_layrnorm.bias                                 | UNEXPECTED |  | 
+logit_scale                                                    | UNEXPECTED |  | 
+vision_model.post_layernorm.weight                             | UNEXPECTED |  | 
+vision_model.post_layernorm.bias                               | UNEXPECTED |  | 
+vision_model.pre_layrnorm.weight                               | UNEXPECTED |  | 
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.

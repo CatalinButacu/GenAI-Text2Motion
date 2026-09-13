@@ -1,11 +1,3 @@
-# Confound-decoupling cell: 34M geometry (= gen_pilot_fsq8x1024) with the 16-token CLIP prefix.
-# The published val pair moved capacity 33.91M -> 98.07M AND prefix 1 -> 16 at the same time, so the
-# 7.48 -> 1.63 FID gain cannot be attributed to scale. This cell holds capacity at 34M and raises only
-# the prefix, isolating the conditioning term; scale = (100M/prefix16) - (this). seed 2026, identical
-# tokenizer/data/split to both existing cells.
-# Verified zero-parameter intervention vs gen_pilot_fsq8x1024: generator 33,912,328 params and text
-# encoder 63,428,096 total / 3,415,552 trainable are bit-identical at prefix 1 and prefix 16, so this
-# cell moves conditioning alone with no capacity confound of its own.
 seed: 2026
 device: cuda
 data:

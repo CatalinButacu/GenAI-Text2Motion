@@ -32,7 +32,7 @@ export CAUSAL_CONV1D_FORCE_BUILD=TRUE
 export TORCH_CUDA_ARCH_LIST=8.6
 export MAX_JOBS=4
 $PY -m pip install -q --no-build-isolation --no-cache-dir causal-conv1d mamba-ssm pytest 2>&1 | tail -2 | tee -a outputs/canary_gate1.log
-$PY -m pytest tests/test_generator_upgrades.py::test_kernel_matches_eager_scan -q 2>&1 | tee -a outputs/canary_gate1.log
+$PY -m pytest tests/generation/test_generator_upgrades.py::test_kernel_matches_eager_scan -q 2>&1 | tee -a outputs/canary_gate1.log
 
 echo "=== gate 2: 5-epoch twins at 100M ===" | tee outputs/canary_timing.log
 for bb in transformer mamba; do

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+import numpy as np
 import torch
 
 SMPLX_MODEL_TYPE = "smplx"
@@ -51,6 +52,13 @@ class MotionChunk:
     motion: MotionClip
     index: int
     is_final: bool
+
+
+@dataclass(frozen=True)
+class StreamedChunk:
+    joints: np.ndarray
+    features: np.ndarray
+    yaw: float
 
 
 @dataclass(frozen=True)

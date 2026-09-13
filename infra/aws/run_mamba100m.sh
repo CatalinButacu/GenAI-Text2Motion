@@ -10,7 +10,7 @@ mkdir -p outputs
 CFG=configs/generator/final100m_fsq8x1024.yaml
 TOK=checkpoints/tokenizer/fsq_g8_v1024.pt
 PACK=data/amass_tokens_fsq8x1024.npz
-PRIOR=checkpoints/generator_mamba_100m_pretrained.pt   # matches the transformer prior's naming
+PRIOR=checkpoints/generator/generator_mamba_100m_pretrained.pt   # matches the transformer prior's naming
 FT=generator_mamba_100m.pt                             # best-by-val fine-tune; resume: *_last.pt
 
 # EAGER training (config use_kernel: false): the fused mamba-ssm kernel fails ABI-link on this DLAMI

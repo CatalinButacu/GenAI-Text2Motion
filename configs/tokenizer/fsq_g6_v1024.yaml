@@ -1,5 +1,3 @@
-# FSQ matched to rvq_l6_1024: 6 groups x (8,8,4,4)=1024 -> 6 codes/step, vocab 1024 (exact 2^10).
-# ASCII-only.
 seed: 2026
 device: cuda
 data:

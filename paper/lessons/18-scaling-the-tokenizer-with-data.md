@@ -3,14 +3,14 @@
 > A future-work / methods chapter. Lesson 6.6a scaled tokenizer capacity along **codes** (bits/step);
 > this scales it along **data** -- pretraining on a larger corpus (full AMASS, later derivatives). It
 > states the two non-negotiable rules, the feasibility, and the protocol, so the option is on the
-> record *before* the generator is frozen. Grounded in `regenerate.py`, the E7b plan lever, and the
+> record *before* the generator is frozen. Grounded in `motion/preparation.py`, the E7b plan lever, and the
 > scaling references in `.claude/docs/references.md` (Being-M0 / MotionLib).
 
 ## 18.0 The versioned pipeline
 
 ```mermaid
 flowchart LR
-  AM["AMASS (SMPL-X G, ~151 GB) -> regenerate.py -> 263 (~78% coverage)"] --> PT["pretrain tokenizer v2"]
+  AM["AMASS (SMPL-X G, ~151 GB) -> HML3D preparation -> 263 (~78% coverage)"] --> PT["pretrain tokenizer v2"]
   PT --> FT["fine-tune on HumanML3D-263"]
   FT --> EV["eval on HML3D test, frozen Guo matcher, matched bits/step"]
   FT --> RT["re-tokenize HML3D -> retrain generator v2 (forced by the tokenizer change)"]
@@ -51,7 +51,7 @@ the comparable distribution for the numbers.
 
 ## 18.4 Feasibility (already wired)
 
-- The donor AMASS is the **SMPL-X G** release; `regenerate.py` forwards it through the SMPL-X body
+- The donor AMASS is the **SMPL-X G** release; `motion/preparation.py` forwards it through the SMPL-X body
   model to 263 at **~78% coverage** (the rename resolver handles gaps) -- the data path exists.
 - The tokenizer is small (Lesson 6: two ~512-wide conv stacks + zero-parameter FSQ), so the 4 GB GPU
   is fine; more data means more **steps per epoch**, not more VRAM.

@@ -14,7 +14,7 @@ flowchart TB
   ENC --> TGT["targets (B,T',6) in 0..999, +END -> (B,L,6)"]
   TGT --> PK["pkeep 0.8 corrupt inputs -> (B,L,6)"]
   CAP["captions -> CLIP -> (B,16,512), drop_text 0.1"] --> CC
-  PK --> EMB["embed_tokens: sum 6 -> (B,L,512)"]
+   PK --> EMB["embed_motion_tokens: sum 6 -> (B,L,512)"]
   EMB --> CC["concat [prefix; shifted] -> (B,16+L-1,512)"]
   CC --> BK["causal backbone (twin) -> slice -> (B,L,512)"]
   BK --> HD["6 heads -> logits (B,L,6,1001)"]
@@ -77,9 +77,9 @@ rows with prob 0.1 -> **(B, 16, 512)**. *Transformation: text -> 16 vectors in t
 rows blanked so CFG works later.*
 
 ## Stage 6 -- generator FORWARD (generator.py), teacher forced
-1. **embed_tokens**: each of 6 input ids -> a 512 embedding; **summed over the 6** -> **(B, L, 512)**
+1. **embed_motion_tokens**: each of 6 input ids -> a 512 embedding; **summed over the 6** -> **(B, L, 512)**
    (L = T'+1). *6 integers -> 1 vector per step.*
-2. **text_prefix** project -> **(B, 16, 512)**.
+2. **project_text_prefix** -> **(B, 16, 512)**.
 3. **concat**: [prefix ; token-embeddings shifted right] -> **(B, 16+L-1, 512)**. *Each position will
    predict the NEXT token from the prefix + earlier tokens only.*
 4. **backbone** (the twin) -> **(B, 16+L-1, 512)**:

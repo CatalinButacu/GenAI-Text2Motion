@@ -63,19 +63,38 @@ sampling * scale the generator (50-150M, not 5M) * **compute FID early and often
 `motion` -> `tokenization` -> `generation` -> `evaluation` / `streaming` / `studio` -> `app`.
 Nothing imports a stage above itself (enforceable: zero upward imports today). `app` is the only
 layer allowed to construct anything.
-- `motion/` -- `model.py` (domain objects), `representation.py` (263 layout + recovery),
-  `kinematics.py`, `dataset.py` (`MotionRepository`, `Split`), `preparation.py` (AMASS -> 263).
-- `tokenization/` -- `model.py` (FSQ/RVQ + `MotionTokenizer` facade), `trainer.py`, `corpus.py`,
-  `evaluation.py`.
-- `generation/` -- `model.py` (backbones + `GeneratorArchitecture`), `text.py`, `losses.py`,
-  `trainer.py`, `pretrain.py`, `pipeline.py` (`MotionGenerator` facade).
-- `evaluation/` -- `metrics.py`, `matcher.py` (frozen Guo evaluator), `evaluator.py`, `benchmark.py`.
-- `streaming/` -- `decoder.py`, `service.py`, `protocol.py`. `studio/` -- `avatar.py`, `scene.py`, `viewer.py`.
-- `app/` -- `config.py`, `checkpoint.py` (external schemas), `runtime.py`, `run_log.py`,
-  `container.py` (`ApplicationFactory`), `cli.py` (every stage is a subcommand).
+- `motion/` -- `contracts.py` (declarations), `model.py` (domain objects),
+  `representation.py` (263 layout + recovery),
+  `kinematics.py`, `datamodule.py` (`MotionDataModule`), `datasets.py` (torch `Dataset`s +
+  `collate_motion_clips`), `preparation.py` (AMASS -> 263), `amass.py` (pose extraction),
+  `annotations.py`, `normalization.py` (`MotionScaler` + split stats), `storage.py` (caches).
+- `tokenization/` -- `contracts.py` (configuration + requests), `model.py` (FSQ/RVQ +
+  `MotionTokenizer` facade), `trainer.py`, `corpus.py`, `metrics.py`.
+- `generation/` -- `contracts.py` (configuration + requests), `model.py` (backbones +
+  `GeneratorModelSpec`), `text.py`, `losses.py`, `trainer.py`, `pretrain.py`, `pipeline.py`
+  (`TextToMotionGenerator` facade).
+- `evaluation/` -- `contracts.py` (requests + reports), `metrics.py`, `matcher.py` (frozen Guo
+  evaluator), `evaluator.py`, `benchmark.py`.
+- `streaming/` -- `decoder.py`, `service.py`, `protocol.py`.
+- `studio/` -- `contracts.py` (ports), `config.py` (studio dataclasses), `avatar.py`, `scene.py`,
+  `generation.py` (`StudioGenerationController`), `actions.py` (console logging), `viewer.py`.
+- `app/` -- `config.py` (declarations), `config_loader.py` (YAML/env operations), `checkpoint.py`
+  (external schemas), `runtime.py`, `run_log.py`,
+  `bootstrap.py` (`ApplicationContext` composition root + `ApplicationBootstrap`), `commands/`
+  (use cases), and `cli.py`
+  (argument parsing and dispatch only). Local roles follow ADR 0004: declarative contracts, domain
+  behavior, operations, adapters, then composition.
 Stage boundaries exchange named objects (`MotionClip`, `MotionTokens`, `MotionBatch`,
 `GeneratedMotion`, `MotionChunk`), never bare tuples. Backbone/quantizer selection lives in one
 registry per subsystem, not in scattered `if backbone == ...` branches.
+
+## Where files go (see `logs/README.md`)
+`logs/train/<stamp>_<name>/` run manifests + metrics -- `logs/cli/` service and studio consoles --
+`logs/perf/inference.jsonl` one row per inference (timing, peak GPU, host RSS).
+`outputs/` is only for things a human looks at: `demo/`, `demo_gallery/`, `figures/`, plus the
+sweep sentinels the training scripts read. `outputs/runs/` is historical and stays put -- ADRs and
+STATUS cite those paths. Checkpoints live in `checkpoints/<stage>/`; scratch files never land in
+the repo.
 
 ## Golden rules
 - Before any stage, open its skill. Before modeling, ADR 0002 must be accepted.
@@ -83,7 +102,7 @@ registry per subsystem, not in scattered `if backbone == ...` branches.
 - Assert tensor shapes at module boundaries; canonical shapes live in `motion-representation`.
 - Data/SMPL-X files are license-gated -- never commit; load from configured paths.
 - **snake_case** (PEP8) everywhere -- the donor's camelCase is NOT inherited. Python 3.12, ruff (line 100).
-- **Config-driven via typed dataclasses** (`app/config.py`): instantiate one `Config`, pass a
+- **Config-driven via typed dataclasses** (`app/config.py`): instantiate one `ApplicationConfig`, pass a
   function only the sub-config it needs. No module-level global constants, no magic numbers in code.
 - **Guard every local run** (`scripts/training/local_guard.ps1`): launch long local jobs WITH the watchdog --
   stall-kill on a stale `metrics.jsonl` heartbeat + a max-hours budget (the laptop twin of the
@@ -94,7 +113,32 @@ registry per subsystem, not in scattered `if backbone == ...` branches.
   ADR/STATUS/the dissertation must trace to a run dir. Model selection on **val** only; `test` is
   touched once per final table (the 20-rep `text2motion evaluate` protocol).
 
-## Status
-- [ ] Repo scaffolded * [ ] Donor assets mapped * [ ] Motion representation round-trips
-- [ ] Unified dataset loads at scale * [ ] **ADR 0002 (architecture) accepted** <- gates model code
-- [ ] Eval harness computes FID * [ ] aitviewer studio * [ ] Streaming decode loop
+## Status (2026-08-19)
+- [x] Repo scaffolded -- 7 stage packages under `src/text2motion/`, 0 upward imports, one CLI
+  (`python -m text2motion.app.cli`), 115 tests pass + 3 skipped offline, ruff clean.
+- [x] Donor assets mapped -- AMASS_263, HumanML3D_263/official, Guo eval matcher, SMPL-X bodies,
+  GloVe all present under `data/`.
+- [x] Motion representation round-trips -- `tests/motion/test_hml3d_263_contract.py` asserts the 263
+  layout + recovery and the exact param constants.
+- [~] Unified dataset loads at scale -- **AMASS + HumanML3D only.** AMASS_263 at 13,249 clips /
+  8,303 token segments; test split 2,189 clips, val 1,460. **Inter-X is declared
+  (`MotionSource.INTER_X`) but not ingested** -- this is the one box still genuinely open.
+- [x] **ADR 0002 (architecture) accepted** (2026-06-03) -- gate PASSED 2026-06-11: 31M twins,
+  transformer FID 3.310 / mamba 3.928, ratio 1.19x inside the <=1.5x gate. Model code unblocked.
+  ADR 0003 (CLIP ViT-B/32 text encoder) accepted 2026-06-20.
+- [x] Eval harness computes FID -- 20-rep protocol over the 2,189-clip test split, frozen Guo
+  matcher, deterministic val selection; tokenizer sweep scored 18 runs (winner `fsq_g8_v1024`,
+  recon-FID 0.0170 vs best RVQ 0.0205 -- **Contribution A is closed, do not retrain**).
+- [x] aitviewer studio -- interactive + headless, motion service in its own process, live
+  regenerate. Demo generation 40.8 s -> 2.9 s. `demo_models.yaml` uses stable implementation names,
+  date-based releases, shared defaults, and atomic generator/text-encoder bundles only.
+- [x] Streaming decode loop -- `streaming/` with measured left context;
+  `tests/streaming/test_streaming.py`
+  asserts streamed == whole-sequence decode and bounded state. Measured at 96M: mamba state flat
+  2.68 MB vs transformer 5.9 -> 76.7 MB. **Bounded-state claim holds; latency claim does not**
+  (mamba 28.6-29.7 ms/step vs transformer 14.6-16.5).
+
+**Blocked on:** Azure GPU quota -- `Standard NCADS_A100_v4 Family vCPUs` 0 -> 24 and
+`Total Regional vCPUs` 10 -> 24 in germanywestcentral. All six planned runs (pretrain + gate +
+finetune for transformer/FSQ, mamba/FSQ, transformer/RVQ) are prepped and launchable via
+`infra/azure/run_twins.sh`. Nothing else gates the 100M twin result.

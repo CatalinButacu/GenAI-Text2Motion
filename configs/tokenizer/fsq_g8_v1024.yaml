@@ -1,4 +1,3 @@
-# Matrix completion: FSQ 8 groups x (8,8,4,4)=1024. Mirrors rvq_l8_1024. ASCII-only, seed 2026.
 seed: 2026
 device: cuda
 data:

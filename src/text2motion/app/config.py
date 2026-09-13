@@ -4,46 +4,29 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-import yaml
-
-from text2motion.generation.losses import LossWeighting, LossWeights
-from text2motion.generation.model import Backbone, GeneratorConfig
-from text2motion.generation.text import TextEncoderConfig
-from text2motion.generation.trainer import Amp, TrainingConfig
-from text2motion.motion.dataset import DataConfig
-from text2motion.motion.model import Gender
-from text2motion.motion.representation import DIM, FPS, JOINTS, Source, Track
-from text2motion.tokenization.model import (
-    Quantizer,
-    RvqConfig,
-    TokenizerConfig,
-    TokenizerKind,
+from text2motion.generation.contracts import (
+    Backbone,
+    GeneratorConfig,
+    GeneratorTrainingConfig,
+    TextEncoderConfig,
 )
+from text2motion.motion.contracts import MotionDataConfig
+from text2motion.motion.model import Gender
+from text2motion.tokenization.contracts import RvqConfig, TokenizerConfig
 
 
-class Device(StrEnum):
+class ComputeDevice(StrEnum):
     CPU = "cpu"
     CUDA = "cuda"
 
 
-class Precision(StrEnum):
+class Float32Precision(StrEnum):
     HIGHEST = "highest"
     TF32 = "tf32"
 
 
-LOSS_WEIGHT_KEYS = {
-    "w_root": "root",
-    "w_ric": "ric",
-    "w_rot6d": "rot6d",
-    "w_vel": "vel",
-    "w_foot": "foot",
-    "w_fk_self": "fk_self",
-    "w_fk_gt": "fk_gt",
-}
-
-
 @dataclass(frozen=True)
-class AvatarConfig:
+class SmplxAvatarConfig:
     model_type: str = "smplx"
     gender: Gender = Gender.NEUTRAL
     num_joints: int = 55
@@ -77,8 +60,8 @@ class AvatarConfig:
 
 
 @dataclass(frozen=True)
-class PathsConfig:
-    donor_root: Path = Path(r"D:\Facultate\dissertation")
+class ProjectPathsConfig:
+    donor_root: Path | None = None
     humanml3d_dir: Path | None = None
     eval_matcher: Path | None = None
     eval_stats_dir: Path | None = None
@@ -97,135 +80,75 @@ class PathsConfig:
     cache_dir: Path = Path("data/.cache")
     checkpoints_dir: Path = Path("checkpoints")
     outputs_dir: Path = Path("outputs")
+    logs_dir: Path = Path("logs")
+    tokenizer_checkpoint_path: Path | None = None
+    generator_checkpoint_paths: dict[str, Path] = field(default_factory=dict)
+
+    @property
+    def tokenizer_checkpoint(self) -> Path:
+        if self.tokenizer_checkpoint_path is None:
+            raise ValueError(
+                "paths.tokenizer_checkpoint_path must be configured or passed explicitly"
+            )
+        return self.tokenizer_checkpoint_path
+
+    def generator_checkpoint(self, backbone: Backbone | str) -> Path:
+        key = Backbone(backbone).value
+        if key not in self.generator_checkpoint_paths:
+            raise ValueError(
+                f"paths.generator_checkpoint_paths.{key} must be configured or passed explicitly"
+            )
+        return self.generator_checkpoint_paths[key]
+
+    @property
+    def inference_log(self) -> Path:
+        return self.logs_dir / "perf" / "inference.jsonl"
+
+    @property
+    def service_log(self) -> Path:
+        return self.logs_dir / "cli" / "motion_service.log"
+
+    @property
+    def benchmark_report(self) -> Path:
+        return self.outputs_dir / "streaming_bench.json"
 
 
 @dataclass(frozen=True)
-class Config:
+class MotionServiceConfig:
+    bind_host: str = "127.0.0.1"
+    connect_host: str = "127.0.0.1"
+    port: int = 8765
+    idle_seconds: int = 600
+    connect_timeout_seconds: float = 5.0
+    startup_timeout_seconds: int = 240
+
+
+@dataclass(frozen=True)
+class ApplicationConfig:
     seed: int = 2026
     deterministic: bool = True
-    device: Device = Device.CUDA
-    precision: Precision = Precision.HIGHEST
-    avatar: AvatarConfig = field(default_factory=AvatarConfig)
-    paths: PathsConfig = field(default_factory=PathsConfig)
-    data: DataConfig = field(default_factory=DataConfig)
+    device: ComputeDevice = ComputeDevice.CUDA
+    precision: Float32Precision = Float32Precision.HIGHEST
+    avatar: SmplxAvatarConfig = field(default_factory=SmplxAvatarConfig)
+    paths: ProjectPathsConfig = field(default_factory=ProjectPathsConfig)
+    service: MotionServiceConfig = field(default_factory=MotionServiceConfig)
+    data: MotionDataConfig = field(default_factory=MotionDataConfig)
     tokenizer: TokenizerConfig = field(default_factory=TokenizerConfig)
     rvq_baseline: RvqConfig = field(default_factory=RvqConfig)
     text_encoder: TextEncoderConfig = field(default_factory=TextEncoderConfig)
     generator: GeneratorConfig = field(default_factory=GeneratorConfig)
-    train: TrainingConfig = field(default_factory=TrainingConfig)
+    train: GeneratorTrainingConfig = field(default_factory=GeneratorTrainingConfig)
 
 
-def _to_paths(raw: dict, keys: set[str]) -> dict:
-    out = dict(raw)
-    for key in keys:
-        if out.get(key) is not None:
-            out[key] = Path(out[key])
-    return out
+def load_config(path: str | Path) -> ApplicationConfig:
+    """Compatibility facade; configuration loading is owned by config_loader."""
+    from text2motion.app.config_loader import load_config as load
+
+    return load(path)
 
 
-def _check_representation_block(raw: dict, source: str | Path) -> None:
-    declared = raw.get("hml3d")
-    if not declared:
-        return
-    expected = {"dim": DIM, "num_joints": JOINTS, "fps": FPS}
-    for key, value in expected.items():
-        if key in declared and int(declared[key]) != value:
-            raise ValueError(
-                f"{source}: hml3d.{key} is {declared[key]}, but the HumanML3D-263 representation "
-                f"contract fixes it at {value}. The layout is a static domain contract "
-                f"(motion/representation.py), not a per-run knob -- every trained checkpoint, the "
-                f"Mean/Std scaler, and the Guo evaluator all assume it."
-            )
+def validate_config(config: ApplicationConfig, source: str | Path = "<config>") -> None:
+    """Compatibility facade; configuration validation is owned by config_loader."""
+    from text2motion.app.config_loader import validate_config as validate
 
-
-def _avatar_config(raw: dict) -> AvatarConfig:
-    avatar_raw = dict(raw.get("avatar", {}))
-    if "pose_segments" in avatar_raw:
-        avatar_raw["pose_segments"] = tuple(
-            (str(name), int(dim)) for name, dim in avatar_raw["pose_segments"]
-        )
-    if "gender" in avatar_raw:
-        avatar_raw["gender"] = Gender(avatar_raw["gender"])
-    return AvatarConfig(**_to_paths(avatar_raw, {"models_path"}))
-
-
-def _tokenizer_config(raw: dict) -> TokenizerConfig:
-    tokenizer_raw = dict(raw.get("tokenizer", {}))
-    if "fsq_levels" in tokenizer_raw:
-        tokenizer_raw["fsq_levels"] = tuple(int(level) for level in tokenizer_raw["fsq_levels"])
-    if "quantizer" in tokenizer_raw:
-        tokenizer_raw["quantizer"] = Quantizer(tokenizer_raw["quantizer"])
-    if "kind" in tokenizer_raw:
-        tokenizer_raw["kind"] = TokenizerKind(tokenizer_raw["kind"])
-    return TokenizerConfig(**tokenizer_raw)
-
-
-def _data_config(raw: dict) -> DataConfig:
-    data_raw = dict(raw.get("data", {}))
-    if "track" in data_raw:
-        data_raw["track"] = Track(data_raw["track"])
-    if "sources" in data_raw:
-        data_raw["sources"] = tuple(Source(source) for source in data_raw["sources"])
-    return DataConfig(**data_raw)
-
-
-def _training_config(raw: dict) -> TrainingConfig:
-    train_raw = dict(raw.get("train", {}))
-    weights = {
-        field_name: train_raw.pop(key)
-        for key, field_name in LOSS_WEIGHT_KEYS.items()
-        if key in train_raw
-    }
-    if weights:
-        train_raw["loss_weights"] = LossWeights(**weights)
-    if "amp" in train_raw:
-        train_raw["amp"] = Amp(train_raw["amp"])
-    if "loss_weighting" in train_raw:
-        train_raw["loss_weighting"] = LossWeighting(train_raw["loss_weighting"])
-    return TrainingConfig(**train_raw)
-
-
-def load_config(path: str | Path) -> Config:
-    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-    _check_representation_block(raw, path)
-
-    generator_raw = dict(raw.get("generator", {}))
-    if "backbone" in generator_raw:
-        generator_raw["backbone"] = Backbone(generator_raw["backbone"])
-
-    config = Config(
-        seed=raw.get("seed", 2026),
-        deterministic=raw.get("deterministic", True),
-        device=Device(raw.get("device", Device.CUDA)),
-        precision=Precision(raw.get("precision", Precision.HIGHEST)),
-        avatar=_avatar_config(raw),
-        paths=PathsConfig(**_to_paths(raw.get("paths", {}), set(PathsConfig.__dataclass_fields__))),
-        data=_data_config(raw),
-        tokenizer=_tokenizer_config(raw),
-        rvq_baseline=RvqConfig(**raw.get("rvq_baseline", {})),
-        text_encoder=TextEncoderConfig(**raw.get("text_encoder", {})),
-        generator=GeneratorConfig(**generator_raw),
-        train=_training_config(raw),
-    )
-    validate_config(config, path)
-    return config
-
-
-def validate_config(config: Config, source: str | Path = "<config>") -> None:
-    if config.generator.text_prefix_len != config.text_encoder.prefix_len:
-        raise ValueError(
-            f"{source}: generator.text_prefix_len ({config.generator.text_prefix_len}) must equal "
-            f"text_encoder.prefix_len ({config.text_encoder.prefix_len}) -- the generator reserves "
-            f"exactly the prefix positions the encoder emits. A silent mismatch changes the text "
-            f"conditioning, which confounds any capacity comparison run against this config."
-        )
-
-    prefix_and_motion = config.generator.text_prefix_len + config.data.max_motion_len // (
-        config.tokenizer.downsample or 1
-    )
-    if config.generator.max_seq_len < prefix_and_motion:
-        raise ValueError(
-            f"{source}: generator.max_seq_len ({config.generator.max_seq_len}) is smaller than "
-            f"text_prefix_len + max_motion_len/downsample ({prefix_and_motion}); the longest "
-            f"training clip would be truncated by the position budget."
-        )
+    validate(config, source)

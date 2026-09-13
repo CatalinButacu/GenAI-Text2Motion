@@ -115,15 +115,17 @@ src/text2motion/
   studio/         SMPL-X fitting + aitviewer studio
   app/            config, checkpoint schemas, composition root, unified CLI
 configs/          YAML hyperparameters (single source of truth)
-scripts/          sweep launchers, watchdog, one-off analyses, figures
-tests/            shape / round-trip / parity / sanity contracts
+scripts/          training, evaluation, benchmarks, figures, rendering, and demos
+tests/            mirrors the seven source stages; see tests/README.md
 paper/            dissertation draft
 ```
 
 Each stage exchanges named domain objects (`MotionClip`, `MotionTokens`, `MotionBatch`,
 `GeneratedMotion`, `MotionChunk`) rather than bare tuples, and exposes one facade —
-`MotionRepository`, `MotionTokenizer`, `MotionGenerator`, `MotionEvaluator`, `StreamingService`.
-Object construction happens in exactly one place, `app.container.ApplicationFactory`.
+`MotionRepository`, `MotionTokenizer`, `TextToMotionGenerator`,
+`HumanMl3dGenerationEvaluator`, `MotionInferenceServer`.
+Object construction happens in `app.bootstrap.ApplicationContext`, created by
+`ApplicationBootstrap`.
 
 ## Setup
 
@@ -153,6 +155,13 @@ text2motion benchmark        --config configs/generator/final100m.yaml
 text2motion serve            --config configs/generator/final100m_fsq8x1024.yaml
 text2motion studio           --config configs/generator/final100m_fsq8x1024.yaml
 ```
+
+## Containers
+
+The repository includes a multi-stage non-root image and Compose profiles for development tests,
+GPU inference, evaluation, benchmarks, and explicit one-shot training. Datasets and checkpoints are
+mounted at runtime rather than copied into images. See [DOCKER.md](DOCKER.md) for the filesystem,
+environment, GPU, health-check, and operational contracts.
 
 Datasets and SMPL-X body models are license-gated and are not distributed here; paths are configured
 in `configs/`.

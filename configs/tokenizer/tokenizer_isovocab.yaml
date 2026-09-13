@@ -1,5 +1,3 @@
-# Iso-vocab FSQ, seeded: 6 groups x (8,8,8)=512 (matches RVQ vocab), latent 18-D. The matched-vocab
-# confound check for H1a. ASCII-only.
 seed: 2026
 device: cuda
 data:

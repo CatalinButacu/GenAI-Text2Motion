@@ -2,6 +2,7 @@
 # Root-anchored: the unanchored `data/` silently ignored src/text2motion/data/ (found 2026-06-10).
 /data/
 /checkpoints/
+/graphify-out/
 /outputs/
 *.zip
 *.npz
@@ -18,6 +19,12 @@ __pycache__/
 # caches
 .cache/
 /data/.cache/
+.docker-cache/
+
+# local container configuration; commit only the template
+.env
+.env.*
+!.env.example
 
 # Claude Code tooling -- local only (agents, skills, ADRs, hooks, settings)
 .claude/
@@ -46,3 +53,9 @@ code_patch.tar
 
 # build artifacts (Kaggle/cloud bundles)
 dist/
+infra/azure/.terraform/
+infra/azure/*.tfstate
+infra/azure/*.tfstate.*
+infra/azure/terraform.tfvars
+infra/azure/.terraform.lock.hcl
+.ropeproject/

@@ -7,18 +7,18 @@ from collections.abc import Iterable, Iterator
 import numpy as np
 import torch
 
-from text2motion.generation.model import MotionGeneratorModule
+from text2motion.generation.model import MotionTokenGenerator
 from text2motion.motion.representation import DIM
-from text2motion.tokenization.model import TokenizerModule
+from text2motion.tokenization.model import MotionTokenizerNetwork
 
-STREAM_END = None
+_END = None
 
 
 @torch.no_grad()
 def measure_decoder_context(
-    tokenizer: TokenizerModule, downsample: int, probe_len: int = 32, trials: int = 4
+    tokenizer: MotionTokenizerNetwork, downsample: int, probe_len: int = 32, trials: int = 4
 ) -> tuple[int, int]:
-    num_quantizers = len(tokenizer.quantizer.units)
+    num_quantizers = len(tokenizer.quantizer.quantizer_units)
     codebook_size = tokenizer.codebook_size
     device = next(tokenizer.parameters()).device
     centre = probe_len // 2
@@ -69,7 +69,7 @@ def _put_drop_oldest(out_queue: "queue_mod.Queue", item: object) -> None:
 class StreamingMotionDecoder:
     def __init__(
         self,
-        tokenizer: TokenizerModule,
+        tokenizer: MotionTokenizerNetwork,
         downsample: int,
         mean: torch.Tensor,
         std: torch.Tensor,
@@ -133,7 +133,7 @@ class StreamingMotionDecoder:
     @torch.no_grad()
     def stream(
         self,
-        generator: MotionGeneratorModule,
+        generator: MotionTokenGenerator,
         text_emb: torch.Tensor,
         num_steps: int,
         temperature: float = 1.0,
@@ -142,7 +142,7 @@ class StreamingMotionDecoder:
         stop_at_end: bool = False,
     ) -> Iterator[torch.Tensor]:
         yield from self.stream_tokens(
-            generator.stream(
+            generator.stream_token_indices(
                 text_emb,
                 num_steps,
                 temperature=temperature,
@@ -155,7 +155,7 @@ class StreamingMotionDecoder:
 
 def run_producer(
     decoder: StreamingMotionDecoder,
-    generator: MotionGeneratorModule,
+    generator: MotionTokenGenerator,
     text_emb: torch.Tensor,
     num_steps: int,
     out_queue: "queue_mod.Queue",
@@ -175,7 +175,7 @@ def run_producer(
     ):
         _put_drop_oldest(out_queue, chunk)
 
-    _put_drop_oldest(out_queue, STREAM_END)
+    _put_drop_oldest(out_queue, _END)
 
 
 def collect_stream(out_queue: "queue_mod.Queue") -> np.ndarray:
@@ -184,7 +184,7 @@ def collect_stream(out_queue: "queue_mod.Queue") -> np.ndarray:
     while True:
         item = out_queue.get()
 
-        if item is STREAM_END:
+        if item is _END:
             break
 
         chunks.append(item.squeeze(0).cpu().numpy())

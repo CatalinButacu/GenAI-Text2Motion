@@ -1,6 +1,6 @@
 # Kernel canary on free GPU (Kaggle) — FALLBACK VENUE
 
-Primary venue is now Azure A10 — see `infra/azure/README.md`. Use this page only if the Azure
+Primary venue is now Azure A100 (`Standard_NC24ads_A100_v4`) — see `infra/azure/README.md`. Use this page only if the Azure
 GPU quota request is refused or still pending after ~3 days. Nothing here is wasted either way:
 `infra/kernel_canary.sh` and `infra/make_bundle.sh` are shared by both venues.
 

@@ -85,7 +85,7 @@ Copy-Item terraform.tfvars.example terraform.tfvars   # edit: region, bucket
 $b = "thesis-t2m-<name>"
 tar -cf bundle.tar src configs checkpoints/tokenizer/fsq_g8_v1024.pt `
   data/HumanML3D_official data/eval_stats data/official_evaluator data/t2m_glove
-# add the local resume checkpoints if continuing: checkpoints/generator_*_last.pt
+# add the local resume checkpoints if continuing: checkpoints/generator/generator_*_last.pt
 aws s3 cp bundle.tar s3://$b/bundle.tar
 ```
 

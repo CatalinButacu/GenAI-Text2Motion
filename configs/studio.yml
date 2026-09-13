@@ -1,5 +1,7 @@
 fit:
   model_dir: data/smplx_models
+  device: cpu
+  threads: 4
   num_betas: 10
   lr: 0.05
   w_smooth: 0.05
@@ -16,6 +18,10 @@ schedule:
   continuation_stage1_iters: 0
   continuation_stage2_iters: 25
   retrofit_window: 16
+
+display:
+  window_frames: 600
+  fit_lookahead_chunks: 8
 
 live:
   steps: 20

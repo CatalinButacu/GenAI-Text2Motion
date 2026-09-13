@@ -11,11 +11,10 @@ from pathlib import Path
 
 import numpy as np
 
+from text2motion.motion.model import StreamedChunk
 
-class Wire:
-    HOST: str = "127.0.0.1"
-    PORT: int = 8765
 
+class MotionStreamProtocol:
     @staticmethod
     def send_json(io, obj: dict) -> None:
         io.write((json.dumps(obj) + "\n").encode("utf-8"))
@@ -44,17 +43,18 @@ class Wire:
         return np.frombuffer(data, dtype=np.float32).reshape(msg["shape"]).copy()
 
 
-class MotionServiceClient:
-    def __init__(self, host: str = Wire.HOST, port: int = Wire.PORT):
-        self.sock = socket.create_connection((host, port), timeout=5)
+class MotionInferenceClient:
+    def __init__(self, host: str, port: int, timeout_seconds: float = 5.0):
+        self.sock = socket.create_connection((host, port), timeout=timeout_seconds)
         self.sock.settimeout(None)
         self.io = self.sock.makefile("rwb")
         self.lock = threading.Lock()
-        self.hello = Wire.recv_json(self.io)
+        self.hello = MotionStreamProtocol.recv_json(self.io)
+        self.last_stats: dict | None = None
 
     def load(self, config: str, ckpt: str, tokenizer_ckpt: str, backbone: str) -> dict:
         with self.lock:
-            Wire.send_json(
+            MotionStreamProtocol.send_json(
                 self.io,
                 {
                     "cmd": "load",
@@ -64,7 +64,7 @@ class MotionServiceClient:
                     "backbone": backbone,
                 },
             )
-            msg = Wire.recv_json(self.io)
+            msg = MotionStreamProtocol.recv_json(self.io)
         if msg["type"] == "error":
             raise RuntimeError(msg["message"])
         self.hello = msg
@@ -80,7 +80,7 @@ class MotionServiceClient:
         should_cancel=None,
     ):
         with self.lock:
-            Wire.send_json(
+            MotionStreamProtocol.send_json(
                 self.io,
                 {
                     "cmd": "generate",
@@ -93,15 +93,20 @@ class MotionServiceClient:
             )
             cancel_sent = False
             while True:
-                msg = Wire.recv_json(self.io)
+                msg = MotionStreamProtocol.recv_json(self.io)
                 kind = msg["type"]
                 if kind == "chunk":
-                    joints = Wire.recv_array(self.io, msg)
+                    joints = MotionStreamProtocol.recv_array(self.io, msg)
+                    placement = MotionStreamProtocol.recv_json(self.io)
+                    features = MotionStreamProtocol.recv_array(self.io, MotionStreamProtocol.recv_json(self.io))
                     if should_cancel is not None and should_cancel() and not cancel_sent:
-                        Wire.send_json(self.io, {"cmd": "cancel"})
+                        MotionStreamProtocol.send_json(self.io, {"cmd": "cancel"})
                         cancel_sent = True
-                    yield joints
+                    yield StreamedChunk(
+                        joints=joints, features=features, yaw=float(placement["yaw"])
+                    )
                 elif kind in ("done", "cancelled"):
+                    self.last_stats = msg.get("stats")
                     return
                 elif kind == "error":
                     raise RuntimeError(msg["message"])
@@ -115,19 +120,19 @@ class MotionServiceClient:
             self.sock.close()
 
 
-def connect_or_spawn(
+def connect_or_start_motion_server(
     config: str,
     ckpt: str,
     tokenizer_ckpt: str,
     backbone: str,
-    host: str = Wire.HOST,
-    port: int = Wire.PORT,
-    log_path: str = "outputs/motion_service.log",
+    host: str,
+    port: int,
+    log_path: str | Path,
     spawn_wait_seconds: int = 240,
-) -> MotionServiceClient:
+) -> MotionInferenceClient:
     client = None
     try:
-        client = MotionServiceClient(host, port)
+        client = MotionInferenceClient(host, port)
         print(f"[service] reusing warm service ({client.hello.get('ckpt')})", flush=True)
     except OSError:
         cmd = [
@@ -152,14 +157,18 @@ def connect_or_spawn(
         Path(log_path).parent.mkdir(parents=True, exist_ok=True)
         log = open(log_path, "ab")
         flags = getattr(subprocess, "DETACHED_PROCESS", 0)
-        env = dict(os.environ)
+        env = {key: value for key, value in os.environ.items() if key.startswith("TEXT2MOTION_")}
+        for key in ("PATH", "PYTHONPATH", "CUDA_VISIBLE_DEVICES", "HF_HOME", "TORCH_HOME"):
+            if key in os.environ:
+                env[key] = os.environ[key]
         env["PYTHONPATH"] = env.get("PYTHONPATH") or "src"
+        env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
         subprocess.Popen(cmd, stdout=log, stderr=log, creationflags=flags, env=env)
         print(f"[service] spawned; loading the model (log: {log_path})...", flush=True)
         deadline = time.time() + spawn_wait_seconds
         while time.time() < deadline:
             try:
-                client = MotionServiceClient(host, port)
+                client = MotionInferenceClient(host, port)
                 break
             except OSError:
                 time.sleep(2)

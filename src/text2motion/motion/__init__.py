@@ -1,10 +1,6 @@
-from text2motion.motion.dataset import (
-    DataConfig,
-    MotionRepository,
-    MotionScaler,
-    Split,
-    collate_clips,
-)
+from text2motion.motion.contracts import MotionDataConfig, Split
+from text2motion.motion.datamodule import MotionDataModule
+from text2motion.motion.datasets import collate_motion_clips
 from text2motion.motion.model import (
     GeneratedMotion,
     MotionBatch,
@@ -12,16 +8,17 @@ from text2motion.motion.model import (
     MotionClip,
     MotionTokens,
 )
+from text2motion.motion.normalization import MotionScaler
 
 __all__ = [
-    "DataConfig",
+    "MotionDataConfig",
     "GeneratedMotion",
     "MotionBatch",
     "MotionChunk",
     "MotionClip",
-    "MotionRepository",
+    "MotionDataModule",
     "MotionScaler",
     "MotionTokens",
     "Split",
-    "collate_clips",
+    "collate_motion_clips",
 ]

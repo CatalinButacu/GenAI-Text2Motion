@@ -33,9 +33,9 @@ def _jsonable(value: Any) -> Any:
     return str(value)
 
 
-def start_run(name: str, cfg: Any, outputs_dir: Path, extra: dict | None = None) -> Path:
+def start_run(name: str, cfg: Any, logs_dir: Path, extra: dict | None = None) -> Path:
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-    run_dir = Path(outputs_dir) / "runs" / f"{stamp}_{name}"
+    run_dir = Path(logs_dir) / "train" / f"{stamp}_{name}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     import torch

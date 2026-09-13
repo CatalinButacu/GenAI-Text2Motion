@@ -2,123 +2,88 @@ from __future__ import annotations
 
 import zlib
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
 
 import numpy as np
 import torch
 
-from text2motion.evaluation.matcher import EvaluationContext
+from text2motion.evaluation.contracts import (
+    DIVERSITY_PAIRS,
+    R_PRECISION_POOL,
+    GenerationEvaluationProtocol,
+    GenerationEvaluationReport,
+    GenerationEvaluationSet,
+)
+from text2motion.evaluation.matcher import GuoEvaluationResources
 from text2motion.evaluation.metrics import (
     bootstrap_fid,
+    compute_guo_motion_embeddings,
+    compute_guo_text_embeddings,
     diversity,
-    embed_motions,
-    embed_texts,
     fid,
     mm_dist,
     r_precision,
 )
-from text2motion.generation.pipeline import MotionGenerator, SamplingConfig
-from text2motion.motion.dataset import FEATURES_DIR, Split, parse_text_file
+from text2motion.generation.contracts import SamplingConfig
+from text2motion.generation.pipeline import TextToMotionGenerator
+from text2motion.motion.annotations import parse_text_file
+from text2motion.motion.contracts import Split
+from text2motion.motion.storage import FEATURES_DIR
 
-MAX_EVAL_FRAMES = 196
-MIN_EVAL_TOKENS = 2
-R_PRECISION_POOL = 32
 
-
-def clip_seed(clip_id: str) -> int:
+def deterministic_generation_seed(clip_id: str) -> int:
     return zlib.crc32(clip_id.encode("utf-8"))
 
 
-@dataclass(frozen=True)
-class EvaluationRequest:
-    split: Split = Split.TEST
-    max_clips: int = 100000
-    sampling: SamplingConfig = field(default_factory=SamplingConfig)
-    mm_clips: int = 100
-    mm_repeats: int = 30
-    bootstrap: int = 200
-    reps: int = 20
-    batch_size: int = 1
+class HumanMl3dGenerationEvaluator:
+    def __init__(self, resources: GuoEvaluationResources, max_frames: int, min_tokens: int = 2) -> None:
+        self.resources = resources
+        self.max_frames = max_frames
+        self.min_tokens = min_tokens
 
-
-@dataclass(frozen=True)
-class EvaluationReport:
-    clips: int
-    fid: float
-    r_precision: tuple[float, float, float]
-    diversity: float
-    multimodality: float
-    matching_distance: float
-    r_top1_std: float = 0.0
-    fid_ci_lo: float = float("nan")
-    fid_ci_hi: float = float("nan")
-
-    def as_dict(self) -> dict[str, float]:
-        record = asdict(self)
-        top1, top2, top3 = self.r_precision
-        record.pop("r_precision")
-        record.update({"r_top1": top1, "r_top2": top2, "r_top3": top3})
-        return record
-
-
-@dataclass(frozen=True)
-class GeneratedSplit:
-    reference: list[np.ndarray]
-    generated: list[np.ndarray]
-    token_lists: list[list[list[str]]]
-    captions: list[str]
-    requested: int
-    dropped: dict[str, int]
-
-
-class MotionEvaluator:
-    def __init__(self, context: EvaluationContext) -> None:
-        self.context = context
-
-    def embed(self, feats: list[np.ndarray]) -> np.ndarray:
-        return embed_motions(
-            self.context.motion_matcher,
+    def compute_motion_embeddings(self, feats: list[np.ndarray]) -> np.ndarray:
+        return compute_guo_motion_embeddings(
+            self.resources.motion_embedder,
             feats,
-            self.context.eval_mean,
-            self.context.eval_std,
-            self.context.device,
+            self.resources.guo_motion_mean,
+            self.resources.guo_motion_std,
+            self.resources.device,
         )
 
-    def recon_fid(self, reference: list[np.ndarray], recon: list[np.ndarray]) -> float:
-        return fid(self.embed(reference), self.embed(recon))
+    def calculate_reconstruction_fid(self, reference: list[np.ndarray], recon: list[np.ndarray]) -> float:
+        return fid(self.compute_motion_embeddings(reference), self.compute_motion_embeddings(recon))
 
-    def reference_clip(self, clip_id: str) -> tuple[np.ndarray, int] | None:
-        vec_path = self.context.out_dir / FEATURES_DIR / f"{clip_id}.npy"
+    def load_scorable_reference_clip(self, clip_id: str) -> tuple[np.ndarray, int] | None:
+        vec_path = self.resources.motion_dataset_dir / FEATURES_DIR / f"{clip_id}.npy"
         if not vec_path.is_file():
             return None
         feat = np.load(vec_path).astype(np.float32)
         if np.isnan(feat).any():
             return None
-        token_len = min(feat.shape[0], MAX_EVAL_FRAMES) // self.context.downsample
-        if token_len < MIN_EVAL_TOKENS:
+        token_len = min(feat.shape[0], self.max_frames) // self.resources.tokenizer_downsample_factor
+        if token_len < self.min_tokens:
             return None
-        return feat[: token_len * self.context.downsample], token_len
+        return feat[: token_len * self.resources.tokenizer_downsample_factor], token_len
 
     @torch.no_grad()
-    def generate_split(
+    def generate_evaluation_set(
         self,
-        generator: MotionGenerator,
+        generator: TextToMotionGenerator,
         split: Split | str,
         max_clips: int | None,
         sampling: SamplingConfig,
         batch_size: int = 1,
-    ) -> GeneratedSplit:
+    ) -> GenerationEvaluationSet:
         generator.eval()
-        ids = self.context.clip_ids(split)[:max_clips]
+        ids = self.resources.clip_ids(split)[:max_clips]
         dropped = {"missing_files": 0, "too_short": 0, "no_caption": 0, "empty_generation": 0}
 
         entries: list[dict] = []
         for clip_id in ids:
-            text_path = self.context.text_dir / f"{clip_id}.txt"
+            text_path = self.resources.annotation_dir / f"{clip_id}.txt"
             if not text_path.is_file():
                 dropped["missing_files"] += 1
                 continue
-            clip = self.reference_clip(clip_id)
+            clip = self.load_scorable_reference_clip(clip_id)
             if clip is None:
                 dropped["too_short"] += 1
                 continue
@@ -152,12 +117,12 @@ class MotionEvaluator:
                     [entries[i]["caption"] for i in group],
                     token_len,
                     sampling,
-                    seeds=[clip_seed(entries[i]["clip_id"]) for i in group],
+                    seeds=[deterministic_generation_seed(entries[i]["clip_id"]) for i in group],
                 )
                 if batch is None:
                     continue
                 for position, item in zip(group, batch, strict=True):
-                    entries[position]["generated"] = self.context.denormalize(
+                    entries[position]["generated"] = self.resources.denormalize(
                         item.motion.features.cpu().numpy()
                     )
 
@@ -166,7 +131,7 @@ class MotionEvaluator:
         if not scorable:
             raise RuntimeError(f"no scorable clips in split {split!r}; dropped {dropped}")
 
-        return GeneratedSplit(
+        return GenerationEvaluationSet(
             reference=[entry["feat"] for entry in scorable],
             generated=[entry["generated"] for entry in scorable],
             token_lists=[entry["caption_tokens"] for entry in scorable],
@@ -176,9 +141,9 @@ class MotionEvaluator:
         )
 
     @torch.no_grad()
-    def multimodality(
+    def calculate_multimodality(
         self,
-        generator: MotionGenerator,
+        generator: TextToMotionGenerator,
         captions: list[str],
         token_lens: list[int],
         sampling: SamplingConfig,
@@ -192,24 +157,24 @@ class MotionEvaluator:
             if batch is None or len(batch) < 2:
                 continue
             decoded = [
-                self.context.denormalize(item.motion.features.cpu().numpy()) for item in batch
+                self.resources.denormalize(item.motion.features.cpu().numpy()) for item in batch
             ]
-            emb = self.embed(decoded)
+            emb = self.compute_motion_embeddings(decoded)
             first = rng.integers(0, len(emb), 10)
             second = rng.integers(0, len(emb), 10)
             per_caption.append(float(np.linalg.norm(emb[first] - emb[second], axis=1).mean()))
         return float(np.mean(per_caption)) if per_caption else float("nan")
 
-    def score(self, split: GeneratedSplit, reps: int, bootstrap: int) -> dict[str, float]:
-        reference_emb = self.embed(split.reference)
-        generated_emb = self.embed(split.generated)
+    def calculate_generation_metrics(self, split: GenerationEvaluationSet, reps: int, bootstrap: int) -> dict[str, float]:
+        reference_emb = self.compute_motion_embeddings(split.reference)
+        generated_emb = self.compute_motion_embeddings(split.generated)
 
         flat, owner = [], []
         for clip_index, token_lists in enumerate(split.token_lists):
             for tokens in token_lists:
-                flat.append(self.context.build_text(tokens))
+                flat.append(self.resources.build_guo_text_inputs(tokens))
                 owner.append(clip_index)
-        text_emb = embed_texts(self.context.text_matcher, flat, self.context.device)
+        text_emb = compute_guo_text_embeddings(self.resources.text_embedder, flat, self.resources.device)
         owner = np.array(owner)
         per_clip = [np.where(owner == index)[0] for index in range(len(split.generated))]
 
@@ -241,29 +206,35 @@ class MotionEvaluator:
             "r_top2": float(precisions[:, 1].mean()),
             "r_top3": float(precisions[:, 2].mean()),
             "mm_dist": float(np.mean(distances)),
-            "diversity": diversity(generated_emb, num_pairs=300),
+            "diversity": diversity(generated_emb, num_pairs=DIVERSITY_PAIRS),
         }
 
-    def evaluate(
-        self, generator: MotionGenerator, request: EvaluationRequest | None = None
-    ) -> EvaluationReport:
-        request = request or EvaluationRequest()
-        split = self.generate_split(generator, request.split, request.max_clips, request.sampling)
+    def run_generation_evaluation_protocol(
+        self, generator: TextToMotionGenerator, request: GenerationEvaluationProtocol | None = None
+    ) -> GenerationEvaluationReport:
+        request = request or GenerationEvaluationProtocol()
+        split = self.generate_evaluation_set(
+            generator,
+            request.split,
+            request.max_clips,
+            request.sampling,
+            request.batch_size,
+        )
         if sum(split.dropped.values()):
             print(
                 f"WARNING: scored {len(split.generated)} of {split.requested} requested clips "
                 f"(dropped {split.dropped}). FID is only comparable at equal clip counts."
             )
 
-        metrics = self.score(split, reps=request.reps, bootstrap=request.bootstrap)
+        metrics = self.calculate_generation_metrics(split, reps=request.reps, bootstrap=request.bootstrap)
 
         multimodality = float("nan")
         if request.mm_clips > 0:
             token_lens = [
-                min(feat.shape[0], MAX_EVAL_FRAMES) // self.context.downsample
+                min(feat.shape[0], self.max_frames) // self.resources.tokenizer_downsample_factor
                 for feat in split.reference
             ]
-            multimodality = self.multimodality(
+            multimodality = self.calculate_multimodality(
                 generator,
                 split.captions,
                 token_lens,
@@ -272,7 +243,7 @@ class MotionEvaluator:
                 request.mm_repeats,
             )
 
-        return EvaluationReport(
+        return GenerationEvaluationReport(
             clips=metrics["clips"],
             fid=metrics["fid"],
             r_precision=(metrics["r_top1"], metrics["r_top2"], metrics["r_top3"]),
@@ -285,28 +256,28 @@ class MotionEvaluator:
         )
 
     @torch.no_grad()
-    def evaluate_generation(
+    def evaluate_checkpoint_selection_metrics(
         self,
-        generator: MotionGenerator,
+        generator: TextToMotionGenerator,
         split: Split | str = Split.VALIDATION,
         max_clips: int | None = None,
         sampling: SamplingConfig | None = None,
         batch_size: int = 1,
     ) -> dict[str, float]:
         sampling = sampling or SamplingConfig()
-        generated = self.generate_split(generator, split, max_clips, sampling, batch_size)
+        generated = self.generate_evaluation_set(generator, split, max_clips, sampling, batch_size)
         if sum(generated.dropped.values()):
             print(
                 f"  [gen-eval] scored {len(generated.generated)}/{generated.requested} clips, "
                 f"dropped {generated.dropped}"
             )
 
-        reference_emb = self.embed(generated.reference)
-        generated_emb = self.embed(generated.generated)
-        text_emb = embed_texts(
-            self.context.text_matcher,
-            [self.context.build_text(tokens[0]) for tokens in generated.token_lists],
-            self.context.device,
+        reference_emb = self.compute_motion_embeddings(generated.reference)
+        generated_emb = self.compute_motion_embeddings(generated.generated)
+        text_emb = compute_guo_text_embeddings(
+            self.resources.text_embedder,
+            [self.resources.build_guo_text_inputs(tokens[0]) for tokens in generated.token_lists],
+            self.resources.device,
         )
 
         rng = np.random.default_rng(0)

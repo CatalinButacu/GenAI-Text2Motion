@@ -44,8 +44,8 @@ for bb in transformer mamba; do
         --cfg_scale 5.0 \
         --temperature 1.1 \
         > "outputs/$bb.log" 2>&1
-    aws s3 cp "checkpoints/generator_$bb.pt" "s3://$B/results/" --region eu-north-1 2>/dev/null
-    aws s3 cp "checkpoints/generator_${bb}_last.pt" "s3://$B/results/" --region eu-north-1 2>/dev/null
+    aws s3 cp "checkpoints/generator/generator_$bb.pt" "s3://$B/results/" --region eu-north-1 2>/dev/null
+    aws s3 cp "checkpoints/generator/generator_${bb}_last.pt" "s3://$B/results/" --region eu-north-1 2>/dev/null
 done
 
 kill "$SYNC" "$CKPT_SYNC" 2>/dev/null

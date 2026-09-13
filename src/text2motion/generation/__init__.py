@@ -1,26 +1,24 @@
-from text2motion.generation.model import (
+from text2motion.generation.contracts import (
     Backbone,
     BackboneChoice,
-    GeneratorArchitecture,
     GeneratorConfig,
-    MotionGeneratorModule,
-)
-from text2motion.generation.pipeline import (
-    GenerationRequest,
-    MotionGenerator,
     SamplingConfig,
+    TextEncoderConfig,
+    TextToMotionGenerationRequest,
 )
-from text2motion.generation.text import CLIPTextEncoder, TextEncoderConfig
+from text2motion.generation.model import GeneratorModelSpec, MotionTokenGenerator
+from text2motion.generation.pipeline import TextToMotionGenerator
+from text2motion.generation.text import CLIPTextEncoder
 
 __all__ = [
     "Backbone",
     "BackboneChoice",
     "CLIPTextEncoder",
-    "GenerationRequest",
-    "GeneratorArchitecture",
+    "TextToMotionGenerationRequest",
+    "GeneratorModelSpec",
     "GeneratorConfig",
-    "MotionGenerator",
-    "MotionGeneratorModule",
+    "TextToMotionGenerator",
+    "MotionTokenGenerator",
     "SamplingConfig",
     "TextEncoderConfig",
 ]

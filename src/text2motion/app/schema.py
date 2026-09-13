@@ -9,7 +9,7 @@ from typing import Any, TypeVar, Union, get_args, get_origin, get_type_hints
 
 import yaml
 
-T = TypeVar("T")
+_T = TypeVar("_T")
 
 
 def coerce(annotation: Any, value: Any) -> Any:
@@ -50,7 +50,7 @@ def coerce(annotation: Any, value: Any) -> Any:
     return value
 
 
-def from_mapping(cls: type[T], data: Mapping[str, Any]) -> T:
+def from_mapping(cls: type[_T], data: Mapping[str, Any]) -> _T:
     if not is_dataclass(cls):
         raise TypeError(f"{cls.__name__} is not a dataclass")
 
@@ -66,6 +66,6 @@ def from_mapping(cls: type[T], data: Mapping[str, Any]) -> T:
     return cls(**{name: coerce(hints[name], value) for name, value in data.items()})
 
 
-def load_dataclass(cls: type[T], path: str | Path) -> T:
+def load_dataclass(cls: type[_T], path: str | Path) -> _T:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     return from_mapping(cls, raw)

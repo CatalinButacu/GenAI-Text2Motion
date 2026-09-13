@@ -1,19 +1,21 @@
-from text2motion.tokenization.model import (
-    MotionTokenizer,
-    Quantizer,
+from text2motion.tokenization.contracts import (
+    FsqComposition,
     RvqConfig,
     TokenizerConfig,
     TokenizerKind,
-    TokenizerModule,
-    build_tokenizer_module,
+)
+from text2motion.tokenization.model import (
+    MotionTokenizer,
+    MotionTokenizerNetwork,
+    build_tokenizer_network,
 )
 
 __all__ = [
     "MotionTokenizer",
-    "Quantizer",
+    "FsqComposition",
     "RvqConfig",
     "TokenizerConfig",
     "TokenizerKind",
-    "TokenizerModule",
-    "build_tokenizer_module",
+    "MotionTokenizerNetwork",
+    "build_tokenizer_network",
 ]

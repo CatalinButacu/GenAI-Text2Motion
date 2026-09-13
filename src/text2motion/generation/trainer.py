@@ -3,71 +3,38 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from enum import StrEnum
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import torch
 from torch import nn
 
-from text2motion.generation.losses import (
+from text2motion.generation.contracts import (
+    GeneratorTrainingConfig,
+    GeneratorTrainingRequest,
     LossWeighting,
-    LossWeights,
+    MixedPrecisionMode,
+    OverfitCriteria,
+)
+from text2motion.generation.losses import (
     UncertaintyWeighter,
     generator_loss,
 )
-from text2motion.generation.model import MotionGeneratorModule
+from text2motion.generation.model import MotionTokenGenerator
 from text2motion.generation.text import CLIPTextEncoder
-from text2motion.motion.dataset import Split
+from text2motion.motion.contracts import Split
 from text2motion.motion.kinematics import Skeleton
-from text2motion.motion.representation import t2m_kinematic_chain, t2m_raw_offsets
-from text2motion.tokenization.model import TokenizerModule
-from text2motion.tokenization.trainer import Ema
+from text2motion.motion.representation import KINEMATIC_CHAINS, RAW_OFFSETS
+from text2motion.tokenization.ema import ExponentialMovingAverage
+from text2motion.tokenization.model import MotionTokenizerNetwork
 
-NO_DECAY_SUFFIXES = ("a_log", "d_skip")
-NORM_TYPES = (nn.LayerNorm, nn.GroupNorm, nn.BatchNorm1d)
+_NO_DECAY_SUFFIXES = ("a_log", "d_skip")
+_NORM_TYPES = (nn.LayerNorm, nn.GroupNorm, nn.BatchNorm1d)
 
-MetricSink = Callable[[dict[str, object]], None]
-Evaluator = Callable[[Split], dict[str, float]]
-CheckpointSink = Callable[[int, float], None]
-
-
-class Amp(StrEnum):
-    OFF = "off"
-    BF16 = "bf16"
-
-
-@dataclass(frozen=True)
-class TrainingConfig:
-    lr: float = 2e-4
-    text_encoder_lr: float = 1e-5
-    weight_decay: float = 0.01
-    warmup_steps: int = 1000
-    lr_min_ratio: float = 0.01
-    ema_decay: float = 0.999
-    cfg_dropout: float = 0.1
-    pkeep: float = 0.8
-    amp: Amp = Amp.OFF
-    grad_accum: int = 1
-    grad_clip: float = 1.0
-    decay_groups: bool = True
-    loss_weighting: LossWeighting = LossWeighting.FIXED
-    loss_weights: LossWeights = field(default_factory=LossWeights)
-
-
-@dataclass(frozen=True)
-class GeneratorTrainingRequest:
-    epochs: int = 60
-    batch_size: int = 64
-    grad_accum: int = 1
-    eval_every: int = 5
-    eval_split: Split = Split.VALIDATION
-    max_eval_clips: int = 600
-    temperature: float = 1.0
-    cfg_scale: float = 1.0
-    checkpoint_name: str | None = None
-    resume: bool = False
+_MetricSink = Callable[[dict[str, object]], None]
+_Evaluator = Callable[[Split], dict[str, float]]
+_CheckpointSink = Callable[[int, float], None]
 
 
 @dataclass(frozen=True)
@@ -96,7 +63,7 @@ class ParameterPartition:
 def _undecayed_parameter_ids(module: nn.Module) -> set[int]:
     ids: set[int] = set()
     for submodule in module.modules():
-        if isinstance(submodule, (nn.Embedding, *NORM_TYPES)):
+        if isinstance(submodule, (nn.Embedding, *_NORM_TYPES)):
             ids.update(id(parameter) for parameter in submodule.parameters(recurse=False))
         elif type(submodule).__name__ == "RMSNorm":
             ids.update(id(parameter) for parameter in submodule.parameters(recurse=False))
@@ -113,13 +80,22 @@ def partition_parameters(
     for name, parameter in module.named_parameters():
         if not parameter.requires_grad or (allowed is not None and id(parameter) not in allowed):
             continue
-        if parameter.ndim <= 1 or id(parameter) in exempt or name.endswith(NO_DECAY_SUFFIXES):
+        if parameter.ndim <= 1 or id(parameter) in exempt or name.endswith(_NO_DECAY_SUFFIXES):
             no_decay.append(parameter)
         else:
             decay.append(parameter)
     partition = ParameterPartition(tuple(decay), tuple(no_decay))
     partition.assert_complete(list(module.parameters()) if only is None else only)
     return partition
+
+
+def warmup_cosine_factor(step: int, warmup: int, total_steps: int, floor: float) -> float:
+    warmup = max(warmup, 1)
+    if step < warmup:
+        return step / warmup
+    progress = (step - warmup) / max(total_steps - warmup, 1)
+    cosine = 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
+    return floor + (1.0 - floor) * cosine
 
 
 def adamw_groups(
@@ -137,72 +113,73 @@ def adamw_groups(
 class GeneratorTrainer:
     def __init__(
         self,
-        generator: MotionGeneratorModule,
-        tokenizer: TokenizerModule,
-        cfg: TrainingConfig,
+        token_generator: MotionTokenGenerator,
+        tokenizer_network: MotionTokenizerNetwork,
+        training_config: GeneratorTrainingConfig,
         downsample: int,
         text_encoder: CLIPTextEncoder | None = None,
         mean: np.ndarray | None = None,
         std: np.ndarray | None = None,
     ) -> None:
-        self.generator = generator
-        self.tokenizer = tokenizer.eval().requires_grad_(False)
+        self.token_generator = token_generator
+        self.tokenizer_network = tokenizer_network.eval().requires_grad_(False)
         self.text_encoder = text_encoder
-        self.cfg = cfg
+        self.training_config = training_config
         self.downsample = downsample
 
         groups: list[dict] = []
-        self._clip_params = list(generator.parameters())
-        groups.extend(adamw_groups(generator, cfg.lr, cfg.decay_groups))
+        self._clip_params = list(token_generator.parameters())
+        groups.extend(
+            adamw_groups(token_generator, training_config.lr, training_config.decay_groups)
+        )
 
         if text_encoder is not None:
             encoder_trainable = [p for p in text_encoder.parameters() if p.requires_grad]
             if encoder_trainable:
                 groups.extend(
                     adamw_groups(
-                        text_encoder, cfg.text_encoder_lr, cfg.decay_groups, only=encoder_trainable
+                        text_encoder,
+                        training_config.text_encoder_lr,
+                        training_config.decay_groups,
+                        only=encoder_trainable,
                     )
                 )
                 self._clip_params += encoder_trainable
 
         self.weighter: UncertaintyWeighter | None = None
-        if cfg.loss_weighting == LossWeighting.UNCERTAINTY:
-            self.weighter = UncertaintyWeighter(cfg.loss_weights.active_terms()).to(
-                next(generator.parameters()).device
+        if training_config.loss_weighting == LossWeighting.UNCERTAINTY:
+            self.weighter = UncertaintyWeighter(training_config.loss_weights.active_terms()).to(
+                next(token_generator.parameters()).device
             )
             groups.append({"params": list(self.weighter.parameters()), "weight_decay": 0.0})
             self._clip_params += list(self.weighter.parameters())
 
         self._mean = self._std = self._skeleton = None
-        if cfg.loss_weights.fk_enabled:
+        if training_config.loss_weights.fk_enabled:
             if mean is None or std is None:
                 raise ValueError(
                     "FK-consistency loss needs mean/std (pass them to GeneratorTrainer)"
                 )
-            device = next(generator.parameters()).device
+            device = next(token_generator.parameters()).device
             self._mean = torch.from_numpy(np.asarray(mean, dtype=np.float32)).to(device)
             self._std = torch.from_numpy(np.asarray(std, dtype=np.float32)).to(device)
-            self._skeleton = Skeleton(
-                torch.from_numpy(t2m_raw_offsets), t2m_kinematic_chain, str(device)
-            )
+            self._skeleton = Skeleton(torch.from_numpy(RAW_OFFSETS), KINEMATIC_CHAINS, str(device))
 
-        self.opt = torch.optim.AdamW(groups, lr=cfg.lr, weight_decay=cfg.weight_decay)
-        self.ema = Ema(generator, cfg.ema_decay)
+        self.optimizer = torch.optim.AdamW(
+            groups, lr=training_config.lr, weight_decay=training_config.weight_decay
+        )
+        self.parameter_ema = ExponentialMovingAverage(token_generator, training_config.ema_decay)
         self.scheduler: torch.optim.lr_scheduler.LambdaLR | None = None
         self._accum_count = 0
 
     def build_scheduler(self, total_steps: int) -> None:
-        warmup = max(self.cfg.warmup_steps, 1)
-        floor = self.cfg.lr_min_ratio
+        warmup = self.training_config.warmup_steps
+        floor = self.training_config.lr_min_ratio
 
         def lr_factor(step: int) -> float:
-            if step < warmup:
-                return step / warmup
-            progress = (step - warmup) / max(total_steps - warmup, 1)
-            cosine = 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
-            return floor + (1.0 - floor) * cosine
+            return warmup_cosine_factor(step, warmup, total_steps, floor)
 
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.opt, lr_factor)
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_factor)
 
     def encode(self, texts: list[str]) -> torch.Tensor:
         if self.text_encoder is None:
@@ -210,10 +187,12 @@ class GeneratorTrainer:
         return self.text_encoder(texts)
 
     def drop_text(self, text_emb: torch.Tensor) -> torch.Tensor:
-        if self.cfg.cfg_dropout <= 0:
+        if self.training_config.cfg_dropout <= 0:
             return text_emb
         keep_shape = (text_emb.size(0),) + (1,) * (text_emb.dim() - 1)
-        keep = (torch.rand(keep_shape, device=text_emb.device) >= self.cfg.cfg_dropout).float()
+        keep = (
+            torch.rand(keep_shape, device=text_emb.device) >= self.training_config.cfg_dropout
+        ).float()
         return text_emb * keep
 
     def _append_end_targets(
@@ -225,9 +204,11 @@ class GeneratorTrainer:
             token_lengths = torch.full((batch,), t_tokens, device=device, dtype=torch.long)
         else:
             token_lengths = (lengths // self.downsample).clamp(min=1, max=t_tokens)
-        pad = torch.full_like(target_tokens[:, :1], self.generator.end_id)
+        pad = torch.full_like(target_tokens[:, :1], self.token_generator.end_id)
         target_tokens = torch.cat([target_tokens, pad], dim=1)
-        target_tokens[torch.arange(batch, device=device), token_lengths] = self.generator.end_id
+        target_tokens[torch.arange(batch, device=device), token_lengths] = (
+            self.token_generator.end_id
+        )
         return target_tokens, token_lengths + 1
 
     def train_step(
@@ -242,54 +223,64 @@ class GeneratorTrainer:
             lengths = lengths.clamp(max=usable)
 
         with torch.no_grad():
-            target_tokens = self.tokenizer.encode(gt_motion)
+            target_tokens = self.tokenizer_network.encode(gt_motion)
 
         token_lengths = None
-        if self.generator.end_id is not None:
+        if self.token_generator.end_id is not None:
             target_tokens, token_lengths = self._append_end_targets(target_tokens, lengths)
 
         input_tokens = target_tokens
-        if self.cfg.pkeep < 1.0:
-            corrupt = torch.rand(target_tokens.shape, device=target_tokens.device) >= self.cfg.pkeep
-            random_tokens = torch.randint_like(target_tokens, self.generator.cfg.codebook_size)
+        if self.training_config.pkeep < 1.0:
+            corrupt = (
+                torch.rand(target_tokens.shape, device=target_tokens.device)
+                >= self.training_config.pkeep
+            )
+            random_tokens = torch.randint_like(
+                target_tokens, self.token_generator.cfg.codebook_size
+            )
             input_tokens = torch.where(corrupt, random_tokens, target_tokens)
 
-        amp_on = self.cfg.amp == Amp.BF16 and gt_motion.is_cuda
+        amp_on = self.training_config.amp == MixedPrecisionMode.BF16 and gt_motion.is_cuda
         with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):
-            logits = self.generator(input_tokens, self.drop_text(text_emb))
+            logits = self.token_generator(input_tokens, self.drop_text(text_emb))
             total, parts = generator_loss(
                 logits,
                 target_tokens,
                 gt_motion,
-                self.tokenizer,
-                self.cfg.loss_weights,
+                self.tokenizer_network,
+                self.training_config.loss_weights,
                 self.downsample,
                 lengths,
                 token_lengths=token_lengths,
-                has_end=self.generator.end_id is not None,
+                has_end=self.token_generator.end_id is not None,
                 mean=self._mean,
                 std=self._std,
                 skeleton=self._skeleton,
                 weighter=self.weighter,
             )
 
-        accum = max(1, self.cfg.grad_accum)
+        accum = max(1, self.training_config.grad_accum)
         if self._accum_count == 0:
-            self.opt.zero_grad()
+            self.optimizer.zero_grad()
         (total / accum).backward()
         self._accum_count += 1
         if self._accum_count >= accum:
-            self._accum_count = 0
-            nn.utils.clip_grad_norm_(self._clip_params, self.cfg.grad_clip)
-            self.opt.step()
-            if self.scheduler is not None:
-                self.scheduler.step()
-            self.ema.update(self.generator)
+            self.apply_pending_gradients()
 
         return parts
 
+    def apply_pending_gradients(self) -> None:
+        if self._accum_count == 0:
+            return
+        self._accum_count = 0
+        nn.utils.clip_grad_norm_(self._clip_params, self.training_config.grad_clip)
+        self.optimizer.step()
+        if self.scheduler is not None:
+            self.scheduler.step()
+        self.parameter_ema.update(self.token_generator)
+
     def train_epoch(self, loader, device: str, heartbeat: Path | None = None) -> dict[str, float]:
-        self.generator.train()
+        self.token_generator.train()
         if self.text_encoder is not None:
             self.text_encoder.train()
 
@@ -304,36 +295,38 @@ class GeneratorTrainer:
             steps += 1
             if heartbeat is not None and steps % 100 == 0:
                 heartbeat.write_text(str(steps), encoding="utf-8")
+        self.apply_pending_gradients()
         return {key: value.item() / steps for key, value in totals.items()}
 
     @contextmanager
     def ema_weights(self):
-        self.ema.copy_to(self.generator)
+        self.parameter_ema.copy_to(self.token_generator)
         try:
-            yield self.generator
+            yield self.token_generator
         finally:
-            self.ema.restore(self.generator)
+            self.parameter_ema.restore(self.token_generator)
 
-    def resume_state(self, epoch: int, best_fid: float) -> dict:
+    def resume_state(self, epoch: int, best_fid: float, stale_evaluations: int) -> dict:
         return {
-            "generator": self.generator.state_dict(),
+            "generator": self.token_generator.state_dict(),
             "text_encoder": self.text_encoder.state_dict() if self.text_encoder else None,
-            "optimizer": self.opt.state_dict(),
-            "ema": self.ema.shadow,
+            "optimizer": self.optimizer.state_dict(),
+            "ema": self.parameter_ema.shadow,
             "scheduler": self.scheduler.state_dict() if self.scheduler else None,
             "epoch": epoch,
             "best_fid": best_fid,
+            "stale_evaluations": stale_evaluations,
         }
 
-    def load_resume_state(self, state: dict, device: str) -> tuple[int, float]:
-        self.generator.load_state_dict(state["generator"])
+    def load_resume_state(self, state: dict, device: str) -> tuple[int, float, int]:
+        self.token_generator.load_state_dict(state["generator"])
         if self.text_encoder is not None and state.get("text_encoder") is not None:
             self.text_encoder.load_state_dict(state["text_encoder"])
-        self.opt.load_state_dict(state["optimizer"])
-        self.ema.shadow = {key: value.to(device) for key, value in state["ema"].items()}
+        self.optimizer.load_state_dict(state["optimizer"])
+        self.parameter_ema.shadow = {key: value.to(device) for key, value in state["ema"].items()}
         if self.scheduler is not None and state.get("scheduler") is not None:
             self.scheduler.load_state_dict(state["scheduler"])
-        return state["epoch"] + 1, state["best_fid"]
+        return state["epoch"] + 1, state["best_fid"], state.get("stale_evaluations", 0)
 
 
 def train_generator(
@@ -341,19 +334,20 @@ def train_generator(
     loader,
     request: GeneratorTrainingRequest,
     device: str,
-    evaluate: Evaluator,
-    save_best: CheckpointSink,
+    evaluate: _Evaluator,
+    save_best: _CheckpointSink,
     resume_path: Path,
     run_dir: Path | None = None,
-    on_metrics: MetricSink = lambda metrics: None,
+    on_metrics: _MetricSink = lambda metrics: None,
 ) -> float:
     best_fid = float("inf")
     start_epoch = 0
+    stale_evaluations = 0
     heartbeat = None if run_dir is None else Path(run_dir) / "heartbeat"
 
     if request.resume and resume_path.is_file():
         state = torch.load(resume_path, map_location="cpu")
-        start_epoch, best_fid = trainer.load_resume_state(state, device)
+        start_epoch, best_fid, stale_evaluations = trainer.load_resume_state(state, device)
         del state
         if device == "cuda":
             torch.cuda.empty_cache()
@@ -381,26 +375,31 @@ def train_generator(
             )
             if metrics["fid"] < best_fid:
                 best_fid = metrics["fid"]
+                stale_evaluations = 0
                 with trainer.ema_weights():
                     save_best(epoch + 1, best_fid)
+            else:
+                stale_evaluations += 1
 
-        torch.save(trainer.resume_state(epoch, best_fid), resume_path)
+        torch.save(trainer.resume_state(epoch, best_fid, stale_evaluations), resume_path)
 
         if device == "cuda":
             torch.cuda.empty_cache()
 
+        if request.patience and stale_evaluations >= request.patience:
+            print(
+                f"early stop at epoch {epoch + 1}: {stale_evaluations} consecutive evaluations "
+                f"without improving val FID {best_fid:.4f} (patience {request.patience})"
+            )
+            break
+
     return best_fid
-
-
-MIN_TOKEN_ACCURACY = 0.99
-MAX_CE = 0.1
-MAX_TOTAL_RATIO = 0.05
 
 
 @torch.no_grad()
 def teacher_forced_accuracy(
-    generator: MotionGeneratorModule,
-    tokenizer: TokenizerModule,
+    generator: MotionTokenGenerator,
+    tokenizer: MotionTokenizerNetwork,
     downsample: int,
     motion: torch.Tensor,
     text_embedding: torch.Tensor,
@@ -425,8 +424,9 @@ def overfit_single_batch(
     lengths: torch.Tensor,
     captions: list[str],
     steps: int,
+    criteria: OverfitCriteria = OverfitCriteria(),
 ) -> dict[str, float]:
-    generator = trainer.generator
+    generator = trainer.token_generator
     text_encoder = trainer.text_encoder
     first_total = None
     parts: dict[str, float] = {}
@@ -445,7 +445,7 @@ def overfit_single_batch(
         text_encoder.eval()
         accuracy, ce = teacher_forced_accuracy(
             generator,
-            trainer.tokenizer,
+            trainer.tokenizer_network,
             trainer.downsample,
             motion,
             text_encoder(captions),
@@ -456,19 +456,20 @@ def overfit_single_batch(
         print(
             f"step {step + 1:4d} total {parts['total']:.5f} ce {ce:.5f} token_accuracy {accuracy:.4f}"
         )
-        if (
-            accuracy >= MIN_TOKEN_ACCURACY
-            and ce <= MAX_CE
-            and parts["total"] <= MAX_TOTAL_RATIO * first_total
-        ):
+        if criteria.accepts(accuracy, ce, parts["total"] / first_total):
             break
 
     generator.eval()
     text_encoder.eval()
     accuracy, ce = teacher_forced_accuracy(
-        generator, trainer.tokenizer, trainer.downsample, motion, text_encoder(captions), lengths
+        generator,
+        trainer.tokenizer_network,
+        trainer.downsample,
+        motion,
+        text_encoder(captions),
+        lengths,
     )
-    if any(parameter.grad is not None for parameter in trainer.tokenizer.parameters()):
+    if any(parameter.grad is not None for parameter in trainer.tokenizer_network.parameters()):
         raise RuntimeError("frozen tokenizer received gradients during overfit gate")
 
     return {

@@ -1,5 +1,3 @@
-# RVQ hypertune: 8 residual levels x 512 codes, code_dim 512. More levels = finer residual
-# refinement, more codes/step (heavier generator). Enc/dec width 512 / downsample 4 / 3 resblocks.
 seed: 2026
 device: cuda
 data:

@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -20,29 +21,29 @@ DIM = 263
 JOINTS = 22
 FPS = 20
 
-ROOT = slice(0, 4)
-RIC = slice(4, 67)
-ROT6D = slice(67, 193)
-VEL = slice(193, 259)
-FOOT = slice(259, 263)
-
-SLICES = {"root": ROOT, "ric": RIC, "rot6d": ROT6D, "vel": VEL, "foot": FOOT}
+SLICES = {
+    "root": slice(0, 4),
+    "ric": slice(4, 67),
+    "rot6d": slice(67, 193),
+    "vel": slice(193, 259),
+    "foot": slice(259, 263),
+}
 GEO_TERMS = tuple(SLICES)
 FK_TERMS = ("fk_self", "fk_gt")
 
 
-class Track(StrEnum):
+class RepresentationTrack(StrEnum):
     HML3D_263 = "hml3d263"
     SMPLX_168 = "smplx168"
 
 
-class Source(StrEnum):
+class MotionSource(StrEnum):
     HUMANML3D = "humanml3d"
     AMASS = "amass"
     INTER_X = "inter-x"
 
 
-t2m_raw_offsets = np.array(
+RAW_OFFSETS = np.array(
     [
         [0, 0, 0],
         [1, 0, 0],
@@ -69,7 +70,7 @@ t2m_raw_offsets = np.array(
     ]
 )
 
-t2m_kinematic_chain = [
+KINEMATIC_CHAINS = [
     [0, 2, 5, 8, 11],
     [0, 1, 4, 7, 10],
     [0, 3, 6, 9, 12, 15],
@@ -77,107 +78,82 @@ t2m_kinematic_chain = [
     [9, 13, 16, 18, 20],
 ]
 
-t2m_left_hand_chain = [
-    [20, 22, 23, 24],
-    [20, 34, 35, 36],
-    [20, 25, 26, 27],
-    [20, 31, 32, 33],
-    [20, 28, 29, 30],
-]
-t2m_right_hand_chain = [
-    [21, 43, 44, 45],
-    [21, 46, 47, 48],
-    [21, 40, 41, 42],
-    [21, 37, 38, 39],
-    [21, 49, 50, 51],
-]
-
-
-l_idx1, l_idx2 = 5, 8
-fid_r, fid_l = [8, 11], [7, 10]
-face_joint_indx = [2, 1, 17, 16]
-r_hip, l_hip = 2, 1
-
-JOINTS = 22
-
-feet_threshold = 0.002
-
-t2m_tgt_skel_id = "000021"
-
-
-mirror_right_chain = [2, 5, 8, 11, 14, 17, 19, 21]
-mirror_left_chain = [1, 4, 7, 10, 13, 16, 18, 20]
-mirror_left_hand_chain = [22, 23, 24, 34, 35, 36, 25, 26, 27, 31, 32, 33, 28, 29, 30]
-mirror_right_hand_chain = [43, 44, 45, 46, 47, 48, 40, 41, 42, 37, 38, 39, 49, 50, 51]
+_LEG_JOINTS = (5, 8)
+_RIGHT_FEET = [8, 11]
+_LEFT_FEET = [7, 10]
+_FACE_JOINTS = [2, 1, 17, 16]
+_FOOT_VELOCITY_THRESHOLD = 0.002
 
 
 @dataclass(frozen=True)
 class FeatureParams:
-    n_raw_offsets: np.ndarray
-    kinematic_chain: list[list[int]]
-    tgt_offsets: torch.Tensor
-    face_joint_indx: list[int]
-    fid_l: list[int]
-    fid_r: list[int]
-    l_idx1: int
-    l_idx2: int
-    joints_num: int
-    feet_threshold: float
+    raw_offsets: np.ndarray
+    chains: list[list[int]]
+    target_offsets: torch.Tensor
+    face_joints: list[int]
+    left_feet: list[int]
+    right_feet: list[int]
+    leg_joints: tuple[int, int]
+    joint_count: int
+    foot_velocity_threshold: float
 
 
-def build_tgt_offsets(reference_joints: np.ndarray) -> torch.Tensor:
-    n_raw_offsets = torch.from_numpy(t2m_raw_offsets)
+def target_offsets(reference_joints: np.ndarray) -> torch.Tensor:
+    raw_offsets = torch.from_numpy(RAW_OFFSETS)
     example = torch.from_numpy(reference_joints).float()
-    tgt_skel = Skeleton(n_raw_offsets, t2m_kinematic_chain, "cpu")
-    return tgt_skel.get_offsets_joints(example[0])
+    skeleton = Skeleton(raw_offsets, KINEMATIC_CHAINS, "cpu")
+    return skeleton.get_offsets_joints(example[0])
 
 
-def default_params(tgt_offsets: torch.Tensor) -> FeatureParams:
+def feature_params(offsets: torch.Tensor) -> FeatureParams:
     return FeatureParams(
-        n_raw_offsets=t2m_raw_offsets,
-        kinematic_chain=t2m_kinematic_chain,
-        tgt_offsets=tgt_offsets,
-        face_joint_indx=face_joint_indx,
-        fid_l=fid_l,
-        fid_r=fid_r,
-        l_idx1=l_idx1,
-        l_idx2=l_idx2,
-        joints_num=JOINTS,
-        feet_threshold=feet_threshold,
+        raw_offsets=RAW_OFFSETS,
+        chains=KINEMATIC_CHAINS,
+        target_offsets=offsets,
+        face_joints=_FACE_JOINTS,
+        left_feet=_LEFT_FEET,
+        right_feet=_RIGHT_FEET,
+        leg_joints=_LEG_JOINTS,
+        joint_count=JOINTS,
+        foot_velocity_threshold=_FOOT_VELOCITY_THRESHOLD,
     )
 
 
-def uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarray:
-    n_raw_offsets = torch.from_numpy(params.n_raw_offsets)
-    target_offset = params.tgt_offsets
+def _uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarray:
+    raw_offsets = torch.from_numpy(params.raw_offsets)
+    target_offset = params.target_offsets
 
-    src_skel = Skeleton(n_raw_offsets, params.kinematic_chain, "cpu")
+    src_skel = Skeleton(raw_offsets, params.chains, "cpu")
     src_offset = src_skel.get_offsets_joints(torch.from_numpy(positions[0]))
     src_offset = src_offset.numpy()
     tgt_offset = target_offset.numpy()
 
-    src_leg_len = np.abs(src_offset[params.l_idx1]).max() + np.abs(src_offset[params.l_idx2]).max()
-    tgt_leg_len = np.abs(tgt_offset[params.l_idx1]).max() + np.abs(tgt_offset[params.l_idx2]).max()
+    first_leg_joint, second_leg_joint = params.leg_joints
+    src_leg_len = np.abs(src_offset[first_leg_joint]).max() + np.abs(
+        src_offset[second_leg_joint]
+    ).max()
+    tgt_leg_len = np.abs(tgt_offset[first_leg_joint]).max() + np.abs(
+        tgt_offset[second_leg_joint]
+    ).max()
 
     scale_rt = tgt_leg_len / src_leg_len
     src_root_pos = positions[:, 0]
     tgt_root_pos = src_root_pos * scale_rt
 
-    quat_params = src_skel.inverse_kinematics_np(positions, params.face_joint_indx)
+    quat_params = src_skel.inverse_kinematics_np(positions, params.face_joints)
 
     src_skel.set_offset(target_offset)
     new_joints = src_skel.forward_kinematics_np(quat_params, tgt_root_pos)
     return new_joints
 
 
-def process_file(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarray, ...]:
-    feet_thre = params.feet_threshold
-    face_joint_indx = params.face_joint_indx
-    fid_l, fid_r = params.fid_l, params.fid_r
-    n_raw_offsets = torch.from_numpy(params.n_raw_offsets)
-    kinematic_chain = params.kinematic_chain
+def encode_joints(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarray, ...]:
+    foot_threshold = params.foot_velocity_threshold
+    face_joints = params.face_joints
+    left_feet, right_feet = params.left_feet, params.right_feet
+    raw_offsets = torch.from_numpy(params.raw_offsets)
 
-    positions = uniform_skeleton(positions, params)
+    positions = _uniform_skeleton(positions, params)
 
     floor_height = positions.min(axis=0).min(axis=0)[1]
     positions[:, :, 1] -= floor_height
@@ -186,7 +162,7 @@ def process_file(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarr
     root_pose_init_xz = root_pos_init[0] * np.array([1, 0, 1])
     positions = positions - root_pose_init_xz
 
-    r_hip, l_hip, sdr_r, sdr_l = face_joint_indx
+    r_hip, l_hip, sdr_r, sdr_l = face_joints
     across1 = root_pos_init[r_hip] - root_pos_init[l_hip]
     across2 = root_pos_init[sdr_r] - root_pos_init[sdr_l]
     across = across1 + across2
@@ -203,25 +179,25 @@ def process_file(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarr
 
     global_positions = positions.copy()
 
-    def foot_detect(positions: np.ndarray, thres: float) -> tuple[np.ndarray, np.ndarray]:
-        velfactor = np.array([thres, thres])
+    def detect_feet(positions: np.ndarray, threshold: float) -> tuple[np.ndarray, np.ndarray]:
+        velocity_limit = np.array([threshold, threshold])
 
-        feet_l_x = (positions[1:, fid_l, 0] - positions[:-1, fid_l, 0]) ** 2
-        feet_l_y = (positions[1:, fid_l, 1] - positions[:-1, fid_l, 1]) ** 2
-        feet_l_z = (positions[1:, fid_l, 2] - positions[:-1, fid_l, 2]) ** 2
-        feet_l = ((feet_l_x + feet_l_y + feet_l_z) < velfactor).astype(np.float32)
+        left_x = (positions[1:, left_feet, 0] - positions[:-1, left_feet, 0]) ** 2
+        left_y = (positions[1:, left_feet, 1] - positions[:-1, left_feet, 1]) ** 2
+        left_z = (positions[1:, left_feet, 2] - positions[:-1, left_feet, 2]) ** 2
+        left_contact = ((left_x + left_y + left_z) < velocity_limit).astype(np.float32)
 
-        feet_r_x = (positions[1:, fid_r, 0] - positions[:-1, fid_r, 0]) ** 2
-        feet_r_y = (positions[1:, fid_r, 1] - positions[:-1, fid_r, 1]) ** 2
-        feet_r_z = (positions[1:, fid_r, 2] - positions[:-1, fid_r, 2]) ** 2
-        feet_r = ((feet_r_x + feet_r_y + feet_r_z) < velfactor).astype(np.float32)
-        return feet_l, feet_r
+        right_x = (positions[1:, right_feet, 0] - positions[:-1, right_feet, 0]) ** 2
+        right_y = (positions[1:, right_feet, 1] - positions[:-1, right_feet, 1]) ** 2
+        right_z = (positions[1:, right_feet, 2] - positions[:-1, right_feet, 2]) ** 2
+        right_contact = ((right_x + right_y + right_z) < velocity_limit).astype(np.float32)
+        return left_contact, right_contact
 
-    feet_l, feet_r = foot_detect(positions, feet_thre)
+    feet_l, feet_r = detect_feet(positions, foot_threshold)
 
-    def get_cont6d_params(positions: np.ndarray) -> tuple[np.ndarray, ...]:
-        skel = Skeleton(n_raw_offsets, kinematic_chain, "cpu")
-        quat_params = skel.inverse_kinematics_np(positions, face_joint_indx, smooth_forward=True)
+    def rotation_features(positions: np.ndarray) -> tuple[np.ndarray, ...]:
+        skeleton = Skeleton(raw_offsets, params.chains, "cpu")
+        quat_params = skeleton.inverse_kinematics_np(positions, face_joints, smooth_forward=True)
 
         cont_6d_params = quaternion_to_cont6d_np(quat_params)
         r_rot = quat_params[:, 0].copy()
@@ -230,15 +206,15 @@ def process_file(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarr
         r_velocity = qmul_np(r_rot[1:], qinv_np(r_rot[:-1]))
         return cont_6d_params, r_velocity, velocity, r_rot
 
-    cont_6d_params, r_velocity, velocity, r_rot = get_cont6d_params(positions)
+    cont_6d_params, r_velocity, velocity, r_rot = rotation_features(positions)
 
-    def get_rifke(positions: np.ndarray) -> np.ndarray:
+    def root_relative_positions(positions: np.ndarray) -> np.ndarray:
         positions[..., 0] -= positions[:, 0:1, 0]
         positions[..., 2] -= positions[:, 0:1, 2]
         positions = qrot_np(np.repeat(r_rot[:, None], positions.shape[1], axis=1), positions)
         return positions
 
-    positions = get_rifke(positions)
+    positions = root_relative_positions(positions)
 
     root_y = positions[:, 0, 1:2]
 
@@ -265,7 +241,7 @@ def process_file(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarr
     return data, global_positions, positions, l_velocity
 
 
-def recover_root_rot_pos(data: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def _recover_root(data: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     rot_vel = data[..., 0]
     r_rot_ang = torch.zeros_like(rot_vel).to(data.device)
     r_rot_ang[..., 1:] = rot_vel[..., :-1]
@@ -285,9 +261,9 @@ def recover_root_rot_pos(data: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor
     return r_rot_quat, r_pos
 
 
-def recover_from_ric(data: torch.Tensor, joints_num: int) -> torch.Tensor:
-    r_rot_quat, r_pos = recover_root_rot_pos(data)
-    positions = data[..., 4 : (joints_num - 1) * 3 + 4]
+def recover_from_ric(data: torch.Tensor, joint_count: int) -> torch.Tensor:
+    r_rot_quat, r_pos = _recover_root(data)
+    positions = data[..., 4 : (joint_count - 1) * 3 + 4]
     positions = positions.view(positions.shape[:-1] + (-1, 3))
 
     positions = qrot(qinv(r_rot_quat[..., None, :]).expand(positions.shape[:-1] + (4,)), positions)
@@ -300,23 +276,23 @@ def recover_from_ric(data: torch.Tensor, joints_num: int) -> torch.Tensor:
     return positions
 
 
-def recover_from_rot(data: torch.Tensor, joints_num: int, skeleton: Skeleton) -> torch.Tensor:
-    r_rot_quat, r_pos = recover_root_rot_pos(data)
+def recover_from_rot(data: torch.Tensor, joint_count: int, skeleton: Skeleton) -> torch.Tensor:
+    r_rot_quat, r_pos = _recover_root(data)
 
     r_rot_cont6d = quaternion_to_cont6d(r_rot_quat)
 
-    start_indx = 1 + 2 + 1 + (joints_num - 1) * 3
-    end_indx = start_indx + (joints_num - 1) * 6
+    start_indx = 1 + 2 + 1 + (joint_count - 1) * 3
+    end_indx = start_indx + (joint_count - 1) * 6
     cont6d_params = data[..., start_indx:end_indx]
     cont6d_params = torch.cat([r_rot_cont6d, cont6d_params], dim=-1)
-    cont6d_params = cont6d_params.view(-1, joints_num, 6)
+    cont6d_params = cont6d_params.view(-1, joint_count, 6)
 
     positions = skeleton.forward_kinematics_cont6d(cont6d_params, r_pos)
 
     return positions
 
 
-def normalization_stats(clips: list[np.ndarray], joints_num: int) -> tuple[np.ndarray, np.ndarray]:
+def normalization_stats(clips: list[np.ndarray], joint_count: int) -> tuple[np.ndarray, np.ndarray]:
     if not clips:
         raise ValueError("normalization_stats received no clips")
 
@@ -324,15 +300,15 @@ def normalization_stats(clips: list[np.ndarray], joints_num: int) -> tuple[np.nd
     mean = data.mean(axis=0)
     std = data.std(axis=0)
 
-    expected_dim = 8 + (joints_num - 1) * 9 + joints_num * 3
+    expected_dim = 8 + (joint_count - 1) * 9 + joint_count * 3
     if std.shape[-1] != expected_dim:
         raise ValueError(
-            f"feature dim {std.shape[-1]} != expected {expected_dim} for {joints_num=}"
+            f"feature dim {std.shape[-1]} != expected {expected_dim} for {joint_count=}"
         )
 
-    ric_end = 4 + (joints_num - 1) * 3
-    rot_end = 4 + (joints_num - 1) * 9
-    vel_end = rot_end + joints_num * 3
+    ric_end = 4 + (joint_count - 1) * 3
+    rot_end = 4 + (joint_count - 1) * 9
+    vel_end = rot_end + joint_count * 3
     groups = (
         (0, 1),
         (1, 3),
@@ -357,8 +333,50 @@ def recover_skeleton(feat263: np.ndarray | torch.Tensor) -> np.ndarray:
     return recover_from_ric(data.float(), JOINTS).cpu().numpy()
 
 
+class StreamingSkeletonRecovery:
+    def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
+        self.yaw = 0.0
+        self.offset = np.zeros(2, dtype=np.float32)
+
+    @staticmethod
+    def _yaw_quat(yaw: float) -> torch.Tensor:
+        quat = torch.zeros(4, dtype=torch.float32)
+        quat[0] = math.cos(yaw)
+        quat[2] = math.sin(yaw)
+        return quat
+
+    def __call__(self, feat263: np.ndarray | torch.Tensor) -> np.ndarray:
+        data = (
+            feat263.float()
+            if isinstance(feat263, torch.Tensor)
+            else torch.as_tensor(np.asarray(feat263), dtype=torch.float32)
+        )
+        local = recover_from_ric(data, JOINTS)
+
+        carry = self._yaw_quat(self.yaw).expand(local.shape[:-1] + (4,))
+        placed = qrot(qinv(carry), local)
+        placed[..., 0] += float(self.offset[0])
+        placed[..., 2] += float(self.offset[1])
+
+        yaw_next = self.yaw + float(data[..., 0].sum())
+        step = torch.zeros(3, dtype=torch.float32)
+        step[0] = data[-1, 1]
+        step[2] = data[-1, 2]
+        step = qrot(qinv(self._yaw_quat(yaw_next)), step)
+
+        root_last = placed[-1, 0]
+        self.offset = np.array(
+            [float(root_last[0] + step[0]), float(root_last[2] + step[2])], dtype=np.float32
+        )
+        self.yaw = yaw_next
+        return placed.cpu().numpy()
+
+
 def kinematic_bones() -> np.ndarray:
     bones = [
-        [chain[i], chain[i + 1]] for chain in t2m_kinematic_chain for i in range(len(chain) - 1)
+        [chain[i], chain[i + 1]] for chain in KINEMATIC_CHAINS for i in range(len(chain) - 1)
     ]
     return np.array(bones, dtype=np.int64)

@@ -128,7 +128,7 @@ def qbetween(v0: torch.Tensor, v1: torch.Tensor) -> torch.Tensor:
     assert v0.shape[-1] == 3, "v0 must be of the shape (*, 3)"
     assert v1.shape[-1] == 3, "v1 must be of the shape (*, 3)"
 
-    v = torch.cross(v0, v1)
+    v = torch.cross(v0, v1, dim=-1)
     w = torch.sqrt((v0**2).sum(dim=-1, keepdim=True) * (v1**2).sum(dim=-1, keepdim=True)) + (
         v0 * v1
     ).sum(dim=-1, keepdim=True)

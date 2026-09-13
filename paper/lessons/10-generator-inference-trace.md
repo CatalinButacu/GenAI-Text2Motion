@@ -54,7 +54,7 @@ updated state. *The model has now "read" the caption.*
 4. **sample** per codebook: nucleus top-p 0.9, temperature 1.1 -> token **(1, 6)**. *Logits ->
    6 chosen integers. Non-greedy so it doesn't collapse.*
 5. **yield** the token (this is where streaming emits -- a chunk is ready before the rest exists).
-6. **embed_tokens(token)** -> **(1, 512)** (duplicate for the 2 CFG rows) -> **backbone.step** ->
+6. **embed_motion_tokens(token)** -> **(1, 512)** (duplicate for the 2 CFG rows) -> **backbone.step** ->
    new hidden + new state. *The model's own output becomes its next input.*
 Repeat for the requested steps (or until END) -> tokens **(1, T', 6)**.
 

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
 
 import torch
 
-from text2motion.generation.model import MotionGeneratorModule, rollout_uniforms
+from text2motion.generation.contracts import SamplingConfig, TextToMotionGenerationRequest
+from text2motion.generation.model import MotionTokenGenerator, seeded_sampling_uniforms
 from text2motion.generation.text import CLIPTextEncoder
 from text2motion.motion.model import (
     GeneratedMotion,
@@ -15,37 +15,21 @@ from text2motion.motion.model import (
 from text2motion.tokenization.model import MotionTokenizer
 
 
-@dataclass(frozen=True)
-class SamplingConfig:
-    temperature: float = 1.0
-    top_p: float = 0.9
-    cfg_scale: float = 1.0
-    stop_at_end: bool = False
-
-
-@dataclass(frozen=True)
-class GenerationRequest:
-    prompt: str
-    token_steps: int
-    sampling: SamplingConfig = SamplingConfig()
-    chunk_tokens: int = 1
-
-
-class MotionGenerator:
+class TextToMotionGenerator:
     def __init__(
         self,
-        module: MotionGeneratorModule,
+        token_generator: MotionTokenGenerator,
         text_encoder: CLIPTextEncoder,
         tokenizer: MotionTokenizer,
     ) -> None:
-        self.module = module
+        self.token_generator = token_generator
         self.text_encoder = text_encoder
         self.tokenizer = tokenizer
 
-    def eval(self) -> MotionGenerator:
-        self.module.eval()
+    def eval(self) -> TextToMotionGenerator:
+        self.token_generator.eval()
         self.text_encoder.eval()
-        self.tokenizer.module.eval()
+        self.tokenizer.tokenizer_model.eval()
         return self
 
     @property
@@ -55,7 +39,7 @@ class MotionGenerator:
     def token_steps_for(self, frames: int) -> int:
         return max(1, frames // self.downsample)
 
-    def stream_tokens(
+    def sample_token_sequences(
         self,
         captions: list[str],
         token_steps: int,
@@ -65,11 +49,11 @@ class MotionGenerator:
         text_emb = self.text_encoder(captions)
         uniforms = None
         if seeds is not None:
-            uniforms = rollout_uniforms(
-                seeds, token_steps, self.module.cfg.num_codebooks, text_emb.device
+            uniforms = seeded_sampling_uniforms(
+                seeds, token_steps, self.token_generator.cfg.num_codebooks, text_emb.device
             )
         steps = list(
-            self.module.stream(
+            self.token_generator.stream_token_indices(
                 text_emb,
                 token_steps,
                 temperature=sampling.temperature,
@@ -90,10 +74,10 @@ class MotionGenerator:
         sampling: SamplingConfig,
         seeds: Sequence[int] | None = None,
     ) -> list[GeneratedMotion] | None:
-        indices = self.stream_tokens(captions, token_steps, sampling, seeds)
+        indices = self.sample_token_sequences(captions, token_steps, sampling, seeds)
         if indices is None:
             return None
-        decoded = self.tokenizer.module.decode(indices)
+        decoded = self.tokenizer.tokenizer_model.decode(indices)
         return [
             GeneratedMotion(
                 prompt=caption,
@@ -111,14 +95,16 @@ class MotionGenerator:
             for row, caption in enumerate(captions)
         ]
 
-    def generate(self, request: GenerationRequest) -> GeneratedMotion | None:
+    def generate(self, request: TextToMotionGenerationRequest) -> GeneratedMotion | None:
         batch = self.generate_batch([request.prompt], request.token_steps, request.sampling)
         return None if batch is None else batch[0]
 
-    def token_stream(self, request: GenerationRequest) -> Iterator[torch.Tensor]:
+    def stream_token_indices(
+        self, request: TextToMotionGenerationRequest
+    ) -> Iterator[torch.Tensor]:
         sampling = request.sampling
         text_emb = self.text_encoder([request.prompt])
-        return self.module.stream(
+        return self.token_generator.stream_token_indices(
             text_emb,
             request.token_steps,
             temperature=sampling.temperature,

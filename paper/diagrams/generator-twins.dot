@@ -7,7 +7,7 @@ digraph generator_twins {
     edge  [fontname="Segoe UI", fontsize=9];
 
     subgraph cluster_front {
-        label="Shared front-end (MotionGenerator)";
+        label="Shared front-end (MotionTokenGenerator)";
         style=filled; color="#e1f5fe"; fontname="Segoe UI Semibold"; node [fillcolor="#81d4fa"];
         temb  [label="embed 6 codebook tokens, sum them"];
         tprefix [label="project 16-token text prefix"];

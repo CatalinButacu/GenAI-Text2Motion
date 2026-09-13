@@ -1,5 +1,3 @@
-# FSQ winner re-run, seeded: 6 groups x (8,5,5,5)=1000, latent 24-D. Target recon-FID ~0.0266.
-# Repo-relative paths; ASCII-only (a BOM/encoding mishap broke the earlier copy).
 seed: 2026
 device: cuda
 data:

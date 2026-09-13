@@ -1,0 +1,39 @@
+.git
+.github
+.claude
+.vscode
+.idea
+.venv
+.pytest_cache
+.ruff_cache
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+
+# License-gated or generated assets are mounted at runtime.
+data
+checkpoints
+outputs
+logs
+dist
+paper
+infra
+
+# Local state and secrets.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+imgui.ini
+
+# Large archives and caches.
+*.zip
+*.tar
+*.tar.gz
+*.npz
+*.pkl
+.cache
