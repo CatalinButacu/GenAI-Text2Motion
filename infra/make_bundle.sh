@@ -20,8 +20,8 @@ for item in \
     "data/official_evaluator/extracted" \
     "data/eval_stats" \
     "data/t2m_glove" \
-    "checkpoints/tokenizer/fsq_g8_v1024.pt" \
-    "checkpoints/tokenizer/rvq_l8_1024.pt" \
+    "artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt" \
+    "artifacts/checkpoints/tokenizer/rvq_l8_1024.pt" \
     "data/amass_tokens_fsq8x1024.npz" \
     "data/amass_tokens_rvq8x1024.npz"
 do
@@ -37,6 +37,6 @@ echo "code bundle is ready: azcopy it to Blob (Azure), or attach it to a noteboo
 echo "For the data, upload these paths preserving the layout (one Blob container, or one private Kaggle Dataset):"
 echo "  data/HumanML3D_official/  data/official_evaluator/extracted/"
 echo "  data/eval_stats/  data/t2m_glove/"
-echo "  checkpoints/tokenizer/fsq_g8_v1024.pt  checkpoints/tokenizer/rvq_l8_1024.pt"
+echo "  artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt  artifacts/checkpoints/tokenizer/rvq_l8_1024.pt"
 echo
 echo "Phase 1 (the kernel canary) needs ONLY the code bundle -- the probes use random weights."

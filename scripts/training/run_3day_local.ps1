@@ -21,7 +21,7 @@ function Left {
     return [math]::Round($BudgetHours - ((Get-Date) - $start).TotalHours, 1)
 }
 
-New-Item -ItemType Directory -Force outputs | Out-Null
+New-Item -ItemType Directory -Force artifacts/outputs | Out-Null
 Write-Output "=== 3-day local chain start $(Get-Date -Format u)  budget ${BudgetHours}h ==="
 
 function Invoke-Guarded([string]$tag, [string]$argList, [string]$logFile, [double]$maxHours, [int]$staleMin = $StaleMinutes) {
@@ -33,7 +33,7 @@ function Invoke-Guarded([string]$tag, [string]$argList, [string]$logFile, [doubl
     $p = Start-Process -FilePath $py -ArgumentList "-u -m $argList" -PassThru -NoNewWindow `
         -RedirectStandardOutput $logFile -RedirectStandardError "$logFile.err"
     Start-Sleep -Seconds 45  # let start_run create the timestamped run dir
-    $hbDir = Get-ChildItem outputs/runs -Directory -EA SilentlyContinue |
+    $hbDir = Get-ChildItem artifacts/outputs/runs -Directory -EA SilentlyContinue |
         Where-Object { $_.LastWriteTime -ge $before } |
         Sort-Object LastWriteTime -Desc |
         Select-Object -First 1
@@ -60,7 +60,7 @@ function Invoke-Guarded([string]$tag, [string]$argList, [string]$logFile, [doubl
     if (-not $p.HasExited) {
         Stop-Process -Id $p.Id -Force
         Start-Sleep 5
-        "$((Get-Date).ToString('u'))  $tag KILLED: $r" | Out-File -Append outputs/GUARD_KILL.txt -Encoding utf8
+        "$((Get-Date).ToString('u'))  $tag KILLED: $r" | Out-File -Append artifacts/outputs/GUARD_KILL.txt -Encoding utf8
         Write-Output "GUARD KILLED ${tag}: $r  (best-by-val checkpoint is safe; --resume to continue)"
         return -1
     }
@@ -69,7 +69,7 @@ function Invoke-Guarded([string]$tag, [string]$argList, [string]$logFile, [doubl
 }
 
 function EpochsLogged([string]$pat) {
-    $d = Get-ChildItem outputs/runs -Directory -EA SilentlyContinue |
+    $d = Get-ChildItem artifacts/outputs/runs -Directory -EA SilentlyContinue |
         Where-Object { $_.Name -match $pat } |
         Sort-Object LastWriteTime -Desc |
         Select-Object -First 1
@@ -83,34 +83,34 @@ function EpochsLogged([string]$pat) {
     return (Get-Content $m | Select-String '"epoch"' | Measure-Object).Count
 }
 
-if (Test-Path checkpoints/tokenizer/tokenizer_isovocab.pt) {
+if (Test-Path artifacts/checkpoints/tokenizer/tokenizer_isovocab.pt) {
     Write-Output "`n=== PHASE 1  [$(Hrs)h] SKIP iso-vocab (already done; tokenizer_isovocab.pt exists) ==="
 } else {
     Write-Output "`n=== PHASE 1  [$(Hrs)h] iso-vocab tokenizer ==="
     & $py -u -m text2motion.app.cli train-tokenizer --config configs/tokenizer/tokenizer_isovocab.yaml `
         --tokenizer fsq --ckpt_name tokenizer_isovocab.pt --epochs 50 --eval_every 5 *>&1 |
-        Tee-Object outputs/phase1_isovocab.log
+        Tee-Object artifacts/outputs/phase1_isovocab.log
 }
 
-if (Test-Path checkpoints/generator/generator_transformer_bs8.pt) {
+if (Test-Path artifacts/checkpoints/generator/generator_transformer_bs8.pt) {
     Write-Output "`n=== PHASE 2  [$(Hrs)h] SKIP transformer-bs8 (done; generator_transformer_bs8.pt exists) ==="
 } else {
     Write-Output "`n=== PHASE 2  [$(Hrs)h] transformer-34M bs8 (matched twin partner) ==="
-    if (-not (Test-Path outputs/gates/transformer_34m_overfit.json)) {
+    if (-not (Test-Path artifacts/outputs/gates/transformer_34m_overfit.json)) {
         & $py -u -m text2motion.app.cli sanity-overfit --config configs/generator/gen_pilot_fsq8x1024.yaml `
-            --backbone transformer --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt `
-            --out outputs/gates/transformer_34m_overfit.json
+            --backbone transformer --tokenizer_ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt `
+            --out artifacts/outputs/gates/transformer_34m_overfit.json
     }
     & $py -u -m text2motion.app.cli train-generator --config configs/generator/gen_pilot_fsq8x1024.yaml `
-        --backbone transformer --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt `
-        --overfit_gate outputs/gates/transformer_34m_overfit.json `
-        --init_ckpt checkpoints/generator/generator_transformer_pretrained.pt `
+        --backbone transformer --tokenizer_ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt `
+        --overfit_gate artifacts/outputs/gates/transformer_34m_overfit.json `
+        --init_ckpt artifacts/checkpoints/generator/generator_transformer_pretrained.pt `
         --ckpt_name generator_transformer_bs8.pt --epochs 18 --batch_size 8 `
         --eval_every 6 --cfg_scale 6.0 --temperature 1.0 --resume *>&1 |
-        Tee-Object outputs/phase2_transformer_bs8.log
+        Tee-Object artifacts/outputs/phase2_transformer_bs8.log
 }
 
-$P3_DONE = "checkpoints/generator/generator_mamba_pretrained.pt.done"
+$P3_DONE = "artifacts/checkpoints/generator/generator_mamba_pretrained.pt.done"
 for ($try = 1; $try -le 6; $try++) {
     if (Test-Path $P3_DONE) {
         Write-Output "PHASE 3 complete (marker present)"
@@ -123,8 +123,8 @@ for ($try = 1; $try -le 6; $try++) {
     Write-Output "`n=== PHASE 3  [$(Hrs)h, $(Left)h left] mamba pretrain (try $try) ==="
     $maxHours = [math]::Min(14, (Left))
     $code = Invoke-Guarded "phase3_mamba_pretrain" `
-        "text2motion.app.cli pretrain --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --token_pack data/amass_tokens_fsq8x1024.npz --epochs 20 --batch_size 8 --grad_accum 8 --out checkpoints/generator/generator_mamba_pretrained.pt --resume" `
-        "outputs/phase3_mamba_pretrain.log" $maxHours
+        "text2motion.app.cli pretrain --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --token_pack data/amass_tokens_fsq8x1024.npz --epochs 20 --batch_size 8 --grad_accum 8 --out artifacts/checkpoints/generator/generator_mamba_pretrained.pt --resume" `
+        "artifacts/outputs/phase3_mamba_pretrain.log" $maxHours
     if ($code -eq 0 -and (Test-Path $P3_DONE)) {
         Write-Output "PHASE 3 complete (clean exit)"
         break
@@ -134,10 +134,10 @@ for ($try = 1; $try -le 6; $try++) {
 if (-not (Test-Path $P3_DONE)) {
     Write-Output "`n=== PHASE 4 SKIP: mamba prior incomplete (no .done marker) ==="
 } else {
-    if (-not (Test-Path outputs/gates/mamba_34m_overfit.json)) {
+    if (-not (Test-Path artifacts/outputs/gates/mamba_34m_overfit.json)) {
         & $py -u -m text2motion.app.cli sanity-overfit --config configs/generator/gen_pilot_fsq8x1024.yaml `
-            --backbone mamba --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt `
-            --out outputs/gates/mamba_34m_overfit.json
+            --backbone mamba --tokenizer_ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt `
+            --out artifacts/outputs/gates/mamba_34m_overfit.json
     }
     for ($try = 1; $try -le 4; $try++) {
         if ((Left) -le 1) {
@@ -146,8 +146,8 @@ if (-not (Test-Path $P3_DONE)) {
         }
         Write-Output "`n=== PHASE 4  [$(Hrs)h, $(Left)h left] mamba bs8 finetune (try $try) ==="
         $code = Invoke-Guarded "phase4_mamba_finetune" `
-            "text2motion.app.cli train-generator --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt --overfit_gate outputs/gates/mamba_34m_overfit.json --init_ckpt checkpoints/generator/generator_mamba_pretrained.pt --ckpt_name generator_mamba_bs8.pt --epochs 18 --batch_size 4 --grad_accum 2 --eval_every 6 --cfg_scale 6.0 --temperature 1.0 --resume" `
-            "outputs/phase4_mamba_finetune.log" (Left)
+            "text2motion.app.cli train-generator --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --tokenizer_ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt --overfit_gate artifacts/outputs/gates/mamba_34m_overfit.json --init_ckpt artifacts/checkpoints/generator/generator_mamba_pretrained.pt --ckpt_name generator_mamba_bs8.pt --epochs 18 --batch_size 4 --grad_accum 2 --eval_every 6 --cfg_scale 6.0 --temperature 1.0 --resume" `
+            "artifacts/outputs/phase4_mamba_finetune.log" (Left)
         if ($code -eq 0) {
             Write-Output "PHASE 4 complete (clean exit)"
             break
@@ -156,4 +156,4 @@ if (-not (Test-Path $P3_DONE)) {
 }
 
 Write-Output "`n=== CHAIN DONE  total $(Hrs)h ==="
-"done $(Get-Date -Format u)  total $(Hrs)h" | Out-File outputs/CHAIN_DONE.txt -Encoding utf8
+"done $(Get-Date -Format u)  total $(Hrs)h" | Out-File artifacts/outputs/CHAIN_DONE.txt -Encoding utf8

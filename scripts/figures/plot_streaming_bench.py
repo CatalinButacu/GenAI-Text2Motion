@@ -14,8 +14,8 @@ COLORS = {"transformer": "tab:red", "mamba": "tab:blue"}
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Plot the streaming benchmark figure.")
-    p.add_argument("--bench", default="outputs/streaming_bench.json")
-    p.add_argument("--out", default="outputs/streaming_bench.png")
+    p.add_argument("--bench", default="artifacts/outputs/streaming_bench.json")
+    p.add_argument("--out", default="artifacts/outputs/streaming_bench.png")
     a = p.parse_args()
 
     data = json.loads(Path(a.bench).read_text())["results"]

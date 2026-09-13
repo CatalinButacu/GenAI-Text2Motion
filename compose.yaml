@@ -17,9 +17,9 @@ x-environment: &environment
 
 x-volumes: &volumes
   - ${TEXT2MOTION_HOST_DATA:-./data}:/app/data
-  - ${TEXT2MOTION_HOST_CHECKPOINTS:-./checkpoints}:/app/checkpoints
-  - ${TEXT2MOTION_HOST_OUTPUTS:-./outputs}:/app/outputs
-  - ${TEXT2MOTION_HOST_LOGS:-./logs}:/app/logs
+  - ${TEXT2MOTION_HOST_CHECKPOINTS:-./artifacts/checkpoints}:/app/checkpoints
+  - ${TEXT2MOTION_HOST_OUTPUTS:-./artifacts/outputs}:/app/outputs
+  - ${TEXT2MOTION_HOST_LOGS:-./artifacts/logs}:/app/logs
   - ${TEXT2MOTION_HOST_CACHE:-./.docker-cache}:/var/cache/text2motion
 
 services:

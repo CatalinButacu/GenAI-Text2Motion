@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO="${REPO:-$(cd "$(dirname "$0")/.." && pwd)}"
 PY="${PY:-python}"
-LOG="$REPO/outputs/canary"
+LOG="$REPO/artifacts/outputs/canary"
 
 cd "$REPO"
 export PYTHONPATH="$REPO/src"

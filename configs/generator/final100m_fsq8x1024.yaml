@@ -14,8 +14,8 @@ paths:
   hml3d_out_dir: data/HumanML3D_official
   texts_dir: data/HumanML3D_official/texts
   smplx_models: data/smplx_models
-  checkpoints_dir: checkpoints
-  outputs_dir: outputs
+  checkpoints_dir: artifacts/checkpoints
+  outputs_dir: artifacts/outputs
 
 tokenizer:
   in_dim: 263

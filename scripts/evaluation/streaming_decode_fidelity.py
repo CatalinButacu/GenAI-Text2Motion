@@ -156,7 +156,7 @@ def run(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/tokenizer/fsq_g8_v1024.yaml")
-    parser.add_argument("--ckpt", default="checkpoints/tokenizer/fsq_g8_v1024.pt")
+    parser.add_argument("--ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt")
     parser.add_argument("--split", type=Split, choices=list(Split), default=Split.TEST)
     parser.add_argument("--max_clips", type=int, default=64)
     parser.add_argument("--window", type=int)

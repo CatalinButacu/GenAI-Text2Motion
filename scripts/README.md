@@ -9,13 +9,13 @@ Everything that needs a GPU should be launched behind `training/local_guard.ps1`
 
 | file | what it is |
 |---|---|
-| `local_guard.ps1` | the watchdog. Stall-kills on a stale `metrics.jsonl` heartbeat plus a max-hours budget, and writes the reason to `outputs/GUARD_KILL.txt`. Wrap every long local job in it. |
+| `local_guard.ps1` | the watchdog. Stall-kills on a stale `metrics.jsonl` heartbeat plus a max-hours budget, and writes the reason to `artifacts/outputs/GUARD_KILL.txt`. Wrap every long local job in it. |
 | `run_3day_local.ps1` | the local generator chain: overfit gate -> pretrain -> finetune, for both twins. Written for the 4 GB laptop, so its `--epochs`/`--batch_size` are laptop compromises, not the intended recipe. |
 
 ### `training/tokenizer_sweep/` — Contribution A, and it is FINISHED
 
 The grid that settled the tokenizer question. **Do not re-run these.** The winner is frozen at
-`checkpoints/tokenizer/fsq_g8_v1024.pt` (recon-FID **0.0170**), every generator is trained on its
+`artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt` (recon-FID **0.0170**), every generator is trained on its
 tokens, and retraining the tokenizer would invalidate every generator checkpoint we own.
 
 | file | what it is |
@@ -25,7 +25,7 @@ tokens, and retraining the tokenizer would invalidate every generator checkpoint
 | `matrix_complete.ps1` / `matrix_remaining.ps1` | resume helpers for a partially-finished grid |
 | `run_fsq_g*.ps1` / `run_rvq_l*.ps1` | individual grid cells, one config each |
 
-Results live in `outputs/runs/tokenizer/*/metrics.jsonl` (18 runs, full test split, 2189 clips).
+Results live in `artifacts/outputs/runs/tokenizer/*/metrics.jsonl` (18 runs, full test split, 2189 clips).
 Headline: FSQ beats RVQ at every matched depth, and by 26% at matched depth *and* matched vocab.
 
 ## `evaluation/` — thesis metrics

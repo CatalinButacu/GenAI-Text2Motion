@@ -176,7 +176,7 @@ strong RVQ at **every matched bit-rate cell**; the best cell (8 quantizers x imp
 (512: 0.0612<0.0626, 0.0305<0.0342, 0.0196<0.0277; 1024: 0.0527<0.0558, 0.0283<0.0310,
 0.0170<0.0221). FSQ wins **at the same 512 vocab** too, so the gain is the mechanism, not codebook
 size. FSQ carries **0 codebook parameters** vs RVQ's 1.6-3M, so it is Pareto-dominant on
-(distortion, params). Every cell traces to `outputs/runs/*tokenizer_<stem>/metrics.jsonl`. Cited
+(distortion, params). Every cell traces to `artifacts/outputs/runs/*tokenizer_<stem>/metrics.jsonl`. Cited
 context (more compute): T2M-GPT VQ 0.071; MoMask RVQ 0.019.*
 
 **Honest bounds (sec. 4.6).** Our strong-RVQ (best 8x1024 = 0.0221) is weaker than MoMask's tuned RVQ
@@ -454,8 +454,8 @@ to it** (val, 730 clips, both scored identically):
 | Transformer-100M, prefix-16, cfg 6.0/temp 1.0 (ours, val) | 98.07M | **1.63**[*] | **0.323**[*] | 0.478[*] | 0.580[*] | 4.43[*] | 8.79[*] |
 
 *Bold marks the better of the two 34M twins per column in the test table, and the better of the two
-systems in the val pair. Provenance: transformer `outputs/runs/20260704T044653Z_evaluate_test`, Mamba
-`.../20260704T050118Z_evaluate_test`; val pair `outputs/runs/evaluate/20260620T044949Z_evaluate_val`
+systems in the val pair. Provenance: transformer `artifacts/outputs/runs/20260704T044653Z_evaluate_test`, Mamba
+`.../20260704T050118Z_evaluate_test`; val pair `artifacts/outputs/runs/evaluate/20260620T044949Z_evaluate_val`
 (34M) and `.../20260624T062231Z_evaluate_val` (100M), both 730 clips.*
 
 **The result: parity at matched budget, with a mechanism trade.** The two 34M twins are statistically

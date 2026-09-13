@@ -11,7 +11,7 @@ data:
 paths:
   donor_root: null
   humanml3d_dir: null
-  eval_matcher: data/official_evaluator/extracted/t2m/text_mot_match/model/finest.tar
+  eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
 
   eval_stats_dir: data/eval_stats
   t2m_vqvae: null
@@ -20,12 +20,12 @@ paths:
   smplx_models: data/smplx_models
   stats_dir: data/eval_stats
   cache_dir: data/.cache
-  checkpoints_dir: checkpoints
-  outputs_dir: outputs
-  tokenizer_checkpoint_path: checkpoints/tokenizer/fsq_g8_v1024.pt
+  checkpoints_dir: artifacts/checkpoints
+  outputs_dir: artifacts/outputs
+  tokenizer_checkpoint_path: artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt
   generator_checkpoint_paths:
-    transformer: checkpoints/generator/generator_transformer_bs8_enc_last.pt
-    mamba: checkpoints/generator/generator_mamba_bs8_last.pt
+    transformer: artifacts/checkpoints/generator/generator_transformer_bs8_enc_last.pt
+    mamba: artifacts/checkpoints/generator/generator_mamba_bs8_last.pt
 
   body_model_dir: null
   smplh_dir: null

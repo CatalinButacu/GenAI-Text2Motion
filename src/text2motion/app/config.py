@@ -78,9 +78,9 @@ class ProjectPathsConfig:
     texts_dir: Path | None = None
     our_vab_dir: Path = Path("data/t2m_glove/glove")
     cache_dir: Path = Path("data/.cache")
-    checkpoints_dir: Path = Path("checkpoints")
-    outputs_dir: Path = Path("outputs")
-    logs_dir: Path = Path("logs")
+    checkpoints_dir: Path = Path("artifacts/checkpoints")
+    outputs_dir: Path = Path("artifacts/outputs")
+    logs_dir: Path = Path("artifacts/logs")
     tokenizer_checkpoint_path: Path | None = None
     generator_checkpoint_paths: dict[str, Path] = field(default_factory=dict)
 

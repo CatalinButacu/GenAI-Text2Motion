@@ -81,7 +81,7 @@ it is reported as an un-decomposed configuration change rather than a scale clai
 unlabeled AMASS before fine-tuning on HumanML3D cuts pilot FID **6.58 → 2.12** with *fewer* fine-tune
 epochs.
 
-Every number above traces to a run directory under `outputs/runs/` with a manifest recording config,
+Every number above traces to a run directory under `artifacts/outputs/runs/` with a manifest recording config,
 git commit, seed, and library versions.
 
 ## What this project demonstrates
@@ -146,7 +146,7 @@ text2motion prepare          --config configs/default.yaml --stage all
 text2motion train-tokenizer  --config configs/tokenizer/fsq_g8_v1024.yaml --tokenizer fsq
 text2motion tokenize         --config configs/default.yaml --out data/amass_tokens.npz
 text2motion sanity-overfit   --config configs/default.yaml --backbone mamba \
-                             --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt --out gate.json
+                             --tokenizer_ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt --out gate.json
 text2motion pretrain         --config configs/generator/final100m.yaml --backbone mamba
 text2motion train-generator  --config configs/generator/final100m.yaml --backbone mamba \
                              --overfit_gate gate.json

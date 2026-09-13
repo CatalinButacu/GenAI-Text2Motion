@@ -73,7 +73,7 @@ batch 8; 22,418 train clips = 2,802 steps/epoch). T4 absolute numbers will diffe
 
 Upload the data listed by `make_bundle.sh` as one private Kaggle Dataset (4.66 GB), preserving
 paths. Sessions are 9 h and a run is longer, so rely on `--resume`: `train-generator` writes
-`checkpoints/<stem>_last.pt` every epoch with generator + text encoder + optimizer + EMA +
+`artifacts/checkpoints/<stem>_last.pt` every epoch with generator + text encoder + optimizer + EMA +
 scheduler + epoch + best_fid. Push it to a Dataset version at session end, pull it back at
 session start.
 

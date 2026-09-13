@@ -2,7 +2,34 @@
 
 Prepared 2026-07-04. Companion to `paper/dissertation_draft.md`. This lists **what is now measured**,
 **what is still pending**, and the **specific decisions I want feedback on**. Every number below traces
-to a run directory under `outputs/runs/` (seed 2026, manifests record config + git + versions).
+to a run directory under `artifacts/outputs/runs/` (seed 2026, manifests record config + git + versions).
+
+## Update (2026-09-15) -- status of section 4's pending items
+
+Nothing below is a rewrite of the 2026-07-04 notes -- they stay as originally written. This is what
+has changed since, checked against the actual run directories, not assumed:
+
+- **100M Mamba twin**: still cloud-gated, unchanged in substance. What's new: the Azure platform
+  (resource group, storage, three least-privilege managed identities, key vault) is fully provisioned
+  and verified, and a GPU quota increase has been requested -- self-service is refused for this SKU
+  (`QuotaNotAvailableForResource` in every region tried), so it needs human review. All six runs
+  (pretrain+gate+finetune x transformer/FSQ, mamba/FSQ, transformer/RVQ) are launch-ready via
+  `infra/azure/run_twins.sh`, guarded by max-hours budgets and auto-shutdown. Quota is the only
+  remaining gate on this row.
+- **Downstream generation A/B (FSQ-tokens vs RVQ-tokens generator)**: setup is now complete --
+  `configs/generator/gen_pilot_rvq8x1024.yaml` and a matching AMASS RVQ token pack exist, mirroring the
+  FSQ config exactly (seed/width/downsample/resblocks/8 quantizers/1024 vocab) so the comparison
+  isolates the tokenizer alone. The run itself (`transformer_rvq` in the six-run campaign) is blocked
+  on the same Azure quota as the row above -- **still not measured**, do not cite a result yet.
+- **Multi-seed variance bars, camera-ready streaming figure, prose expansion / LaTeX port**: unchanged,
+  still open. (The fused-kernel path the streaming figure needs now has a preflight gate and a
+  Kaggle-based build canary to de-risk it before the paid cloud run, but the figure itself isn't produced.)
+- **One number in this document was re-verified, not corrected**: the strong-RVQ figure in secs. 1 and
+  4.6 (0.0221, `rvq_l8_1024`) was checked directly against
+  `artifacts/outputs/runs/tokenizer/20260617T102700Z_tokenizer_rvq_l8_1024/metrics.jsonl` on the full
+  2189-clip test split. It is correct as written -- a separate summary in `.claude/docs/STATUS.md`
+  states 0.0205 for the same cell, which does not match the run artifact and should not be trusted
+  over it.
 
 ## 1. What changed since v0.1
 - **Contribution A (tokenizer) is complete.** The full 3x5 FSQ-vs-RVQ matrix is measured (sec. 4.4):
@@ -62,9 +89,9 @@ to a run directory under `outputs/runs/` (seed 2026, manifests record config + g
 - Prose expansion (sec. 2-3, sec. 4.1-4.3, sec. 5.1-5.3) from `paper/lessons/` to reach 30-45 pp; LaTeX/Overleaf port.
 
 ## 5. Where to read the evidence
-- Twin test: `outputs/runs/20260704T044653Z_evaluate_test` (transformer),
-  `outputs/runs/20260704T050118Z_evaluate_test` (mamba). Command:
+- Twin test: `artifacts/outputs/runs/20260704T044653Z_evaluate_test` (transformer),
+  `artifacts/outputs/runs/20260704T050118Z_evaluate_test` (mamba). Command:
   `python -m text2motion.app.cli evaluate --backbone <b> --ckpt <ckpt> --split test --cfg_scale 6.0 --temperature 1.0 --length_mode fixed --mm_clips 100 --mm_repeats 30`.
-- Tokenizer matrix: `outputs/runs/*tokenizer_<stem>/metrics.jsonl` (e.g. `*tokenizer_fsq_g8_v1024` = 0.0170).
-- 100M transformer val: `outputs/runs/evaluate/20260624T062231Z_evaluate_val`.
+- Tokenizer matrix: `artifacts/outputs/runs/*tokenizer_<stem>/metrics.jsonl` (e.g. `*tokenizer_fsq_g8_v1024` = 0.0170).
+- 100M transformer val: `artifacts/outputs/runs/evaluate/20260624T062231Z_evaluate_val`.
 - Streaming bench: `scripts/figures/plot_streaming_bench.py` from `eval.streaming_bench` -> `paper/figures/streaming.png`.

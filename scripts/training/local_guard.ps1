@@ -29,7 +29,7 @@ while ($true) {
 }
 Write-Output "guard: KILLING pid $TargetPid - $reason"
 Stop-Process -Id $TargetPid -Force -Confirm:$false
-$marker = "outputs/GUARD_KILL.txt"
+$marker = "artifacts/outputs/GUARD_KILL.txt"
 "$((Get-Date).ToUniversalTime().ToString('u'))  pid $TargetPid  $reason" | Out-File -Append $marker -Encoding utf8
 Write-Output "guard: logged to $marker - inspect before relaunching (fail loud, do not ignore)"
 exit 1

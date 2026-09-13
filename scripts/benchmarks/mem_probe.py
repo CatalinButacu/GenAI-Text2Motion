@@ -83,7 +83,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Probe true training memory peak.")
     p.add_argument("--config", required=True)
     p.add_argument("--backbone", default="transformer", choices=["transformer", "mamba"])
-    p.add_argument("--tokenizer_ckpt", default="checkpoints/tokenizer/fsq_g8_v1024.pt")
+    p.add_argument("--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt")
     p.add_argument("--batch", type=int, default=1)
     run(p.parse_args())
 

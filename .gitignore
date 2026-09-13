@@ -1,9 +1,8 @@
 # data & licensed assets -- never commit (290 GB donor corpus, SMPL-X bodies).
 # Root-anchored: the unanchored `data/` silently ignored src/text2motion/data/ (found 2026-06-10).
 /data/
-/checkpoints/
 /graphify-out/
-/outputs/
+/artifacts/
 *.zip
 *.npz
 *.pkl
@@ -28,6 +27,7 @@ __pycache__/
 
 # Claude Code tooling -- local only (agents, skills, ADRs, hooks, settings)
 .claude/
+CLAUDE.md/
 
 # editor
 .vscode/
@@ -59,3 +59,5 @@ infra/azure/*.tfstate.*
 infra/azure/terraform.tfvars
 infra/azure/.terraform.lock.hcl
 .ropeproject/
+CLAUDE.md
+.claude/hooks/.graph_last

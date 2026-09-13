@@ -9,9 +9,9 @@ data:
   min_motion_len: 40
 
 paths:
-  eval_matcher: data/official_evaluator/extracted/t2m/text_mot_match/model/finest.tar
+  eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
   eval_stats_dir: data/eval_stats
   hml3d_out_dir: data/HumanML3D_official
   texts_dir: data/HumanML3D_official/texts
-  checkpoints_dir: checkpoints
-  outputs_dir: outputs
+  checkpoints_dir: artifacts/checkpoints
+  outputs_dir: artifacts/outputs

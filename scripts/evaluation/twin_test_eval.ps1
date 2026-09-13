@@ -13,9 +13,9 @@ $env:PYTORCH_CUDA_ALLOC_CONF = "max_split_size_mb:64"
 $py = ".\.venv\Scripts\python.exe"
 
 $config = "configs/generator/gen_pilot_fsq8x1024.yaml"
-$tok = "checkpoints/tokenizer/fsq_g8_v1024.pt"
-$transformerCkpt = "checkpoints/generator/generator_transformer_bs8.pt"
-$mambaCkpt = "checkpoints/generator/generator_mamba_bs8.pt"
+$tok = "artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
+$transformerCkpt = "artifacts/checkpoints/generator/generator_transformer_bs8.pt"
+$mambaCkpt = "artifacts/checkpoints/generator/generator_mamba_bs8.pt"
 
 function Get-GpuFreeMiB {
     $used = (nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits) | Select-Object -First 1
@@ -28,7 +28,7 @@ if (-not $NoWait) {
     while ($true) {
         Start-Sleep -Seconds 120
         $mib = Get-GpuFreeMiB
-        $chainFresh = (Test-Path outputs/CHAIN_DONE.txt) -and ((Get-Item outputs/CHAIN_DONE.txt).LastWriteTime -ge $start)
+        $chainFresh = (Test-Path artifacts/outputs/CHAIN_DONE.txt) -and ((Get-Item artifacts/outputs/CHAIN_DONE.txt).LastWriteTime -ge $start)
         if ($mib -lt 1500 -and (Test-Path $mambaCkpt)) {
             Write-Output "GPU free (${mib} MiB) + mamba ckpt present -> starting eval $(Get-Date -Format u)"
             break
@@ -53,10 +53,10 @@ function Invoke-Eval([string]$backbone, [string]$ckpt) {
     & $py -u -m text2motion.app.cli evaluate `
         --config $config --backbone $backbone --ckpt $ckpt --tokenizer_ckpt $tok `
         --split test --cfg_scale 6.0 --temperature 1.0 --length_mode fixed `
-        --mm_clips 100 --mm_repeats 30 *>&1 | Tee-Object "outputs/twin_test_$backbone.log"
+        --mm_clips 100 --mm_repeats 30 *>&1 | Tee-Object "artifacts/outputs/twin_test_$backbone.log"
 }
 
 Invoke-Eval "transformer" $transformerCkpt
 Invoke-Eval "mamba" $mambaCkpt
 Write-Output "`n=== TWIN TEST EVAL DONE  $(Get-Date -Format u) ==="
-"done $(Get-Date -Format u)" | Out-File outputs/TWIN_TEST_DONE.txt -Encoding utf8
+"done $(Get-Date -Format u)" | Out-File artifacts/outputs/TWIN_TEST_DONE.txt -Encoding utf8

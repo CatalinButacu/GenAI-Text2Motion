@@ -188,7 +188,7 @@ Stage the 4.66 GB listed by `make_bundle.sh` into one Blob container in the VM's
 preserving paths.
 
 Spot eviction and Kaggle's 9-hour session cap are the same problem with the same fix:
-`--resume` is epoch-granular and reads `checkpoints/<stem>_last.pt`, which `train_generator`
+`--resume` is epoch-granular and reads `artifacts/checkpoints/<stem>_last.pt`, which `train_generator`
 writes **every epoch unconditionally** (`generation/trainer.py:389`) with generator + text
 encoder + optimizer + EMA + scheduler + epoch + best_fid. Sync that file to Blob each epoch and
 an eviction costs at most one epoch.
@@ -199,7 +199,7 @@ loud on any edit), and the *best* weights live only in the separate bundle at `c
 — carry both files.
 
 Keep the watchdog as well as auto-shutdown. `train-generator` writes
-`outputs/runs/<stamp>_generator_<bb>/heartbeat` every 100 steps, but `train-tokenizer` and
+`artifacts/outputs/runs/<stamp>_generator_<bb>/heartbeat` every 100 steps, but `train-tokenizer` and
 `pretrain` write no heartbeat — for those, watch the run dir's newest file with a 45 min stale
 window, as `scripts/training/run_3day_local.ps1` already does.
 

@@ -1,15 +1,15 @@
 defaults:
   config: configs/generator/gen_pilot_fsq8x1024.yaml
-  tokenizer_ckpt: checkpoints/tokenizer/fsq_g8_v1024.pt
+  tokenizer_ckpt: artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt
 
 models:
   - name: mamba
     version: "2026-07-04"
-    ckpt: checkpoints/generator/generator_mamba_bs8_last.pt
+    ckpt: artifacts/checkpoints/generator/generator_mamba_bs8_last.pt
   - name: transformer
     version: "2026-07-28-bs8"
-    ckpt: checkpoints/generator/generator_transformer_bs8_enc_last.pt
+    ckpt: artifacts/checkpoints/generator/generator_transformer_bs8_enc_last.pt
   - name: transformer
     version: "2026-07-28-prefix16"
     config: configs/generator/gen_34m_prefix16.yaml
-    ckpt: checkpoints/generator/generator_transformer_34m_prefix16_last.pt
+    ckpt: artifacts/checkpoints/generator/generator_transformer_34m_prefix16_last.pt
