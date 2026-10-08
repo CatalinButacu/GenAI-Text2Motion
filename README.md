@@ -7,9 +7,9 @@ generating.
 Master's thesis, built from scratch: motion tokenizer, generator, training pipeline, evaluation
 harness, and a live viewer fed by the streaming decoder.
 
-<!-- DEMO: drop the aitviewer screen capture here (type a caption -> avatar moves live). -->
+---
 
-## Why prediction
+## 01 PROBLEM
 
 Most text-to-motion systems generate offline. A diffusion model sees the entire horizon and refines it
 until it looks right; that is a legitimate way to get a beautiful clip, and it is also a way of never
@@ -24,7 +24,7 @@ to be honest about what you lose. It is also the constraint that a robot control
 codec, and a live avatar all actually live under — the offline setting is the special case, not the
 general one.
 
-## What is new here
+### The gap
 
 Text-to-motion is a crowded field. Two cells in it are not occupied, and this thesis sits in both.
 
@@ -41,7 +41,34 @@ The claim is deliberately on the **efficiency axis**, not the quality axis:
 
 > a bounded recurrent state matches a growing KV-cache in generation quality, at matched budget.
 
-## Results
+## 02 DEMO
+
+<!-- TODO: drop the aitviewer screen capture here (type a caption -> avatar moves live). -->
+> 🎬 *Demo capture coming soon.*
+
+Run the live studio yourself (see [Setup](#04-setup) first):
+
+```bash
+text2motion studio --config configs/generator/final100m_fsq8x1024.yaml
+```
+
+## 03 FEATURES
+
+- **Training under a hard compute ceiling** — everything here was trained on a 4 GB GPU, with
+  gradient accumulation, watchdog-guarded runs, and full resume state so a stalled job costs one epoch
+  rather than the run.
+- **Discrete-latent modeling** — quantizer design, codebook utilization, reconstruction-vs-downstream
+  trade-offs. The same machinery behind any tokenized generative system.
+- **Evaluation discipline** — a frozen third-party evaluator (Guo et al.) reused unmodified so FID
+  stays comparable to the published field; model selection on validation only; the test split scored
+  once per final table.
+- **Ablation hygiene** — confounded comparisons are labeled as confounded and decomposed with
+  parameter-identical control cells, rather than reported as the flattering interpretation.
+- **Streaming inference** — a bounded-memory decode loop with a *measured* decoder receptive field
+  ($\pm 4$ latent tokens $= \pm 0.8$ s), a `stream == batch` numerical parity test proving the
+  evaluated model is the streamed model, and a live viewer consuming it.
+
+### Results
 
 **The mechanism — streaming state vs. horizon** (both 100M twins, single stream, CUDA):
 
@@ -84,23 +111,7 @@ epochs.
 Every number above traces to a run directory under `outputs/runs/` with a manifest recording config,
 git commit, seed, and library versions.
 
-## What this project demonstrates
-
-- **Training under a hard compute ceiling** — everything here was trained on a 4 GB GPU, with
-  gradient accumulation, watchdog-guarded runs, and full resume state so a stalled job costs one epoch
-  rather than the run.
-- **Discrete-latent modeling** — quantizer design, codebook utilization, reconstruction-vs-downstream
-  trade-offs. The same machinery behind any tokenized generative system.
-- **Evaluation discipline** — a frozen third-party evaluator (Guo et al.) reused unmodified so FID
-  stays comparable to the published field; model selection on validation only; the test split scored
-  once per final table.
-- **Ablation hygiene** — confounded comparisons are labeled as confounded and decomposed with
-  parameter-identical control cells, rather than reported as the flattering interpretation.
-- **Streaming inference** — a bounded-memory decode loop with a *measured* decoder receptive field
-  ($\pm 4$ latent tokens $= \pm 0.8$ s), a `stream == batch` numerical parity test proving the
-  evaluated model is the streamed model, and a live viewer consuming it.
-
-## Layout
+### Architecture
 
 The package is organised by pipeline stage, and dependencies point strictly inward
 (`app -> studio/streaming/evaluation -> generation -> tokenization -> motion`):
@@ -127,7 +138,16 @@ Each stage exchanges named domain objects (`MotionClip`, `MotionTokens`, `Motion
 Object construction happens in `app.bootstrap.ApplicationContext`, created by
 `ApplicationBootstrap`.
 
-## Setup
+### Limitations
+
+- Pilot scale (34M) — absolute FID is well above published 100M-class systems.
+- Most ablation cells are single-seed; no variance bars outside the main twin table.
+- Mamba runs in eager mode on the test machine, so reported latency is a lower bound on its advantage.
+- Whole-body SMPL-X (hands, face) is staged behind the body-only 263 track used for citable FID.
+
+## 04 SETUP
+
+### Install
 
 ```bash
 uv sync                  # core
@@ -136,7 +156,10 @@ uv sync --extra dev      # ruff + pytest
 pytest                   # shape and parity contracts
 ```
 
-## Running
+Datasets and SMPL-X body models are license-gated and are not distributed here; paths are configured
+in `configs/`.
+
+### Run
 
 Every stage is a subcommand of one entry point (`python -m text2motion.app.cli <command>`, or
 `text2motion <command>` once installed):
@@ -156,19 +179,9 @@ text2motion serve            --config configs/generator/final100m_fsq8x1024.yaml
 text2motion studio           --config configs/generator/final100m_fsq8x1024.yaml
 ```
 
-## Containers
+### Containers
 
 The repository includes a multi-stage non-root image and Compose profiles for development tests,
 GPU inference, evaluation, benchmarks, and explicit one-shot training. Datasets and checkpoints are
 mounted at runtime rather than copied into images. See [DOCKER.md](DOCKER.md) for the filesystem,
 environment, GPU, health-check, and operational contracts.
-
-Datasets and SMPL-X body models are license-gated and are not distributed here; paths are configured
-in `configs/`.
-
-## Limitations
-
-- Pilot scale (34M) — absolute FID is well above published 100M-class systems.
-- Most ablation cells are single-seed; no variance bars outside the main twin table.
-- Mamba runs in eager mode on the test machine, so reported latency is a lower bound on its advantage.
-- Whole-body SMPL-X (hands, face) is staged behind the body-only 263 track used for citable FID.
