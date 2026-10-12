@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,8 @@ from text2motion.generation.contracts import (
 )
 from text2motion.generation.model import GeneratorModelSpec, token_ce_loss
 from text2motion.generation.trainer import adamw_groups, warmup_cosine_factor
+
+logger = logging.getLogger(__name__)
 
 _MetricSink = Callable[[dict[str, object]], None]
 
@@ -151,7 +154,7 @@ def pretrain_generator(
     seed: int = 2026,
 ) -> None:
     loader, val_loader, budget = build_token_loaders(request, seed)
-    print(
+    logger.info(
         f"pretrain split by clip: {len(loader.dataset)} train windows, "
         f"{0 if val_loader is None else len(val_loader.dataset)} val windows"
     )
@@ -170,7 +173,7 @@ def pretrain_generator(
     resume_path = out_path.with_name(out_path.stem + "_last.pt")
 
     amp_on = train.amp == MixedPrecisionMode.BF16 and device == "cuda"
-    print(
+    logger.info(
         f"segments {len(loader.dataset)}  examples/epoch {budget.consumed_examples}  "
         f"microbatches/epoch {budget.microbatches}  "
         f"optimizer_steps/epoch {budget.optimizer_steps}  "
@@ -184,7 +187,7 @@ def pretrain_generator(
         generator.load_state_dict(state["generator"])
         opt.load_state_dict(state["optimizer"])
         step, start_epoch = state["step"], state["epoch"] + 1
-        print(f"resumed pretrain from {resume_path} at epoch {start_epoch} (step {step})")
+        logger.info(f"resumed pretrain from {resume_path} at epoch {start_epoch} (step {step})")
 
     def null_condition(batch_size: int) -> torch.Tensor:
         return torch.zeros(
@@ -248,7 +251,7 @@ def pretrain_generator(
             line += f"  val_ce {record['val_ce']:.4f}  gap {record['gap']:+.4f}"
 
         on_metrics(record)
-        print(line)
+        logger.info(line)
         torch.save(generator.state_dict(), out_path)
         torch.save(
             {
@@ -265,4 +268,4 @@ def pretrain_generator(
     out_path.with_suffix(out_path.suffix + ".done").write_text(
         f"epochs {request.epochs}", encoding="utf-8"
     )
-    print(f"saved pretrained init -> {out_path}")
+    logger.info(f"saved pretrained init -> {out_path}")

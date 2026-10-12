@@ -23,4 +23,4 @@ tokenizer:
   n_resblocks: 3
 generator:
   use_end_token: true
-  use_kernel: true
+  use_kernel: false

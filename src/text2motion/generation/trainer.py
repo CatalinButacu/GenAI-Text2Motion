@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import math
+import time
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -28,6 +30,8 @@ from text2motion.motion.kinematics import Skeleton
 from text2motion.motion.representation import KINEMATIC_CHAINS, RAW_OFFSETS
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.model import MotionTokenizerNetwork
+
+logger = logging.getLogger(__name__)
 
 _NO_DECAY_SUFFIXES = ("a_log", "d_skip")
 _NORM_TYPES = (nn.LayerNorm, nn.GroupNorm, nn.BatchNorm1d)
@@ -60,7 +64,7 @@ class ParameterPartition:
             raise RuntimeError("optimizer parameter partitions do not cover trainable parameters")
 
 
-def _undecayed_parameter_ids(module: nn.Module) -> set[int]:
+def __undecayed_parameter_ids(module: nn.Module) -> set[int]:
     ids: set[int] = set()
     for submodule in module.modules():
         if isinstance(submodule, (nn.Embedding, *_NORM_TYPES)):
@@ -74,7 +78,7 @@ def partition_parameters(
     module: nn.Module, only: list[nn.Parameter] | None = None
 ) -> ParameterPartition:
     allowed = None if only is None else {id(parameter) for parameter in only}
-    exempt = _undecayed_parameter_ids(module)
+    exempt = __undecayed_parameter_ids(module)
     decay: list[nn.Parameter] = []
     no_decay: list[nn.Parameter] = []
     for name, parameter in module.named_parameters():
@@ -155,10 +159,10 @@ class GeneratorTrainer:
             self._clip_params += list(self.weighter.parameters())
 
         self._mean = self._std = self._skeleton = None
-        if training_config.loss_weights.fk_enabled:
+        if training_config.loss_weights.needs_positions:
             if mean is None or std is None:
                 raise ValueError(
-                    "FK-consistency loss needs mean/std (pass them to GeneratorTrainer)"
+                    "FK-consistency and dynamics losses need mean/std (pass them to GeneratorTrainer)"
                 )
             device = next(token_generator.parameters()).device
             self._mean = torch.from_numpy(np.asarray(mean, dtype=np.float32)).to(device)
@@ -195,7 +199,7 @@ class GeneratorTrainer:
         ).float()
         return text_emb * keep
 
-    def _append_end_targets(
+    def append_end_targets(
         self, target_tokens: torch.Tensor, lengths: torch.Tensor | None
     ) -> tuple[torch.Tensor, torch.Tensor]:
         batch, t_tokens, _ = target_tokens.shape
@@ -227,7 +231,7 @@ class GeneratorTrainer:
 
         token_lengths = None
         if self.token_generator.end_id is not None:
-            target_tokens, token_lengths = self._append_end_targets(target_tokens, lengths)
+            target_tokens, token_lengths = self.append_end_targets(target_tokens, lengths)
 
         input_tokens = target_tokens
         if self.training_config.pkeep < 1.0:
@@ -345,29 +349,47 @@ def train_generator(
     stale_evaluations = 0
     heartbeat = None if run_dir is None else Path(run_dir) / "heartbeat"
 
+    if request.fresh_selection and not resume_path.is_file():
+        raise FileNotFoundError(
+            f"--fresh_selection fine-tunes from {resume_path}, which does not exist; "
+            "copy the source run's *_last.pt there first"
+        )
     if request.resume and resume_path.is_file():
         state = torch.load(resume_path, map_location="cpu")
         start_epoch, best_fid, stale_evaluations = trainer.load_resume_state(state, device)
+        if request.fresh_selection:
+            logger.info(
+                f"fresh selection: ignoring inherited best FID {best_fid:.4f} from the resumed run"
+            )
+            best_fid = float("inf")
+            stale_evaluations = 0
         del state
         if device == "cuda":
             torch.cuda.empty_cache()
-        print(f"resumed from {resume_path} at epoch {start_epoch} (best FID {best_fid:.4f})")
+        logger.info(f"resumed from {resume_path} at epoch {start_epoch} (best FID {best_fid:.4f})")
 
     for epoch in range(start_epoch, request.epochs):
         loader.dataset.set_epoch(epoch)
+        epoch_started = time.perf_counter()
         means = trainer.train_epoch(loader, device, heartbeat=heartbeat)
-        on_metrics({"epoch": epoch + 1, **means})
-        print(
-            f"epoch {epoch + 1:3d}  ce {means['ce']:.4f}  ric {means['ric']:.4f}  "
-            f"rot6d {means['rot6d']:.4f}  foot {means['foot']:.4f}  total {means['total']:.4f}"
+        epoch_minutes = (time.perf_counter() - epoch_started) / 60
+        learning_rate = trainer.optimizer.param_groups[0]["lr"]
+        on_metrics(
+            {"epoch": epoch + 1, **means, "lr": learning_rate, "epoch_minutes": epoch_minutes}
         )
+        logger.info(
+            f"epoch {epoch + 1:3d}/{request.epochs}  ce {means['ce']:.4f}  "
+            f"ric {means['ric']:.4f}  rot6d {means['rot6d']:.4f}  foot {means['foot']:.4f}  "
+            f"total {means['total']:.4f}  lr {learning_rate:.2e}  {epoch_minutes:.1f} min"
+        )
+        logger.debug(f"epoch {epoch + 1} all loss terms {means}")
 
         due = (epoch + 1) % request.eval_every == 0 or epoch + 1 == request.epochs
         if due:
             with trainer.ema_weights():
                 metrics = evaluate(request.eval_split)
             on_metrics({"epoch": epoch + 1, "split": request.eval_split.value, **metrics})
-            print(
+            logger.info(
                 f"  [gen-eval:{request.eval_split.value}] clips {metrics['clips']}  "
                 f"FID {metrics['fid']:.4f}  R@1 {metrics['r_top1']:.3f}  "
                 f"R@3 {metrics['r_top3']:.3f}  MM {metrics['mm_dist']:.3f}  "
@@ -387,7 +409,7 @@ def train_generator(
             torch.cuda.empty_cache()
 
         if request.patience and stale_evaluations >= request.patience:
-            print(
+            logger.info(
                 f"early stop at epoch {epoch + 1}: {stale_evaluations} consecutive evaluations "
                 f"without improving val FID {best_fid:.4f} (patience {request.patience})"
             )
@@ -453,7 +475,7 @@ def overfit_single_batch(
         )
         generator.train()
         text_encoder.train()
-        print(
+        logger.info(
             f"step {step + 1:4d} total {parts['total']:.5f} ce {ce:.5f} token_accuracy {accuracy:.4f}"
         )
         if criteria.accepts(accuracy, ce, parts["total"] / first_total):

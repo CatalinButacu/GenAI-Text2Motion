@@ -25,9 +25,9 @@ class CLIPTextEncoder(nn.Module):
                 f"(set GeneratorConfig.d_text and TextEncoderConfig.out_dim to {proj_dim})"
             )
 
-        self._freeze_except_last(cfg.unfreeze_last_n, cfg.unfreeze_projection)
+        self.__freeze_except_last(cfg.unfreeze_last_n, cfg.unfreeze_projection)
 
-    def _freeze_except_last(self, unfreeze_last_n: int, unfreeze_projection: bool) -> None:
+    def __freeze_except_last(self, unfreeze_last_n: int, unfreeze_projection: bool) -> None:
         for p in self.model.parameters():
             p.requires_grad_(False)
 
