@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import torch
 
 from text2motion.app.checkpoint import load_generator_checkpoint
-from text2motion.app.config import ApplicationConfig
+from text2motion.app.config import ApplicationConfig, MotionServiceConfig
 from text2motion.app.config_loader import load_config
+from text2motion.app.logging_setup import ensure_logging_configured
 from text2motion.app.runtime import apply_precision, resolve_device, seed_everything
 from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
 from text2motion.evaluation.matcher import GuoEvaluationResources
@@ -20,7 +22,7 @@ from text2motion.motion.datamodule import MotionDataModule
 from text2motion.tokenization.model import MotionTokenizer, build_tokenizer_network
 
 
-def _required_path(value: Path | None, key: str) -> Path:
+def required_path(value: Path | None, key: str) -> Path:
     if value is None:
         raise ValueError(f"paths.{key} must be set in the config")
     return value
@@ -132,7 +134,7 @@ class ApplicationContext:
                 "and R-precision are defined by the frozen Guo et al. evaluator (ADR 0001)."
             )
         return GuoEvaluationResources.from_frozen_guo_assets(
-            motion_dataset_dir=_required_path(path_config.hml3d_out_dir, "hml3d_out_dir"),
+            motion_dataset_dir=required_path(path_config.hml3d_out_dir, "hml3d_out_dir"),
             eval_stats_dir=path_config.eval_stats_dir,
             eval_matcher=path_config.eval_matcher,
             vocab_dir=Path(vocab_dir) if vocab_dir else path_config.our_vab_dir,
@@ -152,7 +154,7 @@ class ApplicationContext:
     def create_hml3d_preparation_request(self) -> PreparationRequest:
         path_config = self.config.paths
         return PreparationRequest(
-            out_dir=_required_path(path_config.hml3d_out_dir, "hml3d_out_dir"),
+            out_dir=required_path(path_config.hml3d_out_dir, "hml3d_out_dir"),
             amass_dir=path_config.amass_dir,
             smplx_models=path_config.smplx_models,
             index_csv=path_config.hml3d_index_csv,
@@ -169,6 +171,20 @@ class ApplicationContext:
     def with_config(self, config_path: str | Path) -> ApplicationContext:
         return ApplicationBootstrap.from_config(config_path, device=self.device)
 
+    def with_service(self, service: MotionServiceConfig) -> ApplicationContext:
+        return replace(self, config=replace(self.config, service=service))
+
+    def with_service_file(self, service_config: str | Path) -> ApplicationContext:
+        from text2motion.app.schema import load_dataclass
+
+        path = Path(service_config)
+        if not path.is_file():
+            raise FileNotFoundError(f"service config {path} not found (pass --service_config)")
+        return self.with_service(load_dataclass(MotionServiceConfig, path))
+
+
+logger = logging.getLogger(__name__)
+
 
 class ApplicationBootstrap:
     @classmethod
@@ -178,11 +194,18 @@ class ApplicationBootstrap:
         device: str | None = None,
         seed: int | None = None,
     ) -> ApplicationContext:
+        ensure_logging_configured()
         config = load_config(config_path)
-        seed_everything(config.seed if seed is None else seed, config.deterministic)
+        resolved_seed = config.seed if seed is None else seed
+        seed_everything(resolved_seed, config.deterministic)
         apply_precision(config.precision)
+        resolved_device = resolve_device(config.device, device)
+        logger.info(
+            f"config {config_path}  device {resolved_device}  seed {resolved_seed}  "
+            f"deterministic {config.deterministic}  precision {config.precision.value}"
+        )
         return ApplicationContext(
             config=config,
-            device=resolve_device(config.device, device),
+            device=resolved_device,
             config_path=Path(config_path),
         )
