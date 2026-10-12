@@ -6,8 +6,9 @@ from pathlib import Path
 from typing import NamedTuple
 
 import torch
+from pydantic import Field
 
-from text2motion.motion.contracts import MotionDataConfig
+from text2motion.motion.contracts import CommandRequest, CorpusLayout, MotionDataConfig
 from text2motion.motion.representation import DIM
 
 DROPPED_CODE = -1
@@ -77,3 +78,66 @@ class TokenPackRequest:
     out_path: Path
     segment_frames: int = _MOTION_FRAMES
     stride: int = _MOTION_FRAMES
+
+
+class TokenizeRequest(CommandRequest):
+    features_dir: Path = Field(
+        default=CorpusLayout().amass_features_dir,
+        description="folder of 263-feature clips to encode",
+    )
+    tokenizer_ckpt: Path | None = Field(
+        default=None,
+        description="frozen tokenizer checkpoint; default from the config",
+    )
+    token_pack: Path = Field(
+        default=CorpusLayout().amass_token_pack,
+        description="output .npz file of tokens; pretraining reads this file",
+    )
+    segment_frames: int = Field(
+        default=_MOTION_FRAMES,
+        description="window length in frames; clips shorter than one window are not encoded",
+    )
+    stride: int = Field(
+        default=_MOTION_FRAMES,
+        description="step between windows; a smaller stride gives more, overlapping windows",
+    )
+
+
+class TrainTokenizerRequest(CommandRequest):
+    tokenizer: TokenizerKind = Field(
+        description="quantizer family: fsq has no learned codebook, rvq is the baseline"
+    )
+    epochs: int = Field(
+        default=TokenizerTrainingRequest().epochs, description="passes over the training set"
+    )
+    window: int = Field(
+        default=TokenizerTrainingRequest().window,
+        description="training crop in frames; a longer crop gives more context and uses more memory",
+    )
+    batch_size: int = Field(
+        default=TokenizerTrainingRequest().batch_size,
+        description="clips per step; limited by GPU memory",
+    )
+    ema_decay: float = Field(
+        default=TokenizerTrainingRequest().ema_decay,
+        description="decay of the averaged weights that are evaluated; higher is smoother and slower",
+    )
+    eval_every: int = Field(
+        default=TokenizerTrainingRequest().eval_every,
+        description="epochs between reconstruction evaluations",
+    )
+    max_eval_clips: int | None = Field(
+        default=TokenizerTrainingRequest().max_eval_clips,
+        description="cap on evaluation clips; a low cap is faster and gives a noisier FID",
+    )
+    num_workers: int = Field(
+        default=TokenizerTrainingRequest().num_workers,
+        description="data loader processes; 0 loads in the training process and needs the least RAM",
+    )
+    ckpt_name: str | None = Field(
+        default=None,
+        description="checkpoint file name inside the checkpoint folder; also names the run",
+    )
+    resume: bool = Field(
+        default=False, description="continue from the saved state of this checkpoint"
+    )
