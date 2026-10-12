@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
 from typing import Any
@@ -14,6 +15,7 @@ from text2motion.generation.contracts import (
     GeneratorConfig,
 )
 from text2motion.generation.contracts import BackboneChoice as BackboneChoice
+from text2motion.generation.scan_kernel import selective_scan_function
 
 
 class RMSNorm(nn.Module):
@@ -26,7 +28,7 @@ class RMSNorm(nn.Module):
         return F.rms_norm(x, self.weight.shape, self.weight, self.eps)
 
 
-def _parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+def parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     length = a.size(1)
     shift = 1
     while shift < length:
@@ -113,9 +115,7 @@ class MambaMixer(nn.Module):
         )
 
         if self.use_kernel:
-            from mamba_ssm.ops.selective_scan_interface import selective_scan_fn
-
-            y = selective_scan_fn(
+            y = selective_scan_function()(
                 x_c.transpose(1, 2).contiguous(),
                 self.dt_proj(dt_raw).transpose(1, 2).contiguous(),
                 a,
@@ -130,7 +130,7 @@ class MambaMixer(nn.Module):
         da = torch.exp(dt.unsqueeze(-1) * a)
         dbx = (dt * x_c).unsqueeze(-1) * b.unsqueeze(2)
 
-        ssm = _parallel_scan(da, dbx)
+        ssm = parallel_scan(da, dbx)
         y = (ssm * c.unsqueeze(2)).sum(-1) + self.d_skip * x_c
         return self.out_proj(y * F.silu(z))
 
@@ -293,7 +293,31 @@ class MotionTokenGenerator(nn.Module):
             [nn.Linear(cfg.d_model, vocab) for _ in range(cfg.num_codebooks)]
         )
         self.emb_drop = nn.Dropout(cfg.dropout)
-        self.backbone = _instantiate_backbone(cfg)
+        self.backbone = instantiate_backbone(cfg)
+        self.captured_steps: dict[int, CapturedDecodeStep] | None = None
+
+    def enable_cuda_graph_decode(self) -> None:
+        if not isinstance(self.backbone, MambaBackbone):
+            raise ValueError(
+                f"cuda-graph decode needs the fixed-size recurrent state of the mamba backbone, "
+                f"got {type(self.backbone).__name__}; set service.cuda_graph_decode: false"
+            )
+        device = next(self.parameters()).device
+        if device.type != "cuda":
+            raise ValueError(
+                f"cuda-graph decode needs a cuda device, the generator is on {device}; "
+                "set service.cuda_graph_decode: false"
+            )
+        self.captured_steps = {}
+
+    def decode_step_for(self, state: list, batch: int):
+        if self.captured_steps is None:
+            return EagerDecodeStep(self, state)
+        if batch not in self.captured_steps:
+            self.captured_steps[batch] = CapturedDecodeStep(self, batch)
+        captured = self.captured_steps[batch]
+        captured.load_state(state)
+        return captured
 
     def embed_motion_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
         out = self.token_emb[0](tokens[..., 0])
@@ -323,15 +347,30 @@ class MotionTokenGenerator(nn.Module):
         h = self.backbone(self.emb_drop(seq_in))[:, prefix.size(1) - 1 :]
         return self.predict_token_logits(h)
 
-    def _check_stream_budget(self, steps: int, prefix_len: int, uniforms) -> None:
+    def check_stream_budget(
+        self, steps: int, prefix_len: int, uniforms, anchor_every: int = 0, anchor_context: int = 0
+    ) -> None:
         if steps < 0:
             raise ValueError(f"steps must be >= 0 (0 means unbounded), got {steps}")
         if steps == 0 and uniforms is not None:
             raise ValueError("unbounded streaming cannot consume a fixed uniforms tensor")
+        if anchor_every < 0 or anchor_context < 0:
+            raise ValueError(
+                f"anchor_every ({anchor_every}) and anchor_context ({anchor_context}) must be >= 0"
+            )
         limit = getattr(self.backbone, "max_positions", None)
         if limit is None:
             return
         available = limit - prefix_len
+        if anchor_every:
+            deepest = anchor_context + anchor_every
+            if deepest > available:
+                raise ValueError(
+                    f"re-anchoring every {anchor_every} tokens over a {anchor_context}-token "
+                    f"context reaches position {prefix_len + deepest}, but "
+                    f"{type(self.backbone).__name__} has {limit} learned positions"
+                )
+            return
         if steps == 0:
             raise RuntimeError(
                 f"{type(self.backbone).__name__} cannot stream unboundedly: it has "
@@ -355,23 +394,39 @@ class MotionTokenGenerator(nn.Module):
         cfg_scale: float = 1.0,
         stop_at_end: bool = False,
         uniforms: torch.Tensor | None = None,
+        anchor_every: int = 0,
+        anchor_context: int = 16,
     ):
         device = text_emb.device
         guided = cfg_scale != 1.0
         if guided:
             text_emb = torch.cat([text_emb, torch.zeros_like(text_emb)], dim=0)
         prefix = self.project_text_prefix(text_emb)
-        self._check_stream_budget(steps, prefix.size(1), uniforms)
-        if hasattr(self.backbone, "prefill"):
-            h, state = self.backbone.prefill(prefix)
-        else:
-            state = self.backbone.init_state(text_emb.size(0), device)
+        batch = text_emb.size(0)
+        self.check_stream_budget(
+            steps, prefix.size(1), uniforms, anchor_every, anchor_context if anchor_every else 0
+        )
+
+        def start_from(context: list[torch.Tensor]):
+            if hasattr(self.backbone, "prefill"):
+                embedded = [self.embed_motion_tokens(feed) for feed in context]
+                sequence = torch.cat([prefix, *[e.unsqueeze(1) for e in embedded]], dim=1)
+                h, state = self.backbone.prefill(sequence)
+                return self.predict_token_logits(h), self.decode_step_for(state, batch)
+            state = self.backbone.init_state(batch, device)
             for position in range(prefix.size(1)):
                 h, state = self.backbone.step(prefix[:, position], state)
+            step = self.decode_step_for(state, batch)
+            logits = self.predict_token_logits(h)
+            for feed in context:
+                logits = step(feed)
+            return logits, step
 
+        recent: deque[torch.Tensor] = deque(maxlen=anchor_context if anchor_every else 0)
+        logits, decode_step = start_from([])
+        since_anchor = 0
         index = 0
         while steps == 0 or index < steps:
-            logits = self.predict_token_logits(h)
             if guided:
                 cond, uncond = logits.chunk(2, dim=0)
                 logits = uncond + cfg_scale * (cond - uncond)
@@ -382,9 +437,65 @@ class MotionTokenGenerator(nn.Module):
             if self.end_id is not None and stop_at_end and (tokens == self.end_id).any(-1).all():
                 return
             yield tokens
-            feed = torch.cat([tokens, tokens], dim=0) if guided else tokens
-            h, state = self.backbone.step(self.embed_motion_tokens(feed), state)
             index += 1
+            if steps != 0 and index >= steps:
+                return
+            feed = torch.cat([tokens, tokens], dim=0) if guided else tokens
+            if not anchor_every:
+                logits = decode_step(feed)
+                continue
+            recent.append(feed)
+            since_anchor += 1
+            if since_anchor < anchor_every:
+                logits = decode_step(feed)
+                continue
+            logits, decode_step = start_from(list(recent))
+            since_anchor = 0
+
+
+class EagerDecodeStep:
+    def __init__(self, model: MotionTokenGenerator, state: list) -> None:
+        self.model = model
+        self.state = state
+
+    def __call__(self, feed: torch.Tensor) -> torch.Tensor:
+        embedded = self.model.embed_motion_tokens(feed)
+        h, self.state = self.model.backbone.step(embedded, self.state)
+        return self.model.predict_token_logits(h)
+
+
+class CapturedDecodeStep:
+    warmup_steps = 3
+
+    def __init__(self, model: MotionTokenGenerator, batch: int) -> None:
+        device = next(model.parameters()).device
+        codebooks = model.cfg.num_codebooks
+        self.tokens = torch.zeros(batch, codebooks, dtype=torch.long, device=device)
+        self.state = model.backbone.init_state(batch, device)
+        side_stream = torch.cuda.Stream(device)
+        side_stream.wait_stream(torch.cuda.current_stream(device))
+        with torch.cuda.stream(side_stream):
+            for _ in range(self.warmup_steps):
+                EagerDecodeStep(model, list(self.state))(self.tokens)
+        torch.cuda.current_stream(device).wait_stream(side_stream)
+        self.graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self.graph):
+            embedded = model.embed_motion_tokens(self.tokens)
+            h, next_state = model.backbone.step(embedded, list(self.state))
+            for (ssm, conv), (next_ssm, next_conv) in zip(self.state, next_state):
+                ssm.copy_(next_ssm)
+                conv.copy_(next_conv)
+            self.logits = model.predict_token_logits(h)
+
+    def load_state(self, state: list) -> None:
+        for (ssm, conv), (source_ssm, source_conv) in zip(self.state, state):
+            ssm.copy_(source_ssm)
+            conv.copy_(source_conv)
+
+    def __call__(self, feed: torch.Tensor) -> torch.Tensor:
+        self.tokens.copy_(feed)
+        self.graph.replay()
+        return self.logits
 
 
 _BACKBONE_FACTORIES = {
@@ -393,7 +504,7 @@ _BACKBONE_FACTORIES = {
 }
 
 
-def _instantiate_backbone(cfg: GeneratorConfig) -> nn.Module:
+def instantiate_backbone(cfg: GeneratorConfig) -> nn.Module:
     build = _BACKBONE_FACTORIES.get(Backbone(cfg.backbone))
     if build is None:
         raise ValueError(
