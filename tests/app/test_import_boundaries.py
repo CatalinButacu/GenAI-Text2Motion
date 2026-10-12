@@ -131,9 +131,7 @@ def test_contract_modules_import_only_declarations() -> None:
                 violations.append(f"{path}: imports missing module {module}")
                 continue
             allowed = (
-                OWN_STAGE_CONTRACT_SAFE_ROLES
-                if imported_stage == stage
-                else CONTRACT_SAFE_ROLES
+                OWN_STAGE_CONTRACT_SAFE_ROLES if imported_stage == stage else CONTRACT_SAFE_ROLES
             )
             if role not in allowed:
                 violations.append(
