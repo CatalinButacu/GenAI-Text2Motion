@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import time
 import traceback
 from array import array
@@ -19,6 +20,8 @@ from text2motion.studio.config import StudioConfig
 from text2motion.studio.contracts import MotionInferenceClientPort, ViewerHost
 from text2motion.studio.generation import StudioGenerationController
 from text2motion.studio.scene import StreamSceneUpdater, StudioSession
+
+logger = logging.getLogger(__name__)
 
 _COLOR_SLOTS = {
     "window_background": imgui.COLOR_WINDOW_BACKGROUND,
@@ -75,7 +78,7 @@ class GuiPanels:
         self.host.gui_controls["params"] = self.gui_params
         self.host.gui_controls["prompt"] = self.gui_prompt
 
-    def _rects(self):
+    def __rects(self):
         layout = self.state.config.layout
         w, h = imgui.get_io().display_size
         top = imgui.get_frame_height()
@@ -91,12 +94,12 @@ class GuiPanels:
         prompt = (left_w, h - prompt_h, w - left_w - right_w, prompt_h)
         return editor, env, params, playback, prompt
 
-    def _dock(self, rect) -> None:
+    def __dock(self, rect) -> None:
         x, y, w, h = rect
         imgui.set_next_window_position(x, y, imgui.ALWAYS)
         imgui.set_next_window_size(w, h, imgui.ALWAYS)
 
-    def _apply_style(self) -> None:
+    def __apply_style(self) -> None:
         if self.state.styled:
             return
         self.state.styled = True
@@ -112,33 +115,33 @@ class GuiPanels:
                 )
             style.colors[slot] = rgba
 
-    def _section(self, label: str) -> None:
+    def __section(self, label: str) -> None:
         imgui.spacing()
         imgui.push_style_color(imgui.COLOR_TEXT, *self.state.config.theme.section_label_color)
         imgui.text(label.upper())
         imgui.pop_style_color()
         imgui.separator()
 
-    def _dim_text(self, text: str) -> None:
+    def __dim_text(self, text: str) -> None:
         imgui.push_style_color(imgui.COLOR_TEXT, 0.62, 0.66, 0.74, 1.0)
         imgui.text_wrapped(text)
         imgui.pop_style_color()
 
     def gui_scene(self) -> None:
-        self._apply_style()
-        editor, *_ = self._rects()
-        self._dock(editor)
+        self.__apply_style()
+        editor, *_ = self.__rects()
+        self.__dock(editor)
         expanded, _ = imgui.begin("Scene", False, _WINDOW_FLAGS)
         if expanded:
             self.host.scene.gui_editor(imgui, self.host.viewports, self.host.viewport_mode)
         imgui.end()
 
     def gui_environment(self) -> None:
-        _, env, *_ = self._rects()
-        self._dock(env)
+        _, env, *_ = self.__rects()
+        self.__dock(env)
         imgui.begin("Environment", False, _WINDOW_FLAGS)
 
-        self._section("scene")
+        self.__section("scene")
         changed, color = imgui.color_edit4("background", *self.host.scene.background_color)
         if changed:
             self.host.scene.background_color = color
@@ -157,7 +160,7 @@ class GuiPanels:
             self.host.scene.light_mode = "diffuse"
         _, self.host.shadows_enabled = imgui.checkbox("shadows [S]", self.host.shadows_enabled)
 
-        self._section("lights")
+        self.__section("lights")
         for i, light in enumerate(self.host.scene.lights):
             flags = imgui.TREE_NODE_DEFAULT_OPEN if i == 0 else 0
             if imgui.tree_node(f"light {i + 1}##light{i}", flags):
@@ -178,7 +181,7 @@ class GuiPanels:
                 )
                 imgui.tree_pop()
 
-        self._section("floor & origin")
+        self.__section("floor & origin")
         floor = self.host.scene.floor
         changed, floor.enabled = imgui.checkbox("show floor", floor.enabled)
         if changed:
@@ -195,24 +198,24 @@ class GuiPanels:
         imgui.end()
 
     def gui_params(self) -> None:
-        *_, params, _, _ = self._rects()
-        self._dock(params)
+        *_, params, _, _ = self.__rects()
+        self.__dock(params)
         imgui.begin("Generation", False, _WINDOW_FLAGS)
-        self._model_controls()
-        self._sampling_controls()
-        self._avatar_controls()
-        self._prompt_history()
+        self.__model_controls()
+        self.__sampling_controls()
+        self.__avatar_controls()
+        self.__prompt_history()
         imgui.end()
 
-    def _model_controls(self) -> None:
-        self._section("model")
+    def __model_controls(self) -> None:
+        self.__section("model")
         picked, self.state.model_idx = imgui.combo(
             "model", self.state.model_idx, [e.label for e in self.state.models]
         )
         if picked:
             log_action("select model", self.state.models[self.state.model_idx].key)
         entry = self.state.models[self.state.model_idx]
-        self._dim_text(
+        self.__dim_text(
             f"pinned from training: {entry.backbone} backbone, tokenizer"
             f" {Path(entry.tokenizer_ckpt).stem}, config {Path(entry.config).stem}"
         )
@@ -223,10 +226,10 @@ class GuiPanels:
         if imgui.button("Reload settings + models (R)", width=-1) and not busy:
             log_action("press Reload settings")
             self.host.reload_settings()
-        self._dim_text(self.state.load_status)
+        self.__dim_text(self.state.load_status)
 
-    def _sampling_controls(self) -> None:
-        self._section("sampling")
+    def __sampling_controls(self) -> None:
+        self.__section("sampling")
         _, self.state.temperature = imgui.slider_float(
             "temperature", self.state.temperature, 0.1, 2.0
         )
@@ -239,30 +242,38 @@ class GuiPanels:
                 self.state.steps = 0 if forever else self.state.default_steps
                 log_toggle("run forever", forever)
         if self.state.steps == 0:
-            self._dim_text(
+            self.__dim_text(
                 "unbounded: this recurrent backbone streams until you press stop. "
                 f"The viewer keeps the last {self.state.window_frames} frames."
             )
         else:
             upper = self.state.max_steps or self.state.window_steps
             _, self.state.steps = imgui.slider_int("steps (tokens)", self.state.steps, 8, upper)
-            seconds = self.state.steps * self.state.downsample / self.host.playback_fps
+            seconds = (
+                self.state.steps
+                * self.state.downsample
+                * self.state.upsample
+                / self.host.playback_fps
+            )
             cap = (
                 f"{self.state.max_steps} is the model's position-table hard cap."
                 if self.state.max_steps
                 else "this backbone has no position cap -- tick 'run forever' for unbounded."
             )
             trained_seconds = (
-                self.state.trained_steps * self.state.downsample / self.host.playback_fps
+                self.state.trained_steps
+                * self.state.downsample
+                * self.state.upsample
+                / self.host.playback_fps
             )
-            self._dim_text(
+            self.__dim_text(
                 f"= {self.state.steps * self.state.downsample} frames (~{seconds:.1f}s @"
                 f" {self.host.playback_fps:.0f} fps). Trained at {self.state.trained_steps} steps "
                 f"(~{trained_seconds:.1f}s); much lower looks clipped; {cap}"
             )
 
-    def _avatar_controls(self) -> None:
-        self._section("avatar")
+    def __avatar_controls(self) -> None:
+        self.__section("avatar")
         clicked, self.state.fit_body = imgui.checkbox(
             "avatar skin (SMPL-X body)", self.state.fit_body
         )
@@ -271,13 +282,13 @@ class GuiPanels:
         if clicked and self.state.fit_body and not self.state.model_dir:
             self.state.fit_body = False
         elif clicked:
-            self.avatar._on_fit_body_toggled()
+            self.avatar.on_fit_body_toggled()
         if not self.state.model_dir:
-            self._dim_text("SMPL-X models not found: skeleton only.")
+            self.__dim_text("SMPL-X models not found: skeleton only.")
         for i, name in enumerate(self.state.config.genders):
             if imgui.radio_button(name, self.state.gender_idx == i) and self.state.gender_idx != i:
                 self.state.gender_idx = i
-                self.avatar._on_avatar_changed()
+                self.avatar.on_avatar_changed()
             if i < len(self.state.config.genders) - 1:
                 imgui.same_line()
         changed, col = imgui.color_edit3("skin", *self.state.skin_color[:3])
@@ -286,40 +297,40 @@ class GuiPanels:
             for node in (self.state.nodes.body, self.state.nodes.rest):
                 if node is not None:
                     node.color = self.state.skin_color
-        self._beta_slider(0, "height")
-        self._beta_slider(1, "build")
+        self.__beta_slider(0, "height")
+        self.__beta_slider(1, "build")
         if imgui.collapsing_header("more shape dimensions")[0]:
             for i in range(2, self.state.config.fit.num_betas):
-                self._beta_slider(i, f"shape {i}")
+                self.__beta_slider(i, f"shape {i}")
         half = imgui.get_content_region_available()[0] / 2 - 4
         if imgui.button("reset shape", width=half) and self.state.user_betas.any():
             log_action("press reset shape")
             self.state.user_betas[:] = 0.0
-            self.avatar._on_avatar_changed()
+            self.avatar.on_avatar_changed()
         imgui.same_line()
         if imgui.button("refresh avatar", width=half):
             log_action("press refresh avatar")
-            self.avatar._on_avatar_changed()
+            self.avatar.on_avatar_changed()
         if self.state.smplx_fit.note:
-            self._dim_text(self.state.smplx_fit.note)
+            self.__dim_text(self.state.smplx_fit.note)
 
-    def _prompt_history(self) -> None:
+    def __prompt_history(self) -> None:
         if len(self.state.history) > 0 and imgui.collapsing_header("prompt history")[0]:
             for i, past in enumerate(reversed(self.state.history[-10:])):
                 clicked, _ = imgui.selectable(f"{past[:44]}##hist{i}")
                 if clicked:
                     self.state.prompt_text = past
 
-    def _beta_slider(self, i: int, label: str) -> None:
+    def __beta_slider(self, i: int, label: str) -> None:
         changed, value = imgui.slider_float(label, float(self.state.user_betas[i]), -3.0, 3.0)
         if changed:
             self.state.user_betas[i] = value
         if imgui.is_item_deactivated_after_edit():
-            self.avatar._on_avatar_changed()
+            self.avatar.on_avatar_changed()
 
     def gui_playback(self) -> None:
-        *_, playback, _ = self._rects()
-        self._dock(playback)
+        *_, playback, _ = self.__rects()
+        self.__dock(playback)
         imgui.begin("Playback", False, _WINDOW_FLAGS)
 
         changed, run = imgui.checkbox("play [space]", self.host.run_animations)
@@ -328,7 +339,7 @@ class GuiPanels:
             self.host.toggle_animation(run)
         imgui.same_line()
         n_frames = max(1, self.host.scene.n_frames)
-        self._dim_text(f"frame {self.host.scene.current_frame_id + 1}/{n_frames}")
+        self.__dim_text(f"frame {self.host.scene.current_frame_id + 1}/{n_frames}")
         imgui.push_item_width(-1)
         moved, frame = imgui.slider_int(
             "##frame", self.host.scene.current_frame_id, 0, n_frames - 1
@@ -367,8 +378,8 @@ class GuiPanels:
         imgui.end()
 
     def gui_prompt(self) -> None:
-        *_, prompt = self._rects()
-        self._dock(prompt)
+        *_, prompt = self.__rects()
+        self.__dock(prompt)
         flags = _WINDOW_FLAGS | imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_SCROLLBAR
         imgui.begin("##prompt_bar", False, flags)
 
@@ -397,7 +408,7 @@ class GuiPanels:
         if changed:
             log_toggle("live regenerate", self.state.live.enabled)
         imgui.same_line()
-        label = "hide skin (S)" if self.state.show_skin else "show skin (S)"
+        label = "hide skin (H)" if self.state.show_skin else "show skin (H)"
         if imgui.button(label):
             self.state.show_skin = not self.state.show_skin
             log_toggle("skin", self.state.show_skin)
@@ -405,7 +416,7 @@ class GuiPanels:
         if self.state.generating:
             avail = imgui.get_content_region_available()[0]
             done = self.state.stream_buffers.frames_emitted
-            total = self.state.steps * self.state.downsample
+            total = self.state.steps * self.state.downsample * self.state.upsample
             label = f"motion {done}/{total} frames" if total else f"motion {done} frames (forever)"
             bar = self.state.stream_buffers.gen_progress if total else (done % 100) / 100.0
             if self.state.stream_buffers.current_fit_body:
@@ -415,7 +426,7 @@ class GuiPanels:
                 imgui.progress_bar(fit, (-1, 15), f"body fit {int(fit * 100)}%")
             else:
                 imgui.progress_bar(bar, (-1, 15), label)
-        self._dim_text(self.state.status)
+        self.__dim_text(self.state.status)
         imgui.end()
 
 
@@ -439,14 +450,14 @@ class StreamingStudioViewer(Viewer):
         self.generation = StudioGenerationController(self, self.state, self.avatar)
         self.panels = GuiPanels(self, self.state, self.avatar, self.generation)
 
-        self.playback_fps = float(args.fps)
+        self.playback_fps = float(args.fps) * self.state.upsample
         self.run_animations = False
         self.scene.background_color = config.appearance.sky_color
 
         self.panels.install()
-        self._add_rest_pose()
+        self.__add_rest_pose()
 
-    def _add_rest_pose(self) -> None:
+    def __add_rest_pose(self) -> None:
         state = self.state
         if not state.model_dir:
             return
@@ -459,7 +470,9 @@ class StreamingStudioViewer(Viewer):
             )
             state.stream_buffers.need_reset_view = True
         except Exception as exc:
-            print(f"[warn] rest-pose SMPL-X unavailable ({exc}); skeleton-only until first prompt")
+            logger.info(
+                f"[warn] rest-pose SMPL-X unavailable ({exc}); skeleton-only until first prompt"
+            )
             state.model_dir = ""
             state.fit_body = False
 
@@ -485,18 +498,31 @@ class StreamingStudioViewer(Viewer):
         super().key_event(key, action, modifiers)
         if action != self.wnd.keys.ACTION_PRESS or imgui.get_io().want_capture_keyboard:
             return
-        if key == self.wnd.keys.S:
+        if key == self.wnd.keys.H:
             self.state.show_skin = not self.state.show_skin
-            log_toggle("skin [S]", self.state.show_skin)
+            log_toggle("skin [H]", self.state.show_skin)
         elif key == self.wnd.keys.R:
             log_action("key R")
             self.reload_settings()
 
+    def __advance_playhead(self, time) -> None:
+        if not self.run_animations or self.scene.n_frames == 0:
+            return
+        frames = int((time - self._last_frame_rendered_at) * self.playback_fps)
+        if frames <= 0:
+            return
+        if self.playback_without_skipping:
+            frames = 1
+        self.scene.current_frame_id = (self.scene.current_frame_id + frames) % self.scene.n_frames
+        self._last_frame_rendered_at += frames * (1.0 / self.playback_fps)
+
     def on_render(self, time, frame_time, export=False, transparent_background=False) -> None:
         self.generation.tick_live()
-        self.scene_updater._consume()
-        self.scene_updater._sync_display_nodes()
-        self.scene_updater._update_follow_cam()
+        self.scene_updater.consume()
+        self.__advance_playhead(time)
+        self.scene_updater.hold_playhead_at_fitted_body()
+        self.scene_updater.sync_display_nodes()
+        self.scene_updater.update_follow_cam()
         super().on_render(
             time, frame_time, export=export, transparent_background=transparent_background
         )

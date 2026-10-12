@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import math
 import threading
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ from aitviewer.scene.camera import ViewerCamera
 from text2motion.studio.avatar import append_skeleton_sequence_frames, create_skeleton_sequence_node
 from text2motion.studio.config import StudioConfig
 from text2motion.studio.contracts import MotionInferenceClientPort, ViewerHost
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -79,7 +82,7 @@ def load_model_registry(
                 )
             )
     else:
-        print(f"[warn] model registry not found: {registry} -> launch args only")
+        logger.info(f"[warn] model registry not found: {registry} -> launch args only")
     if launch is None:
         return entries, 0
     launch_ckpt = Path(launch.ckpt).resolve()
@@ -98,7 +101,7 @@ class StudioSceneNodes:
         self.body = None
         self.follow_center: np.ndarray | None = None
 
-    def _drop(self, node):
+    def __drop(self, node):
         if node is None:
             return None
         if self.scene.selected_object is node:
@@ -107,13 +110,13 @@ class StudioSceneNodes:
         return None
 
     def clear_rest(self) -> None:
-        self.rest = self._drop(self.rest)
+        self.rest = self.__drop(self.rest)
 
     def clear_motion(self) -> None:
-        self.motion = self._drop(self.motion)
+        self.motion = self.__drop(self.motion)
 
     def clear_body(self) -> None:
-        self.body = self._drop(self.body)
+        self.body = self.__drop(self.body)
 
     def clear_all(self) -> None:
         self.clear_motion()
@@ -184,7 +187,11 @@ class StudioStreamBuffers:
         self.accum_joints: np.ndarray | None = None
         self.body_verts: np.ndarray | None = None
         self.current_fit_body = False
-        self.drop_skeleton = False
+        self.take = 0
+        self.trimmed_frames = 0
+        self.interpolation_anchor: np.ndarray | None = None
+        self.fit_take = -1
+        self.fitting = False
         self.started = False
         self.need_reset_view = False
         self.cancel = False
@@ -212,14 +219,17 @@ class StudioStreamBuffers:
         with self.lock:
             self.pending_remesh = (verts, faces, is_rest)
 
-    def append_fitted_chunk(self, fit, verts, faces, res) -> None:
+    def append_fitted_chunk(self, fit, verts, faces, res) -> bool:
         with self.lock:
+            if self.fit_is_stale():
+                return False
             self.pending_body_chunks.append((verts, faces))
             fit.orient.append(res.global_orient)
             fit.pose.append(res.body_pose)
             fit.transl.append(res.transl)
             if fit.betas is None:
                 fit.betas = res.betas
+            return True
 
     def reset_fit_track(self, fit) -> None:
         with self.lock:
@@ -245,6 +255,9 @@ class StudioStreamBuffers:
     def body_frames(self) -> int:
         return 0 if self.body_verts is None else len(self.body_verts)
 
+    def fit_is_stale(self) -> bool:
+        return self.cancel or self.fit_take != self.take
+
 
 class LiveGenerationDebouncer:
     def __init__(self) -> None:
@@ -268,24 +281,35 @@ class StreamSceneUpdater:
         self.host = host
         self.state = state
 
-    def _consume(self) -> None:
+    def consume(self) -> None:
         chunks, body_chunks, remesh = self.state.stream_buffers.drain()
 
         if chunks:
-            self._append_chunks(chunks)
+            self.append_chunks(chunks)
         if body_chunks:
-            self._append_body_chunks(body_chunks)
-        if self.state.stream_buffers.drop_skeleton and not body_chunks:
-            self.state.stream_buffers.drop_skeleton = False
+            self.__append_body_chunks(body_chunks)
         if remesh is not None:
-            self._apply_remesh(*remesh)
+            self.__apply_remesh(*remesh)
         if self.state.stream_buffers.need_reset_view:
             self.state.stream_buffers.need_reset_view = False
             node = self.state.nodes.focus
             if node is not None:
-                self._center_view(node)
+                self.__center_view(node)
 
-    def _sync_display_nodes(self) -> None:
+    def hold_playhead_at_fitted_body(self) -> None:
+        buffers = self.state.stream_buffers
+        motion = self.state.nodes.motion
+        if not buffers.fitting or not self.state.show_skin or motion is None:
+            return
+        if self.state.nodes.body is None or buffers.body_frames == 0:
+            self.host.scene.current_frame_id = 0
+            return
+        if buffers.body_frames >= len(motion.joint_positions):
+            return
+        if self.host.scene.current_frame_id >= buffers.body_frames:
+            self.host.scene.current_frame_id = buffers.body_frames - 1
+
+    def sync_display_nodes(self) -> None:
         body = self.state.nodes.body
         motion = self.state.nodes.motion
         if body is None:
@@ -307,15 +331,19 @@ class StreamSceneUpdater:
         if motion is not None:
             motion.enabled = not on_body
 
-    def _center_view(self, node) -> None:
+    def __center_view(self, node) -> None:
         bounds = node.current_bounds
         if not np.isfinite(bounds).all():
-            print(f"[warn] skipped centring on {node.name}: non-finite bounds")
+            logger.info(f"[warn] skipped centring on {node.name}: non-finite bounds")
             return
         self.host.center_view_on_node(node)
 
-    def _append_chunks(self, chunks: list[np.ndarray]) -> None:
+    def append_chunks(self, chunks: list[np.ndarray]) -> None:
         new = np.concatenate(chunks, axis=0)
+        if not self.state.stream_buffers.started:
+            self.state.nodes.clear_motion()
+            self.state.stream_buffers.accum_joints = None
+            self.state.stream_buffers.trimmed_frames = 0
         self.state.stream_buffers.accum_joints = (
             new
             if self.state.stream_buffers.accum_joints is None
@@ -327,12 +355,11 @@ class StreamSceneUpdater:
             self.state.nodes.show_motion(motion)
         else:
             append_skeleton_sequence_frames(self.state.nodes.motion, new)
-        print(
+        logger.info(
             f"[DISP] skeleton node added: accum={self.state.stream_buffers.accum_joints.shape} "
-            f"scene_frames={self.host.scene.n_frames} started={self.state.stream_buffers.started}",
-            flush=True,
+            f"scene_frames={self.host.scene.n_frames} started={self.state.stream_buffers.started}"
         )
-        self._trim_to_window()
+        self.__trim_to_window()
         if not self.state.stream_buffers.started:
             self.state.stream_buffers.started = True
             self.state.nodes.clear_body()
@@ -342,7 +369,7 @@ class StreamSceneUpdater:
             self.host.toggle_animation(True)
             self.state.stream_buffers.need_reset_view = True
 
-    def _trim_to_window(self) -> None:
+    def __trim_to_window(self) -> None:
         window = self.state.window_frames
         motion = self.state.nodes.motion
         if window <= 0 or motion is None:
@@ -354,6 +381,7 @@ class StreamSceneUpdater:
         if excess <= 0:
             return
         dropped = list(range(excess))
+        self.state.stream_buffers.trimmed_frames += excess
         motion.joint_positions = motion.joint_positions[excess:]
         motion.spheres.remove_frames(dropped)
         motion.lines.remove_frames(dropped)
@@ -361,11 +389,9 @@ class StreamSceneUpdater:
             body.remove_frames(dropped)
             self.state.stream_buffers.body_verts = body.vertices
         self.state.stream_buffers.accum_joints = self.state.stream_buffers.accum_joints[-window:]
-        self.host.scene.current_frame_id = max(
-            0, self.host.scene.current_frame_id - excess
-        )
+        self.host.scene.current_frame_id = max(0, self.host.scene.current_frame_id - excess)
 
-    def _append_body_chunks(self, chunks: list[tuple[np.ndarray, np.ndarray]]) -> None:
+    def __append_body_chunks(self, chunks: list[tuple[np.ndarray, np.ndarray]]) -> None:
         for verts, faces in chunks:
             if self.state.nodes.body is None:
                 self.state.nodes.show_body(
@@ -382,13 +408,12 @@ class StreamSceneUpdater:
         if lag == self.state.stream_buffers.last_body_lag:
             return
         self.state.stream_buffers.last_body_lag = lag
-        print(
+        logger.info(
             f"[DISP] body frames={len(self.state.stream_buffers.body_verts)} "
-            f"skeleton frames={len(motion.joint_positions)} lag={lag}",
-            flush=True,
+            f"skeleton frames={len(motion.joint_positions)} lag={lag}"
         )
 
-    def _apply_remesh(self, verts: np.ndarray, faces: np.ndarray, is_rest: bool) -> None:
+    def __apply_remesh(self, verts: np.ndarray, faces: np.ndarray, is_rest: bool) -> None:
         if is_rest:
             if self.state.nodes.has_motion_or_body:
                 return
@@ -404,7 +429,7 @@ class StreamSceneUpdater:
         self.state.stream_buffers.body_verts = verts
         self.host.scene.current_frame_id = min(frame, len(verts) - 1)
 
-    def _current_center(self) -> np.ndarray | None:
+    def __current_center(self) -> np.ndarray | None:
         frame = self.host.scene.current_frame_id
         body_frames = (
             0
@@ -424,13 +449,13 @@ class StreamSceneUpdater:
             return None
         return arr[min(frame, len(arr) - 1)].mean(axis=0)
 
-    def _update_follow_cam(self) -> None:
+    def update_follow_cam(self) -> None:
         if not self.state.follow_cam:
             return
         camera = self.host.scene.camera
         if not isinstance(camera, ViewerCamera):
             return
-        center = self._current_center()
+        center = self.__current_center()
         if center is None:
             return
         if self.state.nodes.follow_center is None:
@@ -469,6 +494,10 @@ class StudioSession:
         self.steps = resolve_step_budget(args, self.downsample, self.max_steps)
         self.window_frames = int(config.display.window_frames)
         self.fit_lookahead_chunks = int(config.display.fit_lookahead_chunks)
+        self.stream_lead_frames = int(config.display.stream_lead_frames)
+        self.upsample = int(config.display.upsample)
+        if self.upsample < 1:
+            raise ValueError(f"display.upsample must be >= 1, got {self.upsample}")
         self.window_steps = max(8, self.window_frames // self.downsample)
 
         self.gender_idx = 0
@@ -511,13 +540,14 @@ class StudioSession:
         self.window_frames = int(config.display.window_frames)
         self.window_steps = max(8, self.window_frames // self.downsample)
         self.fit_lookahead_chunks = int(config.display.fit_lookahead_chunks)
+        self.stream_lead_frames = int(config.display.stream_lead_frames)
         self.skin_color = config.appearance.skin_color
         self.models, self.model_idx = load_model_registry(
             self.models[self.model_idx], config.model_registry
         )
         added = len(self.models) - previous
         return (
-            f"settings reloaded -- fit {config.schedule.continuation_stage2_iters} iters, "
+            f"settings reloaded -- "
             f"window {self.window_frames} frames, {len(self.models)} models"
             + (f" (+{added})" if added > 0 else "")
         )
