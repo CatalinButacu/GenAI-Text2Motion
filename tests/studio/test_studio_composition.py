@@ -94,7 +94,7 @@ def test_panels_install_registers_the_three_docked_panels(wired):
 
 def test_display_consume_runs_against_a_stub_host(wired):
     host, state, display, _, _, _ = wired
-    display._consume()  # empty queues: must be a clean no-op, not an attribute error
+    display.consume()  # empty queues: must be a clean no-op, not an attribute error
     assert state.stream_buffers.drain() == ([], [], None)
 
 

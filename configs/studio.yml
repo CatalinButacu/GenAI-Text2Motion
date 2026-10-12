@@ -13,8 +13,8 @@ fit:
   yaw_candidates_deg: [0.0, 90.0, 180.0, 270.0]
 
 schedule:
-  first_stage1_iters: 30
-  first_stage2_iters: 75
+  first_stage1_iters: 20
+  first_stage2_iters: 50
   continuation_stage1_iters: 0
   continuation_stage2_iters: 25
   retrofit_window: 16
@@ -22,6 +22,8 @@ schedule:
 display:
   window_frames: 600
   fit_lookahead_chunks: 8
+  stream_lead_frames: 120
+  upsample: 3
 
 live:
   steps: 20

@@ -112,8 +112,11 @@ def test_append_fitted_chunk_keeps_body_and_fit_track_aligned():
         betas = "b"
 
     buf, fit = StudioStreamBuffers(), SmplxFitState()
+    buf.fit_take = buf.take
     for _ in range(3):
-        buf.append_fitted_chunk(fit, "verts", "faces", FitResult())
+        assert buf.append_fitted_chunk(fit, "verts", "faces", FitResult())
+    buf.take += 1
+    assert not buf.append_fitted_chunk(fit, "verts", "faces", FitResult())
 
     assert len(buf.pending_body_chunks) == len(fit.orient) == 3
     assert len(fit.pose) == len(fit.transl) == 3
@@ -197,9 +200,7 @@ def test_model_registry_uses_name_and_version(tmp_path):
                     "config": "model.yaml",
                     "tokenizer_ckpt": "tokenizer.pt",
                 },
-                "models": [
-                    {"name": "mamba", "version": "2026-08-24", "ckpt": "model.pt"}
-                ],
+                "models": [{"name": "mamba", "version": "2026-08-24", "ckpt": "model.pt"}],
             }
         ),
         encoding="utf-8",

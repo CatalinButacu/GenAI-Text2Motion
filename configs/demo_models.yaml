@@ -4,6 +4,12 @@ defaults:
 
 models:
   - name: mamba
+    version: "2026-09-23-thesis-e60"
+    ckpt: artifacts/checkpoints/generator/generator_mamba_bs8_e60.pt
+  - name: transformer
+    version: "2026-09-20-thesis-e60"
+    ckpt: artifacts/checkpoints/generator/generator_transformer_bs8_e60.pt
+  - name: mamba
     version: "2026-07-04"
     ckpt: artifacts/checkpoints/generator/generator_mamba_bs8_last.pt
   - name: transformer
