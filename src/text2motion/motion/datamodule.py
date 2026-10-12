@@ -55,6 +55,9 @@ class MotionDataModule:
             num_workers=num_workers,
             collate_fn=collate_motion_clips,
             drop_last=(split == Split.TRAIN),
+            pin_memory=True,
+            persistent_workers=num_workers > 0,
+            prefetch_factor=2 if num_workers > 0 else None,
         )
 
     def window_batch_loader(
@@ -72,4 +75,7 @@ class MotionDataModule:
             num_workers=num_workers,
             collate_fn=collate_motion_clips,
             drop_last=(split == Split.TRAIN),
+            pin_memory=True,
+            persistent_workers=num_workers > 0,
+            prefetch_factor=2 if num_workers > 0 else None,
         )

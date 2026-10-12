@@ -47,7 +47,7 @@ def head_trim_frames(source_path: str | Path, fps: int) -> int:
     return int(round(_HEAD_TRIM_SECONDS.get(dataset_name(source_path), 0.0) * fps))
 
 
-def _pose_candidates(source_path: str, pose_root: Path) -> tuple[Path | None, list[Path]]:
+def __pose_candidates(source_path: str, pose_root: Path) -> tuple[Path | None, list[Path]]:
     parts = [part for part in Path(source_path).parts if part not in (".", "pose_data")]
     if not parts:
         return None, []
@@ -58,12 +58,14 @@ def _pose_candidates(source_path: str, pose_root: Path) -> tuple[Path | None, li
     folder = pose_root / relative.parent
 
     stems = list(dict.fromkeys([base, base.replace(" ", "_"), stem, stem.replace(" ", "_")]))
-    names = [f"{candidate}{suffix}.npy" for candidate in stems for suffix in ("_stageii", "_poses", "")]
+    names = [
+        f"{candidate}{suffix}.npy" for candidate in stems for suffix in ("_stageii", "_poses", "")
+    ]
     return folder, [folder / name for name in dict.fromkeys(names)]
 
 
 def resolve_pose_path(source_path: str, pose_root: Path) -> Path | None:
-    folder, candidates = _pose_candidates(source_path, pose_root)
+    folder, candidates = __pose_candidates(source_path, pose_root)
     if folder is None:
         return None
     return next((candidate for candidate in candidates if candidate.is_file()), None)
@@ -96,7 +98,7 @@ def heldout_sources(index_csv: Path, out_dir: Path, pose_root: Path) -> set[Path
         if resolved is not None:
             excluded.add(resolved.resolve())
             continue
-        folder, _ = _pose_candidates(source_path, pose_root)
+        folder, _ = __pose_candidates(source_path, pose_root)
         if folder is not None and folder.is_dir():
             unexcludable.append(source_path)
 
@@ -110,7 +112,7 @@ def heldout_sources(index_csv: Path, out_dir: Path, pose_root: Path) -> set[Path
     return excluded
 
 
-def _model_root(smplx_dir: Path) -> Path:
+def resolve_model_root(smplx_dir: Path) -> Path:
     if (smplx_dir / "smplx").is_dir():
         return smplx_dir
     if smplx_dir.name.lower() == "smplx":
@@ -135,7 +137,7 @@ class AmassPoseExtractor:
         self._joint_count = joint_count
         self._fps = fps
         self._chunk_size = chunk_size
-        model_root = _model_root(Path(smplx_dir))
+        model_root = resolve_model_root(Path(smplx_dir))
         self._models: dict[str, Any] = {}
 
         for gender in Gender:
@@ -155,18 +157,16 @@ class AmassPoseExtractor:
                 .eval()
             )
 
-        self._expression_count = int(
-            self._models[Gender.NEUTRAL.value].num_expression_coeffs
-        )
+        self._expression_count = int(self._models[Gender.NEUTRAL.value].num_expression_coeffs)
 
-    def _model(self, gender: object):
+    def __model(self, gender: object):
         value = gender.decode() if isinstance(gender, bytes) else str(gender)
         return self._models.get(value, self._models[Gender.FEMALE.value])
 
-    def _tensor(self, array: np.ndarray) -> torch.Tensor:
+    def to_float_tensor(self, array: np.ndarray) -> torch.Tensor:
         return torch.as_tensor(array, dtype=torch.float32, device=self.device)
 
-    def _forward(
+    def __forward(
         self,
         model: Any,
         root: torch.Tensor,
@@ -214,19 +214,19 @@ class AmassPoseExtractor:
             hand = np.asarray(data["pose_hand"][sample], dtype=np.float32)
             trans = np.asarray(data["trans"][sample], dtype=np.float32)
             betas = np.asarray(data["betas"][: self._beta_count], dtype=np.float32)
-            model = self._model(data["gender"])
+            model = self.__model(data["gender"])
 
-        root_device = self._tensor(root)
-        body_device = self._tensor(body)
-        hand_device = self._tensor(hand)
-        trans_device = self._tensor(trans)
-        betas_device = self._tensor(betas)
+        root_device = self.to_float_tensor(root)
+        body_device = self.to_float_tensor(body)
+        hand_device = self.to_float_tensor(hand)
+        trans_device = self.to_float_tensor(trans)
+        betas_device = self.to_float_tensor(betas)
 
         chunks: list[torch.Tensor] = []
         for start in range(0, root.shape[0], self._chunk_size):
             end = min(start + self._chunk_size, root.shape[0])
             chunks.append(
-                self._forward(
+                self.__forward(
                     model,
                     root_device[start:end],
                     body_device[start:end],
@@ -236,7 +236,5 @@ class AmassPoseExtractor:
                 )
             )
         joints = torch.cat(chunks, dim=0)
-        y_up_joints = torch.stack(
-            (joints[..., 0], joints[..., 2], joints[..., 1]), dim=-1
-        )
+        y_up_joints = torch.stack((joints[..., 0], joints[..., 2], joints[..., 1]), dim=-1)
         return y_up_joints.cpu().numpy()

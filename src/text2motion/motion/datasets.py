@@ -49,7 +49,7 @@ class CaptionedMotionDataset(Dataset):
             )
         listed = [n.strip() for n in split_path.read_text().splitlines() if n.strip()]
         base_names = list(dict.fromkeys(n[1:] if n.startswith("M") else n for n in listed))
-        self._ids = self._select_usable_clip_ids(base_names)
+        self._ids = self.__select_usable_clip_ids(base_names)
         if not self._ids:
             raise RuntimeError(f"no usable clips for split {split!r} under {self._vec_dir}")
 
@@ -65,16 +65,16 @@ class CaptionedMotionDataset(Dataset):
     def std(self) -> np.ndarray:
         return self.scaler.std
 
-    def _clip_id_variants(self, name: str) -> list[str]:
+    def __clip_id_variants(self, name: str) -> list[str]:
         return [name, f"M{name}"] if self._mirror else [name]
 
-    def _select_usable_clip_ids(self, names: list[str]) -> list[str]:
-        candidates = [clip_id for name in names for clip_id in self._clip_id_variants(name)]
+    def __select_usable_clip_ids(self, names: list[str]) -> list[str]:
+        candidates = [clip_id for name in names for clip_id in self.__clip_id_variants(name)]
         lengths = clip_frame_counts(self._vec_dir, candidates)
         return [
             clip_id
             for name in names
-            for clip_id in self._clip_id_variants(name)
+            for clip_id in self.__clip_id_variants(name)
             if lengths.get(clip_id, 0) >= self._min_len
             and (self._text_dir / f"{clip_id}.txt").is_file()
         ]
@@ -97,12 +97,14 @@ class CaptionedMotionDataset(Dataset):
         if feat.shape[-1] != DIM:
             raise ValueError(f"{clip_id}: expected {DIM}-dim feature, got {feat.shape}")
         if not np.isfinite(feat).all():
-            raise ValueError(f"{clip_id}: non-finite values in feature; drop it from the split list")
+            raise ValueError(
+                f"{clip_id}: non-finite values in feature; drop it from the split list"
+            )
 
         rng = item_rng(self._seed, self._epoch, idx)
         annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
-        annotation, feat = self._select_captioned_segment(annotations, feat, rng)
-        feat = self.normalize(self._crop_to_max_frames(feat, rng))
+        annotation, feat = self.__select_captioned_segment(annotations, feat, rng)
+        feat = self.normalize(self.__crop_to_max_frames(feat, rng))
         return MotionClip(
             features=torch.from_numpy(feat),
             frame_count=feat.shape[0],
@@ -111,19 +113,19 @@ class CaptionedMotionDataset(Dataset):
         )
 
     @staticmethod
-    def _annotation_frame_range(annotation: TextAnnotation, total: int) -> tuple[int, int] | None:
+    def __annotation_frame_range(annotation: TextAnnotation, total: int) -> tuple[int, int] | None:
         if annotation.start_time == 0.0 and annotation.end_time == 0.0:
             return None
         start = max(int(annotation.start_time * FPS), 0)
         end = min(int(annotation.end_time * FPS), total)
         return start, end
 
-    def _select_captioned_segment(
+    def __select_captioned_segment(
         self, annotations: list[TextAnnotation], feat: np.ndarray, rng: np.random.RandomState
     ) -> tuple[TextAnnotation, np.ndarray]:
         usable = []
         for annotation in annotations:
-            segment = self._annotation_frame_range(annotation, feat.shape[0])
+            segment = self.__annotation_frame_range(annotation, feat.shape[0])
             if segment is None or segment[1] - segment[0] >= self._min_len:
                 usable.append((annotation, segment))
         if not usable:
@@ -131,7 +133,7 @@ class CaptionedMotionDataset(Dataset):
         annotation, segment = usable[rng.randint(len(usable))]
         return annotation, feat if segment is None else feat[segment[0] : segment[1]]
 
-    def _crop_to_max_frames(self, feat: np.ndarray, rng: np.random.RandomState) -> np.ndarray:
+    def __crop_to_max_frames(self, feat: np.ndarray, rng: np.random.RandomState) -> np.ndarray:
         overflow = feat.shape[0] - self._max_len
         if overflow <= 0:
             return feat
@@ -162,11 +164,11 @@ class MotionWindowDataset(Dataset):
             n.strip() for n in (root / SPLIT_FILES[split]).read_text().splitlines() if n.strip()
         ]
         base_names = list(dict.fromkeys(n[1:] if n.startswith("M") else n for n in listed))
-        self._ids, self._cache = self._load_windowable_clips(base_names)
+        self._ids, self._cache = self.__load_windowable_clips(base_names)
         if not self._ids:
             raise RuntimeError(f"no clips >= window {window} for split {split!r}")
 
-    def _load_windowable_clips(self, names: list[str]) -> tuple[list[str], list[np.ndarray]]:
+    def __load_windowable_clips(self, names: list[str]) -> tuple[list[str], list[np.ndarray]]:
         ids: list[str] = []
         clips: list[np.ndarray] = []
         non_finite: list[str] = []

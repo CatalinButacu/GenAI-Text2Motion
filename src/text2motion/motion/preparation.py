@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,8 @@ from text2motion.motion.representation import (
 )
 from text2motion.motion.storage import FEATURES_DIR, SPLIT_FILES
 
+logger = logging.getLogger(__name__)
+
 _REFERENCE_CLIP_ID = "000021"
 _RIGHT_CHAIN = [2, 5, 8, 11, 14, 17, 19, 21]
 _LEFT_CHAIN = [1, 4, 7, 10, 13, 16, 18, 20]
@@ -33,7 +36,7 @@ _LEFT_HAND_CHAIN = [22, 23, 24, 34, 35, 36, 25, 26, 27, 31, 32, 33, 28, 29, 30]
 _RIGHT_HAND_CHAIN = [43, 44, 45, 46, 47, 48, 40, 41, 42, 37, 38, 39, 49, 50, 51]
 
 
-def _parquet_files(src: Path, split: str) -> list[Path]:
+def __parquet_files(src: Path, split: str) -> list[Path]:
     matches = sorted(src.glob(f"**/{split}-*.parquet"))
     if not matches:
         matches = sorted(p for p in src.glob("**/*.parquet") if split in p.name)
@@ -48,7 +51,7 @@ def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
     split_names: dict[str, list[str]] = {split: [] for split in Split}
 
     for split in Split:
-        files = _parquet_files(src, split)
+        files = __parquet_files(src, split)
         if not files:
             raise FileNotFoundError(f"no parquet files for split {split!r} under {src}")
 
@@ -79,7 +82,7 @@ def convert_official_release(src: Path, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     split_names = write_motions(src, out)
     for split, names in split_names.items():
-        print(f"{split}: {len(names)} clips")
+        logger.info(f"{split}: {len(names)} clips")
     compute_mean_std(out, split_names[Split.TRAIN])
 
 
@@ -122,7 +125,9 @@ class Hml3dPreparationLayout:
             d.mkdir(parents=True, exist_ok=True)
 
 
-def extract_amass_to_y_up_joints(request: PreparationRequest, layout: Hml3dPreparationLayout) -> None:
+def extract_amass_to_y_up_joints(
+    request: PreparationRequest, layout: Hml3dPreparationLayout
+) -> None:
     if request.amass_dir is None:
         raise ValueError("amass_dir must be set to the AMASS root for stage 'amass'")
     if request.smplx_models is None:
@@ -185,10 +190,14 @@ def build_indexed_joint_clips(
         np.save(layout.joints / ("M" + new_name), data_m)
         written += 1
 
-    print(f"index->joints: wrote {written} clips, skipped {missing} missing (of {len(index_file)})")
+    logger.info(
+        f"index->joints: wrote {written} clips, skipped {missing} missing (of {len(index_file)})"
+    )
 
 
-def encode_joint_clips_to_hml3d263(request: PreparationRequest, layout: Hml3dPreparationLayout) -> None:
+def encode_joint_clips_to_hml3d263(
+    request: PreparationRequest, layout: Hml3dPreparationLayout
+) -> None:
     joint_count = request.joint_count
     ref_path = layout.joints / f"{_REFERENCE_CLIP_ID}.npy"
     if not ref_path.is_file():
@@ -196,7 +205,7 @@ def encode_joint_clips_to_hml3d263(request: PreparationRequest, layout: Hml3dPre
         if not available:
             raise FileNotFoundError(f"no joints in {layout.joints}; run stage 'index' first")
         ref_path = available[0]
-        print(f"reference skeleton {_REFERENCE_CLIP_ID} missing; using {ref_path.name}")
+        logger.info(f"reference skeleton {_REFERENCE_CLIP_ID} missing; using {ref_path.name}")
     reference = np.load(ref_path)[:, :joint_count]
     reference = reference.reshape(len(reference), -1, 3)
     params = feature_params(target_offsets(reference))
@@ -212,20 +221,24 @@ def encode_joint_clips_to_hml3d263(request: PreparationRequest, layout: Hml3dPre
             np.save(layout.new_joint_vecs / source_file, data)
             frame_num += data.shape[0]
         except Exception as exc:
-            print(f"FAILED {source_file}: {exc}")
+            logger.info(f"FAILED {source_file}: {exc}")
 
-    print(
+    logger.info(
         f"Total clips: {len(source_list)}, Frames: {frame_num}, "
         f"Duration: {frame_num / request.fps / 60:.4f}m"
     )
 
 
-def compute_hml3d_normalization_stats(layout: Hml3dPreparationLayout, joint_count: int) -> tuple[np.ndarray, np.ndarray]:
+def compute_hml3d_normalization_stats(
+    layout: Hml3dPreparationLayout, joint_count: int
+) -> tuple[np.ndarray, np.ndarray]:
     train_names = read_split_names(layout.out_dir / SPLIT_FILES[Split.TRAIN])
     return fit_train_stats(layout.new_joint_vecs, train_names, layout.out_dir, joint_count)
 
 
-def run_hml3d_preparation(request: PreparationRequest, stage: PreparationStage | str = PreparationStage.ALL) -> None:
+def run_hml3d_preparation(
+    request: PreparationRequest, stage: PreparationStage | str = PreparationStage.ALL
+) -> None:
     stage = PreparationStage(stage)
     layout = Hml3dPreparationLayout(Path(request.out_dir))
     layout.mkdirs()
@@ -306,7 +319,7 @@ def build_amass_pretraining_corpus(
             total_frames += features.shape[0]
         except Exception as exc:
             failed += 1
-            print(f"FAILED {rel}: {exc}")
+            logger.info(f"FAILED {rel}: {exc}")
 
     summary = {
         "written": written,

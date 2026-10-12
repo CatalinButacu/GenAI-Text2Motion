@@ -13,7 +13,7 @@ JOINTS_NUM = 22
 EXPECTED_DIM = 263
 
 
-def _synthetic_motion(num_frames: int = 30, seed: int = 0) -> np.ndarray:
+def __synthetic_motion(num_frames: int = 30, seed: int = 0) -> np.ndarray:
     rng = np.random.default_rng(seed)
     base = param_util.RAW_OFFSETS.astype(np.float64) * 0.3
     joints = np.tile(base[None], (num_frames, 1, 1))
@@ -27,7 +27,7 @@ def _synthetic_motion(num_frames: int = 30, seed: int = 0) -> np.ndarray:
 
 
 def test_263_layout_and_recovery() -> None:
-    motion = _synthetic_motion()
+    motion = __synthetic_motion()
     params = feature_params(target_offsets(motion))
 
     data, global_positions, local_positions, l_velocity = encode_joints(motion, params)
@@ -52,7 +52,7 @@ def test_263_layout_and_recovery() -> None:
 
 
 def test_param_constants_exact() -> None:
-    params = feature_params(target_offsets(_synthetic_motion()))
+    params = feature_params(target_offsets(__synthetic_motion()))
     assert params.face_joints == [2, 1, 17, 16]
     assert params.left_feet == [7, 10]
     assert params.right_feet == [8, 11]

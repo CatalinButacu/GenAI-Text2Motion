@@ -23,7 +23,7 @@ def item_rng(seed: int, epoch: int, index: int) -> np.random.RandomState:
     return np.random.RandomState(item_seed)
 
 
-def _read_frame_count_cache(cache_path: Path) -> dict[str, list[int]]:
+def __read_frame_count_cache(cache_path: Path) -> dict[str, list[int]]:
     if not cache_path.is_file():
         return {}
     raw = json.loads(cache_path.read_text(encoding="utf-8"))
@@ -32,7 +32,7 @@ def _read_frame_count_cache(cache_path: Path) -> dict[str, list[int]]:
 
 def clip_frame_counts(vec_dir: Path, clip_ids: list[str]) -> dict[str, int]:
     cache_path = vec_dir.parent / CLIP_LENGTHS_FILE
-    cache = _read_frame_count_cache(cache_path)
+    cache = __read_frame_count_cache(cache_path)
 
     lengths: dict[str, int] = {}
     dirty = False

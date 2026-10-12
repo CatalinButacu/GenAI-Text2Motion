@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +12,8 @@ import torch
 from text2motion.motion.contracts import Split
 from text2motion.motion.representation import normalization_stats
 from text2motion.motion.storage import MEAN_FILE, STATS_PROVENANCE_FILE, STD_FILE
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -38,16 +41,16 @@ class MotionScaler:
 
     def normalize(self, feats):
         if isinstance(feats, torch.Tensor):
-            return (feats - self._as_tensor(self.mean, feats)) / self._as_tensor(self.std, feats)
+            return (feats - self.__as_tensor(self.mean, feats)) / self.__as_tensor(self.std, feats)
         return (feats - self.mean) / self.std
 
     def denormalize(self, feats):
         if isinstance(feats, torch.Tensor):
-            return feats * self._as_tensor(self.std, feats) + self._as_tensor(self.mean, feats)
+            return feats * self.__as_tensor(self.std, feats) + self.__as_tensor(self.mean, feats)
         return feats * self.std + self.mean
 
     @staticmethod
-    def _as_tensor(array: np.ndarray, like: torch.Tensor) -> torch.Tensor:
+    def __as_tensor(array: np.ndarray, like: torch.Tensor) -> torch.Tensor:
         return torch.as_tensor(array, device=like.device, dtype=like.dtype)
 
 
@@ -69,7 +72,7 @@ def load_clips(vec_dir: Path, names: list[str]) -> list[np.ndarray]:
             continue
         array = np.load(path)
         if np.isnan(array).any():
-            print(f"NaN feature, skipping: {name}")
+            logger.info(f"NaN feature, skipping: {name}")
             continue
         clips.append(array)
     return clips
@@ -97,5 +100,5 @@ def fit_train_stats(
     np.save(out_dir / STD_FILE, std)
     provenance_path = out_dir / STATS_PROVENANCE_FILE
     provenance_path.write_text(json.dumps(provenance, indent=2), encoding="utf-8")
-    print(f"Mean/Std saved from {len(clips)} train clips -> {provenance_path}")
+    logger.info(f"Mean/Std saved from {len(clips)} train clips -> {provenance_path}")
     return mean, std

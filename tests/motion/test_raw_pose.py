@@ -44,14 +44,14 @@ def test_amass_extractor_crosses_backend_boundaries_once_per_clip(tmp_path):
     extractor._chunk_size = 2
     extractor._models = {gender: model for gender in ("neutral", "male", "female")}
     extractor._expression_count = 10
-    original_tensor = extractor._tensor
+    original_tensor = extractor.to_float_tensor
     transferred_shapes: list[tuple[int, ...]] = []
 
     def record_transfer(array: np.ndarray) -> torch.Tensor:
         transferred_shapes.append(array.shape)
         return original_tensor(array)
 
-    extractor._tensor = record_transfer
+    extractor.to_float_tensor = record_transfer
 
     joints = extractor.extract(source)
 

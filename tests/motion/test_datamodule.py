@@ -12,7 +12,7 @@ from text2motion.motion.representation import DIM
 from text2motion.motion.storage import FEATURES_DIR, MEAN_FILE
 
 
-def _repository_or_skip() -> MotionDataModule:
+def __repository_or_skip() -> MotionDataModule:
     cfg = load_config("configs/default.yaml")
     out = cfg.paths.hml3d_out_dir
     if not out or not (Path(out) / FEATURES_DIR).is_dir():
@@ -26,7 +26,7 @@ def _repository_or_skip() -> MotionDataModule:
 
 @pytest.mark.slow
 def test_train_has_mirror_eval_does_not():
-    repository = _repository_or_skip()
+    repository = __repository_or_skip()
     train = repository.captioned_dataset(Split.TRAIN)
     test = repository.captioned_dataset(Split.TEST)
 
@@ -37,7 +37,7 @@ def test_train_has_mirror_eval_does_not():
 
 @pytest.mark.slow
 def test_batch_shape_and_normalization():
-    repository = _repository_or_skip()
+    repository = __repository_or_skip()
     loader = repository.captioned_batch_loader(Split.VALIDATION, batch_size=4)
     batch = next(iter(loader))
 
