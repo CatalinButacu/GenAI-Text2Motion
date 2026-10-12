@@ -1,4 +1,5 @@
 import json
+import logging
 import platform
 import subprocess
 import sys
@@ -7,25 +8,29 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
+from text2motion.app.logging_setup import add_run_log_file, ensure_logging_configured
 
-def _git_commit() -> str:
+logger = logging.getLogger(__name__)
+
+
+def __git_commit() -> str:
     try:
         out = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True, timeout=10
         )
         return out.stdout.strip()
     except (FileNotFoundError, subprocess.SubprocessError) as exc:
-        print(f"WARNING: git commit unavailable ({type(exc).__name__}: {exc}); recording 'unknown'")
+        logger.warning(f"git commit unavailable ({type(exc).__name__}: {exc}); recording 'unknown'")
         return "unknown"
 
 
-def _jsonable(value: Any) -> Any:
+def __jsonable(value: Any) -> Any:
     if is_dataclass(value) and not isinstance(value, type):
-        return _jsonable(asdict(value))
+        return __jsonable(asdict(value))
     if isinstance(value, dict):
-        return {str(k): _jsonable(v) for k, v in value.items()}
+        return {str(k): __jsonable(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
-        return [_jsonable(v) for v in value]
+        return [__jsonable(v) for v in value]
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, (str, int, float, bool)) or value is None:
@@ -33,10 +38,14 @@ def _jsonable(value: Any) -> Any:
     return str(value)
 
 
-def start_run(name: str, cfg: Any, logs_dir: Path, extra: dict | None = None) -> Path:
+def start_run(
+    name: str,
+    cfg: Any,
+    logs_dir: Path,
+    extra: dict | None = None,
+    existing_run_dir: Path | None = None,
+) -> Path:
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-    run_dir = Path(logs_dir) / "train" / f"{stamp}_{name}"
-    run_dir.mkdir(parents=True, exist_ok=True)
 
     import torch
 
@@ -50,16 +59,38 @@ def start_run(name: str, cfg: Any, logs_dir: Path, extra: dict | None = None) ->
     manifest = {
         "name": name,
         "started_utc": stamp,
-        "git_commit": _git_commit(),
-        "config": _jsonable(cfg),
-        "extra": _jsonable(extra or {}),
+        "git_commit": __git_commit(),
+        "config": __jsonable(cfg),
+        "extra": __jsonable(extra or {}),
         "versions": versions,
     }
+
+    if existing_run_dir is not None:
+        run_dir = Path(existing_run_dir)
+        if not run_dir.is_dir():
+            raise ValueError(f"--resume_run_dir does not exist: {run_dir}")
+        resumes_path = run_dir / "resumes.jsonl"
+        with resumes_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(manifest) + "\n")
+        ensure_logging_configured()
+        add_run_log_file(run_dir)
+        logger.info(f"run directory {run_dir} (resumed, commit {manifest['git_commit'][:8]})")
+        return run_dir
+
+    run_dir = Path(logs_dir) / "train" / f"{stamp}_{name}"
+    run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    ensure_logging_configured()
+    add_run_log_file(run_dir)
+    logger.info(f"run directory {run_dir} (commit {manifest['git_commit'][:8]})")
+    logger.info(f"versions {versions}")
     return run_dir
 
 
 def log_metrics(run_dir: Path, record: dict) -> None:
-    record = {"logged_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **_jsonable(record)}
+    record = {
+        "logged_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        **__jsonable(record),
+    }
     with (Path(run_dir) / "metrics.jsonl").open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record) + "\n")

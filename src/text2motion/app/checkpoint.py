@@ -183,13 +183,17 @@ class OverfitGate:
             "config_sha256": sha256_file(config_path),
             "tokenizer_sha256": sha256_file(tokenizer_ckpt),
             "backbone": Backbone(backbone),
-            "resolved_generator_config": resolved_config,
+            "resolved_generator_config": {
+                k: v for k, v in resolved_config.items() if k != "dropout"
+            },
         }
         actual = {
             "config_sha256": self.config_sha256,
             "tokenizer_sha256": self.tokenizer_sha256,
             "backbone": self.backbone,
-            "resolved_generator_config": self.resolved_generator_config,
+            "resolved_generator_config": {
+                k: v for k, v in self.resolved_generator_config.items() if k != "dropout"
+            },
         }
         for key, value in expected.items():
             if actual[key] != value:

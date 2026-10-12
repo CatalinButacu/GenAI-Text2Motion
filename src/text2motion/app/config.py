@@ -121,6 +121,9 @@ class MotionServiceConfig:
     idle_seconds: int = 600
     connect_timeout_seconds: float = 5.0
     startup_timeout_seconds: int = 240
+    cuda_graph_decode: bool = False
+    anchor_every_tokens: int = 0
+    anchor_context_tokens: int = 16
 
 
 @dataclass(frozen=True)
