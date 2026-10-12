@@ -1,0 +1,74 @@
+[
+  {
+    "name": "AMASS data set",
+    "used_for": "unlabeled motion for generator pretraining; source of the HumanML3D motions",
+    "licence": "Dataset Copyright License for non-commercial scientific research purposes",
+    "commercial_use": "prohibited",
+    "source_url": "https://amass.is.tue.mpg.de/license.html",
+    "verified_on": "2026-10-10",
+    "evidence": "Any other use, in particular any use for commercial purposes, is prohibited"
+  },
+  {
+    "name": "HumanML3D data set",
+    "used_for": "captioned motion for training and evaluation",
+    "licence": "No separate data licence is stated; the motions come from AMASS and cannot be redistributed",
+    "commercial_use": "prohibited by the AMASS licence",
+    "source_url": "https://raw.githubusercontent.com/EricGuo5513/HumanML3D/main/README.md",
+    "verified_on": "2026-10-10",
+    "evidence": "Due to the distribution policy of AMASS dataset, we are not allowed to distribute the data directly."
+  },
+  {
+    "name": "HumanML3D processing code",
+    "used_for": "the 263-feature representation and joint recovery, ported into src/text2motion/motion",
+    "licence": "MIT License",
+    "commercial_use": "permitted",
+    "source_url": "https://raw.githubusercontent.com/EricGuo5513/HumanML3D/main/LICENSE",
+    "verified_on": "2026-10-10",
+    "evidence": "MIT License Copyright (c) 2022 Chuan Guo"
+  },
+  {
+    "name": "text-to-motion evaluator (text_mot_match)",
+    "used_for": "frozen feature extractor for FID, R-precision and MM-Dist",
+    "licence": "MIT License",
+    "commercial_use": "permitted",
+    "source_url": "https://raw.githubusercontent.com/EricGuo5513/text-to-motion/main/LICENSE",
+    "verified_on": "2026-10-10",
+    "evidence": "MIT License Copyright (c) 2022 Chuan Guo"
+  },
+  {
+    "name": "SMPL-X model and smplx package",
+    "used_for": "body model for the AMASS conversion and for the studio body surface",
+    "licence": "Software Copyright License for non-commercial scientific research purposes",
+    "commercial_use": "prohibited",
+    "source_url": "https://raw.githubusercontent.com/vchoutas/smplx/main/LICENSE",
+    "verified_on": "2026-10-10",
+    "evidence": "Any other use, in particular any use for commercial, pornographic, military, or surveillance, purposes is prohibited."
+  },
+  {
+    "name": "CLIP (code licence of the openai/CLIP repository)",
+    "used_for": "text encoder ViT-B/32 for caption conditioning",
+    "licence": "MIT License",
+    "commercial_use": "permitted",
+    "source_url": "https://raw.githubusercontent.com/openai/CLIP/main/LICENSE",
+    "verified_on": "2026-10-10",
+    "evidence": "MIT License Copyright (c) 2021 OpenAI"
+  },
+  {
+    "name": "aitviewer",
+    "used_for": "interactive viewer and headless renderer",
+    "licence": "MIT License",
+    "commercial_use": "permitted",
+    "source_url": "https://raw.githubusercontent.com/eth-ait/aitviewer/main/LICENSE",
+    "verified_on": "2026-10-10",
+    "evidence": "MIT License Copyright (C) 2022-2026 ETH Zurich, Manuel Kaufmann, Velko Vechev, Dario Mylonopoulos"
+  },
+  {
+    "name": "mamba-ssm (selective-scan kernel, patched copy in third_party/)",
+    "used_for": "compiled CUDA kernel for the Mamba scan in training; two source files changed for MSVC",
+    "licence": "Apache License 2.0",
+    "commercial_use": "permitted",
+    "source_url": "https://raw.githubusercontent.com/state-spaces/mamba/main/LICENSE",
+    "verified_on": "2026-10-10",
+    "evidence": "Apache License Version 2.0, January 2004"
+  }
+]
