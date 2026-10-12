@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -15,6 +16,8 @@ from text2motion.tokenization.model import (
     MotionTokenizerNetwork,
     feature_velocity_reconstruction_loss,
 )
+
+logger = logging.getLogger(__name__)
 
 _MetricSink = Callable[[dict[str, object]], None]
 _Evaluator = Callable[[Split], dict[str, float]]
@@ -39,7 +42,7 @@ class TokenizerTrainer:
         )
         self.parameter_ema = ExponentialMovingAverage(tokenizer_network, ema_decay)
 
-    def _code_stats(self, indices: torch.Tensor) -> tuple[float, float]:
+    def __code_stats(self, indices: torch.Tensor) -> tuple[float, float]:
         indices = indices.detach().cpu()
         perplexities, usages = [], []
         for codebook in range(indices.shape[-1]):
@@ -63,7 +66,7 @@ class TokenizerTrainer:
         self.optimizer.step()
         self.parameter_ema.update(self.tokenizer_network)
 
-        perplexity, usage_frac = self._code_stats(indices)
+        perplexity, usage_frac = self.__code_stats(indices)
         return {
             "recon": recon_loss.item(),
             "total": total.item(),
@@ -125,13 +128,15 @@ def train_tokenizer(
         start_epoch, best_fid = trainer.load_resume_state(
             torch.load(resume_path, map_location=device), device
         )
-        print(f"resumed from {resume_path} at epoch {start_epoch} (best recon-FID {best_fid:.4f})")
+        logger.info(
+            f"resumed from {resume_path} at epoch {start_epoch} (best recon-FID {best_fid:.4f})"
+        )
 
     for epoch in range(start_epoch, request.epochs):
         loader.dataset.set_epoch(epoch)
         means = trainer.train_epoch(loader, device)
         on_metrics({"epoch": epoch + 1, **means})
-        print(
+        logger.info(
             f"epoch {epoch + 1:3d}  [common] recon {means['recon']:.4f} total {means['total']:.4f}  "
             f"[health] perplexity {means['perplexity']:.1f} usage {means['usage_frac']:.1%} "
             f"commit {means['commit']:.4f}"
@@ -143,7 +148,7 @@ def train_tokenizer(
         with trainer.ema_weights():
             metrics = evaluate(Split.VALIDATION)
         on_metrics({"epoch": epoch + 1, "split": Split.VALIDATION.value, **metrics})
-        print(
+        logger.info(
             f"  [val] clips {metrics['clips']}  MPJPE {metrics['mpjpe_mm']:.1f}mm  "
             f"feat-L2 {metrics['feature_l2']:.4f}  recon-FID {metrics['recon_fid']:.4f}"
         )
@@ -152,7 +157,7 @@ def train_tokenizer(
             best_fid = metrics["recon_fid"]
             with trainer.ema_weights() as module:
                 torch.save(module.state_dict(), checkpoint_path)
-            print(f"  saved best (val) -> {checkpoint_path} (val recon-FID {best_fid:.4f})")
+            logger.info(f"  saved best (val) -> {checkpoint_path} (val recon-FID {best_fid:.4f})")
 
         torch.save(trainer.resume_state(epoch, best_fid), resume_path)
 

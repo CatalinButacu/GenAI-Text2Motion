@@ -43,7 +43,9 @@ def evaluate_tokenizer_reconstruction(
     recon_fid: _ReconFidScorer | None = None,
 ) -> dict[str, float]:
     module.eval()
-    ids = select_reconstruction_evaluation_clip_ids(root, split, max_clips=max_clips, shuffle_seed=shuffle_seed)
+    ids = select_reconstruction_evaluation_clip_ids(
+        root, split, max_clips=max_clips, shuffle_seed=shuffle_seed
+    )
 
     reference_feats: list[np.ndarray] = []
     recon_feats: list[np.ndarray] = []

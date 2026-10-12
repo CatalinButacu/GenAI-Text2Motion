@@ -229,18 +229,18 @@ class MotionFeatureDecoder(nn.Module):
         return self.net(x.transpose(1, 2)).transpose(1, 2)
 
 
-def _build_grouped_fsq(cfg: TokenizerConfig) -> tuple[nn.Module, int]:
+def __build_grouped_fsq(cfg: TokenizerConfig) -> tuple[nn.Module, int]:
     return GroupedFSQ(cfg.fsq_levels, cfg.num_quantizers), cfg.num_quantizers * len(cfg.fsq_levels)
 
 
-def _build_residual_fsq(cfg: TokenizerConfig) -> tuple[nn.Module, int]:
+def __build_residual_fsq(cfg: TokenizerConfig) -> tuple[nn.Module, int]:
     quantizer = ResidualFSQ(cfg.fsq_levels, cfg.num_quantizers, cfg.quant_dropout)
     return quantizer, len(cfg.fsq_levels)
 
 
 _QUANTIZER_FACTORIES = {
-    FsqComposition.GROUPED: _build_grouped_fsq,
-    FsqComposition.RESIDUAL: _build_residual_fsq,
+    FsqComposition.GROUPED: __build_grouped_fsq,
+    FsqComposition.RESIDUAL: __build_residual_fsq,
 }
 
 
@@ -301,12 +301,12 @@ class EmaVectorQuantizer(nn.Module):
         self.register_buffer("cluster_size", torch.zeros(codebook_size))
         self.register_buffer("embed_avg", embed.clone())
 
-    def _distances(self, flat: torch.Tensor) -> torch.Tensor:
+    def __distances(self, flat: torch.Tensor) -> torch.Tensor:
         return (
             flat.pow(2).sum(1, keepdim=True) - 2 * flat @ self.embed.t() + self.embed.pow(2).sum(1)
         )
 
-    def _ema_update(self, flat: torch.Tensor, onehot: torch.Tensor) -> None:
+    def __ema_update(self, flat: torch.Tensor, onehot: torch.Tensor) -> None:
         n = onehot.sum(0)
         embed_sum = onehot.t() @ flat
         self.cluster_size.mul_(self.decay).add_(n, alpha=1 - self.decay)
@@ -315,9 +315,9 @@ class EmaVectorQuantizer(nn.Module):
         total = self.cluster_size.sum()
         smoothed = (self.cluster_size + self.eps) / (total + self.codebook_size * self.eps) * total
         self.embed.copy_(self.embed_avg / smoothed.unsqueeze(1))
-        self._reset_dead_codes(flat)
+        self.__reset_dead_codes(flat)
 
-    def _reset_dead_codes(self, flat: torch.Tensor) -> None:
+    def __reset_dead_codes(self, flat: torch.Tensor) -> None:
         dead = self.cluster_size < self.reset_threshold
         n_dead = int(dead.sum().item())
         if n_dead == 0:
@@ -331,11 +331,11 @@ class EmaVectorQuantizer(nn.Module):
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             flat = z.reshape(-1, self.code_dim)
-            indices = self._distances(flat).argmin(1)
+            indices = self.__distances(flat).argmin(1)
             onehot = F.one_hot(indices, self.codebook_size).type_as(flat)
 
             if self.training:
-                self._ema_update(flat, onehot)
+                self.__ema_update(flat, onehot)
 
         quant = (onehot @ self.embed).view_as(z)
         commit = F.mse_loss(z, quant.detach())
