@@ -1,252 +1,148 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
+import logging
+import sys
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
 
-from text2motion.app.bootstrap import ApplicationBootstrap
+from jsonargparse import ArgumentParser as RequestParser
+from jsonargparse.typing import register_type
+from pydantic import BaseModel
+
+from text2motion.app.bootstrap import ApplicationBootstrap, ApplicationContext
 from text2motion.app.commands.data import run_prepare, run_tokenize
 from text2motion.app.commands.evaluation import run_bench, run_evaluate
 from text2motion.app.commands.generator import run_pretrain, run_sanity_overfit, run_train_generator
 from text2motion.app.commands.serving import run_health, run_serve, run_studio
 from text2motion.app.commands.tokenizer import run_train_tokenizer
+from text2motion.app.logging_setup import LOG_LEVELS, configure_logging
 from text2motion.evaluation.contracts import (
-    GenerationEvaluationProtocol,
+    BenchmarkRequest,
+    EvaluateRequest,
     GenerationLengthPolicy,
-    StreamingBenchmarkProtocol,
 )
 from text2motion.generation.contracts import (
     Backbone,
     BackboneChoice,
-    GeneratorPretrainingRequest,
-    GeneratorTrainingRequest,
-    SamplingConfig,
+    PretrainRequest,
+    SanityOverfitRequest,
+    TrainGeneratorRequest,
 )
-from text2motion.motion.contracts import MotionDataConfig, PreparationStage, Split
-from text2motion.motion.representation import FPS
+from text2motion.motion.contracts import PreparationStage, PrepareRequest, Split
+from text2motion.streaming.contracts import HealthRequest, ServeRequest, StudioRequest
 from text2motion.tokenization.contracts import (
+    TokenizeRequest,
     TokenizerKind,
-    TokenizerTrainingRequest,
-    TokenPackRequest,
+    TrainTokenizerRequest,
 )
 
-_DEFAULT_CONFIG = "configs/default.yaml"
+logger = logging.getLogger(__name__)
+COMMAND_ENUMS = (
+    Backbone,
+    BackboneChoice,
+    GenerationLengthPolicy,
+    PreparationStage,
+    Split,
+    TokenizerKind,
+)
 
 
-def add_config(parser: argparse.ArgumentParser, required: bool = True) -> None:
-    parser.add_argument(
-        "--config",
-        required=required,
-        default=None if required else _DEFAULT_CONFIG,
-        help="path to a YAML config",
-    )
+@dataclass(frozen=True)
+class Command:
+    request_model: type[BaseModel]
+    handler: Callable[[ApplicationContext, Any], None]
+    summary: str
 
 
-def _add_data_commands(commands) -> None:
-    data_defaults = MotionDataConfig()
-    corpus_defaults = TokenPackRequest(features_dir=Path(), out_path=Path())
-    prepare = commands.add_parser("prepare", help="AMASS -> HumanML3D-263 data preparation")
-    add_config(prepare, required=False)
-    prepare.add_argument("--stage", default=PreparationStage.ALL, type=PreparationStage, choices=list(PreparationStage))
-    prepare.add_argument("--corpus", action="store_true")
-    prepare.add_argument("--regen_dir", default="data/HumanML3D_263")
-    prepare.add_argument("--out_dir", default="data/AMASS_263")
-    prepare.add_argument("--min_frames", type=int, default=data_defaults.min_motion_len)
-    prepare.add_argument("--limit", type=int, default=0)
-    prepare.add_argument("--source_release", default=None)
-    prepare.add_argument("--out", default="data/HumanML3D_official")
-    prepare.set_defaults(func=run_prepare)
-
-    tokenize = commands.add_parser("tokenize", help="encode a feature corpus into tokens")
-    add_config(tokenize)
-    tokenize.add_argument("--features_dir", default="data/AMASS_263/new_joint_vecs")
-    tokenize.add_argument("--tokenizer_ckpt", default=None)
-    tokenize.add_argument("--out", default="data/amass_tokens.npz")
-    tokenize.add_argument("--segment_frames", type=int, default=corpus_defaults.segment_frames)
-    tokenize.add_argument("--stride", type=int, default=corpus_defaults.stride)
-    tokenize.set_defaults(func=run_tokenize)
+COMMANDS = {
+    "prepare": Command(PrepareRequest, run_prepare, "AMASS -> HumanML3D-263 data preparation"),
+    "tokenize": Command(TokenizeRequest, run_tokenize, "encode a feature corpus into tokens"),
+    "train-tokenizer": Command(
+        TrainTokenizerRequest, run_train_tokenizer, "train the motion tokenizer"
+    ),
+    "sanity-overfit": Command(
+        SanityOverfitRequest, run_sanity_overfit, "mandatory real-batch overfit gate"
+    ),
+    "train-generator": Command(
+        TrainGeneratorRequest, run_train_generator, "train the text-to-motion generator"
+    ),
+    "pretrain": Command(PretrainRequest, run_pretrain, "unconditional token-corpus pretraining"),
+    "evaluate": Command(EvaluateRequest, run_evaluate, "citable generation eval (20-rep protocol)"),
+    "benchmark": Command(BenchmarkRequest, run_bench, "streaming latency/state-size benchmark"),
+    "serve": Command(ServeRequest, run_serve, "local streaming generation service"),
+    "studio": Command(StudioRequest, run_studio, "interactive aitviewer studio"),
+    "health": Command(HealthRequest, run_health, "check the streaming service readiness"),
+}
 
 
-def _add_tokenizer_command(commands) -> None:
-    defaults = TokenizerTrainingRequest()
-    train = commands.add_parser("train-tokenizer", help="train the motion tokenizer")
-    add_config(train)
-    train.add_argument(
-        "--tokenizer", required=True, type=TokenizerKind, choices=list(TokenizerKind)
-    )
-    train.add_argument("--epochs", type=int, default=defaults.epochs)
-    train.add_argument("--window", type=int, default=defaults.window)
-    train.add_argument("--batch_size", type=int, default=defaults.batch_size)
-    train.add_argument("--ema_decay", type=float, default=defaults.ema_decay)
-    train.add_argument("--eval_every", type=int, default=defaults.eval_every)
-    train.add_argument("--max_eval_clips", type=int, default=defaults.max_eval_clips)
-    train.add_argument("--num_workers", type=int, default=defaults.num_workers)
-    train.add_argument("--ckpt_name", default=None)
-    train.add_argument("--resume", action="store_true")
-    train.set_defaults(func=run_train_tokenizer)
+def register_value_enum(enum_class: type[Enum]) -> None:
+    def member(text: str) -> Enum:
+        return enum_class[text] if text in enum_class.__members__ else enum_class(text)
+
+    register_type(enum_class, serializer=lambda item: item.value, deserializer=member)
 
 
-def _add_generation_commands(commands) -> None:
-    train_defaults = GeneratorTrainingRequest()
-    pretrain_defaults = GeneratorPretrainingRequest(token_pack=Path())
-    sanity = commands.add_parser("sanity-overfit", help="mandatory real-batch overfit gate")
-    add_config(sanity)
-    sanity.add_argument("--backbone", required=True, type=Backbone, choices=list(Backbone))
-    sanity.add_argument("--tokenizer_ckpt", required=True)
-    sanity.add_argument("--out", required=True)
-    sanity.add_argument("--batch_size", type=int, default=4)
-    sanity.add_argument("--steps", type=int, default=1000)
-    sanity.add_argument("--lr", type=float, default=3e-3)
-    sanity.set_defaults(func=run_sanity_overfit)
-
-    train_gen = commands.add_parser("train-generator", help="train the text-to-motion generator")
-    add_config(train_gen)
-    train_gen.add_argument("--backbone", required=True, type=Backbone, choices=list(Backbone))
-    train_gen.add_argument("--tokenizer_ckpt", default=None)
-    train_gen.add_argument("--overfit_gate", required=True)
-    train_gen.add_argument("--init_ckpt", default=None)
-    train_gen.add_argument("--epochs", type=int, default=train_defaults.epochs)
-    train_gen.add_argument("--batch_size", type=int, default=train_defaults.batch_size)
-    train_gen.add_argument("--grad_accum", type=int, default=train_defaults.grad_accum)
-    train_gen.add_argument("--cfg_scale", type=float, default=train_defaults.cfg_scale)
-    train_gen.add_argument(
-        "--eval_split",
-        default=train_defaults.eval_split,
-        type=Split,
-        choices=[Split.VALIDATION, Split.TEST],
-    )
-    train_gen.add_argument("--eval_every", type=int, default=train_defaults.eval_every)
-    train_gen.add_argument("--max_eval_clips", type=int, default=train_defaults.max_eval_clips)
-    train_gen.add_argument("--eval_batch", type=int, default=train_defaults.eval_batch_size)
-    train_gen.add_argument("--temperature", type=float, default=train_defaults.temperature)
-    train_gen.add_argument("--our_vab_dir", default=None)
-    train_gen.add_argument("--ckpt_name", default=None)
-    train_gen.add_argument("--resume", action="store_true")
-    train_gen.add_argument("--patience", type=int, default=train_defaults.patience)
-    train_gen.set_defaults(func=run_train_generator)
-
-    pretrain = commands.add_parser("pretrain", help="unconditional token-corpus pretraining")
-    add_config(pretrain)
-    pretrain.add_argument("--backbone", required=True, type=Backbone, choices=list(Backbone))
-    pretrain.add_argument("--token_pack", default="data/amass_tokens_fsq8x1024.npz")
-    pretrain.add_argument("--epochs", type=int, default=pretrain_defaults.epochs)
-    pretrain.add_argument("--batch_size", type=int, default=pretrain_defaults.batch_size)
-    pretrain.add_argument("--grad_accum", type=int, default=pretrain_defaults.grad_accum)
-    pretrain.add_argument("--num_workers", type=int, default=pretrain_defaults.num_workers)
-    pretrain.add_argument("--val_fraction", type=float, default=pretrain_defaults.val_fraction)
-    pretrain.add_argument("--out", default=None)
-    pretrain.add_argument("--resume", action="store_true")
-    pretrain.set_defaults(func=run_pretrain)
+for command_enum in COMMAND_ENUMS:
+    register_value_enum(command_enum)
 
 
-def _add_evaluation_commands(commands) -> None:
-    defaults = GenerationEvaluationProtocol()
-    sampling = SamplingConfig()
-    benchmark = StreamingBenchmarkProtocol()
-    evaluate = commands.add_parser("evaluate", help="citable generation eval (20-rep protocol)")
-    add_config(evaluate, required=False)
-    evaluate.add_argument(
-        "--backbone",
-        default=BackboneChoice.BOTH,
-        type=BackboneChoice,
-        choices=list(BackboneChoice),
-    )
-    evaluate.add_argument(
-        "--split", default=defaults.split, type=Split, choices=[Split.VALIDATION, Split.TEST]
-    )
-    evaluate.add_argument("--max_clips", type=int, default=defaults.max_clips)
-    evaluate.add_argument("--temperature", type=float, default=sampling.temperature)
-    evaluate.add_argument("--top_p", type=float, default=sampling.top_p)
-    evaluate.add_argument("--cfg_scale", type=float, default=sampling.cfg_scale)
-    evaluate.add_argument(
-        "--length_mode",
-        default=GenerationLengthPolicy.FIXED,
-        type=GenerationLengthPolicy,
-        choices=list(GenerationLengthPolicy),
-    )
-    evaluate.add_argument("--mm_clips", type=int, default=defaults.mm_clips)
-    evaluate.add_argument("--mm_repeats", type=int, default=defaults.mm_repeats)
-    evaluate.add_argument("--bootstrap", type=int, default=defaults.bootstrap)
-    evaluate.add_argument("--eval_batch", type=int, default=defaults.batch_size)
-    evaluate.add_argument("--ckpt", default=None)
-    evaluate.add_argument("--tokenizer_ckpt", default=None)
-    evaluate.add_argument("--text_encoder_ckpt", default=None)
-    evaluate.add_argument("--device", default=None)
-    evaluate.add_argument("--seed", type=int, default=None)
-    evaluate.set_defaults(func=run_evaluate)
-
-    bench = commands.add_parser("benchmark", help="streaming latency/state-size benchmark")
-    add_config(bench, required=False)
-    bench.add_argument("--horizons", type=int, nargs="+", default=list(benchmark.horizons))
-    bench.add_argument("--device", default=None)
-    bench.add_argument("--out", default=None)
-    bench.add_argument("--warmup", type=int, default=benchmark.warmup)
-    bench.add_argument("--streams", type=int, nargs="*", default=list(benchmark.streams))
-    bench.add_argument("--streams_horizon", type=int, default=benchmark.streams_horizon)
-    bench.set_defaults(func=run_bench)
+def with_flag_values(request_model: type[BaseModel], arguments: list[str]) -> list[str]:
+    flags = {
+        f"--{name}"
+        for name, field in request_model.model_fields.items()
+        if field.annotation is bool
+    }
+    completed: list[str] = []
+    for index, argument in enumerate(arguments):
+        completed.append(argument)
+        following = arguments[index + 1] if index + 1 < len(arguments) else "--"
+        if argument in flags and following.startswith("--"):
+            completed.append("true")
+    return completed
 
 
-def _add_runtime_commands(commands) -> None:
-    sampling = SamplingConfig()
-    serve = commands.add_parser("serve", help="local streaming generation service")
-    add_config(serve, required=False)
-    serve.add_argument("--ckpt", default=None)
-    serve.add_argument("--tokenizer_ckpt", default=None)
-    serve.add_argument(
-        "--backbone", default=Backbone.TRANSFORMER, type=Backbone, choices=list(Backbone)
-    )
-    serve.add_argument("--host", default=None)
-    serve.add_argument("--port", type=int, default=None)
-    serve.add_argument("--idle_seconds", type=int, default=None)
-    serve.set_defaults(func=run_serve)
-
-    studio = commands.add_parser("studio", help="interactive aitviewer studio")
-    add_config(studio, required=False)
-    studio.add_argument("--ckpt", default=None)
-    studio.add_argument("--tokenizer_ckpt", default=None)
-    studio.add_argument(
-        "--backbone", default=Backbone.TRANSFORMER, type=Backbone, choices=list(Backbone)
-    )
-    studio.add_argument("--model_dir", default=None)
-    studio.add_argument("--studio_config", default="configs/studio.yml")
-    studio.add_argument("--model", default=None)
-    studio.add_argument("--steps", type=int, default=0)
-    studio.add_argument("--seconds", type=float, default=0.0)
-    studio.add_argument("--cfg_scale", type=float, default=6.0)
-    studio.add_argument("--temperature", type=float, default=sampling.temperature)
-    studio.add_argument("--top_p", type=float, default=sampling.top_p)
-    studio.add_argument("--fps", type=int, default=FPS)
-    studio.add_argument("--host", default=None)
-    studio.add_argument("--port", type=int, default=None)
-    studio.set_defaults(func=run_studio)
-
-    health = commands.add_parser("health", help="check the streaming service readiness")
-    add_config(health, required=False)
-    health.add_argument("--host", default=None)
-    health.add_argument("--port", type=int, default=None)
-    health.set_defaults(func=run_health)
+def parse_request(command: str, arguments: list[str]) -> BaseModel:
+    selected = COMMANDS[command]
+    parser = RequestParser(prog=f"text2motion {command}", description=selected.summary)
+    parser.add_class_arguments(selected.request_model, nested_key=None)
+    parsed = parser.parse_args(with_flag_values(selected.request_model, arguments))
+    return selected.request_model.model_validate(parsed.as_dict())
 
 
 def build_parser() -> argparse.ArgumentParser:
+    summaries = "\n".join(f"  {name:16s} {command.summary}" for name, command in COMMANDS.items())
     parser = argparse.ArgumentParser(
-        prog="text2motion", description="Streaming text-to-motion: one entry point per stage."
+        prog="text2motion",
+        description="Streaming text-to-motion: one entry point per stage.",
+        epilog=f"commands:\n{summaries}\n\ntext2motion <command> --help shows the flags.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    commands = parser.add_subparsers(dest="command", required=True)
-    _add_data_commands(commands)
-    _add_tokenizer_command(commands)
-    _add_generation_commands(commands)
-    _add_evaluation_commands(commands)
-    _add_runtime_commands(commands)
+    parser.add_argument(
+        "--log_level",
+        default="INFO",
+        choices=LOG_LEVELS,
+        help="DEBUG adds detail lines; WARNING shows problems only",
+    )
+    parser.add_argument("command", choices=list(COMMANDS), metavar="command")
+    parser.add_argument("arguments", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
     return parser
 
 
 def main(argv: list[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
+    arguments = sys.argv[1:] if argv is None else list(argv)
+    selected = build_parser().parse_args(arguments)
+    configure_logging(selected.log_level)
+    logger.info(f"command: text2motion {' '.join(arguments)}")
+    request = parse_request(selected.command, selected.arguments)
     app = ApplicationBootstrap.from_config(
-        args.config,
-        device=getattr(args, "device", None),
-        seed=getattr(args, "seed", None),
+        getattr(request, "config"),
+        device=getattr(request, "device", None),
+        seed=getattr(request, "seed", None),
     )
-    args.func(app, args)
+    COMMANDS[selected.command].handler(app, request)
 
 
 if __name__ == "__main__":
