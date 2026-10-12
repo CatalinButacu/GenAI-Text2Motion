@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import statistics
 import time
 from pathlib import Path
@@ -15,6 +16,8 @@ from text2motion.generation.model import (
     MotionTokenGenerator,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def streaming_state_size_bytes(state) -> int:
     total = 0
@@ -27,7 +30,7 @@ def streaming_state_size_bytes(state) -> int:
 
 
 @torch.no_grad()
-def _advance(generator: MotionTokenGenerator, tokens: torch.Tensor, state):
+def __advance(generator: MotionTokenGenerator, tokens: torch.Tensor, state):
     h, state = generator.backbone.step(generator.embed_motion_tokens(tokens), state)
     nxt = generator.predict_token_logits(h).argmax(-1)
     if generator.end_id is not None:
@@ -36,7 +39,9 @@ def _advance(generator: MotionTokenGenerator, tokens: torch.Tensor, state):
 
 
 @torch.no_grad()
-def warm_up_streaming_generator(generator: MotionTokenGenerator, device: str, steps: int, batch: int = 1) -> None:
+def warm_up_streaming_generator(
+    generator: MotionTokenGenerator, device: str, steps: int, batch: int = 1
+) -> None:
     if steps <= 0:
         return
     cfg = generator.cfg
@@ -47,7 +52,7 @@ def warm_up_streaming_generator(generator: MotionTokenGenerator, device: str, st
         _, state = generator.backbone.step(prefix[:, position], state)
     tokens = torch.zeros(batch, cfg.num_codebooks, dtype=torch.long, device=device)
     for _ in range(steps):
-        tokens, state = _advance(generator, tokens, state)
+        tokens, state = __advance(generator, tokens, state)
     if device == "cuda":
         torch.cuda.synchronize()
 
@@ -78,7 +83,7 @@ def benchmark_streaming_horizons(
         if cuda:
             torch.cuda.synchronize()
         t0 = time.perf_counter()
-        tokens, state = _advance(generator, tokens, state)
+        tokens, state = __advance(generator, tokens, state)
         if cuda:
             torch.cuda.synchronize()
         step_ms.append((time.perf_counter() - t0) * 1000)
@@ -128,7 +133,7 @@ def benchmark_concurrent_streams(
             if cuda:
                 torch.cuda.synchronize()
             t0 = time.perf_counter()
-            tokens, state = _advance(generator, tokens, state)
+            tokens, state = __advance(generator, tokens, state)
             if cuda:
                 torch.cuda.synchronize()
             step_ms.append((time.perf_counter() - t0) * 1000)
@@ -178,13 +183,13 @@ def run_streaming_state_latency_benchmark(
             module, horizons, device, warmup_steps=request.warmup
         )
         params = sum(p.numel() for p in module.parameters())
-        print(
+        logger.info(
             f"\n{backbone.value} ({params:,} params, "
             f"{architecture.config.n_layers} layers, device {device})"
         )
-        print(f"{'horizon':>8} {'ms/step':>9} {'state':>12} {'cuda peak':>12}")
+        logger.info(f"{'horizon':>8} {'ms/step':>9} {'state':>12} {'cuda peak':>12}")
         for row in results[backbone.value]:
-            print(
+            logger.info(
                 f"{row['horizon']:>8} {row['ms_per_step']:>9.2f} "
                 f"{row['state_bytes'] / 1e6:>10.2f}MB {row['cuda_peak_bytes'] / 1e6:>10.1f}MB"
             )
@@ -194,10 +199,12 @@ def run_streaming_state_latency_benchmark(
                 module, sorted(request.streams), request.streams_horizon, device
             )
             concurrency[backbone.value] = rows
-            print(f"  concurrency @ horizon {request.streams_horizon}")
-            print(f"  {'streams':>8} {'ms/step':>9} {'state':>12} {'per-stream':>12} {'peak':>10}")
+            logger.info(f"  concurrency @ horizon {request.streams_horizon}")
+            logger.info(
+                f"  {'streams':>8} {'ms/step':>9} {'state':>12} {'per-stream':>12} {'peak':>10}"
+            )
             for row in rows:
-                print(
+                logger.info(
                     f"  {row['streams']:>8} {row['ms_per_step']:>9.2f} "
                     f"{row['state_bytes'] / 1e6:>10.2f}MB "
                     f"{row['state_bytes_per_stream'] / 1e6:>10.3f}MB "
@@ -215,5 +222,5 @@ def run_streaming_state_latency_benchmark(
     out_path = Path(request.out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2))
-    print(f"\nwrote {out_path}")
+    logger.info(f"\nwrote {out_path}")
     return payload

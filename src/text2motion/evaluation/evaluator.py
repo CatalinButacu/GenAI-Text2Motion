@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import zlib
 from collections import defaultdict
 
@@ -29,13 +30,17 @@ from text2motion.motion.annotations import parse_text_file
 from text2motion.motion.contracts import Split
 from text2motion.motion.storage import FEATURES_DIR
 
+logger = logging.getLogger(__name__)
+
 
 def deterministic_generation_seed(clip_id: str) -> int:
     return zlib.crc32(clip_id.encode("utf-8"))
 
 
 class HumanMl3dGenerationEvaluator:
-    def __init__(self, resources: GuoEvaluationResources, max_frames: int, min_tokens: int = 2) -> None:
+    def __init__(
+        self, resources: GuoEvaluationResources, max_frames: int, min_tokens: int = 2
+    ) -> None:
         self.resources = resources
         self.max_frames = max_frames
         self.min_tokens = min_tokens
@@ -49,7 +54,9 @@ class HumanMl3dGenerationEvaluator:
             self.resources.device,
         )
 
-    def calculate_reconstruction_fid(self, reference: list[np.ndarray], recon: list[np.ndarray]) -> float:
+    def calculate_reconstruction_fid(
+        self, reference: list[np.ndarray], recon: list[np.ndarray]
+    ) -> float:
         return fid(self.compute_motion_embeddings(reference), self.compute_motion_embeddings(recon))
 
     def load_scorable_reference_clip(self, clip_id: str) -> tuple[np.ndarray, int] | None:
@@ -59,7 +66,9 @@ class HumanMl3dGenerationEvaluator:
         feat = np.load(vec_path).astype(np.float32)
         if np.isnan(feat).any():
             return None
-        token_len = min(feat.shape[0], self.max_frames) // self.resources.tokenizer_downsample_factor
+        token_len = (
+            min(feat.shape[0], self.max_frames) // self.resources.tokenizer_downsample_factor
+        )
         if token_len < self.min_tokens:
             return None
         return feat[: token_len * self.resources.tokenizer_downsample_factor], token_len
@@ -165,7 +174,9 @@ class HumanMl3dGenerationEvaluator:
             per_caption.append(float(np.linalg.norm(emb[first] - emb[second], axis=1).mean()))
         return float(np.mean(per_caption)) if per_caption else float("nan")
 
-    def calculate_generation_metrics(self, split: GenerationEvaluationSet, reps: int, bootstrap: int) -> dict[str, float]:
+    def calculate_generation_metrics(
+        self, split: GenerationEvaluationSet, reps: int, bootstrap: int
+    ) -> dict[str, float]:
         reference_emb = self.compute_motion_embeddings(split.reference)
         generated_emb = self.compute_motion_embeddings(split.generated)
 
@@ -174,7 +185,9 @@ class HumanMl3dGenerationEvaluator:
             for tokens in token_lists:
                 flat.append(self.resources.build_guo_text_inputs(tokens))
                 owner.append(clip_index)
-        text_emb = compute_guo_text_embeddings(self.resources.text_embedder, flat, self.resources.device)
+        text_emb = compute_guo_text_embeddings(
+            self.resources.text_embedder, flat, self.resources.device
+        )
         owner = np.array(owner)
         per_clip = [np.where(owner == index)[0] for index in range(len(split.generated))]
 
@@ -221,12 +234,14 @@ class HumanMl3dGenerationEvaluator:
             request.batch_size,
         )
         if sum(split.dropped.values()):
-            print(
-                f"WARNING: scored {len(split.generated)} of {split.requested} requested clips "
+            logger.warning(
+                f"scored {len(split.generated)} of {split.requested} requested clips "
                 f"(dropped {split.dropped}). FID is only comparable at equal clip counts."
             )
 
-        metrics = self.calculate_generation_metrics(split, reps=request.reps, bootstrap=request.bootstrap)
+        metrics = self.calculate_generation_metrics(
+            split, reps=request.reps, bootstrap=request.bootstrap
+        )
 
         multimodality = float("nan")
         if request.mm_clips > 0:
@@ -267,7 +282,7 @@ class HumanMl3dGenerationEvaluator:
         sampling = sampling or SamplingConfig()
         generated = self.generate_evaluation_set(generator, split, max_clips, sampling, batch_size)
         if sum(generated.dropped.values()):
-            print(
+            logger.info(
                 f"  [gen-eval] scored {len(generated.generated)}/{generated.requested} clips, "
                 f"dropped {generated.dropped}"
             )

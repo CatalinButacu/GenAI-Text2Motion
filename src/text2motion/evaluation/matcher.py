@@ -35,26 +35,95 @@ _POS_INDEX = {
 
 _VIP_WORDS = {
     "Loc_VIP": (
-        "left", "right", "clockwise", "counterclockwise", "anticlockwise", "forward",
-        "back", "backward", "up", "down", "straight", "curve",
+        "left",
+        "right",
+        "clockwise",
+        "counterclockwise",
+        "anticlockwise",
+        "forward",
+        "back",
+        "backward",
+        "up",
+        "down",
+        "straight",
+        "curve",
     ),
     "Body_VIP": (
-        "arm", "chin", "foot", "feet", "face", "hand", "mouth", "leg", "waist",
-        "eye", "knee", "shoulder", "thigh",
+        "arm",
+        "chin",
+        "foot",
+        "feet",
+        "face",
+        "hand",
+        "mouth",
+        "leg",
+        "waist",
+        "eye",
+        "knee",
+        "shoulder",
+        "thigh",
     ),
     "Obj_VIP": (
-        "stair", "dumbbell", "chair", "window", "floor", "car", "ball", "handrail",
-        "baseball", "basketball",
+        "stair",
+        "dumbbell",
+        "chair",
+        "window",
+        "floor",
+        "car",
+        "ball",
+        "handrail",
+        "baseball",
+        "basketball",
     ),
     "Act_VIP": (
-        "walk", "run", "swing", "pick", "bring", "kick", "put", "squat", "throw",
-        "hop", "dance", "jump", "turn", "stumble", "stop", "sit", "lift", "lower",
-        "raise", "wash", "stand", "kneel", "stroll", "rub", "bend", "balance", "flap",
-        "jog", "shuffle", "lean", "rotate", "spin", "spread", "climb",
+        "walk",
+        "run",
+        "swing",
+        "pick",
+        "bring",
+        "kick",
+        "put",
+        "squat",
+        "throw",
+        "hop",
+        "dance",
+        "jump",
+        "turn",
+        "stumble",
+        "stop",
+        "sit",
+        "lift",
+        "lower",
+        "raise",
+        "wash",
+        "stand",
+        "kneel",
+        "stroll",
+        "rub",
+        "bend",
+        "balance",
+        "flap",
+        "jog",
+        "shuffle",
+        "lean",
+        "rotate",
+        "spin",
+        "spread",
+        "climb",
     ),
     "Desc_VIP": (
-        "slowly", "carefully", "fast", "careful", "slow", "quickly", "happy", "angry",
-        "sad", "happily", "angrily", "sadly",
+        "slowly",
+        "carefully",
+        "fast",
+        "careful",
+        "slow",
+        "quickly",
+        "happy",
+        "angry",
+        "sad",
+        "happily",
+        "angrily",
+        "sadly",
     ),
 }
 
@@ -66,7 +135,7 @@ class GuoWordPosVectorizer:
         word2idx = pickle.load(open(pjoin(meta_root, "%s_idx.pkl" % prefix), "rb"))
         self.word2vec = {w: vectors[word2idx[w]] for w in words}
 
-    def _pos_one_hot(self, pos):
+    def __pos_one_hot(self, pos):
         pos_vec = np.zeros(len(_POS_INDEX))
         if pos in _POS_INDEX:
             pos_vec[_POS_INDEX[pos]] = 1
@@ -87,12 +156,12 @@ class GuoWordPosVectorizer:
                     vip_pos = key
                     break
             if vip_pos is not None:
-                pos_vec = self._pos_one_hot(vip_pos)
+                pos_vec = self.__pos_one_hot(vip_pos)
             else:
-                pos_vec = self._pos_one_hot(pos)
+                pos_vec = self.__pos_one_hot(pos)
         else:
             word_vec = self.word2vec["unk"]
-            pos_vec = self._pos_one_hot("OTHER")
+            pos_vec = self.__pos_one_hot("OTHER")
         return word_vec, pos_vec
 
 
@@ -106,7 +175,7 @@ _GLOVE_DIM = 300
 _POS_DIM = 15
 
 
-def _bigru_final_state(
+def bigru_final_state(
     gru: nn.GRU, x: torch.Tensor, hidden: torch.Tensor, lengths: torch.Tensor | None
 ) -> torch.Tensor:
     h0 = hidden.repeat(1, x.size(0), 1)
@@ -168,7 +237,7 @@ class GuoMotionEncoder(nn.Module):
         self.register_buffer("hidden", torch.zeros(2, 1, _GRU_WIDTH))
 
     def forward(self, x: torch.Tensor, lengths: torch.Tensor | None = None) -> torch.Tensor:
-        final = _bigru_final_state(self.gru, self.input_emb(x), self.hidden, lengths)
+        final = bigru_final_state(self.gru, self.input_emb(x), self.hidden, lengths)
         return self.output_net(final)
 
 
@@ -222,7 +291,7 @@ class GuoTextEmbeddingEncoder(nn.Module):
         if pos_onehots is None:
             pos_onehots = torch.zeros(*word_embs.shape[:2], _POS_DIM, device=word_embs.device)
         x = self.input_emb(word_embs + self.pos_emb(pos_onehots))
-        final = _bigru_final_state(self.gru, x, self.hidden, lengths)
+        final = bigru_final_state(self.gru, x, self.hidden, lengths)
         return self.output_net(final)
 
 
@@ -231,27 +300,27 @@ def load_guo_motion_normalization_stats(stats_dir: Path) -> tuple[np.ndarray, np
     std = np.load(Path(stats_dir) / "std.npy")
 
     if mean.shape[-1] != DIM:
-        raise ValueError(
-            f"eval stats must be {DIM}-dim (standard HumanML3D), got {mean.shape}"
-        )
+        raise ValueError(f"eval stats must be {DIM}-dim (standard HumanML3D), got {mean.shape}")
 
     return mean.astype(np.float32), std.astype(np.float32)
 
 
-def load_frozen_guo_embedding_encoders(finest_tar: Path, device: str = "cpu") -> tuple[GuoMotionEmbeddingEncoder, GuoTextEmbeddingEncoder]:
+def load_frozen_guo_embedding_encoders(
+    finest_tar: Path, device: str = "cpu"
+) -> tuple[GuoMotionEmbeddingEncoder, GuoTextEmbeddingEncoder]:
     ckpt = torch.load(Path(finest_tar), map_location="cpu", weights_only=False)
 
     motion = GuoMotionEmbeddingEncoder()
-    _load_exact(motion.movement, ckpt["movement_encoder"], "movement_encoder")
-    _load_exact(motion.encoder, ckpt["motion_encoder"], "motion_encoder")
+    __load_exact(motion.movement, ckpt["movement_encoder"], "movement_encoder")
+    __load_exact(motion.encoder, ckpt["motion_encoder"], "motion_encoder")
 
     text = GuoTextEmbeddingEncoder()
-    _load_exact(text, ckpt["text_encoder"], "text_encoder")
+    __load_exact(text, ckpt["text_encoder"], "text_encoder")
 
     return motion.to(device).eval(), text.to(device).eval()
 
 
-def _load_exact(module: nn.Module, state: dict, name: str) -> None:
+def __load_exact(module: nn.Module, state: dict, name: str) -> None:
     missing, unexpected = module.load_state_dict(state, strict=False)
 
     if missing:

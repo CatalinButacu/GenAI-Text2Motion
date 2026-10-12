@@ -1,8 +1,12 @@
+import logging
+
 import numpy as np
 import torch
 from scipy import linalg
 
 from text2motion.evaluation.contracts import DIVERSITY_PAIRS, R_PRECISION_POOL
+
+logger = logging.getLogger(__name__)
 
 
 def frechet_gaussian_distance(
@@ -24,8 +28,8 @@ def fid(real_feats: np.ndarray, gen_feats: np.ndarray, warn_rank_deficient: bool
 
     dim = real_feats.shape[-1]
     if warn_rank_deficient and min(n_real, n_gen) <= dim:
-        print(
-            f"WARNING: FID over {min(n_real, n_gen)} samples of {dim}-dim features -- the "
+        logger.warning(
+            f"FID over {min(n_real, n_gen)} samples of {dim}-dim features -- the "
             f"covariance is rank-deficient, so this value carries a large sample-size-dependent "
             f"bias. It is comparable ONLY to other FIDs at the same sample count."
         )
@@ -83,6 +87,8 @@ def paired_fid_delta(
         "delta_ci_lo": lo,
         "delta_ci_hi": hi,
         "separates": bool(lo > 0.0 or hi < 0.0),
+        "share_a_higher": float((arr > 0.0).mean()),
+        "resamples": int(resamples),
     }
 
 

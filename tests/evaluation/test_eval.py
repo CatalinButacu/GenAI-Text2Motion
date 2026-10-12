@@ -55,7 +55,7 @@ def test_fid_rejects_degenerate_input():
         _fid(np.zeros((1, 8), np.float32), np.zeros((5, 8), np.float32))
 
 
-def test_fid_warns_when_covariance_is_rank_deficient(capsys):
+def test_fid_warns_when_covariance_is_rank_deficient(caplog):
     from text2motion.evaluation.metrics import fid as _fid
 
     rng = np.random.default_rng(0)
@@ -63,12 +63,13 @@ def test_fid_warns_when_covariance_is_rank_deficient(capsys):
     b = rng.normal(size=(20, 64)).astype(np.float32)
 
     _fid(a, b)
-    assert "rank-deficient" in capsys.readouterr().out
+    assert "rank-deficient" in caplog.text
+    caplog.clear()
 
     big_a = rng.normal(size=(80, 8)).astype(np.float32)
     big_b = rng.normal(size=(80, 8)).astype(np.float32)
     _fid(big_a, big_b)
-    assert "rank-deficient" not in capsys.readouterr().out
+    assert "rank-deficient" not in caplog.text
 
 
 def test_bootstrap_fid_reports_a_usable_interval():
