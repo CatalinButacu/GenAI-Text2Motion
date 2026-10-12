@@ -279,3 +279,117 @@ def test_streaming_recovery_resets_to_the_origin():
     assert recovery.yaw == 0.0
     again = recovery(feat)
     assert np.allclose(first, again)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda graphs need a cuda device")
+def test_cuda_graph_decode_streams_the_same_tokens_as_eager_decode():
+    from text2motion.generation.model import seeded_sampling_uniforms
+
+    torch.manual_seed(0)
+    gen = MotionTokenGenerator(GEN).cuda().eval()
+    text = torch.randn(1, 32, device="cuda")
+    steps = 12
+    uniforms = seeded_sampling_uniforms([3], steps, GEN.num_codebooks, "cuda")
+
+    def stream() -> torch.Tensor:
+        tokens = gen.stream_token_indices(text, steps, cfg_scale=3.0, uniforms=uniforms)
+        return torch.stack(list(tokens), 1)
+
+    eager = stream()
+    gen.enable_cuda_graph_decode()
+    first = stream()
+    replayed = stream()
+    assert torch.equal(eager, first)
+    assert torch.equal(eager, replayed)
+
+
+def test_cuda_graph_decode_refuses_a_positional_backbone():
+    cfg = GeneratorConfig(
+        backbone="transformer",
+        d_model=64,
+        n_layers=2,
+        d_text=32,
+        num_codebooks=2,
+        codebook_size=16,
+        max_seq_len=32,
+        n_heads=4,
+    )
+    with pytest.raises(ValueError, match="recurrent state"):
+        MotionTokenGenerator(cfg).enable_cuda_graph_decode()
+
+
+def test_anchored_stream_runs_a_positional_backbone_past_its_learned_positions():
+    cfg = GeneratorConfig(
+        backbone="transformer",
+        d_model=64,
+        n_layers=2,
+        d_text=32,
+        num_codebooks=2,
+        codebook_size=16,
+        max_seq_len=24,
+        n_heads=4,
+    )
+    torch.manual_seed(0)
+    gen = MotionTokenGenerator(cfg).eval()
+    text = torch.randn(1, 32)
+    limit = gen.backbone.max_positions
+    tokens = list(gen.stream_token_indices(text, 3 * limit, anchor_every=8, anchor_context=8))
+    assert len(tokens) == 3 * limit
+
+
+def test_anchoring_that_would_overrun_the_learned_positions_is_refused():
+    cfg = GeneratorConfig(
+        backbone="transformer",
+        d_model=64,
+        n_layers=2,
+        d_text=32,
+        num_codebooks=2,
+        codebook_size=16,
+        max_seq_len=24,
+        n_heads=4,
+    )
+    gen = MotionTokenGenerator(cfg).eval()
+    with pytest.raises(ValueError, match="re-anchoring"):
+        list(gen.stream_token_indices(torch.randn(1, 32), 10, anchor_every=20, anchor_context=16))
+
+
+def test_anchoring_disabled_leaves_the_stream_unchanged_and_enabled_changes_it():
+    from text2motion.generation.model import seeded_sampling_uniforms
+
+    torch.manual_seed(0)
+    gen = MotionTokenGenerator(GEN).eval()
+    text = torch.randn(1, 32)
+    uniforms = seeded_sampling_uniforms([5], 20, GEN.num_codebooks, "cpu")
+    plain = torch.stack(list(gen.stream_token_indices(text, 20, uniforms=uniforms)), 1)
+    again = torch.stack(
+        list(gen.stream_token_indices(text, 20, uniforms=uniforms, anchor_every=0)), 1
+    )
+    anchored = torch.stack(
+        list(
+            gen.stream_token_indices(text, 20, uniforms=uniforms, anchor_every=4, anchor_context=2)
+        ),
+        1,
+    )
+    assert torch.equal(plain, again)
+    assert torch.equal(plain[:, :5], anchored[:, :5])
+    assert not torch.equal(plain, anchored)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda graphs need a cuda device")
+def test_anchored_cuda_graph_decode_matches_anchored_eager_decode():
+    from text2motion.generation.model import seeded_sampling_uniforms
+
+    torch.manual_seed(0)
+    gen = MotionTokenGenerator(GEN).cuda().eval()
+    text = torch.randn(1, 32, device="cuda")
+    uniforms = seeded_sampling_uniforms([9], 24, GEN.num_codebooks, "cuda")
+
+    def stream() -> torch.Tensor:
+        tokens = gen.stream_token_indices(
+            text, 24, cfg_scale=3.0, uniforms=uniforms, anchor_every=6, anchor_context=4
+        )
+        return torch.stack(list(tokens), 1)
+
+    eager = stream()
+    gen.enable_cuda_graph_decode()
+    assert torch.equal(eager, stream())
