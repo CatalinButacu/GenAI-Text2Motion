@@ -71,7 +71,9 @@ def run(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Count and sanity-check the 100M twins.")
     parser.add_argument("--config", default="configs/generator/final100m_fsq8x1024.yaml")
-    parser.add_argument("--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt")
+    parser.add_argument(
+        "--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
+    )
     parser.add_argument("--steps", type=int, default=150)
     parser.add_argument("--batch_size", type=int, default=2)
     parser.add_argument("--window", type=int, default=64)

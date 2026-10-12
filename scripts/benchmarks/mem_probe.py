@@ -58,9 +58,7 @@ def run(a: argparse.Namespace) -> None:
 
     torch.cuda.reset_peak_memory_stats()
     motion = torch.randn(a.batch, cfg.data.max_motion_len, DIM, device=dev)
-    lengths = torch.full(
-        (a.batch,), cfg.data.max_motion_len, dtype=torch.long, device=dev
-    )
+    lengths = torch.full((a.batch,), cfg.data.max_motion_len, dtype=torch.long, device=dev)
     caps = ["a person walks forward and sits down"] * a.batch
     try:
         text_emb = trainer.encode(caps)

@@ -67,3 +67,14 @@ These answer "is it fast enough", never "is it good". No FID here.
 They live in `infra/`: `infra/kernel_canary.sh` (the fused-kernel canary),
 `infra/make_bundle.sh` (builds the upload payload), `infra/azure/run_twins.sh` (the six training
 runs), plus the Terraform in `infra/azure/`.
+
+## `qa/` — test the studio the way a person uses it
+
+| file | what it is |
+|---|---|
+| `studio_human_test.py` | drives the **real** studio viewer offscreen (headless window, real PyQt6 key codes, 60 Hz paced like vsync) through human scenarios: type a prompt and press Enter, double Enter, run forever then Stop then a new prompt, keyboard shortcuts (H skin, S shadows, R reload), live typing, switching models. Checks state invariants every frame (no duplicate nodes, playhead in range, no error status, finite joints) and reads rendered pixels to verify the mesh / skeleton are actually drawn. Starts its own service on port 8797. Screenshots + `report.json` in `artifacts/outputs/qa/studio/`. |
+| `studio_controls_test.py` | clicks **every control** in the studio for real: records each ImGui widget's on-screen rect as the panels draw it, then drives the viewer's own mouse/keyboard handlers (move, press, drag, release, scroll, type, Enter) and asserts each control's effect -- all Environment, Sampling, Avatar, Model, Playback and Prompt-bar widgets (57 checks). Every button click must actually fire, or the test reports the rect and clip it missed. Exit code 1 on any failure; `report.json` in `artifacts/outputs/qa/studio_controls/`. |
+| `motion_naturalness_probe.py` | per-stage motion statistics (acceleration, jerk, frames over the physical limit, root teleports, foot skate) for ground truth, tokenizer round-trip, generated skeleton and the studio mesh -- localizes where unnatural motion enters. |
+| `motion_glitch_probe.py` | generates long motions through the exact service path (streaming decoder + chunked skeleton recovery), plain vs re-anchored, and counts over-limit joint accelerations, root teleports, foot skating, NaNs, and streamed-vs-whole recovery error, with spike positions checked against decoder seams and re-anchor rebuilds. |
+
+Both studio QA scripts take `--visible` (drive the real PyQt6 window on screen, with the injected mouse cursor drawn) and `--pace N` (slow typing and add pauses so a person can follow). Selenium does not apply: the studio is a native OpenGL/ImGui window with no DOM or accessibility tree; these scripts are the equivalent -- find a control by label, act on it, assert the effect.

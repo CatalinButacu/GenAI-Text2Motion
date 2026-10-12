@@ -24,11 +24,7 @@ def run(a: argparse.Namespace) -> None:
     cfg = load_config(a.config)
     seed_everything(cfg.seed, cfg.deterministic)
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    steps = (
-        a.steps
-        if a.steps is not None
-        else cfg.data.max_motion_len // cfg.tokenizer.downsample
-    )
+    steps = a.steps if a.steps is not None else cfg.data.max_motion_len // cfg.tokenizer.downsample
     tok = FsqTokenizer(cfg.tokenizer)
     tok.load_state_dict(torch.load(a.tokenizer_ckpt, map_location="cpu"))
     tok.to(dev).eval()
@@ -96,8 +92,7 @@ def run(a: argparse.Namespace) -> None:
         ax.set_axis_off()
         ax.view_init(elev=12, azim=-75)
     fig.suptitle(
-        f'{a.backbone} pilot, cfg {a.cfg_scale}: "{a.prompt}"  '
-        f"({frame_count} frames @{FPS}fps)",
+        f'{a.backbone} pilot, cfg {a.cfg_scale}: "{a.prompt}"  ({frame_count} frames @{FPS}fps)',
         fontsize=11,
     )
     fig.tight_layout()

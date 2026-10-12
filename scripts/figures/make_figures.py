@@ -12,7 +12,7 @@ FIG = Path("paper/figures")
 FIG.mkdir(parents=True, exist_ok=True)
 
 
-def _load_streaming() -> dict[str, dict[int, dict]]:
+def __load_streaming() -> dict[str, dict[int, dict]]:
 
     merged: dict[str, dict[int, dict]] = {"transformer": {}, "mamba": {}}
     for name in ("streaming_bench.json", "streaming_bench_long.json"):
@@ -27,7 +27,7 @@ def _load_streaming() -> dict[str, dict[int, dict]]:
 
 
 def fig_streaming() -> None:
-    data = _load_streaming()
+    data = __load_streaming()
     fig, (ax_mem, ax_lat) = plt.subplots(1, 2, figsize=(11, 4.2))
     style = {
         "transformer": ("tab:red", "o", "Transformer (KV-cache)"),

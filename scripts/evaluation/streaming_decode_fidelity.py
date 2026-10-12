@@ -61,16 +61,12 @@ def run(args: argparse.Namespace) -> None:
         raise ValueError("paths.hml3d_out_dir must be configured")
     window = args.window or cfg.data.max_motion_len
     fps = args.fps or FPS
-    clips, scaler = load_clips(
-        Path(cfg.paths.hml3d_out_dir), args.split, args.max_clips, window
-    )
+    clips, scaler = load_clips(Path(cfg.paths.hml3d_out_dir), args.split, args.max_clips, window)
     motion = torch.from_numpy(clips).float()
     mean_t = torch.from_numpy(scaler.mean).float()
     std_t = torch.from_numpy(scaler.std).float()
 
-    measured_left, measured_right = measure_decoder_context(
-        tokenizer, cfg.tokenizer.downsample
-    )
+    measured_left, measured_right = measure_decoder_context(tokenizer, cfg.tokenizer.downsample)
     print(f"measured decoder context: left {measured_left} tokens, right {measured_right} tokens")
 
     run_dir = start_run("streaming_decode_fidelity", cfg, cfg.paths.logs_dir)

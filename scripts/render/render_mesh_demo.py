@@ -51,11 +51,7 @@ def run(a):
     model_dir = Path(a.model_dir) if a.model_dir else cfg.paths.smplx_models
     if model_dir is None:
         raise ValueError("paths.smplx_models or --model_dir must identify the SMPL-X model root")
-    steps = (
-        a.steps
-        if a.steps is not None
-        else cfg.data.max_motion_len // cfg.tokenizer.downsample
-    )
+    steps = a.steps if a.steps is not None else cfg.data.max_motion_len // cfg.tokenizer.downsample
     fps = a.fps or FPS
     tok = FsqTokenizer(cfg.tokenizer)
     tok.load_state_dict(torch.load(a.tokenizer_ckpt, map_location="cpu"))
@@ -132,7 +128,9 @@ def main():
         description="Render generated motion as a SMPL-X body montage + GIF."
     )
     p.add_argument("--config", default="configs/generator/final100m_fsq8x1024.yaml")
-    p.add_argument("--ckpt", default="artifacts/checkpoints/generator/generator_transformer_100m_val163.pt")
+    p.add_argument(
+        "--ckpt", default="artifacts/checkpoints/generator/generator_transformer_100m_val163.pt"
+    )
     p.add_argument("--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt")
     p.add_argument("--model_dir")
     p.add_argument("--prompt", required=True)

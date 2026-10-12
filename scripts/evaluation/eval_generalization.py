@@ -69,9 +69,7 @@ def run(args: argparse.Namespace) -> None:
         }
         gap = fids[Split.TEST] - fids[Split.TRAIN]
         tv = abs(fids[Split.TEST] - fids[Split.VALIDATION])
-        rows.append(
-            (stem, fids[Split.TRAIN], fids[Split.VALIDATION], fids[Split.TEST])
-        )
+        rows.append((stem, fids[Split.TRAIN], fids[Split.VALIDATION], fids[Split.TEST]))
         print(
             f"{stem:14} {fids[Split.TRAIN]:8.4f} {fids[Split.VALIDATION]:8.4f} "
             f"{fids[Split.TEST]:8.4f} "

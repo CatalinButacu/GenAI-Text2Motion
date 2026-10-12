@@ -32,9 +32,13 @@ def main() -> None:
     if config.paths.eval_matcher is None or config.paths.eval_stats_dir is None:
         raise ValueError("paths.eval_matcher and paths.eval_stats_dir are required")
 
-    build_text = create_guo_text_input_builder(GuoWordPosVectorizer(str(config.paths.our_vab_dir), "our_vab"))
+    build_text = create_guo_text_input_builder(
+        GuoWordPosVectorizer(str(config.paths.our_vab_dir), "our_vab")
+    )
     eval_mean, eval_std = load_guo_motion_normalization_stats(config.paths.eval_stats_dir)
-    motion_matcher, text_matcher = load_frozen_guo_embedding_encoders(config.paths.eval_matcher, device=device)
+    motion_matcher, text_matcher = load_frozen_guo_embedding_encoders(
+        config.paths.eval_matcher, device=device
+    )
 
     raw_ids = (root / "test.txt").read_text(encoding="utf-8").splitlines()
     clip_ids = [name.strip() for name in raw_ids if name.strip()]

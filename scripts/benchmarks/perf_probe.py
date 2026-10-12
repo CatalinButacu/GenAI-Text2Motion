@@ -52,7 +52,9 @@ def run_steps(config, device: str, backbone: Backbone, tokenizer_ckpt: str, step
     )
     for _ in range(steps):
         trainer.train_step(motion, text, lengths)
-    return {name: value.detach().clone() for name, value in trainer.token_generator.state_dict().items()}
+    return {
+        name: value.detach().clone() for name, value in trainer.token_generator.state_dict().items()
+    }
 
 
 def determinism_check(args) -> None:
@@ -317,7 +319,10 @@ def build_kernel_trainer(config, device, backbone, use_kernel: bool, batch: int)
         use_kernel=use_kernel,
     )
     trainer = GeneratorTrainer(
-        architecture.create_model(device), tokenizer, config.train, downsample=config.tokenizer.downsample
+        architecture.create_model(device),
+        tokenizer,
+        config.train,
+        downsample=config.tokenizer.downsample,
     )
     motion, text, lengths = fixed_batch(
         batch, config.data.max_motion_len, device, config.generator.d_text
