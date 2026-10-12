@@ -71,7 +71,9 @@ def test_cfg_dropout_step_is_finite():
 def test_term_split_reports_each_group():
     tok = FsqTokenizer(TOK)
     gen = MotionTokenGenerator(GEN)
-    trainer = GeneratorTrainer(gen, tok, GeneratorTrainingConfig(cfg_dropout=0.0, pkeep=1.0), downsample=4)
+    trainer = GeneratorTrainer(
+        gen, tok, GeneratorTrainingConfig(cfg_dropout=0.0, pkeep=1.0), downsample=4
+    )
     parts = trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
 
     for term in ("ce", "root", "ric", "rot6d", "vel", "foot", "total"):

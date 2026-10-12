@@ -37,7 +37,7 @@ def streamed_logits(
     return torch.stack(outs, dim=1)  # (B, L, R, V)
 
 
-def _parity(backbone: str) -> None:
+def __parity(backbone: str) -> None:
     torch.manual_seed(0)
     cfg = small_cfg(backbone)
     gen = MotionTokenGenerator(cfg).eval()
@@ -53,11 +53,11 @@ def _parity(backbone: str) -> None:
 
 
 def test_parity_mamba():
-    _parity("mamba")
+    __parity("mamba")
 
 
 def test_parity_transformer():
-    _parity("transformer")
+    __parity("transformer")
 
 
 def test_state_is_bounded_mamba_but_kv_grows_transformer():

@@ -52,6 +52,39 @@ def test_overfit_gate_is_bound_to_architecture_config_and_tokenizer(tmp_path):
         )
 
 
+def test_overfit_gate_ignores_dropout_difference_from_training_config(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    tokenizer_path = tmp_path / "tokenizer.pt"
+    gate_path = tmp_path / "gate.json"
+    config_path.write_text("seed: 2026\n", encoding="utf-8")
+    torch.save({"weight": torch.ones(1)}, tokenizer_path)
+    cfg = ApplicationConfig()
+    gate_resolved = resolve_generator_config(
+        replace(cfg, generator=replace(cfg.generator, dropout=0.0)), "mamba", codebook_size=1024
+    )
+    train_resolved = resolve_generator_config(cfg, "mamba", codebook_size=1024)
+    gate = OverfitGate(
+        config_sha256=sha256_file(config_path),
+        tokenizer_sha256=sha256_file(tokenizer_path),
+        backbone="mamba",
+        resolved_generator_config=gate_resolved,
+        batch_size=4,
+        steps=100,
+        first_total=10.0,
+        final_total=0.4,
+        token_accuracy=0.995,
+        ce=0.05,
+    )
+    gate.save(gate_path)
+
+    OverfitGate.load(gate_path).verify_setup(
+        config_path=config_path,
+        tokenizer_ckpt=tokenizer_path,
+        backbone="mamba",
+        resolved_config=train_resolved,
+    )
+
+
 def test_overfit_gate_rejects_weak_accuracy(tmp_path):
     config_path = tmp_path / "config.yaml"
     tokenizer_path = tmp_path / "tokenizer.pt"

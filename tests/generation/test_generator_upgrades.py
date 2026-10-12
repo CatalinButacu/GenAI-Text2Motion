@@ -66,10 +66,12 @@ def test_end_token_targets_and_masked_stream():
     assert gen.end_id == cfg.codebook_size
 
     tok = FsqTokenizer(TOK)
-    trainer = GeneratorTrainer(gen, tok, GeneratorTrainingConfig(cfg_dropout=0.0, pkeep=1.0), downsample=4)
+    trainer = GeneratorTrainer(
+        gen, tok, GeneratorTrainingConfig(cfg_dropout=0.0, pkeep=1.0), downsample=4
+    )
     tokens = torch.randint(0, cfg.codebook_size, (2, 6, cfg.num_codebooks))
     lengths = torch.tensor([12, 24])  # 3 and 6 tokens at downsample 4
-    targets, token_lengths = trainer._append_end_targets(tokens, lengths)
+    targets, token_lengths = trainer.append_end_targets(tokens, lengths)
 
     assert targets.shape == (2, 7, cfg.num_codebooks)
     assert (targets[0, 3] == gen.end_id).all() and (targets[1, 6] == gen.end_id).all()
@@ -79,10 +81,14 @@ def test_end_token_targets_and_masked_stream():
     assert all(v == v for v in parts.values())  # finite
 
     text = torch.randn(1, cfg.d_text)
-    fixed = torch.stack(list(gen.stream_token_indices(text, 10)), dim=1)  # fixed-length: END unreachable
+    fixed = torch.stack(
+        list(gen.stream_token_indices(text, 10)), dim=1
+    )  # fixed-length: END unreachable
     assert fixed.shape == (1, 10, cfg.num_codebooks) and (fixed != gen.end_id).all()
 
-    stopped = list(gen.stream_token_indices(text, 10, stop_at_end=True))  # END allowed but never yielded (B=1)
+    stopped = list(
+        gen.stream_token_indices(text, 10, stop_at_end=True)
+    )  # END allowed but never yielded (B=1)
     assert len(stopped) <= 10
     assert all((step != gen.end_id).all() for step in stopped)
 
@@ -151,3 +157,30 @@ def test_config_rejects_position_budget_overflow():
 
     ok = dataclasses.replace(cfg, generator=dataclasses.replace(cfg.generator, max_seq_len=96))
     validate_config(ok)
+
+
+def test_config_rejects_rvq_num_quantizers_mismatch():
+    import dataclasses
+
+    import pytest
+
+    from text2motion.app.config import ApplicationConfig, validate_config
+    from text2motion.tokenization.contracts import RvqConfig, TokenizerConfig, TokenizerKind
+
+    good = ApplicationConfig(
+        tokenizer=TokenizerConfig(kind=TokenizerKind.RVQ, num_quantizers=8),
+        rvq_baseline=RvqConfig(num_quantizers=8),
+    )
+    validate_config(good)
+
+    bad = dataclasses.replace(
+        good, rvq_baseline=dataclasses.replace(good.rvq_baseline, num_quantizers=6)
+    )
+    with pytest.raises(ValueError, match="num_quantizers"):
+        validate_config(bad)
+
+    fsq = ApplicationConfig(
+        tokenizer=TokenizerConfig(kind=TokenizerKind.FSQ, num_quantizers=8),
+        rvq_baseline=RvqConfig(num_quantizers=6),
+    )
+    validate_config(fsq)
