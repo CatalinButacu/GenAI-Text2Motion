@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import argparse
+import logging
 from pathlib import Path
 
 import torch
@@ -9,14 +9,18 @@ from text2motion.app.bootstrap import ApplicationContext
 from text2motion.app.run_log import log_metrics, start_run
 from text2motion.evaluation.benchmark import run_streaming_state_latency_benchmark
 from text2motion.evaluation.contracts import (
+    BenchmarkRequest,
+    EvaluateRequest,
     GenerationEvaluationProtocol,
     GenerationLengthPolicy,
     StreamingBenchmarkProtocol,
 )
 from text2motion.generation.contracts import Backbone, BackboneChoice, SamplingConfig
 
+logger = logging.getLogger(__name__)
 
-def run_evaluate(app: ApplicationContext, args: argparse.Namespace) -> None:
+
+def run_evaluate(app: ApplicationContext, args: EvaluateRequest) -> None:
     args.tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
     tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
     evaluator = app.create_humanml3d_generation_evaluator()
@@ -37,12 +41,12 @@ def run_evaluate(app: ApplicationContext, args: argparse.Namespace) -> None:
         mm_clips=args.mm_clips,
         mm_repeats=args.mm_repeats,
         bootstrap=args.bootstrap,
-        batch_size=args.eval_batch,
+        batch_size=args.eval_batch_size,
     )
     run_dir = start_run(
-        f"evaluate_{args.split.value}", app.config, app.config.paths.logs_dir, vars(args)
+        f"evaluate_{args.split.value}", app.config, app.config.paths.logs_dir, args.model_dump()
     )
-    print(
+    logger.info(
         f"device {app.device}  split {args.split.value}  cfg_scale {args.cfg_scale}  "
         f"temp {args.temperature}  top_p {args.top_p}  length {args.length_mode.value}  "
         f"({request.reps}-rep, our_vab)"
@@ -52,7 +56,7 @@ def run_evaluate(app: ApplicationContext, args: argparse.Namespace) -> None:
         checkpoint = args.ckpt if len(backbones) == 1 else None
         checkpoint = checkpoint or app.config.paths.generator_checkpoint(backbone)
         if not Path(checkpoint).is_file():
-            print(f"{backbone.value:12s} SKIP (no checkpoint yet)")
+            logger.info(f"{backbone.value:12s} SKIP (no checkpoint yet)")
             continue
         generator = app.load_text_to_motion_generator(
             backbone,
@@ -66,7 +70,7 @@ def run_evaluate(app: ApplicationContext, args: argparse.Namespace) -> None:
             run_dir, {"backbone": backbone.value, "ckpt": str(checkpoint), **report.as_dict()}
         )
         top1, top2, top3 = report.r_precision
-        print(
+        logger.info(
             f"{backbone.value:12s} clips {report.clips:4d}  FID {report.fid:6.3f}  "
             f"R@1 {top1:.3f}+/-{report.r_top1_std:.3f}  R@2 {top2:.3f}  R@3 {top3:.3f}  "
             f"MM {report.matching_distance:.3f}  Div {report.diversity:.3f}  "
@@ -77,15 +81,15 @@ def run_evaluate(app: ApplicationContext, args: argparse.Namespace) -> None:
             torch.cuda.empty_cache()
 
 
-def run_bench(app: ApplicationContext, args: argparse.Namespace) -> None:
+def run_bench(app: ApplicationContext, request: BenchmarkRequest) -> None:
     run_streaming_state_latency_benchmark(
         StreamingBenchmarkProtocol(
-            horizons=tuple(args.horizons),
-            warmup=args.warmup,
-            streams=tuple(args.streams),
-            streams_horizon=args.streams_horizon,
-            out_path=Path(args.out) if args.out else app.config.paths.benchmark_report,
-            label=str(args.config),
+            horizons=request.horizons,
+            warmup=request.warmup,
+            streams=request.streams,
+            streams_horizon=request.streams_horizon,
+            out_path=request.report or app.config.paths.benchmark_report,
+            label=str(request.config),
         ),
         generator=app.config.generator,
         codebook_size=app.config.generator.codebook_size,

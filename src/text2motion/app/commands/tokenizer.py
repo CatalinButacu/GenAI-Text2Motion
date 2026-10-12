@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import argparse
+import logging
 from dataclasses import replace
 from pathlib import Path
 
@@ -9,22 +9,26 @@ import torch
 from text2motion.app.bootstrap import ApplicationContext
 from text2motion.app.run_log import log_metrics, start_run
 from text2motion.motion.contracts import Split
-from text2motion.tokenization.contracts import TokenizerKind, TokenizerTrainingRequest
+from text2motion.tokenization.contracts import (
+    TokenizerKind,
+    TokenizerTrainingRequest,
+    TrainTokenizerRequest,
+)
 from text2motion.tokenization.metrics import evaluate_tokenizer_reconstruction
 from text2motion.tokenization.trainer import (
     TokenizerTrainer,
     train_tokenizer,
 )
 
+logger = logging.getLogger(__name__)
 
-def run_train_tokenizer(app: ApplicationContext, args: argparse.Namespace) -> None:
+
+def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) -> None:
     config = replace(app.config, tokenizer=replace(app.config.tokenizer, kind=args.tokenizer))
     app.config = config
 
     module = app.create_tokenizer_network().to(app.device)
-    commitment = (
-        config.rvq_baseline.commitment_beta if args.tokenizer is TokenizerKind.RVQ else 0.0
-    )
+    commitment = config.rvq_baseline.commitment_beta if args.tokenizer is TokenizerKind.RVQ else 0.0
     trainer = TokenizerTrainer(
         module,
         lr=config.train.lr,
@@ -55,9 +59,9 @@ def run_train_tokenizer(app: ApplicationContext, args: argparse.Namespace) -> No
     name = args.ckpt_name or f"tokenizer_{args.tokenizer.value}.pt"
     checkpoint_dir = app.checkpoint_directory("tokenizer")
     run_dir = start_run(
-        f"tokenizer_{Path(name).stem}", config, app.config.paths.logs_dir, vars(args)
+        f"tokenizer_{Path(name).stem}", config, app.config.paths.logs_dir, args.model_dump()
     )
-    print(
+    logger.info(
         f"train clips: {len(loader.dataset)}  device: {app.device}  "
         f"codebook: {module.codebook_size}"
     )
@@ -92,7 +96,7 @@ def run_train_tokenizer(app: ApplicationContext, args: argparse.Namespace) -> No
         run_dir,
         {"epoch": args.epochs, "split": Split.TEST.value, "final": True, **metrics},
     )
-    print(
+    logger.info(
         f"  [TEST once | val-selected best] clips {metrics['clips']}  "
         f"recon-FID {metrics['recon_fid']:.4f}  MPJPE {metrics['mpjpe_mm']:.1f}mm"
     )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import argparse
+import logging
 from dataclasses import replace
 from pathlib import Path
 
@@ -13,7 +13,10 @@ from text2motion.generation.contracts import (
     GeneratorPretrainingRequest,
     GeneratorTrainingRequest,
     MixedPrecisionMode,
+    PretrainRequest,
     SamplingConfig,
+    SanityOverfitRequest,
+    TrainGeneratorRequest,
 )
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.generation.pretrain import pretrain_generator
@@ -24,8 +27,14 @@ from text2motion.generation.trainer import (
 )
 from text2motion.motion.contracts import Split
 
+logger = logging.getLogger(__name__)
 
-def load_tokenizer_and_generator_spec(app: ApplicationContext, args: argparse.Namespace, dropout: float | None = None):
+
+def load_tokenizer_and_generator_spec(
+    app: ApplicationContext,
+    args: SanityOverfitRequest | TrainGeneratorRequest,
+    dropout: float | None = None,
+):
     args.tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
     tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
     overrides = {} if dropout is None else {"dropout": dropout}
@@ -33,7 +42,7 @@ def load_tokenizer_and_generator_spec(app: ApplicationContext, args: argparse.Na
     return tokenizer, architecture
 
 
-def run_sanity_overfit(app: ApplicationContext, args: argparse.Namespace) -> None:
+def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> None:
     repository = app.create_motion_repository()
     batch = next(iter(repository.captioned_batch_loader(Split.TRAIN, args.batch_size)))
     tokenizer, architecture = load_tokenizer_and_generator_spec(app, args, dropout=0.0)
@@ -73,11 +82,11 @@ def run_sanity_overfit(app: ApplicationContext, args: argparse.Namespace) -> Non
         **metrics,
     )
     gate.validate_metrics()
-    gate.save(args.out)
-    print(f"PASS: wrote real-batch overfit gate -> {args.out}")
+    gate.save(args.overfit_gate)
+    logger.info(f"PASS: wrote real-batch overfit gate -> {args.overfit_gate}")
 
 
-def run_train_generator(app: ApplicationContext, args: argparse.Namespace) -> None:
+def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) -> None:
     tokenizer, architecture = load_tokenizer_and_generator_spec(app, args)
     OverfitGate.load(args.overfit_gate).verify_setup(
         config_path=args.config,
@@ -85,16 +94,18 @@ def run_train_generator(app: ApplicationContext, args: argparse.Namespace) -> No
         backbone=args.backbone,
         resolved_config=architecture.as_dict(),
     )
-    print(f"verified mandatory real-batch overfit gate: {args.overfit_gate}")
+    logger.info(f"verified mandatory real-batch overfit gate: {args.overfit_gate}")
 
     module = architecture.create_model(app.device)
     if args.init_ckpt:
         module.load_state_dict(torch.load(args.init_ckpt, map_location=app.device))
-        print(f"initialised generator from pretrained {args.init_ckpt}")
+        logger.info(f"initialised generator from pretrained {args.init_ckpt}")
 
     text_encoder = app.load_text_encoder()
     repository = app.create_motion_repository()
-    loader = repository.captioned_batch_loader(Split.TRAIN, args.batch_size)
+    loader = repository.captioned_batch_loader(
+        Split.TRAIN, args.batch_size, num_workers=args.num_workers
+    )
     scaler = repository.load_scaler()
     trainer = GeneratorTrainer(
         module,
@@ -106,7 +117,7 @@ def run_train_generator(app: ApplicationContext, args: argparse.Namespace) -> No
         std=scaler.std,
     )
     trainer.build_scheduler(args.epochs * max(1, -(-len(loader) // args.grad_accum)))
-    print(
+    logger.info(
         f"generator params: {sum(p.numel() for p in module.parameters()):,} "
         f"({architecture.architecture_label})"
     )
@@ -119,14 +130,17 @@ def run_train_generator(app: ApplicationContext, args: argparse.Namespace) -> No
         eval_every=args.eval_every,
         eval_split=args.eval_split,
         max_eval_clips=args.max_eval_clips,
-        eval_batch_size=args.eval_batch,
+        eval_batch_size=args.eval_batch_size,
         temperature=args.temperature,
         cfg_scale=args.cfg_scale,
         checkpoint_name=name,
         resume=args.resume,
+        fresh_selection=args.fresh_selection,
         patience=args.patience,
     )
-    evaluator = app.create_humanml3d_generation_evaluator(args.our_vab_dir)
+    if args.fresh_selection and not args.resume:
+        raise SystemExit("--fresh_selection only applies to a resumed run (pass --resume)")
+    evaluator = app.create_humanml3d_generation_evaluator(args.vocab_dir)
     pipeline = TextToMotionGenerator(module, text_encoder, tokenizer)
     sampling = SamplingConfig(temperature=request.temperature, cfg_scale=request.cfg_scale)
     checkpoint_dir = app.checkpoint_directory("generator")
@@ -135,12 +149,12 @@ def run_train_generator(app: ApplicationContext, args: argparse.Namespace) -> No
         f"generator_{args.backbone.value}",
         app.config,
         app.config.paths.logs_dir,
-        extra=vars(args),
+        extra=args.model_dump(),
+        existing_run_dir=Path(args.resume_run_dir) if args.resume_run_dir else None,
     )
     log_metrics(run_dir, {"train_clips": len(loader.dataset), "device": app.device})
-    print(
-        f"train clips: {len(loader.dataset)}  device: {app.device}  "
-        f"backbone: {args.backbone.value}"
+    logger.info(
+        f"train clips: {len(loader.dataset)}  device: {app.device}  backbone: {args.backbone.value}"
     )
 
     def evaluate(split: Split) -> dict[str, float]:
@@ -162,7 +176,7 @@ def run_train_generator(app: ApplicationContext, args: argparse.Namespace) -> No
             epoch=epoch,
             validation_fid=validation_fid,
         ).save(checkpoint_path)
-        print(f"  saved atomic best bundle -> {checkpoint_path} (FID {validation_fid:.4f})")
+        logger.info(f"  saved atomic best bundle -> {checkpoint_path} (FID {validation_fid:.4f})")
 
     train_generator(
         trainer,
@@ -177,24 +191,28 @@ def run_train_generator(app: ApplicationContext, args: argparse.Namespace) -> No
     )
 
 
-def run_pretrain(app: ApplicationContext, args: argparse.Namespace) -> None:
-    vocab = 1
-    for level in app.config.tokenizer.fsq_levels:
-        vocab *= level
+def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
+    from text2motion.tokenization.contracts import TokenizerKind
+
+    if app.config.tokenizer.kind == TokenizerKind.RVQ:
+        vocab = app.config.rvq_baseline.codebook_size
+    else:
+        vocab = 1
+        for level in app.config.tokenizer.fsq_levels:
+            vocab *= level
 
     architecture = app.resolve_generator_spec(args.backbone, vocab)
     module = architecture.create_model(app.device)
-    print(
+    logger.info(
         f"pretrain {args.backbone.value}: {sum(p.numel() for p in module.parameters()):,} params, "
         f"codebooks {architecture.config.num_codebooks} x vocab {vocab}"
     )
     out_path = Path(
-        args.out
-        or app.checkpoint_directory("generator")
-        / f"generator_{args.backbone.value}_pretrained.pt"
+        args.ckpt
+        or app.checkpoint_directory("generator") / f"generator_{args.backbone.value}_pretrained.pt"
     )
     run_dir = start_run(
-        f"pretrain_{args.backbone.value}", app.config, app.config.paths.logs_dir, vars(args)
+        f"pretrain_{args.backbone.value}", app.config, app.config.paths.logs_dir, args.model_dump()
     )
     pretrain_generator(
         architecture,
