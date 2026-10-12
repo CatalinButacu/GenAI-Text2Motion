@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -12,6 +13,8 @@ from pathlib import Path
 import numpy as np
 
 from text2motion.motion.model import StreamedChunk
+
+logger = logging.getLogger(__name__)
 
 
 class MotionStreamProtocol:
@@ -92,26 +95,49 @@ class MotionInferenceClient:
                 },
             )
             cancel_sent = False
-            while True:
-                msg = MotionStreamProtocol.recv_json(self.io)
-                kind = msg["type"]
-                if kind == "chunk":
-                    joints = MotionStreamProtocol.recv_array(self.io, msg)
-                    placement = MotionStreamProtocol.recv_json(self.io)
-                    features = MotionStreamProtocol.recv_array(self.io, MotionStreamProtocol.recv_json(self.io))
-                    if should_cancel is not None and should_cancel() and not cancel_sent:
-                        MotionStreamProtocol.send_json(self.io, {"cmd": "cancel"})
-                        cancel_sent = True
-                    yield StreamedChunk(
-                        joints=joints, features=features, yaw=float(placement["yaw"])
-                    )
-                elif kind in ("done", "cancelled"):
-                    self.last_stats = msg.get("stats")
-                    return
-                elif kind == "error":
-                    raise RuntimeError(msg["message"])
-                else:
-                    raise RuntimeError(f"unexpected message {kind!r}")
+            finished = False
+            try:
+                while True:
+                    msg = MotionStreamProtocol.recv_json(self.io)
+                    kind = msg["type"]
+                    if kind == "chunk":
+                        joints = MotionStreamProtocol.recv_array(self.io, msg)
+                        placement = MotionStreamProtocol.recv_json(self.io)
+                        features = MotionStreamProtocol.recv_array(
+                            self.io, MotionStreamProtocol.recv_json(self.io)
+                        )
+                        if should_cancel is not None and should_cancel() and not cancel_sent:
+                            MotionStreamProtocol.send_json(self.io, {"cmd": "cancel"})
+                            cancel_sent = True
+                        yield StreamedChunk(
+                            joints=joints, features=features, yaw=float(placement["yaw"])
+                        )
+                    elif kind in ("done", "cancelled"):
+                        finished = True
+                        self.last_stats = msg.get("stats")
+                        return
+                    elif kind == "error":
+                        finished = True
+                        raise RuntimeError(msg["message"])
+                    else:
+                        finished = True
+                        self.close()
+                        raise RuntimeError(f"unexpected message {kind!r}; connection closed")
+            finally:
+                if not finished:
+                    self.__abandon_stream(cancel_sent)
+
+    def __abandon_stream(self, cancel_sent: bool) -> None:
+        if not cancel_sent:
+            MotionStreamProtocol.send_json(self.io, {"cmd": "cancel"})
+        while True:
+            msg = MotionStreamProtocol.recv_json(self.io)
+            kind = msg["type"]
+            if kind in ("chunk", "features"):
+                MotionStreamProtocol.recv_array(self.io, msg)
+            elif kind in ("done", "cancelled", "error"):
+                self.last_stats = msg.get("stats")
+                return
 
     def close(self) -> None:
         try:
@@ -129,11 +155,13 @@ def connect_or_start_motion_server(
     port: int,
     log_path: str | Path,
     spawn_wait_seconds: int = 240,
+    *,
+    service_config: str | Path,
 ) -> MotionInferenceClient:
     client = None
     try:
         client = MotionInferenceClient(host, port)
-        print(f"[service] reusing warm service ({client.hello.get('ckpt')})", flush=True)
+        logger.info(f"[service] reusing warm service ({client.hello.get('ckpt')})")
     except OSError:
         cmd = [
             sys.executable,
@@ -153,18 +181,17 @@ def connect_or_start_motion_server(
             host,
             "--port",
             str(port),
+            "--service_config",
+            str(service_config),
         ]
         Path(log_path).parent.mkdir(parents=True, exist_ok=True)
         log = open(log_path, "ab")
         flags = getattr(subprocess, "DETACHED_PROCESS", 0)
-        env = {key: value for key, value in os.environ.items() if key.startswith("TEXT2MOTION_")}
-        for key in ("PATH", "PYTHONPATH", "CUDA_VISIBLE_DEVICES", "HF_HOME", "TORCH_HOME"):
-            if key in os.environ:
-                env[key] = os.environ[key]
+        env = dict(os.environ)
         env["PYTHONPATH"] = env.get("PYTHONPATH") or "src"
         env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
         subprocess.Popen(cmd, stdout=log, stderr=log, creationflags=flags, env=env)
-        print(f"[service] spawned; loading the model (log: {log_path})...", flush=True)
+        logger.info(f"[service] spawned; loading the model (log: {log_path})...")
         deadline = time.time() + spawn_wait_seconds
         while time.time() < deadline:
             try:
@@ -177,6 +204,6 @@ def connect_or_start_motion_server(
                 f"motion service not up on {host}:{port} after {spawn_wait_seconds}s; see {log_path}"
             )
     if Path(str(client.hello.get("ckpt", ""))).resolve() != Path(ckpt).resolve():
-        print(f"[service] switching warm service to {ckpt}", flush=True)
+        logger.info(f"[service] switching warm service to {ckpt}")
         client.load(config, ckpt, tokenizer_ckpt, backbone)
     return client

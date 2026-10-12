@@ -1,0 +1,9 @@
+bind_host: 127.0.0.1
+connect_host: 127.0.0.1
+port: 8765
+idle_seconds: 600
+connect_timeout_seconds: 5.0
+startup_timeout_seconds: 240
+cuda_graph_decode: true
+anchor_every_tokens: 8
+anchor_context_tokens: 16
