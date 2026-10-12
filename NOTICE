@@ -1,0 +1,19 @@
+Required Notice: Copyright (c) 2026 Ionel-Catalin Butacu
+
+This project is licensed under the PolyForm Noncommercial License 1.0.0 (see LICENSE).
+You may use it for study, research and teaching. You may not use it to make money.
+
+Parts of this project are ported from code under the MIT License. The MIT copyright and
+permission notices of those parts are in licenses/third_party/:
+
+- HumanML3D processing code, Copyright (c) 2022 Chuan Guo
+  (src/text2motion/motion: 263-feature representation, kinematics, joint recovery)
+- text-to-motion evaluator, Copyright (c) 2022 Chuan Guo
+  (src/text2motion/evaluation/matcher.py)
+- CLIP, Copyright (c) 2021 OpenAI (text encoder, loaded through the transformers package)
+- aitviewer, Copyright (C) 2022-2026 ETH Zurich, Manuel Kaufmann, Velko Vechev,
+  Dario Mylonopoulos (viewer, used as a package)
+
+The data sets (AMASS, HumanML3D) and the SMPL-X body model are not part of this project.
+Their licences permit non-commercial research only. Model checkpoints trained on that
+data have the same limit. See THIRD_PARTY_LICENSES.md for each source.
