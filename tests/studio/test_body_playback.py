@@ -1,0 +1,209 @@
+import threading
+import time
+from types import SimpleNamespace
+
+import numpy as np
+
+from text2motion.studio.generation import StudioGenerationController
+from text2motion.studio.scene import (
+    SmplxFitState,
+    StreamSceneUpdater,
+    StudioSceneNodes,
+    StudioStreamBuffers,
+)
+
+
+class FakeScene:
+    def __init__(self) -> None:
+        self.nodes = []
+        self.selected_object = None
+        self.current_frame_id = 0
+
+    def add(self, node) -> None:
+        self.nodes.append(node)
+
+    def remove(self, node) -> None:
+        self.nodes.remove(node)
+
+    def select(self, node) -> None:
+        self.selected_object = node
+
+
+def __updater_with(skeleton_frames: int, body_frames: int, fitting: bool, playhead: int):
+    scene = FakeScene()
+    host = SimpleNamespace(scene=scene)
+    buffers = StudioStreamBuffers()
+    buffers.fitting = fitting
+    nodes = StudioSceneNodes(scene)
+    nodes.motion = SimpleNamespace(joint_positions=np.zeros((skeleton_frames, 22, 3)), enabled=True)
+    if body_frames:
+        nodes.body = SimpleNamespace(enabled=False)
+        buffers.body_verts = np.zeros((body_frames, 4, 3))
+    state = SimpleNamespace(stream_buffers=buffers, nodes=nodes, show_skin=True)
+    scene.current_frame_id = playhead
+    return StreamSceneUpdater(host, state), scene
+
+
+def test_playhead_waits_at_the_first_frame_until_the_first_mesh_is_fitted():
+    updater, scene = __updater_with(skeleton_frames=160, body_frames=0, fitting=True, playhead=90)
+    updater.hold_playhead_at_fitted_body()
+    assert scene.current_frame_id == 0
+
+
+def test_playhead_is_held_at_the_last_fitted_body_frame_while_fitting():
+    updater, scene = __updater_with(skeleton_frames=160, body_frames=48, fitting=True, playhead=90)
+    updater.hold_playhead_at_fitted_body()
+    assert scene.current_frame_id == 47
+    updater.sync_display_nodes()
+    assert updater.state.nodes.body.enabled
+    assert not updater.state.nodes.motion.enabled
+
+
+def test_playhead_runs_free_once_fitting_has_stopped():
+    updater, scene = __updater_with(skeleton_frames=160, body_frames=48, fitting=False, playhead=90)
+    updater.hold_playhead_at_fitted_body()
+    assert scene.current_frame_id == 90
+
+
+def test_a_new_take_makes_the_running_fit_stale():
+    buffers = StudioStreamBuffers()
+    buffers.fit_take = buffers.take
+    assert not buffers.fit_is_stale()
+    buffers.take += 1
+    assert buffers.fit_is_stale()
+    buffers.fit_take = buffers.take
+    buffers.cancel = True
+    assert buffers.fit_is_stale()
+
+
+def test_every_streamed_chunk_reaches_the_body_fitter_after_a_normal_finish():
+    fitted = []
+    fitter_done = threading.Event()
+
+    def fit_chunk(joints, warm_start, n_frames):
+        time.sleep(0.05)
+        fitted.append(len(joints))
+        return warm_start
+
+    chunks = [
+        SimpleNamespace(
+            joints=np.zeros((16, 22, 3), np.float32),
+            features=np.zeros((16, 263), np.float32),
+            yaw=0.0,
+        )
+        for _ in range(6)
+    ]
+    client = SimpleNamespace(generate=lambda *args, **kwargs: iter(chunks), last_stats=None)
+    buffers = StudioStreamBuffers()
+    state = SimpleNamespace(
+        stream_buffers=buffers,
+        smplx_fit=SmplxFitState(),
+        client=client,
+        fit_lookahead_chunks=2,
+        stream_lead_frames=10_000,
+        upsample=1,
+        generating=True,
+        status="",
+    )
+    host = SimpleNamespace(
+        playback_fps=20.0,
+        run_animations=True,
+        toggle_animation=lambda run: None,
+        scene=FakeScene(),
+    )
+    avatar = SimpleNamespace(fit_single_chunk=fit_chunk)
+    controller = StudioGenerationController(host, state, avatar)
+    original = controller.fit_motion_chunks
+
+    def fit_then_signal(fit_queue, take):
+        original(fit_queue, take)
+        fitter_done.set()
+
+    controller.fit_motion_chunks = fit_then_signal
+    buffers.take = 1
+    params = {
+        "steps": 24,
+        "downsample": 4,
+        "upsample": 1,
+        "fit_body": True,
+        "temperature": 1.0,
+        "top_p": 0.9,
+        "cfg_scale": 6.0,
+    }
+    controller.stream_generation("walk", params)
+    assert fitter_done.wait(timeout=5)
+    assert fitted == [16] * 6
+    assert not buffers.fitting
+
+
+def test_a_new_take_replaces_the_previous_skeleton_instead_of_appending():
+    scene = FakeScene()
+    host = SimpleNamespace(
+        scene=scene,
+        toggle_animation=lambda run: None,
+    )
+    scene.n_frames = 0
+    buffers = StudioStreamBuffers()
+    nodes = StudioSceneNodes(scene)
+    state = SimpleNamespace(stream_buffers=buffers, nodes=nodes, window_frames=600, show_skin=True)
+    updater = StreamSceneUpdater(host, state)
+    updater.append_chunks([np.zeros((160, 22, 3), np.float32)])
+    assert len(nodes.motion.joint_positions) == 160
+    buffers.started = False
+    buffers.accum_joints = None
+    updater.append_chunks([np.ones((16, 22, 3), np.float32)])
+    assert len(nodes.motion.joint_positions) == 16
+    assert len(buffers.accum_joints) == 16
+    assert sum(node.name == "Motion (streaming)" for node in scene.nodes) == 1
+
+
+def test_the_stream_waits_until_the_playhead_is_within_the_lead():
+    buffers = StudioStreamBuffers()
+    scene = FakeScene()
+    host = SimpleNamespace(scene=scene)
+    state = SimpleNamespace(stream_buffers=buffers, stream_lead_frames=32, upsample=1)
+    controller = StudioGenerationController(host, state, SimpleNamespace())
+    assert controller.frames_ahead_of_playhead(48) == 48
+    released = threading.Event()
+
+    def accept():
+        controller.wait_for_playback(48)
+        released.set()
+
+    threading.Thread(target=accept, daemon=True).start()
+    assert not released.wait(0.2)
+    scene.current_frame_id = 20
+    assert released.wait(2.0)
+    buffers.trimmed_frames = 100
+    scene.current_frame_id = 0
+    assert controller.frames_ahead_of_playhead(148) == 48
+
+
+def test_stop_releases_a_stream_that_is_waiting_for_playback():
+    buffers = StudioStreamBuffers()
+    host = SimpleNamespace(scene=FakeScene())
+    state = SimpleNamespace(stream_buffers=buffers, stream_lead_frames=8, upsample=1)
+    controller = StudioGenerationController(host, state, SimpleNamespace())
+    released = threading.Event()
+
+    def accept():
+        controller.wait_for_playback(500)
+        released.set()
+
+    threading.Thread(target=accept, daemon=True).start()
+    assert not released.wait(0.2)
+    buffers.cancel = True
+    assert released.wait(2.0)
+
+
+def test_upsampling_interpolates_between_frames_and_ends_on_each_source_frame():
+    from text2motion.studio.generation import upsample_joints
+
+    joints = np.stack([np.full((22, 3), float(i), np.float32) for i in range(4)])
+    upsampled = upsample_joints(None, joints, 3)
+    assert upsampled.shape == (12, 22, 3)
+    np.testing.assert_allclose(upsampled[2::3, 0, 0], [0.0, 1.0, 2.0, 3.0])
+    np.testing.assert_allclose(upsampled[3:6, 0, 0], [1 / 3, 2 / 3, 1.0], rtol=1e-6)
+    continued = upsample_joints(joints[-1], joints[:1] + 4.0, 3)
+    np.testing.assert_allclose(continued[:, 0, 0], [3 + 1 / 3, 3 + 2 / 3, 4.0], rtol=1e-6)
+    assert upsample_joints(None, joints, 1) is joints
