@@ -5,10 +5,10 @@ import torch
 
 from text2motion.app.config import load_config
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.model import GeneratorModelSpec
+from text2motion.generation.nn_model import GeneratorModelSpec
 from text2motion.generation.trainer import GeneratorTrainer
 from text2motion.motion.representation import DIM
-from text2motion.tokenization.model import build_tokenizer_network
+from text2motion.tokenization.nn_model import build_tokenizer_network
 
 
 def run(args: argparse.Namespace) -> None:

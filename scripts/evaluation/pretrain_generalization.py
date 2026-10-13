@@ -7,11 +7,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from text2motion.app.bootstrap import seed_everything
 from text2motion.app.config import load_config
 from text2motion.app.run_log import log_metrics, start_run
-from text2motion.app.runtime import seed_everything
-from text2motion.generation.model import MotionTokenGenerator, token_ce_loss
-from text2motion.tokenization.model import FsqTokenizer
+from text2motion.generation.nn_model import MotionTokenGenerator, token_ce_loss
+from text2motion.tokenization.nn_model import FsqTokenizer
 
 
 def seen_clip_stems(token_pack: str) -> set[str]:

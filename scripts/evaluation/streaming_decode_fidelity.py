@@ -13,7 +13,7 @@ from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import FEATURES_DIR, SPLIT_FILES
 from text2motion.streaming.decoder import StreamingMotionDecoder, measure_decoder_context
-from text2motion.tokenization.model import build_tokenizer_network
+from text2motion.tokenization.nn_model import build_tokenizer_network
 
 
 def load_tokenizer(cfg, ckpt_path: str):

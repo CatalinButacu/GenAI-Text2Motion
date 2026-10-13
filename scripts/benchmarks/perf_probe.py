@@ -11,13 +11,13 @@ from dataclasses import replace
 
 import torch
 
+from text2motion.app.bootstrap import resolve_device, seed_everything
 from text2motion.app.config import load_config
-from text2motion.app.runtime import resolve_device, seed_everything
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.model import GeneratorModelSpec
+from text2motion.generation.nn_model import GeneratorModelSpec
 from text2motion.generation.trainer import GeneratorTrainer
 from text2motion.motion.representation import DIM, FPS
-from text2motion.tokenization.model import build_tokenizer_network
+from text2motion.tokenization.nn_model import build_tokenizer_network
 
 
 def build_trainer(config, device: str, backbone: Backbone, tokenizer_ckpt: str):
@@ -187,7 +187,7 @@ class StageTimer:
 
 def demo_probe(args) -> None:
     from text2motion.app.bootstrap import ApplicationBootstrap
-    from text2motion.app.schema import load_dataclass
+    from text2motion.app.config import load_dataclass
     from text2motion.motion.representation import recover_skeleton
     from text2motion.streaming.decoder import StreamingMotionDecoder, measure_decoder_context
     from text2motion.studio.avatar import build_smplx_body_model, fit_smplx_to_joints

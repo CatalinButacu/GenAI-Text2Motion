@@ -5,12 +5,6 @@ import torch
 
 from text2motion.app.config import load_config
 from text2motion.evaluation.contracts import DIVERSITY_PAIRS, GenerationEvaluationProtocol
-from text2motion.evaluation.matcher import (
-    GuoWordPosVectorizer,
-    create_guo_text_input_builder,
-    load_frozen_guo_embedding_encoders,
-    load_guo_motion_normalization_stats,
-)
 from text2motion.evaluation.metrics import (
     compute_guo_motion_embeddings,
     compute_guo_text_embeddings,
@@ -19,7 +13,13 @@ from text2motion.evaluation.metrics import (
     mm_dist,
     r_precision,
 )
-from text2motion.motion.annotations import parse_text_file
+from text2motion.evaluation.nn_matcher import (
+    GuoWordPosVectorizer,
+    create_guo_text_input_builder,
+    load_frozen_guo_embedding_encoders,
+    load_guo_motion_normalization_stats,
+)
+from text2motion.motion.datasets import parse_text_file
 
 _MIN_FRAMES = 20
 

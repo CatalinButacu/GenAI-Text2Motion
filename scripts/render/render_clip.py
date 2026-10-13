@@ -11,13 +11,13 @@ import torch
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from text2motion.app.bootstrap import seed_everything
 from text2motion.app.config import load_config
-from text2motion.app.runtime import seed_everything
-from text2motion.generation.model import MotionTokenGenerator
-from text2motion.generation.text import CLIPTextEncoder
+from text2motion.generation.nn_model import MotionTokenGenerator
+from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.motion.representation import DIM, FPS, kinematic_bones, recover_skeleton
 from text2motion.streaming.decoder import StreamingMotionDecoder
-from text2motion.tokenization.model import FsqTokenizer
+from text2motion.tokenization.nn_model import FsqTokenizer
 
 
 def run(a: argparse.Namespace) -> None:

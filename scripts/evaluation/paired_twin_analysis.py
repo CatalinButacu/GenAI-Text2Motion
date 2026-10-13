@@ -14,11 +14,11 @@ from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.app.run_log import log_metrics, start_run
 from text2motion.evaluation.contracts import GenerationEvaluationSet
 from text2motion.evaluation.metrics import (
-    R_PRECISION_POOL,
     compute_guo_text_embeddings,
+    motion_statistics,
+    own_caption_ranks,
     paired_fid_delta,
 )
-from text2motion.evaluation.plausibility import motion_statistics
 from text2motion.generation.contracts import Backbone, StudioSamplingConfig
 from text2motion.motion.contracts import Split
 from text2motion.motion.representation import recover_skeleton
@@ -29,16 +29,6 @@ PLAUSIBILITY_KEYS = (
     "mean_acceleration_cm_per_frame2",
     "mean_jerk_cm_per_frame3",
 )
-
-
-def own_caption_ranks(text: np.ndarray, motion: np.ndarray, order: np.ndarray) -> np.ndarray:
-    ranks = np.full(len(text), -1)
-    for start in range(0, len(order) - R_PRECISION_POOL + 1, R_PRECISION_POOL):
-        pool = order[start : start + R_PRECISION_POOL]
-        distances = np.linalg.norm(text[pool][:, None, :] - motion[pool][None, :, :], axis=-1)
-        own = np.diag(distances)
-        ranks[pool] = (distances < own[:, None]).sum(axis=1)
-    return ranks
 
 
 def paired_summary(first: np.ndarray, second: np.ndarray) -> dict[str, float]:
@@ -67,7 +57,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/generator/gen_pilot_fsq8x1024.yaml")
     parser.add_argument(
-        "--tokenizer_ckpt", type=Path, default=Path("artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt")
+        "--tokenizer_ckpt",
+        type=Path,
+        default=Path("artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"),
     )
     parser.add_argument("--checkpoint_pattern", default="generator_{backbone}_bs8_e60.pt")
     parser.add_argument("--resamples", type=int, default=1000)
