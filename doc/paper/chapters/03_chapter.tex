@@ -1,0 +1,74 @@
+\chapter{Data and Evaluation Protocol}
+\label{chap:protocol}
+
+\section{The HumanML3D-263 Representation Contract}
+\label{sec:protocol_representation}
+
+Every model in this thesis reads and writes the standard HumanML3D feature vector~\cite{guo2022humanml3d}: $x_t \in \mathbb{R}^{263}$ per frame, at 20 frames per second, for a skeleton of $J = 22$ joints. \tabref{tab:layout263} gives the layout.
+
+\begin{table}[H]
+\centering
+\caption{Layout of the 263-dimensional frame vector.}
+\label{tab:layout263}
+\begin{tabular}{lp{0.52\textwidth}r}
+\toprule
+Block & Content & Dimensions \\
+\midrule
+Root & angular velocity about the vertical axis, planar linear velocity, height & $1 + 2 + 1 = 4$ \\
+Positions & root-relative positions of the $J-1$ non-root joints & $21 \times 3 = 63$ \\
+Rotations & 6D rotations of the $J-1$ non-root joints & $21 \times 6 = 126$ \\
+Velocities & linear velocities of all $J$ joints & $22 \times 3 = 66$ \\
+Contacts & binary ground contact for two points on each foot & $4$ \\
+\midrule
+Total & & $263$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Features are standardized with the official per-dimension mean and standard deviation. Joint positions are recovered by integrating the root angular and linear velocities over time and adding the rotated root-relative positions. The code that builds and inverts the representation is a direct port of the reference implementation, with its constants unchanged, and a round-trip test asserts that recovering joints from a built feature vector returns the input joints.
+
+We keep this contract fixed for one reason: the evaluator of \secref{sec:protocol_metrics} was trained on it. Any change to the representation would make our numbers incomparable with published ones.
+
+\section{Datasets, Splits and Preprocessing}
+\label{sec:protocol_data}
+
+\paragraph{HumanML3D.} The captioned corpus has about $28.6$ hours of motion with several text descriptions per clip. We use the official train, validation and test splits. Clips shorter than 40 frames are dropped and clips are cropped to at most 196 frames. With left--right mirror augmentation, the training set has $22{,}418$ clips. The test split used for every reported generation result has $2189$ clips.
+
+\paragraph{AMASS.} AMASS~\cite{mahmood2019amass} is a large collection of motion capture without captions. We convert it to the same 263-dimensional representation by running the SMPL-X body model~\cite{pavlakos2019smplx} forward, keeping the first 22 joints and retargeting them to the HumanML3D skeleton. This yields $13{,}249$ sequences ($40.6$ hours). It is used only for the unconditional pretraining of \chapref{chap:generator}. The body model differs from the one used to build the original HumanML3D; the retargeting step to a uniform skeleton removes most of that difference, and the tokenizer's reconstruction FID on HumanML3D is the check that the pipeline is consistent.
+
+\section{Evaluation Metrics and the Guo Evaluator}
+\label{sec:protocol_metrics}
+
+All generation metrics are computed in the feature space of the pretrained text--motion matching network released with HumanML3D~\cite{guo2022humanml3d}. It has a motion encoder $f_m$ and a text encoder $f_t$ trained so that matching pairs are close in Euclidean distance. We use it frozen and unmodified.
+
+\paragraph{Fr\'echet inception distance.} Let $(\mu_r, \Sigma_r)$ and $(\mu_g, \Sigma_g)$ be the mean and covariance of $f_m$ over real and generated motions. Following~\cite{heusel2017fid},
+\begin{equation}
+\mathrm{FID} = \lVert \mu_r - \mu_g \rVert_2^2 + \operatorname{Tr}\bigl(\Sigma_r + \Sigma_g - 2(\Sigma_r \Sigma_g)^{1/2}\bigr).
+\label{eq:fid}
+\end{equation}
+Lower is better. The estimate is biased by sample size, so FID values are compared only at equal clip counts.
+
+\paragraph{R-precision.} For each generated motion, its caption and 31 mismatched captions are ranked by distance $\lVert f_m(\hat{x}) - f_t(c) \rVert_2$. R@$k$ is the fraction of motions whose own caption ranks in the top $k$, for $k \in \{1, 2, 3\}$. Higher is better.
+
+\paragraph{Multimodal distance.} The mean distance $\lVert f_m(\hat{x}) - f_t(c) \rVert_2$ between each generated motion and its own caption. Lower is better.
+
+\paragraph{Diversity.} The mean distance between randomly paired generated motions across the whole test set. Values close to that of real motion are better.
+
+\paragraph{Multimodality.} The mean distance between motions generated from the \emph{same} caption. It measures how varied the outputs for one prompt are.
+
+For the tokenizer we report \emph{reconstruction FID}: \eqref{eq:fid} between real motions and the same motions after encoding and decoding.
+
+\paragraph{Harness check.} Running real test motions through our harness gives R@1 $= 0.514$, against the published $0.511$~\cite{guo2022humanml3d}. This confirms that the evaluator, the statistics and the data loading agree with the reference.
+
+\section{Model Selection and Reporting Protocol}
+\label{sec:protocol_selection}
+
+\begin{enumerate}
+\item \textbf{Selection on validation.} During training, generation metrics are computed on 600 validation clips at fixed intervals, and the checkpoint with the lowest validation FID is kept.
+\item \textbf{Test touched once.} The selected checkpoint is scored once on the full test split. A checkpoint is never chosen because of its test score.
+\item \textbf{Standard repetitions.} Test metrics are averaged over 20 repetitions of the evaluation.
+\item \textbf{One sampling setting.} Both generators are sampled with the same classifier-free guidance scale, temperature and nucleus threshold, and are asked for the ground-truth number of tokens.
+\item \textbf{Fixed seed.} All runs use seed 2026 with deterministic settings. Every run writes a manifest with its configuration, code revision and seed, and a metrics log; \chapref{chap:appendix_reproducibility} lists the runs behind each table.
+\end{enumerate}
+
+Rule 2 has a visible consequence in \chapref{chap:generator}: when a longer run selects a new checkpoint on validation that then scores worse on test, the worse number is the one we report for that budget.

@@ -1,0 +1,50 @@
+\chapter{Introduction}
+\label{chap:introduction}
+
+\section{Motivation: The Streaming Gap}
+\label{sec:intro_motivation}
+
+Generating 3D human motion from natural language is useful for animation, robotics and embodied agents. On the HumanML3D benchmark~\cite{guo2022humanml3d}, the most accurate published systems are masked or hybrid models such as MoMask~\cite{guo2024momask}, MMM~\cite{pinyoanuntapong2023mmm} and BAMM~\cite{pinyoanuntapong2024bamm}. They reach their quality by attending \emph{bidirectionally over the whole sequence}: every frame is refined with access to frames that come after it.
+
+This is incompatible with the setting this thesis targets, which we call \emph{streaming}: motion is produced incrementally, one short chunk at a time, while earlier chunks are already being played back. A streaming generator has two requirements.
+
+\begin{enumerate}
+\item It must be \emph{causal}: the motion at step $t$ may depend only on the text and on steps before $t$.
+\item It must be \emph{bounded-state}: the memory carried from one step to the next must not grow with the number of steps already generated.
+\end{enumerate}
+
+Causal autoregressive transformers such as T2M-GPT~\cite{zhang2023t2mgpt}, Mogo~\cite{fu2024mogo} and AttT2M~\cite{zhong2023attt2m} satisfy the first requirement. They do not satisfy the second. To avoid recomputing the past, a transformer keeps the keys and values of every previous position, so its state after $L$ steps has size $O(L)$ and each new step costs $O(L)$ attention operations.
+
+State-space sequence models, in particular the selective-scan model Mamba~\cite{gu2023mamba}, carry a state of fixed size and update it in $O(1)$ per step. Existing motion models that use Mamba place it inside diffusion or masked pipelines~\cite{zhang2024motionmamba,zhang2024kmm,zhan2026t2mmamba}, which are bidirectional. To our knowledge, no published work uses it as a discrete, causal, next-token generator for text-to-motion. This thesis builds that model and measures what the bounded state costs in quality.
+
+\section{Research Questions and Thesis Statement}
+\label{sec:intro_questions}
+
+% TODO(human)
+
+\section{Contributions}
+\label{sec:intro_contributions}
+
+\begin{enumerate}
+\item \textbf{A Grouped-FSQ motion tokenizer} (\chapref{chap:tokenizer}). A tokenizer based on finite scalar quantization~\cite{mentzer2023fsq} with a grouped-residual structure. It has no learned codebook and therefore none of the machinery a codebook needs (exponential moving averages, commitment loss, dead-code resets). It is compared with a strong residual vector-quantization baseline at matched bit-rate, on reconstruction, on codebook usage and on the quality of a generator trained on its tokens.
+
+\item \textbf{A token-autoregressive state-space generator} (\chapref{chap:generator}). A discrete, causal, next-token Mamba generator for text-to-motion, evaluated against a transformer twin with the same parameter count, tokenizer, data, seed and budget. The two differ only in the sequence mixer, so a difference in quality can be attributed to the mixer. This is a controlled study of a mechanism, not a competition on scale.
+
+\item \textbf{A bounded-memory streaming system} (\chapref{chap:streaming}). A measurement of recurrent state and per-step latency against horizon for both generators, a measurement of the tokenizer decoder's receptive field with the lookahead that makes streamed decoding exact, and an interactive viewer driven by the streaming decoder.
+\end{enumerate}
+
+A supporting result, reported as an ablation in \chapref{chap:generator}, is that pretraining the generator on unlabeled motion before the captioned fine-tune improves it.
+
+\section{Scope and Non-Goals}
+\label{sec:intro_scope}
+
+We do not claim to surpass MoMask~\cite{guo2024momask} in absolute FID, and we do not compete on scale with models trained on million-clip corpora~\cite{wang2024beingm0,zhang2024lmm,fan2025motionmillion}. All training was done on one GPU with 4~GB of memory, which fixes the model scale at about $34$M parameters.
+
+The quantitative track uses the 22-joint body of HumanML3D-263. Whole-body motion with hands is shown only qualitatively through the viewer of \chapref{chap:streaming}. Facial motion is out of scope.
+
+Two concurrent lines of work are close to ours and are distinguished as follows. AnyMo~\cite{li2026anymo} uses a residual-FSQ tokenizer, but reports no HumanML3D reconstruction FID, so our head-to-head comparison against residual vector quantization on the standard representation is not duplicated by it. LLaMo~\cite{li2026llamo} and MotionStreamer~\cite{xiao2025motionstreamer} generate motion in a streaming fashion, but over a \emph{continuous} autoregressive latent and with attention-based backbones. The combination studied here is discrete tokens, causal next-token prediction and a fixed-size recurrent state.
+
+\section{Thesis Outline}
+\label{sec:intro_outline}
+
+\chapref{chap:background} reviews motion representation, discrete tokenization, text-to-motion generators and state-space models, and states the streaming requirement precisely. \chapref{chap:protocol} fixes the data and the evaluation protocol used for every number in the thesis. Chapters~\ref{chap:tokenizer}, \ref{chap:generator} and~\ref{chap:streaming} present the three contributions; each ends with its threats to validity. \chapref{chap:discussion} discusses the limits that apply to the thesis as a whole, and \chapref{chap:conclusion} maps each claim to its evidence and lists future work. The appendices give the hyperparameters and run identifiers needed to reproduce the results.

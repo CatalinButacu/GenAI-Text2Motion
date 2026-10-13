@@ -1,0 +1,78 @@
+\chapter{Background and Related Work}
+\label{chap:background}
+
+\section{Human Motion Representation}
+\label{sec:bg_representation}
+
+A motion clip is a sequence of body poses sampled at a fixed frame rate. A pose can be written as joint positions, as joint rotations along a kinematic tree, or as a redundant combination of both. The HumanML3D benchmark~\cite{guo2022humanml3d} fixes one such combination: a 263-dimensional feature vector per frame, at 20 frames per second, for a 22-joint skeleton. It contains the root's angular and linear velocity and height, the root-relative positions of the other joints, their rotations in the continuous 6D parameterization~\cite{zhou2019continuity}, the joint velocities and four binary foot-contact labels. Joint positions are recovered from this vector by integrating the root velocities and adding the root-relative positions. \chapref{chap:protocol} gives the exact layout.
+
+Whole-body models such as SMPL-X~\cite{pavlakos2019smplx} add articulated hands and a face to the body. We use SMPL-X only to draw a body surface from the 22 recovered joints.
+
+\section{Discrete Motion Tokenization}
+\label{sec:bg_tokenization}
+
+A motion tokenizer is an autoencoder with a discrete bottleneck. An encoder maps $T$ frames to $T/d$ latent vectors, a quantizer replaces each latent vector by one or more integer codes, and a decoder reconstructs the frames from the codes. A generator can then model motion as a sequence of integers.
+
+\paragraph{Vector quantization.} VQ-VAE~\cite{oord2017vqvae} quantizes a latent vector $z$ to its nearest neighbour in a learned codebook $\{e_k\}_{k=1}^{V}$. The codebook is trained alongside the autoencoder and is fragile: codes that are never selected receive no gradient and stay unused. T2M-GPT~\cite{zhang2023t2mgpt} reports that a plain VQ tokenizer on HumanML3D reaches reconstruction FID $0.492$, and that exponential-moving-average codebook updates together with resetting dead codes bring this to $0.070$. A fair VQ baseline must therefore include both.
+
+\paragraph{Residual vector quantization.} A residual quantizer applies $Q$ codebooks in sequence, each quantizing what the previous ones left over. MoMask~\cite{guo2024momask} uses this with quantizer dropout and reports reconstruction FID $0.019$.
+
+\paragraph{Finite scalar quantization.} FSQ~\cite{mentzer2023fsq} removes the learned codebook. Each latent channel is bounded and rounded to one of a small number of levels, so the set of codes is a fixed lattice. There is nothing to collapse and nothing to reset. FSQ has been shown to outperform VQ on motion by ScaMo~\cite{lu2024scamo}, and in a multi-scale form by Wang et al.~\cite{wang2025stmsq}, who report reconstruction FID $0.037$ and generation FID $0.063$. \chapref{chap:tokenizer} positions our grouped-residual FSQ against these.
+
+\section{Text-to-Motion Generation}
+\label{sec:bg_generation}
+
+Token-based generators fall into two groups.
+
+\paragraph{Causal autoregressive models.} T2M-GPT~\cite{zhang2023t2mgpt} trains a decoder-only transformer to predict the next motion token given the text and the previous tokens, and reports FID $0.116$. AttT2M~\cite{zhong2023attt2m} adds body-part attention (FID $0.112$). Mogo~\cite{fu2024mogo} extends the idea to residual tokens with a hierarchical causal transformer (FID $0.079$). MotionGPT~\cite{jiang2023motiongpt} treats motion tokens as a language for a pretrained language model. These models can emit motion incrementally.
+
+\paragraph{Masked and bidirectional models.} MoMask~\cite{guo2024momask} (FID $0.045$), MMM~\cite{pinyoanuntapong2023mmm} and BAMM~\cite{pinyoanuntapong2024bamm} predict masked tokens using context on both sides. They are the most accurate published models on HumanML3D and cannot stream, because a token is not final until the tokens after it have been considered.
+
+\paragraph{Large motion models.} A separate line scales data and parameters: the Large Motion Model~\cite{zhang2024lmm}, the million-clip corpus and models of Wang et al.~\cite{wang2024beingm0}, and MotionMillion~\cite{fan2025motionmillion}. Scale is an axis this thesis does not explore; we cite these as motivation for the pretraining ablation of \chapref{chap:generator}.
+
+\section{State-Space Sequence Models}
+\label{sec:bg_ssm}
+
+A linear state-space model maps an input signal $u(t)$ to an output $y(t)$ through a hidden state $x(t)$:
+\begin{equation}
+\dot{x}(t) = A\,x(t) + B\,u(t), \qquad y(t) = C\,x(t) + D\,u(t).
+\label{eq:ssm_continuous}
+\end{equation}
+With a step size $\Delta$ and a zero-order hold on the input, the discrete recurrence is
+\begin{equation}
+s_t = \bar{A}\,s_{t-1} + \bar{B}\,u_t, \qquad \bar{A} = e^{\Delta A}, \qquad \bar{B} = (\Delta A)^{-1}\bigl(e^{\Delta A} - I\bigr)\,\Delta B .
+\label{eq:ssm_discrete}
+\end{equation}
+S4~\cite{gu2022s4} uses such a system as a sequence layer. Mamba~\cite{gu2023mamba} makes it \emph{selective}: $\Delta$, $B$ and $C$ become functions of the current input, so the layer can decide, per token, how much of its state to keep. The layer is called S6.
+
+Two properties matter here. During training, the recurrence can be evaluated for all positions in parallel, at a cost linear in the sequence length. During inference, one step needs only the previous state $s_{t-1}$, whose size does not depend on $t$.
+
+Mamba has been applied to motion before, inside diffusion and masked pipelines. Examples are Motion Mamba~\cite{zhang2024motionmamba}, KMM~\cite{zhang2024kmm} and T2M Mamba~\cite{zhan2026t2mmamba}. All of these process the sequence in both directions, so none exercises the constant-state inference path.
+
+\section{The Streaming Requirement and the Unoccupied Design Cell}
+\label{sec:bg_streaming}
+
+\begin{df}[Streaming generator]
+A generator is \emph{streaming} if (i) the token emitted at step $t$ depends only on the condition and on tokens $1,\dots,t-1$, and (ii) the memory it carries between steps is bounded by a constant independent of $t$.
+\end{df}
+
+Condition (i) excludes full-sequence diffusion and bidirectional masking as the runtime model. Condition (ii) separates the two causal options. A transformer with a key--value cache stores, for each of its layers, the keys and values of all $t-1$ previous positions; its state is $O(t)$ and its per-step attention cost is $O(t)$. A state-space model stores one state per layer; both are $O(1)$.
+
+\tabref{tab:design_cells} places prior work along three properties. Streaming systems with a continuous latent exist~\cite{xiao2025motionstreamer,li2026llamo}, and so do discrete causal transformers~\cite{zhang2023t2mgpt,fu2024mogo}. The cell that combines discrete tokens, causal next-token prediction and a fixed-size recurrent state is, to our knowledge, empty. \chapref{chap:generator} fills it.
+
+\begin{table}[H]
+\centering
+\caption{Design cells for text-to-motion generators. Only the last row satisfies both streaming conditions with discrete tokens.}
+\label{tab:design_cells}
+\begin{tabular}{p{0.52\textwidth}ccc}
+\toprule
+Family & Discrete & Causal & Fixed state \\
+\midrule
+Masked transformers~\cite{guo2024momask,pinyoanuntapong2023mmm,pinyoanuntapong2024bamm} & yes & no & no \\
+Mamba in diffusion or masked pipelines~\cite{zhang2024motionmamba,zhang2024kmm,zhan2026t2mmamba} & varies & no & no \\
+Causal transformers~\cite{zhang2023t2mgpt,fu2024mogo,zhong2023attt2m} & yes & yes & no \\
+Continuous-latent streaming~\cite{xiao2025motionstreamer,li2026llamo} & no & yes & no \\
+Token-autoregressive state-space model (this thesis) & yes & yes & yes \\
+\bottomrule
+\end{tabular}
+\end{table}
