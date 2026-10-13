@@ -5,14 +5,14 @@ import pytest
 import torch
 
 from text2motion.app.config import GeneratorConfig, TokenizerConfig
-from text2motion.generation.model import MotionTokenGenerator
+from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.motion.representation import kinematic_bones, recover_skeleton
 from text2motion.streaming.decoder import (
     StreamingMotionDecoder,
     collect_stream,
     run_producer,
 )
-from text2motion.tokenization.model import FsqTokenizer
+from text2motion.tokenization.nn_model import FsqTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorConfig(
@@ -283,7 +283,7 @@ def test_streaming_recovery_resets_to_the_origin():
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda graphs need a cuda device")
 def test_cuda_graph_decode_streams_the_same_tokens_as_eager_decode():
-    from text2motion.generation.model import seeded_sampling_uniforms
+    from text2motion.generation.nn_model import seeded_sampling_uniforms
 
     torch.manual_seed(0)
     gen = MotionTokenGenerator(GEN).cuda().eval()
@@ -354,7 +354,7 @@ def test_anchoring_that_would_overrun_the_learned_positions_is_refused():
 
 
 def test_anchoring_disabled_leaves_the_stream_unchanged_and_enabled_changes_it():
-    from text2motion.generation.model import seeded_sampling_uniforms
+    from text2motion.generation.nn_model import seeded_sampling_uniforms
 
     torch.manual_seed(0)
     gen = MotionTokenGenerator(GEN).eval()
@@ -377,7 +377,7 @@ def test_anchoring_disabled_leaves_the_stream_unchanged_and_enabled_changes_it()
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda graphs need a cuda device")
 def test_anchored_cuda_graph_decode_matches_anchored_eager_decode():
-    from text2motion.generation.model import seeded_sampling_uniforms
+    from text2motion.generation.nn_model import seeded_sampling_uniforms
 
     torch.manual_seed(0)
     gen = MotionTokenGenerator(GEN).cuda().eval()
@@ -393,3 +393,35 @@ def test_anchored_cuda_graph_decode_matches_anchored_eager_decode():
     eager = stream()
     gen.enable_cuda_graph_decode()
     assert torch.equal(eager, stream())
+
+
+def test_a_new_text_at_a_reset_changes_only_the_tokens_after_that_reset():
+    from text2motion.generation.nn_model import seeded_sampling_uniforms
+
+    torch.manual_seed(0)
+    gen = MotionTokenGenerator(GEN).eval()
+    first_text = torch.randn(1, 32)
+    second_text = torch.randn(1, 32)
+    uniforms = seeded_sampling_uniforms([5], 12, GEN.num_codebooks, "cpu")
+    settings = {"uniforms": uniforms, "anchor_every": 4, "anchor_context": 2, "cfg_scale": 3.0}
+    one_text = torch.stack(list(gen.stream_token_indices(first_text, 12, **settings)), 1)
+    switched = torch.stack(
+        list(
+            gen.stream_token_indices(
+                first_text,
+                12,
+                text_at=lambda index: first_text if index < 8 else second_text,
+                **settings,
+            )
+        ),
+        1,
+    )
+    assert torch.equal(switched[:, :8], one_text[:, :8])
+    assert not torch.equal(switched[:, 8:], one_text[:, 8:])
+
+
+def test_a_text_schedule_without_resets_is_refused():
+    gen = MotionTokenGenerator(GEN).eval()
+    text = torch.randn(1, 32)
+    with pytest.raises(ValueError, match="anchor_every"):
+        list(gen.stream_token_indices(text, 4, text_at=lambda index: text))
