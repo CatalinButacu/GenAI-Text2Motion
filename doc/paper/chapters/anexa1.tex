@@ -1,0 +1,154 @@
+\chapter{Appendix A: Reproducibility}
+\label{chap:appendix_reproducibility}
+
+\section{Model Hyperparameters}
+\label{sec:app_hyper}
+
+\begin{table}[H]
+\centering
+\caption{Tokenizer configuration used by the generators.}
+\label{tab:app_tokenizer}
+\begin{tabular}{lr}
+\toprule
+Parameter & Value \\
+\midrule
+Input dimension & 263 \\
+Encoder and decoder width & 512 \\
+Temporal downsampling & 4 \\
+Residual blocks & 3 \\
+Quantizers $Q$ & 8 \\
+FSQ levels per quantizer & $(8, 8, 4, 4)$ \\
+Implicit vocabulary $V$ & 1024 \\
+Quantizer dropout & 0.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Residual VQ baseline. Encoder and decoder as in \tabref{tab:app_tokenizer}.}
+\label{tab:app_rvq}
+\begin{tabular}{lr}
+\toprule
+Parameter & Value \\
+\midrule
+Code dimension & 512 \\
+Codebook update & exponential moving average, decay 0.99 \\
+Commitment weight & 0.02 \\
+Dead-code reset & enabled \\
+Quantizer dropout & 0.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Generator configuration of the 34M pair.}
+\label{tab:app_generator}
+\begin{tabular}{lrr}
+\toprule
+Parameter & Transformer & State-space \\
+\midrule
+Width $d$ & 512 & 512 \\
+Layers & 8 & 15 \\
+Attention heads & 8 & -- \\
+State dimension $n$ & -- & 16 \\
+Convolution kernel $k$ & -- & 4 \\
+Expansion factor & -- & 2 \\
+Rank of the $\Delta$ projection & -- & 32 \\
+Maximum sequence length & 96 & 96 \\
+Dropout & 0.1 & 0.1 \\
+Text prefix length & 1 & 1 \\
+END token & yes & yes \\
+Parameters & 33.91M & 34.10M \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Loss Weights and Optimization Schedules}
+\label{sec:app_optim}
+
+\begin{table}[H]
+\centering
+\caption{Training settings shared by both generators.}
+\label{tab:app_train}
+\begin{tabular}{lr}
+\toprule
+Setting & Value \\
+\midrule
+Optimiser & AdamW \\
+Learning rate, generator & $2 \cdot 10^{-4}$ \\
+Learning rate, text encoder (last layer, final norm, projection) & $10^{-5}$ \\
+Weight decay (weight matrices only) & 0.01 \\
+Warm-up steps & 1000 \\
+Schedule & cosine to $1\%$ of peak \\
+Gradient clipping (global norm) & 1.0 \\
+Weight averaging (EMA decay) & 0.999 \\
+Condition dropout & 0.1 \\
+Input token keep probability & 0.8 \\
+Batch size & 8 \\
+Mixed precision & off \\
+Validation: clips, guidance scale, temperature & 600, 6.0, 1.0 \\
+\midrule
+Loss weight, root & 0.3 \\
+Loss weight, positions & 0.5 \\
+Loss weight, rotations & 0.5 \\
+Loss weight, velocities & 0.3 \\
+Loss weight, contacts & 0.1 \\
+Loss weight, foot sliding (dynamics ablation only) & 10 \\
+Loss weight, acceleration (dynamics ablation only) & 18 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Evaluation settings for all test results.}
+\label{tab:app_eval}
+\begin{tabular}{lr}
+\toprule
+Setting & Value \\
+\midrule
+Test clips & 2189 \\
+Repetitions & 20 \\
+Guidance scale $s$ & 6.0 \\
+Temperature $\tau$ & 1.0 \\
+Nucleus threshold & 0.9 \\
+Generated length & ground-truth number of tokens \\
+R-precision batch & 32 \\
+Multimodality: captions, generations per caption & 100, 30 \\
+Bootstrap resamples for the FID interval & 200 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Run Manifests and Seeds}
+\label{sec:app_runs}
+
+All runs use seed 2026 with deterministic settings, on one GPU with 4~GB of memory, Python 3.12 and PyTorch 2.12. Each run directory holds a manifest (configuration, code revision, seed, software versions) and a metrics log. \tabref{tab:app_runs} maps the generation results to their test-evaluation runs.
+
+\begin{table}[H]
+\centering
+\caption{Test-evaluation runs behind the generation tables. FID is given with its $95\%$ bootstrap interval.}
+\label{tab:app_runs}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{llrl}
+\toprule
+Result & Checkpoint & FID [interval] & Run identifier \\
+\midrule
+Transformer, 60 epochs (\tabref{tab:twin_results}) & \texttt{generator\_transformer\_bs8\_e60} & 0.132 [0.127, 0.230] & \texttt{20260921T044216Z\_evaluate\_test} \\
+State-space, 60 epochs (\tabref{tab:twin_results}) & \texttt{generator\_mamba\_bs8\_e60} & 0.121 [0.114, 0.212] & \texttt{20260925T052409Z\_evaluate\_test} \\
+State-space, repeat evaluation & \texttt{generator\_mamba\_bs8\_e60} & 0.121 [0.114, 0.212] & \texttt{20260927T115140Z\_evaluate\_test} \\
+Transformer, 100 epochs (\tabref{tab:twin_100}) & \texttt{generator\_transformer\_bs8\_e100} & 0.163 [0.152, 0.275] & \texttt{20260927T114353Z\_evaluate\_test} \\
+Transformer, dynamics (\tabref{tab:dyn_test}) & \texttt{generator\_transformer\_bs8\_dyn\_e72} & 0.158 [0.149, 0.254] & \texttt{20261003T160609Z\_evaluate\_test} \\
+State-space, dynamics (\tabref{tab:dyn_test}) & \texttt{generator\_mamba\_bs8\_dyn\_e72} & 0.127 [0.126, 0.222] & \texttt{20261003T201329Z\_evaluate\_test} \\
+Residual VQ tokens, 18 epochs (\tabref{tab:tok_downstream}) & \texttt{generator\_transformer\_rvq\_bs8} & 0.832 [0.737, 1.025] & \texttt{20260920T050442Z\_evaluate\_test} \\
+Residual VQ tokens, 60 epochs (\tabref{tab:tok_downstream}) & \texttt{generator\_transformer\_rvq\_bs8\_e60} & 0.294 [0.251, 0.428] & \texttt{20260921T044525Z\_evaluate\_test} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+The paired analysis of \tabref{tab:twin_paired} is run \texttt{20261010T144528Z\_paired\_twin\_analysis}; it scores the two 60-epoch checkpoints again on the test split, for analysis only and not for selection.
+
+The bootstrap interval resamples test clips with replacement. Because FID is biased upward at smaller effective sample sizes, the resampled values lie mostly above the point estimate, which is why the point estimate sits near the lower end of each interval.

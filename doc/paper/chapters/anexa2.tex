@@ -1,0 +1,39 @@
+\chapter{Appendix B: Engineering Rationale}
+\label{chap:appendix_engineering}
+
+\section{Optimizer and Loss Derivations}
+\label{sec:app_derivations}
+
+\paragraph{Cross-entropy and its floor.} For data distribution $p$ and model $p_\theta$,
+\begin{align}
+\mathrm{CE}(\theta) &= -\mathbb{E}_{z \sim p}\bigl[\ln p_\theta(z)\bigr] \\
+&= -\mathbb{E}_{z \sim p}\bigl[\ln p(z)\bigr] + \mathbb{E}_{z \sim p}\Bigl[\ln \frac{p(z)}{p_\theta(z)}\Bigr] \\
+&= H(p) + D_{\mathrm{KL}}(p \,\Vert\, p_\theta).
+\end{align}
+Since $D_{\mathrm{KL}} \ge 0$, training can only lower the cross-entropy towards $H(p)$ from above. $H(p)$ is not computable, because it requires the true distribution. A cross-entropy measured on the training sample can fall below the entropy of the true distribution, because the empirical distribution of a finite sample has lower entropy than the distribution it was drawn from. This is why stopping is decided on held-out quantities: the validation loss, the gap between training and validation, and the downstream metric.
+
+\paragraph{Why warm-up.} Adam-type optimisers divide the gradient by a running estimate of its second moment. In the first steps that estimate rests on very few samples and is unreliable, so the effective step can be much larger than intended. A linear warm-up keeps the step small until the estimate has settled.
+
+\paragraph{Why decay is decoupled and selective.} In AdamW the weight-decay term is applied to the weights directly and is not rescaled by the second-moment estimate~\cite{loshchilov2019adamw}. We apply it to weight matrices only. For the state-space layer this matters: the transition is $A = -\exp(a_{\log})$, and decay pulls $a_{\log}$ towards zero, that is $A$ towards $-1$, regardless of what the data require. Exempting $a_{\log}$ and $D$ leaves the memory horizon of the recurrence to be set by the gradient alone.
+
+\paragraph{Stability of the recurrence.} Along time, the Jacobian of \eqref{eq:s6} with respect to the previous state is the diagonal matrix with entries $e^{\Delta_t A}$. With $A < 0$ and $\Delta_t > 0$ each entry lies in $(0,1)$, so
+\begin{equation}
+\Bigl\lVert \frac{\partial s_t}{\partial s_{t-k}} \Bigr\rVert = \Bigl\lVert \prod_{i=t-k+1}^{t} \operatorname{diag}\bigl(e^{\Delta_i A}\bigr) \Bigr\rVert < 1 .
+\end{equation}
+Gradients through time cannot explode. They can decay, and the rate of decay is controlled by the input through $\Delta_t$. Along depth, both backbones use pre-norm residual blocks, whose Jacobian $I + J$ contains an identity path at every layer.
+
+\paragraph{Why not normalise over the batch.} Batch normalisation couples the samples of a batch and has no meaningful statistics at batch size one, which is the streaming regime. Both backbones use RMSNorm, which normalises each position independently.
+
+\section{Configuration-Contract Audit}
+\label{sec:app_contracts}
+
+Each stage of the pipeline (motion, tokenization, generation, evaluation, viewer) declares its configuration as typed, immutable records, and one loader composes and validates them before any command runs. During the project, four defects were found that had the same form: a quantity that could be read from more than one place, with no check that the places agreed.
+
+\begin{enumerate}
+\item \textbf{Vocabulary size.} Pretraining computed the vocabulary as the product of the FSQ levels for every tokenizer. For a residual VQ tokenizer this silently gave 1000 where the codebook has 1024 entries. It is now derived from the declared tokenizer kind.
+\item \textbf{Sanity-check equality.} Before every training run, a check verifies that the model can overfit a single batch. It is run with dropout disabled and recorded its configuration; training then compared its own configuration to the recorded one by strict equality, including dropout, so the comparison could never pass. Dropout is now excluded from that comparison and every architectural field must still match.
+\item \textbf{Missing sibling field.} The pretraining request had a data-loader worker count and the fine-tuning request did not, so fine-tuning always loaded data synchronously. Adding the field reduced the epoch time of one configuration from about 15 to about 9 minutes.
+\item \textbf{One quantity in two records.} The number of residual quantizers was declared separately for the generator and for the residual VQ tokenizer. All configurations happened to agree. The loader now rejects a configuration in which they differ.
+\end{enumerate}
+
+None of the four was caught by unit tests, which exercise one record at a time. Each appeared only when two stages were run together in a combination that had not been run before. The remedy in each case was to move the check to the one place that owns both values, the loader, so that a disagreement stops the run before any model is built.
