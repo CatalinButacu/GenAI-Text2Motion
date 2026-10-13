@@ -4,7 +4,7 @@ from text2motion.evaluation.contracts import (
     GenerationLengthPolicy,
 )
 from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
-from text2motion.evaluation.matcher import GuoEvaluationResources
+from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 
 __all__ = [
     "GuoEvaluationResources",

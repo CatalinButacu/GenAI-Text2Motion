@@ -9,7 +9,7 @@ from pathlib import Path
 import torch
 
 from text2motion.evaluation.contracts import StreamingBenchmarkProtocol
-from text2motion.generation.model import (
+from text2motion.generation.nn_model import (
     Backbone,
     GeneratorConfig,
     GeneratorModelSpec,

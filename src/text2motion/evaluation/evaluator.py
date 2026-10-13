@@ -14,7 +14,6 @@ from text2motion.evaluation.contracts import (
     GenerationEvaluationReport,
     GenerationEvaluationSet,
 )
-from text2motion.evaluation.matcher import GuoEvaluationResources
 from text2motion.evaluation.metrics import (
     bootstrap_fid,
     compute_guo_motion_embeddings,
@@ -24,10 +23,11 @@ from text2motion.evaluation.metrics import (
     mm_dist,
     r_precision,
 )
+from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.generation.contracts import SamplingConfig
 from text2motion.generation.pipeline import TextToMotionGenerator
-from text2motion.motion.annotations import parse_text_file
 from text2motion.motion.contracts import Split
+from text2motion.motion.datasets import parse_text_file
 from text2motion.motion.storage import FEATURES_DIR
 
 logger = logging.getLogger(__name__)

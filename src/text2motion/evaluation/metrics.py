@@ -5,6 +5,7 @@ import torch
 from scipy import linalg
 
 from text2motion.evaluation.contracts import DIVERSITY_PAIRS, R_PRECISION_POOL
+from text2motion.motion.representation import FPS
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,16 @@ def r_precision(
     return hits / max(groups, 1)
 
 
+def own_caption_ranks(text: np.ndarray, motion: np.ndarray, order: np.ndarray) -> np.ndarray:
+    ranks = np.full(len(text), -1)
+    for start in range(0, len(order) - R_PRECISION_POOL + 1, R_PRECISION_POOL):
+        pool = order[start : start + R_PRECISION_POOL]
+        distances = np.linalg.norm(text[pool][:, None, :] - motion[pool][None, :, :], axis=-1)
+        own = np.diag(distances)
+        ranks[pool] = (distances < own[:, None]).sum(axis=1)
+    return ranks
+
+
 def mm_dist(text_feats: np.ndarray, motion_feats: np.ndarray) -> float:
     return float(np.linalg.norm(text_feats - motion_feats, axis=1).mean())
 
@@ -171,3 +182,30 @@ def compute_guo_text_embeddings(text_embedder, text_inputs, device, batch_size=3
         )
         out.append(emb.cpu().numpy())
     return np.concatenate(out)
+
+
+FEET = [7, 8, 10, 11]
+ACCELERATION_LIMIT_M_PER_FRAME2 = 0.08
+TELEPORT_M_PER_FRAME = 0.25
+
+
+def motion_statistics(joints: np.ndarray) -> dict[str, float]:
+    velocity = np.diff(joints, axis=0)
+    acceleration = np.diff(velocity, axis=0)
+    jerk = np.diff(acceleration, axis=0)
+    acceleration_norm = np.linalg.norm(acceleration, axis=-1)
+    root_step = np.linalg.norm(velocity[:, 0, [0, 2]], axis=-1)
+    lowest = joints[:, FEET, 1].min(axis=-1)
+    grounded = joints[:, FEET, 1] < np.percentile(lowest, 5) + 0.05
+    foot_speed = np.linalg.norm(velocity[:, FEET][..., [0, 2]], axis=-1)
+    skate = (foot_speed * grounded[1:]).sum() / max(1, grounded[1:].sum()) * FPS
+    return {
+        "mean_acceleration_cm_per_frame2": float(acceleration_norm.mean() * 100),
+        "p99_acceleration_cm_per_frame2": float(np.percentile(acceleration_norm, 99) * 100),
+        "mean_jerk_cm_per_frame3": float(np.linalg.norm(jerk, axis=-1).mean() * 100),
+        "frames_over_acceleration_limit_pct": float(
+            (acceleration_norm.max(axis=-1) > ACCELERATION_LIMIT_M_PER_FRAME2).mean() * 100
+        ),
+        "root_teleports": float((root_step > TELEPORT_M_PER_FRAME).sum()),
+        "foot_skate_m_per_s": float(skate),
+    }
