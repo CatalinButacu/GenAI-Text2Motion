@@ -177,6 +177,48 @@ Transformer & reset every 1, keep 47 & 2.73 & 3.73 & 4.47 & 4.54 & 89 \\
 
 \paragraph{Consequence for the memory claim.} Under any reset policy the generator holds at most $k + n$ tokens, so the transformer's cache is bounded as well. In the configuration that gives good long motion today, both generators have bounded memory, and the transformer is the faster one. The advantage of the state-space model in \tabref{tab:stream_state} becomes a practical advantage only for a model whose state stays valid at long lengths. That needs training on sequences longer than the clips of HumanML3D, which this thesis did not do. The numbers of this section come from 32 captions and one sample each, so they show the direction of the effect and not its exact size.
 
+\paragraph{A list of actions keeps the text match.} A reset rebuilds the state from the text and the last tokens. The text at a reset can therefore be different from the text at the start. We used this to give the generator a plan from outside the model: a list of actions and a pointer to the current action. At each reset the generator receives the caption of the current action and the last 16 tokens. No model was trained again.
+
+We built 96 sequences of three test captions (288 clips, fixed seed). Each sequence is one stream of $3 \times 48$ tokens (28.8 seconds) with a reset every 8 tokens, so a reset is on each boundary between two actions. We compared two methods with the same random numbers. The first gives one joined caption (``$c_1$, then $c_2$, then $c_3$'') for the full stream. The second is the list of actions. Each segment of 48 tokens was scored against the caption of its own action with the evaluator of \secref{sec:protocol_metrics}, in pools of 32.
+
+\begin{table}[H]
+\centering
+\caption{Text match of three consecutive actions in one stream. R@1 is retrieval of the caption of the action at rank one in a pool of 32 (higher is better); distance is the evaluator distance to that caption (lower is better). 96 sequences, one sample each.}
+\label{tab:action_list}
+\begin{tabular}{llrrrrrr}
+\toprule
+ & & \multicolumn{3}{c}{R@1} & \multicolumn{3}{c}{Distance} \\
+Generator & Text & Act. 1 & Act. 2 & Act. 3 & Act. 1 & Act. 2 & Act. 3 \\
+\midrule
+State-space & joined caption & 0.198 & 0.135 & 0.125 & 6.30 & 7.07 & 7.95 \\
+State-space & list of actions & 0.458 & 0.417 & 0.479 & 2.77 & 3.53 & 3.66 \\
+\midrule
+Transformer & joined caption & 0.240 & 0.104 & 0.094 & 6.25 & 7.19 & 7.62 \\
+Transformer & list of actions & 0.448 & 0.427 & 0.521 & 2.89 & 3.54 & 3.32 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+With the list of actions, the second and the third action have the text match of a single clip: the two generators reach R@1 of $0.418$ and $0.395$ on single clips in \tabref{tab:twin_results}, and $0.417$ to $0.521$ here, 10 and 19 seconds after the start of the stream. Foot sliding stays between $0.26$ and $0.29$~m/s for all three actions. The joined caption fails from the first action. The generators never saw such a caption in training, so this row is a weak baseline: it shows that the list of actions works, and not how a model trained on joined captions would do. With 96 sequences, the $95\%$ bootstrap interval of each R@1 value of the list of actions is about $\pm 0.10$ (for the state-space generator, $[0.32, 0.51]$ for the second action and $[0.38, 0.58]$ for the third). The difference to the joined caption is larger than this uncertainty for every action and both generators: the exact McNemar test on the rank-one results gives $p \le 0.003$, and the Wilcoxon signed-rank test on the distances gives $p < 10^{-11}$. The two generators give the same picture.
+
+\paragraph{The boundary between two actions.} No sequence has a jump of the root at a boundary. The motion is rougher there: in a window of one second around a boundary, the mean joint acceleration is $0.91$~cm/frame$^2$ for the state-space generator and $0.97$ for the transformer, against $0.61$ and $0.62$ in the middle of an action. More kept tokens make the boundary smoother, and make the change to the new action slower (\tabref{tab:boundary}). With 32 kept tokens the boundary of the state-space generator is as smooth as the middle of an action ($0.59$), and the distance of the second action to its caption rises from $3.53$ to $4.29$. The number of kept tokens is therefore a control between a smooth change and a fast change of action.
+
+\begin{table}[H]
+\centering
+\caption{Effect of the number of kept tokens with the list of actions: mean joint acceleration around a boundary (cm/frame$^2$) and evaluator distance of the second action to its caption. Reset every 8 tokens, 96 sequences.}
+\label{tab:boundary}
+\begin{tabular}{lrrrr}
+\toprule
+ & \multicolumn{2}{c}{State-space} & \multicolumn{2}{c}{Transformer} \\
+Kept tokens & Boundary accel. & Distance, act. 2 & Boundary accel. & Distance, act. 2 \\
+\midrule
+16 & 0.91 & 3.53 & 0.97 & 3.54 \\
+24 & 0.74 & 4.11 & 0.86 & 3.62 \\
+32 & 0.59 & 4.29 & 0.82 & 4.08 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \section{Interactive Studio Viewer}
 \label{sec:stream_viewer}
 
