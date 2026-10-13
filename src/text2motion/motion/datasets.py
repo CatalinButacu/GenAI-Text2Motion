@@ -4,9 +4,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset
 
-from text2motion.motion.annotations import parse_text_file
 from text2motion.motion.contracts import MotionDataConfig, Split, TextAnnotation
 from text2motion.motion.model import MotionBatch, MotionClip
 from text2motion.motion.normalization import MotionScaler
@@ -237,3 +236,95 @@ def collate_motion_clips(clips: list[MotionClip]) -> MotionBatch:
         lengths=torch.tensor([clip.frame_count for clip in clips], dtype=torch.long),
         captions=[clip.caption or "" for clip in clips],
     )
+
+
+def parse_text_file(path: Path) -> list[TextAnnotation]:
+    annotations: list[TextAnnotation] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        parts = line.split("#")
+        if len(parts) < 4:
+            raise ValueError(f"malformed caption line in {path}: {raw_line!r}")
+        caption, tokens, start, end = parts[0], parts[1], parts[2], parts[3]
+        start_time = float(start)
+        end_time = float(end)
+        annotations.append(
+            TextAnnotation(
+                caption=caption,
+                tokens=tokens.split(" ") if tokens else [],
+                start_time=0.0 if np.isnan(start_time) else start_time,
+                end_time=0.0 if np.isnan(end_time) else end_time,
+            )
+        )
+    if not annotations:
+        raise ValueError(f"no captions found in {path}")
+    return annotations
+
+
+class MotionDataModule:
+    def __init__(
+        self,
+        root: Path,
+        data: MotionDataConfig | None = None,
+        texts_dir: Path | None = None,
+        seed: int = 42,
+    ) -> None:
+        if root is None:
+            raise ValueError("motion repository root must be set (regenerated 263 output dir)")
+        self.root = Path(root)
+        self.data = data or MotionDataConfig()
+        self.texts_dir = Path(texts_dir) if texts_dir is not None else None
+        self.seed = seed
+
+    def load_scaler(self) -> MotionScaler:
+        return MotionScaler.load(self.root, dim=DIM)
+
+    def captioned_dataset(self, split: Split | str) -> CaptionedMotionDataset:
+        return CaptionedMotionDataset(
+            self.root, self.data, split=split, texts_dir=self.texts_dir, seed=self.seed
+        )
+
+    def window_dataset(self, split: Split | str, window: int) -> MotionWindowDataset:
+        return MotionWindowDataset(self.root, self.data, split, window, seed=self.seed)
+
+    def captioned_batch_loader(
+        self,
+        split: Split | str,
+        batch_size: int,
+        shuffle: bool | None = None,
+        num_workers: int = 0,
+    ) -> DataLoader:
+        split = Split(split)
+        return DataLoader(
+            self.captioned_dataset(split),
+            batch_size=batch_size,
+            shuffle=(split == Split.TRAIN) if shuffle is None else shuffle,
+            num_workers=num_workers,
+            collate_fn=collate_motion_clips,
+            drop_last=(split == Split.TRAIN),
+            pin_memory=True,
+            persistent_workers=num_workers > 0,
+            prefetch_factor=2 if num_workers > 0 else None,
+        )
+
+    def window_batch_loader(
+        self,
+        split: Split | str,
+        window: int,
+        batch_size: int,
+        num_workers: int = 0,
+    ) -> DataLoader:
+        split = Split(split)
+        return DataLoader(
+            self.window_dataset(split, window),
+            batch_size=batch_size,
+            shuffle=(split == Split.TRAIN),
+            num_workers=num_workers,
+            collate_fn=collate_motion_clips,
+            drop_last=(split == Split.TRAIN),
+            pin_memory=True,
+            persistent_workers=num_workers > 0,
+            prefetch_factor=2 if num_workers > 0 else None,
+        )

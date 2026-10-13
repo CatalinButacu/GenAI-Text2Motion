@@ -74,8 +74,9 @@ class CommandRequest(BaseModel):
     @classmethod
     def member_from_name(cls, value: Any, info: ValidationInfo) -> Any:
         annotation = cls.model_fields[info.field_name or ""].annotation
-        is_enum = isinstance(annotation, type) and issubclass(annotation, Enum)
-        if is_enum and isinstance(value, str) and value in annotation.__members__:
+        if not (isinstance(annotation, type) and issubclass(annotation, Enum)):
+            return value
+        if isinstance(value, str) and value in annotation.__members__:
             return annotation[value]
         return value
 

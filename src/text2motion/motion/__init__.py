@@ -1,6 +1,5 @@
 from text2motion.motion.contracts import MotionDataConfig, Split
-from text2motion.motion.datamodule import MotionDataModule
-from text2motion.motion.datasets import collate_motion_clips
+from text2motion.motion.datasets import MotionDataModule, collate_motion_clips
 from text2motion.motion.model import (
     GeneratedMotion,
     MotionBatch,

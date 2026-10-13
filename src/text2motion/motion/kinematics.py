@@ -288,31 +288,3 @@ class Skeleton:
                     torch.matmul(matR, offset_vec).squeeze(-1) + joints[:, chain[i - 1]]
                 )
         return joints
-
-    def forward_kinematics_cont6d_np(
-        self,
-        cont6d_params: np.ndarray,
-        root_pos: np.ndarray,
-        skel_joints: np.ndarray | None = None,
-        do_root_R: bool = True,
-    ) -> np.ndarray:
-        if skel_joints is not None:
-            skel_joints = torch.from_numpy(skel_joints)
-            offsets = self.get_offsets_joints_batch(skel_joints)
-        if len(self._offset.shape) == 2:
-            offsets = self._offset.expand(cont6d_params.shape[0], -1, -1)
-        offsets = offsets.numpy()
-        joints = np.zeros(cont6d_params.shape[:-1] + (3,))
-        joints[:, 0] = root_pos
-        for chain in self._kinematic_tree:
-            if do_root_R:
-                matR = cont6d_to_matrix_np(cont6d_params[:, 0])
-            else:
-                matR = np.eye(3)[np.newaxis, :].repeat(len(cont6d_params), axis=0)
-            for i in range(1, len(chain)):
-                matR = np.matmul(matR, cont6d_to_matrix_np(cont6d_params[:, chain[i]]))
-                offset_vec = offsets[:, chain[i]][..., np.newaxis]
-                joints[:, chain[i]] = (
-                    np.matmul(matR, offset_vec).squeeze(-1) + joints[:, chain[i - 1]]
-                )
-        return joints
