@@ -1,25 +1,31 @@
 from __future__ import annotations
 
 import logging
+import random
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from text2motion.app.checkpoint import load_generator_checkpoint
-from text2motion.app.config import ApplicationConfig, MotionServiceConfig
-from text2motion.app.config_loader import load_config
-from text2motion.app.logging_setup import ensure_logging_configured
-from text2motion.app.runtime import apply_precision, resolve_device, seed_everything
+from text2motion.app.config import (
+    ApplicationConfig,
+    ComputeDevice,
+    Float32Precision,
+    MotionServiceConfig,
+    load_config,
+)
+from text2motion.app.run_log import ensure_logging_configured
 from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
-from text2motion.evaluation.matcher import GuoEvaluationResources
+from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.model import GeneratorModelSpec
+from text2motion.generation.nn_model import GeneratorModelSpec
+from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.generation.pipeline import TextToMotionGenerator
-from text2motion.generation.text import CLIPTextEncoder
 from text2motion.motion.contracts import PreparationRequest
-from text2motion.motion.datamodule import MotionDataModule
-from text2motion.tokenization.model import MotionTokenizer, build_tokenizer_network
+from text2motion.motion.datasets import MotionDataModule
+from text2motion.tokenization.nn_model import MotionTokenizer, build_tokenizer_network
 
 
 def required_path(value: Path | None, key: str) -> Path:
@@ -51,7 +57,9 @@ class ApplicationContext:
     def load_tokenizer(self, checkpoint: str | Path | None = None) -> MotionTokenizer:
         checkpoint = checkpoint or self.config.paths.tokenizer_checkpoint
         tokenizer_network = self.create_tokenizer_network()
-        tokenizer_network.load_state_dict(torch.load(checkpoint, map_location="cpu"))
+        tokenizer_network.load_state_dict(
+            torch.load(checkpoint, map_location="cpu", weights_only=True)
+        )
         return MotionTokenizer(
             tokenizer_network,
             downsample=self.config.tokenizer.downsample,
@@ -175,7 +183,7 @@ class ApplicationContext:
         return replace(self, config=replace(self.config, service=service))
 
     def with_service_file(self, service_config: str | Path) -> ApplicationContext:
-        from text2motion.app.schema import load_dataclass
+        from text2motion.app.config import load_dataclass
 
         path = Path(service_config)
         if not path.is_file():
@@ -209,3 +217,32 @@ class ApplicationBootstrap:
             device=resolved_device,
             config_path=Path(config_path),
         )
+
+
+def seed_everything(seed: int, deterministic: bool = False) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.use_deterministic_algorithms(deterministic, warn_only=True)
+    if torch.backends.cudnn.is_available():
+        torch.backends.cudnn.benchmark = not deterministic
+        torch.backends.cudnn.deterministic = deterministic
+
+
+def apply_precision(precision: Float32Precision | str) -> None:
+    precision = Float32Precision(precision)
+    allow_tf32 = precision is Float32Precision.TF32
+    torch.backends.cuda.matmul.allow_tf32 = allow_tf32
+    torch.backends.cudnn.allow_tf32 = allow_tf32
+    torch.set_float32_matmul_precision("high" if allow_tf32 else "highest")
+
+
+def resolve_device(requested: ComputeDevice | str, override: str | None = None) -> str:
+    if override:
+        return override
+    requested = ComputeDevice(requested)
+    if requested is ComputeDevice.CUDA and not torch.cuda.is_available():
+        return ComputeDevice.CPU.value
+    return requested.value
