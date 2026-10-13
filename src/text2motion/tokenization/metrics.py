@@ -10,7 +10,7 @@ from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import JOINTS, recover_from_ric
 from text2motion.motion.storage import FEATURES_DIR
-from text2motion.tokenization.model import MotionTokenizerNetwork
+from text2motion.tokenization.nn_model import MotionTokenizerNetwork
 
 _ReconFidScorer = Callable[[list[np.ndarray], list[np.ndarray]], float]
 

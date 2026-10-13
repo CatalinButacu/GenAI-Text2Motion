@@ -9,7 +9,7 @@ from tqdm import tqdm
 from text2motion.motion.model import MotionClip
 from text2motion.motion.normalization import MotionScaler
 from text2motion.tokenization.contracts import TokenPackRequest
-from text2motion.tokenization.model import MotionTokenizer
+from text2motion.tokenization.nn_model import MotionTokenizer
 
 
 @torch.no_grad()

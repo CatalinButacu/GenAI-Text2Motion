@@ -12,7 +12,7 @@ from text2motion.motion.contracts import Split
 from text2motion.motion.model import MotionBatch
 from text2motion.tokenization.contracts import TokenizerTrainingRequest
 from text2motion.tokenization.ema import ExponentialMovingAverage
-from text2motion.tokenization.model import (
+from text2motion.tokenization.nn_model import (
     MotionTokenizerNetwork,
     feature_velocity_reconstruction_loss,
 )

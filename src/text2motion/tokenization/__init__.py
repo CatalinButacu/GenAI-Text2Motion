@@ -4,7 +4,7 @@ from text2motion.tokenization.contracts import (
     TokenizerConfig,
     TokenizerKind,
 )
-from text2motion.tokenization.model import (
+from text2motion.tokenization.nn_model import (
     MotionTokenizer,
     MotionTokenizerNetwork,
     build_tokenizer_network,
