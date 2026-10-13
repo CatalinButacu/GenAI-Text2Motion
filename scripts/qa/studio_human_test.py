@@ -13,8 +13,8 @@ import numpy as np
 from aitviewer.utils.pyqt6_window import Keys as StudioWindowKeys
 from moderngl_window.context.headless.window import Window as HeadlessWindow
 
-from text2motion.app.schema import load_dataclass
-from text2motion.streaming.protocol import MotionStreamProtocol, connect_or_start_motion_server
+from text2motion.app.config import load_dataclass
+from text2motion.streaming.protocol import MotionStreamProtocol, motion_service_client
 from text2motion.studio.config import StudioConfig
 from text2motion.studio.viewer import StreamingStudioViewer
 
@@ -522,7 +522,7 @@ def main() -> None:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     config = load_dataclass(StudioConfig, args.studio_config)
-    client = connect_or_start_motion_server(
+    client = motion_service_client(
         args.config,
         args.ckpt,
         args.tokenizer_ckpt,

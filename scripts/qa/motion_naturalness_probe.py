@@ -10,8 +10,8 @@ import numpy as np
 import torch
 
 from text2motion.app.bootstrap import ApplicationBootstrap
-from text2motion.app.schema import load_dataclass
-from text2motion.evaluation.plausibility import motion_statistics
+from text2motion.app.config import load_dataclass
+from text2motion.evaluation.metrics import motion_statistics
 from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.representation import recover_skeleton
 from text2motion.studio.avatar import build_smplx_body_model, solve_smplx_pose_from_joints

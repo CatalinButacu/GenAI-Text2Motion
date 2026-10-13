@@ -14,10 +14,13 @@ import torch
 
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.app.run_log import log_metrics, start_run
-from text2motion.evaluation.metrics import compute_guo_text_embeddings, r_precision
-from text2motion.evaluation.plausibility import motion_statistics
+from text2motion.evaluation.metrics import (
+    compute_guo_text_embeddings,
+    motion_statistics,
+    r_precision,
+)
 from text2motion.generation.contracts import Backbone, StudioSamplingConfig
-from text2motion.generation.model import seeded_sampling_uniforms
+from text2motion.generation.nn_model import seeded_sampling_uniforms
 from text2motion.motion.representation import recover_skeleton
 
 logger = logging.getLogger(__name__)

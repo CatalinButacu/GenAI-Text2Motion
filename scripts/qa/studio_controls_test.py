@@ -11,8 +11,8 @@ import imgui
 import numpy as np
 from studio_human_test import HumanDriver, build_studio_viewer
 
-from text2motion.app.schema import load_dataclass
-from text2motion.streaming.protocol import MotionStreamProtocol, connect_or_start_motion_server
+from text2motion.app.config import load_dataclass
+from text2motion.streaming.protocol import MotionStreamProtocol, motion_service_client
 from text2motion.studio.config import StudioConfig
 
 TRACKED_WIDGETS = (
@@ -353,8 +353,8 @@ def sampling_controls(driver: HumanDriver, pointer: Pointer) -> None:
     state.temperature, state.top_p, state.cfg_scale = 1.0, 0.9, 6.0
 
 
-def prompt_bar_and_playback(driver: HumanDriver, pointer: Pointer) -> None:
-    driver.scenario = "prompt_bar_and_playback"
+def prompt_playback(driver: HumanDriver, pointer: Pointer) -> None:
+    driver.scenario = "prompt_playback"
     viewer = driver.viewer
     state = viewer.state
     state.steps = 0
@@ -595,7 +595,7 @@ def model_controls(driver: HumanDriver, pointer: Pointer) -> None:
 PANELS = {
     "environment": environment_controls,
     "sampling": sampling_controls,
-    "prompt_playback": prompt_bar_and_playback,
+    "prompt_playback": prompt_playback,
     "avatar": avatar_controls,
     "model": model_controls,
 }
@@ -622,7 +622,7 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     tracker = WidgetTracker()
     config = load_dataclass(StudioConfig, args.studio_config)
-    client = connect_or_start_motion_server(
+    client = motion_service_client(
         args.config,
         args.ckpt,
         args.tokenizer_ckpt,
