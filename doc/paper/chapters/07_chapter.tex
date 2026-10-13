@@ -1,0 +1,55 @@
+\chapter{Discussion and Limitations}
+\label{chap:discussion}
+
+The previous three chapters each closed with the threats specific to one contribution. This chapter covers the limits that apply to the thesis as a whole.
+
+\section{The Data-Constrained Regime}
+\label{sec:disc_data}
+
+The largest structural limit of this work is neither the GPU nor the choice of sequence mixer. It is that captioned motion capture does not exist at the scale that the model sizes of this field imply. This section counts the data and relates the count to the training behaviour reported in \chapref{chap:generator}.
+
+\paragraph{The token budget.} The tokenizer emits one latent step per $d = 4$ frames, with $Q = 8$ codes per step, and the generator has one cross-entropy target per code. With $F$ the number of training frames after windowing and $m = 2$ the mirror factor, the number of training targets is
+\begin{equation}
+D = \frac{F}{d} \cdot Q \cdot m .
+\end{equation}
+The HumanML3D training split has $F = 1{,}631{,}508$ frames over $11{,}692$ base clips, which gives $D = 6.53$ million tokens. The unconditional prior adds $3.25$ million. Tokenizing all $40.6$ hours of our AMASS conversion, instead of only the full-length windows, would raise the total to about $18$ million.
+
+\paragraph{Against compute-optimal scaling.} Hoffmann et al.~\cite{hoffmann2022chinchilla} fit the loss of language models as $L(N, D) = E + A N^{-\alpha} + B D^{-\beta}$ in parameters $N$ and tokens $D$, and find that for a fixed compute budget the optimum lies near $D^\star \approx 20N$. Read literally, a 34M-parameter generator would call for about $680$ million tokens, roughly a hundred times what HumanML3D provides.
+
+Repeating the data does not close this gap. Muennighoff et al.~\cite{muennighoff2023dataconstrained} model the value of repeated tokens as decaying, with $R$ the number of epochs and $R^\star_D \approx 15$:
+\begin{equation}
+D_{\mathrm{eff}} = D\Bigl(1 + R^\star_D\bigl(1 - e^{-(R-1)/R^\star_D}\bigr)\Bigr) \;\xrightarrow[R \to \infty]{}\; D\,(1 + R^\star_D).
+\end{equation}
+For $D = 6.53$M this caps the effective budget at about $107$ million tokens however long we train. The parameter count that such a budget supports under the same ratio is about $5.4$M. Our 34M generators are about six times larger than that.
+
+\paragraph{An information-theoretic restatement.} The training split carries at most $D \log_2 V = 65.3$~Mbit, or $8.2$~MB, of information, and its true entropy is much lower because motion at a 5~Hz latent rate is strongly autocorrelated. At the storage capacity of about two bits per parameter measured for language models~\cite{allenzhu2024capacity}, a 34M-parameter model can hold about as many bits as the upper bound on the whole training set. Memorising the corpus is within its capacity.
+
+This is the mechanism behind what \chapref{chap:generator} observed three times: validation quality peaks early (epoch 30 for the state-space model), training loss continues to fall for as long as training continues, and neither the 100-epoch extension nor the 84-epoch dynamics fine-tune produced a better model. No schedule changes this; more distinct motion would.
+
+\paragraph{Why the constants should not be read literally.} Three reservations apply. The ratio $D^\star \approx 20N$ is compute-optimal, not a requirement: with data fixed, a larger model can still reach a lower loss. Its constants were fitted on English text, and no such fit exists for motion tokens, so the functional form transfers and the number 20 need not. And part of what the model knows is imported: the CLIP text encoder was pretrained on a very large image--text corpus and is not learned from 6.53 million tokens. The field as a whole is over-parameterised at this data scale in the same way; heavy regularisation and early stopping on validation are what make that workable.
+
+\paragraph{Bearing on the claims.} This limit bounds the absolute quality we can report. It does not threaten the controlled comparison: both generators have the same number of parameters and the same data, so over-parameterisation applies to them identically. It does shape the future work of \chapref{chap:conclusion}, which is weighted towards more data and away from larger models.
+
+\section{Statistical Limits: Seeds, Test Reuse and Evaluator Equivalence}
+\label{sec:disc_statistics}
+
+\paragraph{Seeds.} Every training result in this thesis is one run with seed 2026. The cost of training the state-space generator, about 66 hours for 60 epochs on our hardware (\tabref{tab:cost}), is the reason. The 20 repetitions of the evaluation protocol average over sampling noise in generation and in the metrics; they say nothing about how much a result would move under a different initialisation or data order. The statement supported by our evidence is therefore: \emph{in one matched run, the state-space generator was ahead of the transformer in point estimates on every metric, clearly so on text--motion matching and within evaluation uncertainty on FID, and this ordering persisted across the later checkpoints of the same runs}. A statement about the expected ordering over seeds would need more runs. This is the first experiment we would add.
+
+\paragraph{Test reuse.} Model selection used the validation split only. The test split was scored once per selected checkpoint. Over the course of the project, however, several checkpoints of each generator were scored on test (60 epochs, 100 epochs, the dynamics fine-tune), and all of them are reported. None was chosen as the headline because of its test score: the headline is the first converged budget, fixed before the later runs existed.
+
+\paragraph{Validation and test disagree in level.} On the selected 60-epoch checkpoints, the 600-clip validation FID is higher than the 2189-clip test FID for both generators ($0.248$ against $0.132$ for the transformer, $0.183$ against $0.121$ for the state-space model). Both use the same generation procedure, so the difference comes from sample size and split. FID is biased upward at smaller sample sizes, which is why we compare FID values only at equal clip counts and treat the validation figure as a selection signal, not as an estimate of test quality.
+
+\paragraph{Evaluator equivalence.} Comparability with published numbers rests on using the same evaluator in the same way. Our harness reproduces the published R-precision of real motion ($0.514$ against $0.511$). An earlier version of the harness did not, and gave R-precision values that were too low; the generation results of Tables~\ref{tab:twin_results}, \ref{tab:twin_100} and~\ref{tab:dyn_test} were all produced after that was corrected. Cited rows come from other training runs and are treated as context, not as the other arm of a controlled comparison.
+
+\section{Scope Limits: Whole-Body Motion and Model Scale}
+\label{sec:disc_scope}
+
+\paragraph{Whole-body motion.} The quantitative results concern the 22-joint body. The viewer draws an SMPL-X surface, but the hands and face are not generated.
+
+\paragraph{Model scale.} All trained generators have 34M parameters. A 100M-parameter transformer was trained during the project, but no matching state-space model, so no matched pair exists at that scale and we report none. The analysis of \secref{sec:disc_data} suggests that on this corpus additional parameters would mostly add capacity to memorise, but that is an argument, not a measurement.
+
+\paragraph{Absolute quality.} The best bidirectional model is far ahead of both of our generators in FID ($0.045$ against $0.121$). Streaming has a price in quality at present, and this thesis does not remove it. What it shows is that, among streaming-capable designs, the one with constant memory was not the weaker one.
+
+\paragraph{Physical plausibility.} Generated motion has about $50\%$ more foot sliding than real motion, and the loss terms of \secref{sec:gen_dynamics} reduce this only slightly. We do not enforce contact or balance constraints.
+
+\paragraph{Data licensing and use.} AMASS, SMPL-X and HumanML3D are distributed under research licences that restrict redistribution; this work uses them for research only and redistributes none of them. A text-to-motion model can be used to animate a body performing actions a real person did not perform. The models here generate a generic skeleton and carry no identity, which limits that risk, but it is a property of the application and should be considered by anyone who builds on it.

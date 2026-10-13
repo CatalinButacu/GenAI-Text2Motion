@@ -1,0 +1,202 @@
+\chapter{Contribution III: Bounded-Memory Streaming System}
+\label{chap:streaming}
+
+\section{Streaming Architecture}
+\label{sec:stream_architecture}
+
+The streaming pipeline has three stages, each with a fixed-size state.
+
+\begin{enumerate}
+\item \textbf{Generator.} Both generators expose a step interface: given the previous step's codes and the stored state, return the logits of the next step and the updated state. For the state-space model the state is the recurrent state of \eqref{eq:s6} for each layer plus a short cache for the causal convolution. For the transformer it is the key--value cache.
+\item \textbf{Decoder.} Emitted codes are converted to frames by the tokenizer decoder, a few latent steps at a time, with the buffering described in \secref{sec:stream_decoder}.
+\item \textbf{Viewer.} Frames are converted to joint positions and displayed (\secref{sec:stream_viewer}).
+\end{enumerate}
+
+The step interface and the parallel training path compute the same function. A test compares the logits obtained by stepping through a sequence with those of a single parallel pass and requires them to agree. The numbers of \chapref{chap:generator} were themselves produced through the step interface at ground-truth length, so there is no gap between the evaluated model and the deployed one.
+
+\figref{fig:modules} shows how the software is organised. Each stage depends only on the motion representation of \chapref{chap:protocol} and on the stages below it.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\singlefigure]{\pics/architecture.png}
+\caption{Module structure of the implementation. Arrows point from a module to the modules it depends on.}
+\label{fig:modules}
+\end{figure}
+
+\section{Recurrent State versus Key--Value Cache Growth}
+\label{sec:stream_state}
+
+\paragraph{Analysis.} Let $N$ be the number of layers and $d$ the width. A transformer with a key--value cache stores two tensors of size $d$ per layer for every past position, so after $L$ steps its state is
+\begin{equation}
+M_{\mathrm{TF}}(L) = 2\,N\,d\,L \quad \text{values},
+\end{equation}
+and each new step attends over $L$ positions, so generating $L$ steps costs $O(L^2)$ in total. The state-space model stores, per layer, the state $s_t \in \mathbb{R}^{d_{\mathrm{in}} \times n}$ and the last $k-1$ inputs of the convolution:
+\begin{equation}
+M_{\mathrm{SSM}}(L) = N\,d_{\mathrm{in}}\,(n + k - 1) \quad \text{values},
+\end{equation}
+independent of $L$. Each step costs $O(1)$ and $L$ steps cost $O(L)$.
+
+\paragraph{Measurement.} We stepped both generators to a horizon of $L = 8192$ tokens and recorded the exact size of the state and the median latency per step. Since both quantities are properties of the architecture and not of the weights, this benchmark uses the larger, 100M-parameter configurations of the two architectures (12 and 23 layers) with untrained weights, which makes the gap easier to see. \figref{fig:streaming} and \tabref{tab:stream_state} give the result.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\singlelongfigure]{\pics/streaming.png}
+\caption{State size (left) and median per-step latency (right) against streaming horizon, single stream, 32-bit floats, 4~GB GPU. The state-space model runs without its compiled scan kernel.}
+\label{fig:streaming}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{State carried between steps at three horizons.}
+\label{tab:stream_state}
+\begin{tabular}{rrrr}
+\toprule
+Horizon $L$ (tokens) & Transformer cache (MB) & State-space state (MB) & Ratio \\
+\midrule
+1024 & 76.7 & 2.68 & $29\times$ \\
+4096 & 303.2 & 2.68 & $113\times$ \\
+8192 & 605.2 & 2.68 & $225\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The state of the state-space model is $2.68$~MB at every horizon. The transformer's cache grows linearly and reaches $605$~MB at $L = 8192$. Both measurements agree with the formulas above. For the state-space model, $N = 23$, $d_{\mathrm{in}} = 1536$, $n = 16$ and $k = 4$ give $23 \cdot 1536 \cdot 19 = 671{,}232$ values, which is $2.68$~MB at four bytes each. For the transformer, $N = 12$ and $d = 768$ give $2 \cdot 12 \cdot 768 \cdot 8192 \approx 1.51 \cdot 10^{8}$ values, which is $604$~MB; the remaining megabyte is the text prefix. This result does not depend on hardware, numerical precision or implementation details, because it follows from the two recurrences.
+
+\paragraph{Latency.} The transformer's per-step latency is flat at about $12$~ms while its linear projections dominate, then rises as attention over the cache takes over: $16.5$~ms at $L = 4096$ and $23.6$~ms at $L = 6144$. The state-space model stays at about $26$~ms throughout. The curves cross near $L \approx 6500$.
+
+Two caveats apply to the latency panel and not to the memory panel. First, our state-space layer runs in plain PyTorch, because the compiled selective-scan kernel of the reference implementation is not available on the test machine; this costs a roughly constant factor of two per step. Second, beyond $L \approx 6000$ the transformer's latency jumps to $230$~ms, more than the linear trend predicts, because the cache approaches the memory limit of the 4~GB GPU. The magnitudes at the longest horizons are therefore indicative. The trend, growth for the transformer and a flat line for the state-space model, is what the analysis predicts.
+
+At the lengths of HumanML3D clips, which are at most 49 latent steps, the transformer is the faster of the two (\secref{sec:stream_cost}). The advantage of the bounded state appears for long or open-ended generation.
+
+\section{Decoder Receptive Field and End-to-End Latency}
+\label{sec:stream_decoder}
+
+A bounded-state generator gives a streaming \emph{token} model. To have a streaming \emph{system}, the tokens must also be decoded incrementally.
+
+\paragraph{The constraint.} The tokenizer decoder consists of symmetric, padded convolutions: three residual blocks with kernel 3 at the latent rate, a transposed convolution with kernel 4 and stride 2 per upsampling stage, and a final convolution with kernel 3. A frame therefore depends on latent steps on both sides of its own. If each emitted chunk is decoded in isolation, zero padding stands in for its neighbours and the result differs from a whole-sequence decode.
+
+We measured the receptive field directly, by perturbing one latent step and recording which output frames change. For the $8 \times 1024$ tokenizer it is exactly $\pm 4$ latent steps, that is $\pm 16$ frames or $\pm 0.8$~s. The measurement runs when the decoder is constructed and makes no assumption about the architecture, so a causal decoder would report a right context of zero and the system would configure itself accordingly.
+
+\paragraph{The remedy and its cost.} We keep a ring buffer with the last four latent steps, which costs nothing because they are already known, and delay emission by a lookahead of $r$ steps. Each call decodes the left context, the chunk and the lookahead, and emits only the frames of the chunk. \tabref{tab:lookahead} gives the error against a whole-sequence decode on 64 test clips.
+
+\begin{table}[H]
+\centering
+\caption{Streamed decoding against whole-sequence decoding for chunks of four latent steps. Error is the relative mean absolute error in unnormalised feature space.}
+\label{tab:lookahead}
+\begin{tabular}{rrrr}
+\toprule
+Lookahead $r$ & Added latency & Buffered steps & Relative error \\
+\midrule
+0 & 0.0 s & 8 & 3.22\% \\
+1 & 0.2 s & 9 & 1.08\% \\
+2 & 0.4 s & 10 & 0.34\% \\
+3 & 0.6 s & 11 & 0.07\% \\
+4 & 0.8 s & 12 & 0 (exact) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Without the ring buffer the error at $r = 0$ is $6.16\%$, and smaller chunks make it worse ($17.9\%$ for chunks of one step), since a smaller chunk has proportionally more boundary.
+
+At $r = 4$ the streamed motion is identical to the whole-sequence decode that produced every number in \chapref{chap:generator}. The buffer holds 12 latent steps at any horizon, so the constant-memory property of \secref{sec:stream_state} is preserved. What the decoder adds is a fixed delay of $0.8$~s, which can be traded against the error in \tabref{tab:lookahead}. A causal decoder would remove it; we list this as future work.
+
+\section{Training Cost versus Inference Cost}
+\label{sec:stream_cost}
+
+The state-space generator is much slower to train than the transformer in our implementation. This section measures the difference and shows that most of it does not carry over to inference.
+
+\begin{table}[H]
+\centering
+\caption{Measured cost of the two 34M generators on the 4~GB GPU. Inference is for a 120-frame clip (30 steps) with the sampling settings of \tabref{tab:twin_config}.}
+\label{tab:cost}
+\begin{tabular}{lrrr}
+\toprule
+ & Transformer & State-space & Ratio \\
+\midrule
+Training, per epoch & 7.4 min & 66.5 min & $9.0\times$ \\
+Training, 60 epochs & 7.4 h & 66.5 h & $9.0\times$ \\
+Training, 100 epochs & 12.3 h & 110.8 h & $9.0\times$ \\
+\midrule
+Inference, per step & 9.4 ms & 20.0 ms & $2.1\times$ \\
+Inference, whole clip & 307 ms & 629 ms & $2.0\times$ \\
+Speed relative to 20 fps playback & $19.5\times$ & $9.6\times$ & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The training gap is $9.0\times$ and the inference gap is $2.1\times$. They differ because the training gap is a product of three factors, of which only one survives at inference.
+
+\begin{enumerate}
+\item \emph{Gradient checkpointing} recomputes each block's forward pass during the backward pass. Inference has no backward pass.
+\item \emph{The parallel scan} runs over the whole sequence in about $\log_2 49 \approx 6$ rounds, each materialising full-sequence tensors. The step path processes one token and never does this.
+\item \emph{The layer count}, 15 against 8, applies in both regimes.
+\end{enumerate}
+
+The inference gap of $2.1\times$ agrees with the factor of two observed independently in \secref{sec:stream_state} on different models. Both generators produce motion many times faster than it is played back, so the slower one is still comfortably real-time.
+
+The training cost is a property of an implementation without the compiled kernel on a small GPU. It is a practical limitation of this work, since it restricted the number of runs we could afford, but it is not inherited by a deployed model.
+
+\section{Behaviour Beyond the Trained Length}
+\label{sec:stream_long}
+
+The result of \secref{sec:stream_state} is about memory. It does not say that the motion stays good when the stream is long. Both generators were trained on clips of at most 49 latent tokens (196 frames). This section measures what happens after that length.
+
+\paragraph{Setup.} We generated 196 tokens (39 seconds) for 32 test captions with each of the two 34M generators, with the sampling settings of \tabref{tab:twin_config} and the same random numbers for every policy. Each stream was cut into four segments of 49 tokens. For each segment we computed the distance between the motion and its caption in the evaluator space of \secref{sec:protocol_metrics} (lower is better), and the foot sliding of \secref{sec:gen_dynamics}. The first segment has the length of a training clip. The later segments are continuations, which the evaluator did not see in its own training, so their absolute values are not comparable with \tabref{tab:twin_results}. The comparison between policies at the same segment is valid.
+
+\paragraph{Memory policies.} A policy says what the generator remembers.
+\begin{itemize}
+\item \emph{Full state.} The recurrent state is never reset. Only the state-space model can do this; the transformer has 97 learned positions.
+\item \emph{Reset every $n$, keep $k$.} After every $n$ new tokens the state is discarded and rebuilt from the text and the last $k$ tokens. The generator therefore never sees more than $k + n$ tokens.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Distance between motion and caption for four consecutive segments of 49 tokens, and the cost per token. Segment 1 has the length of a training clip. 32 captions, one sample each.}
+\label{tab:long_stream}
+\begin{tabular}{llrrrrr}
+\toprule
+Generator & Policy & Seg. 1 & Seg. 2 & Seg. 3 & Seg. 4 & ms per token \\
+\midrule
+State-space & full state & 2.95 & 6.91 & 8.45 & 8.41 & 18 \\
+State-space & reset every 32, keep 16 & 3.00 & 3.67 & 3.46 & 3.78 & 27 \\
+State-space & reset every 8, keep 16 & 2.99 & 2.97 & 3.11 & 3.11 & 47 \\
+State-space & reset every 1, keep 16 & 2.94 & 3.29 & 3.25 & 3.23 & 276 \\
+State-space & reset every 1, keep 47 & 2.95 & 4.50 & 5.50 & 5.20 & 771 \\
+\midrule
+Transformer & reset every 32, keep 16 & 2.82 & 3.46 & 3.49 & 3.30 & 11 \\
+Transformer & reset every 8, keep 16 & 2.85 & 3.03 & 3.10 & 2.82 & 12 \\
+Transformer & reset every 1, keep 16 & 2.73 & 3.14 & 2.98 & 3.18 & 33 \\
+Transformer & reset every 1, keep 47 & 2.73 & 3.73 & 4.47 & 4.54 & 89 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{The full state fails after the trained length.} With the full recurrent state, the state-space generator is as good as any policy in the first segment. In the second segment the distance to the caption rises from $2.95$ to $6.91$, and it stays above $8$ afterwards. Retrieval of the correct caption among the 32 falls from $81\%$ to about $22\%$ at rank three. Foot sliding rises from $0.31$ to $0.90$~m/s. The state has a constant size at any length, but its content is valid only for the lengths that training covered.
+
+\paragraph{A short memory restores the quality.} When the state is rebuilt from the last 16 tokens, the later segments stay close to the first one for both generators. Rebuilding every 8 tokens is better than every 32 tokens (for the state-space model, $2.97$ to $3.11$ against $3.46$ to $3.78$) and still runs faster than playback, which needs one token every 200~ms. A long kept context is worse than a short one: with 47 kept tokens the generator is always near the end of a training clip, where clips come to rest, and the motion fades.
+
+\paragraph{Consequence for the memory claim.} Under any reset policy the generator holds at most $k + n$ tokens, so the transformer's cache is bounded as well. In the configuration that gives good long motion today, both generators have bounded memory, and the transformer is the faster one. The advantage of the state-space model in \tabref{tab:stream_state} becomes a practical advantage only for a model whose state stays valid at long lengths. That needs training on sequences longer than the clips of HumanML3D, which this thesis did not do. The numbers of this section come from 32 captions and one sample each, so they show the direction of the effect and not its exact size.
+
+\section{Interactive Studio Viewer}
+\label{sec:stream_viewer}
+
+The pipeline is integrated into an interactive viewer in which a prompt is typed and the motion is displayed while it is being generated.
+
+\paragraph{Structure.} A generation service holds the models and streams chunks of frames over a local socket. The viewer is a separate process that receives the chunks, recovers the 22 joints and fits an SMPL-X body~\cite{pavlakos2019smplx} to them with an analytic inverse-kinematics step so that a body surface can be drawn. A generation can run for a fixed length, until the model emits its END symbol, or indefinitely. An indefinite stream uses the reset policy of \secref{sec:stream_long}: the state is rebuilt from the text and the last 16 tokens after every 8 new tokens.
+
+\paragraph{Pacing.} The generator produces frames faster than they are displayed (\tabref{tab:cost}). Without control, an indefinite stream overruns the display buffer, and the body-fitting stage falls behind. The viewer therefore accepts a new chunk only while the stream is at most 120 frames ahead of the playhead, and lets the transport's back-pressure slow the service down. With this rule the service generates 20 frames per second for 20 frames per second of playback.
+
+\paragraph{Display rate.} Motion at 20 frames per second shown on a 60~Hz display is held for three refreshes per frame, which looks uneven although the motion itself is as smooth as the data (\secref{sec:gen_dynamics}). The viewer interpolates the streamed joints by a factor of three. The interpolation is causal and ends on each source frame, so it adds no latency.
+
+\paragraph{Verification.} The viewer is tested by scripted sessions that drive the real window through its input handlers and assert invariants on every frame, in addition to the unit tests of the pipeline. These tests found and fixed several concurrency defects, among them stale chunks of a cancelled generation leaking into the next one.
+
+\section{Threats to Validity}
+\label{sec:stream_threats}
+
+\begin{itemize}
+\item \textbf{Latency magnitudes.} The latency panel of \figref{fig:streaming} was measured without the compiled scan kernel and on a GPU near its memory limit at long horizons. The memory panel is exact.
+\item \textbf{Benchmark configuration.} The state benchmark uses 100M-parameter architectures with untrained weights. State size and step cost do not depend on the weights, but the absolute megabytes are those of the larger configuration, not of the 34M models of \chapref{chap:generator}.
+\item \textbf{Fixed delay.} Exact streamed decoding needs $0.8$~s of lookahead. The system is real-time in throughput but not zero-latency.
+\item \textbf{Position embeddings.} The transformer twin uses a learned position table of 96 entries, so the trained 34M transformer has no learned positions beyond that length. This is a second way in which it is bound to a horizon, and it means long-horizon quality could not be compared directly between the two trained models.
+\item \textbf{Long-horizon quality.} \secref{sec:stream_long} shows that the full recurrent state does not give usable motion after the trained length of 196 frames. Long streams need a reset policy, and under a reset policy the memory of both generators is bounded. That experiment uses 32 captions and one sample each.
+\end{itemize}

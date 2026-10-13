@@ -1,0 +1,52 @@
+\chapter{Conclusion}
+\label{chap:conclusion}
+
+This thesis asked what it costs to make a text-to-motion generator streamable: causal, and with a memory that does not grow with the length of the motion. It built the pieces such a system needs, a tokenizer, a generator and a decoding pipeline, and measured each against a controlled alternative.
+
+\section{Claim-to-Evidence Summary}
+\label{sec:conc_claims}
+
+\tabref{tab:claims} lists each claim with the evidence for it and its main qualification.
+
+\begin{table}[H]
+\centering
+\caption{Claims of the thesis and the evidence for each.}
+\label{tab:claims}
+\begin{tabular}{p{0.34\textwidth}p{0.30\textwidth}p{0.27\textwidth}}
+\toprule
+Claim & Evidence & Qualification \\
+\midrule
+Grouped-FSQ reconstructs better than a matched residual VQ at equal bit-rate. & Lower reconstruction FID at all six matched cells (\tabref{tab:tok_matrix}); best cell $0.0170$. & One seed per cell; the baseline is weaker than the best published residual VQ. \\
+\addlinespace
+Its advantage carries over to generation. & Generator FID $0.132$ against $0.294$ at 60 epochs (\tabref{tab:tok_downstream}). & One seed; the order is reversed in an undertrained generator. \\
+\addlinespace
+A token-autoregressive state-space generator matches a parameter-matched causal transformer. & Ahead in point estimates on every metric (\tabref{tab:twin_results}); R-precision lead about three standard deviations of a repetition. & One seed; 34M parameters; the FID difference is within the bootstrap interval. \\
+\addlinespace
+The ordering does not depend on where training stops. & Unchanged at 100 epochs (\tabref{tab:twin_100}) and after the dynamics fine-tune (\tabref{tab:dyn_test}). & These checkpoints share one seed and are not independent. \\
+\addlinespace
+Its streaming state is constant. & $2.68$~MB at every horizon against $605$~MB at 8192 tokens (\tabref{tab:stream_state}); follows from the recurrence. & The state keeps its size, but its content is valid only up to the trained length (\tabref{tab:long_stream}); latency magnitudes are hardware-bound. \\
+\addlinespace
+Streamed decoding can be made exact. & Zero error at a lookahead of four latent steps (\tabref{tab:lookahead}). & Costs a fixed delay of $0.8$~s. \\
+\addlinespace
+Unconditional pretraining on unlabeled motion helps. & Three-fold FID reduction in a pilot ablation (\tabref{tab:prior_ablation}). & Pilot configuration and small validation sample; relative effect only. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The expectation we set out to test was that a fixed-size state would cost quality relative to attention. In our controlled comparison it did not. We do not conclude that state-space models are better generators of motion in general; one seed at one scale cannot support that. We conclude that the bounded-state design is a viable basis for streaming text-to-motion, and that its constant memory comes at no measured loss of quality at this scale.
+
+\section{Future Work}
+\label{sec:conc_future}
+
+In order of what would most strengthen or extend the results:
+
+\begin{enumerate}
+\item \textbf{More seeds.} Repeating the matched pair with two or three further seeds would turn the ordering of \tabref{tab:twin_results} from an observation into an estimate with a spread.
+\item \textbf{More distinct motion.} \secref{sec:disc_data} identifies data, not epochs or parameters, as the binding constraint. The cheapest step is to tokenize the $14.4$ hours of our AMASS conversion that the full-window rule excluded from pretraining.
+\item \textbf{A batch-matched prior.} Training the two unconditional priors with the same batch size would remove the one known asymmetry of the comparison.
+\item \textbf{A causal tokenizer decoder.} A decoder without right context would remove the $0.8$~s lookahead of \secref{sec:stream_decoder}. Its effect on reconstruction FID would have to be measured against \tabref{tab:tok_matrix}.
+\item \textbf{Training for long streams.} The full recurrent state fails after the trained length (\tabref{tab:long_stream}). Training on sequences longer than ten seconds, for example on concatenated clips with a caption for each part, is what would turn the constant memory of the state-space model into a practical advantage.
+\item \textbf{The compiled scan kernel.} Running the state-space model with its kernel on a larger GPU would give the latency comparison without the two caveats of \secref{sec:stream_state} and would make further seeds affordable.
+\item \textbf{Contact-aware generation.} Foot sliding remains well above that of real motion. Stronger constraints than the two loss terms of \secref{sec:gen_dynamics} are needed.
+\item \textbf{Whole-body motion.} Extending the representation and tokenizer to hands.
+\end{enumerate}
