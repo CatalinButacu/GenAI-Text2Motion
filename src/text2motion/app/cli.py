@@ -18,7 +18,7 @@ from text2motion.app.commands.evaluation import run_bench, run_evaluate
 from text2motion.app.commands.generator import run_pretrain, run_sanity_overfit, run_train_generator
 from text2motion.app.commands.serving import run_health, run_serve, run_studio
 from text2motion.app.commands.tokenizer import run_train_tokenizer
-from text2motion.app.logging_setup import LOG_LEVELS, configure_logging
+from text2motion.app.run_log import LOG_LEVELS, configure_logging
 from text2motion.evaluation.contracts import (
     BenchmarkRequest,
     EvaluateRequest,
@@ -32,7 +32,7 @@ from text2motion.generation.contracts import (
     TrainGeneratorRequest,
 )
 from text2motion.motion.contracts import PreparationStage, PrepareRequest, Split
-from text2motion.streaming.contracts import HealthRequest, ServeRequest, StudioRequest
+from text2motion.streaming.pydant_requests import HealthRequest, ServeRequest, StudioRequest
 from text2motion.tokenization.contracts import (
     TokenizeRequest,
     TokenizerKind,
@@ -58,23 +58,17 @@ class Command:
 
 
 COMMANDS = {
-    "prepare": Command(PrepareRequest, run_prepare, "AMASS -> HumanML3D-263 data preparation"),
-    "tokenize": Command(TokenizeRequest, run_tokenize, "encode a feature corpus into tokens"),
-    "train-tokenizer": Command(
-        TrainTokenizerRequest, run_train_tokenizer, "train the motion tokenizer"
-    ),
-    "sanity-overfit": Command(
-        SanityOverfitRequest, run_sanity_overfit, "mandatory real-batch overfit gate"
-    ),
-    "train-generator": Command(
-        TrainGeneratorRequest, run_train_generator, "train the text-to-motion generator"
-    ),
-    "pretrain": Command(PretrainRequest, run_pretrain, "unconditional token-corpus pretraining"),
-    "evaluate": Command(EvaluateRequest, run_evaluate, "citable generation eval (20-rep protocol)"),
-    "benchmark": Command(BenchmarkRequest, run_bench, "streaming latency/state-size benchmark"),
-    "serve": Command(ServeRequest, run_serve, "local streaming generation service"),
-    "studio": Command(StudioRequest, run_studio, "interactive aitviewer studio"),
-    "health": Command(HealthRequest, run_health, "check the streaming service readiness"),
+    "prepare":         Command( PrepareRequest,        run_prepare,         "AMASS -> HumanML3D-263 data preparation"),
+    "tokenize":        Command( TokenizeRequest,       run_tokenize,        "encode a feature corpus into tokens"),
+    "train-tokenizer": Command( TrainTokenizerRequest, run_train_tokenizer, "train the motion tokenizer"),
+    "sanity-overfit":  Command( SanityOverfitRequest,  run_sanity_overfit,  "mandatory real-batch overfit gate"),
+    "train-generator": Command( TrainGeneratorRequest, run_train_generator, "train the text-to-motion generator"),
+    "pretrain":        Command( PretrainRequest,       run_pretrain,        "unconditional token-corpus pretraining"),
+    "evaluate":        Command( EvaluateRequest,       run_evaluate,        "citable generation eval (20-rep protocol)"),
+    "benchmark":       Command( BenchmarkRequest,      run_bench,           "streaming latency/state-size benchmark"),
+    "serve":           Command( ServeRequest,          run_serve,           "local streaming generation service"),
+    "studio":          Command( StudioRequest,         run_studio,          "interactive aitviewer studio"),
+    "health":          Command( HealthRequest,         run_health,          "check the streaming service readiness"),
 }
 
 

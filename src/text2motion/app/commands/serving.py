@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-import argparse
 import logging
 from pathlib import Path
 
 import torch
 
 from text2motion.app.bootstrap import ApplicationContext
-from text2motion.app.schema import load_dataclass
+from text2motion.app.config import load_dataclass
 from text2motion.generation.contracts import Backbone
-from text2motion.streaming.contracts import (
+from text2motion.streaming.decoder import StreamingMotionDecoder
+from text2motion.streaming.pydant_requests import (
     HealthRequest,
     ModelServiceRequest,
     ServeRequest,
     StudioRequest,
 )
-from text2motion.streaming.decoder import StreamingMotionDecoder
 from text2motion.streaming.service import LoadedInferencePipeline, MotionInferenceServer
 
 logger = logging.getLogger(__name__)
@@ -77,7 +76,7 @@ def run_serve(app: ApplicationContext, args: ServeRequest) -> None:
         loaded_app = app.with_config(request["config"]).with_service(app.config.service)
         return load_inference_pipeline(
             loaded_app,
-            argparse.Namespace(
+            ModelServiceRequest(
                 config=request["config"],
                 ckpt=request["ckpt"],
                 tokenizer_ckpt=request["tokenizer_ckpt"],
@@ -96,22 +95,22 @@ def run_serve(app: ApplicationContext, args: ServeRequest) -> None:
     )
 
 
-def __select_model(args: StudioRequest, registry: Path) -> None:
+def __select_model(args: StudioRequest, model: str, registry: Path) -> None:
     from text2motion.studio.scene import load_model_registry
 
     entries, _ = load_model_registry(None, registry)
-    chosen = next((entry for entry in entries if entry.key == args.model), None)
-    chosen = chosen or next((entry for entry in entries if args.model in entry.key), None)
+    chosen = next((entry for entry in entries if entry.key == model), None)
+    chosen = chosen or next((entry for entry in entries if model in entry.key), None)
     if chosen is None:
         available = ", ".join(entry.key for entry in entries)
-        raise SystemExit(f"unknown model {args.model!r}. Available in {registry}: {available}")
-    args.config, args.ckpt = chosen.config, chosen.ckpt
-    args.tokenizer_ckpt, args.backbone = chosen.tokenizer_ckpt, Backbone(chosen.backbone)
+        raise SystemExit(f"unknown model {model!r}. Available in {registry}: {available}")
+    args.config, args.ckpt = Path(chosen.config), Path(chosen.ckpt)
+    args.tokenizer_ckpt, args.backbone = Path(chosen.tokenizer_ckpt), Backbone(chosen.backbone)
     logger.info(f"[load] model {chosen.key!r}: {chosen.label}")
 
 
 def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
-    from text2motion.streaming.protocol import connect_or_start_motion_server
+    from text2motion.streaming.protocol import motion_service_client
     from text2motion.studio.config import StudioConfig
     from text2motion.studio.viewer import StreamingStudioViewer
 
@@ -121,7 +120,7 @@ def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
         else StudioConfig()
     )
     if args.model:
-        __select_model(args, studio_config.model_registry)
+        __select_model(args, args.model, studio_config.model_registry)
         app = app.with_config(args.config)
     app = app.with_service_file(args.service_config)
     args.ckpt = args.ckpt or app.config.paths.generator_checkpoint(args.backbone)
@@ -134,10 +133,10 @@ def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
         torch.set_num_threads(studio_config.fit.threads)
     logger.info(f"[load] SMPL-X body fit runs on {device} ({torch.get_num_threads()} threads)")
     logger.info(f"[load] connecting to the motion service (backbone={args.backbone})...")
-    client = connect_or_start_motion_server(
-        args.config,
-        args.ckpt,
-        args.tokenizer_ckpt,
+    client = motion_service_client(
+        str(args.config),
+        str(args.ckpt),
+        str(args.tokenizer_ckpt),
         str(args.backbone),
         args.host,
         args.port,

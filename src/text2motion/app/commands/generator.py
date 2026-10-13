@@ -30,22 +30,11 @@ from text2motion.motion.contracts import Split
 logger = logging.getLogger(__name__)
 
 
-def load_tokenizer_and_generator_spec(
-    app: ApplicationContext,
-    args: SanityOverfitRequest | TrainGeneratorRequest,
-    dropout: float | None = None,
-):
-    args.tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
-    tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
-    overrides = {} if dropout is None else {"dropout": dropout}
-    architecture = app.resolve_generator_spec(args.backbone, tokenizer.codebook_size, **overrides)
-    return tokenizer, architecture
-
-
 def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> None:
     repository = app.create_motion_repository()
     batch = next(iter(repository.captioned_batch_loader(Split.TRAIN, args.batch_size)))
-    tokenizer, architecture = load_tokenizer_and_generator_spec(app, args, dropout=0.0)
+    tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
+    architecture = app.resolve_generator_spec(args.backbone, tokenizer.codebook_size, dropout=0.0)
     tokenizer.tokenizer_model.requires_grad_(False)
     scaler = repository.load_scaler()
     train_config = replace(
@@ -87,10 +76,12 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
 
 
 def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) -> None:
-    tokenizer, architecture = load_tokenizer_and_generator_spec(app, args)
+    tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
+    tokenizer = app.load_tokenizer(tokenizer_ckpt)
+    architecture = app.resolve_generator_spec(args.backbone, tokenizer.codebook_size)
     OverfitGate.load(args.overfit_gate).verify_setup(
         config_path=args.config,
-        tokenizer_ckpt=args.tokenizer_ckpt,
+        tokenizer_ckpt=tokenizer_ckpt,
         backbone=args.backbone,
         resolved_config=architecture.as_dict(),
     )
@@ -171,7 +162,7 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
             module,
             text_encoder,
             backbone=args.backbone,
-            tokenizer_ckpt=args.tokenizer_ckpt,
+            tokenizer_ckpt=tokenizer_ckpt,
             resolved_generator_config=architecture.as_dict(),
             epoch=epoch,
             validation_fid=validation_fid,
