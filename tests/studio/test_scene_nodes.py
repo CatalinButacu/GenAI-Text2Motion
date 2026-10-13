@@ -1,3 +1,5 @@
+import numpy as np
+
 from text2motion.studio.scene import StudioSceneNodes
 
 
@@ -145,13 +147,18 @@ def test_drain_empties_buffers_and_returns_contents():
     from text2motion.studio.scene import StudioStreamBuffers
 
     buf = StudioStreamBuffers()
-    buf.push_joints("j")
-    buf.push_body("v", "f")
-    buf.push_remesh("v", "f", True)
+    joints = np.zeros(1)
+    verts = np.ones(1)
+    faces = np.zeros(1, dtype=np.int64)
+    buf.push_joints(joints)
+    buf.push_body(verts, faces)
+    buf.push_remesh(verts, faces, True)
 
     chunks, body, remesh = buf.drain()
 
-    assert (chunks, body, remesh) == (["j"], [("v", "f")], ("v", "f", True))
+    assert len(chunks) == 1 and chunks[0] is joints
+    assert len(body) == 1 and body[0][0] is verts and body[0][1] is faces
+    assert remesh is not None and remesh[0] is verts and remesh[1] is faces and remesh[2]
     assert buf.drain() == ([], [], None)  # second drain sees an empty queue
 
 

@@ -1,6 +1,9 @@
+from typing import cast
+
 import pytest
 
 from text2motion.studio.avatar import SmplxAvatarController
+from text2motion.studio.contracts import ViewerHost
 from text2motion.studio.generation import StudioGenerationController
 from text2motion.studio.scene import (
     LiveGenerationDebouncer,
@@ -55,10 +58,11 @@ class FakeState:
 @pytest.fixture
 def wired():
     host, state = FakeHost(), FakeState()
-    avatar = SmplxAvatarController(host, state)
-    generation = StudioGenerationController(host, state, avatar)
-    panels = GuiPanels(host, state, avatar, generation)
-    return host, state, StreamSceneUpdater(host, state), avatar, generation, panels
+    viewer_host = cast(ViewerHost, host)
+    avatar = SmplxAvatarController(viewer_host, state)
+    generation = StudioGenerationController(viewer_host, state, avatar)
+    panels = GuiPanels(viewer_host, state, avatar, generation)
+    return host, state, StreamSceneUpdater(viewer_host, state), avatar, generation, panels
 
 
 def test_components_construct_without_a_real_viewer(wired):

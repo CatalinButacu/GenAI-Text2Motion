@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from text2motion.app.config import RvqConfig, TokenizerConfig
-from text2motion.tokenization.contracts import DROPPED_CODE
+from text2motion.tokenization.contracts import DROPPED_CODE, FsqComposition
 from text2motion.tokenization.nn_model import (
     FsqTokenizer,
     MotionTokenizerNetwork,
@@ -60,7 +60,7 @@ def test_dropped_levels_use_a_sentinel_not_code_zero():
         num_quantizers=4,
         fsq_levels=(8, 8, 4, 4),
         n_resblocks=1,
-        quantizer="residual",
+        quantizer=FsqComposition.RESIDUAL,
         quant_dropout=1.0,
     )
     tok = FsqTokenizer(cfg).train()
@@ -88,7 +88,7 @@ def test_eval_mode_never_drops_levels():
             num_quantizers=4,
             fsq_levels=(8, 8, 4, 4),
             n_resblocks=1,
-            quantizer="residual",
+            quantizer=FsqComposition.RESIDUAL,
             quant_dropout=1.0,
         )
     ).eval()

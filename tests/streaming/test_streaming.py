@@ -1,10 +1,12 @@
 import queue as queue_mod
+from typing import cast
 
 import numpy as np
 import pytest
 import torch
 
 from text2motion.app.config import GeneratorConfig, TokenizerConfig
+from text2motion.generation.contracts import Backbone
 from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.motion.representation import kinematic_bones, recover_skeleton
 from text2motion.streaming.decoder import (
@@ -16,7 +18,7 @@ from text2motion.tokenization.nn_model import FsqTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorConfig(
-    backbone="mamba",
+    backbone=Backbone.MAMBA,
     d_model=64,
     n_layers=2,
     d_text=32,
@@ -161,7 +163,13 @@ def test_stream_forwards_guidance_and_end_stopping():
         tok, 4, torch.zeros(263), torch.ones(263), left_context=1, lookahead=1
     )
     list(
-        decoder.stream(FakeGenerator(), torch.zeros(1, 1, 512), 4, cfg_scale=6.0, stop_at_end=True)
+        decoder.stream(
+            cast(MotionTokenGenerator, FakeGenerator()),
+            torch.zeros(1, 1, 512),
+            4,
+            cfg_scale=6.0,
+            stop_at_end=True,
+        )
     )
 
     assert seen["cfg_scale"] == 6.0
@@ -172,7 +180,7 @@ def test_unbounded_stream_runs_past_the_position_table_on_a_recurrent_backbone()
     import itertools
 
     cfg = GeneratorConfig(
-        backbone="mamba",
+        backbone=Backbone.MAMBA,
         text_prefix_len=4,
         d_model=64,
         n_layers=2,
@@ -199,7 +207,7 @@ def test_unbounded_stream_runs_past_the_position_table_on_a_recurrent_backbone()
 
 def test_positional_backbone_refuses_unbounded_and_overlong_streams():
     cfg = GeneratorConfig(
-        backbone="transformer",
+        backbone=Backbone.TRANSFORMER,
         text_prefix_len=4,
         d_model=64,
         n_layers=2,
@@ -223,7 +231,9 @@ def test_positional_backbone_refuses_unbounded_and_overlong_streams():
     with pytest.raises(ValueError, match="supports at most"):
         list(gen.stream_token_indices(text, cfg.max_seq_len * 4))
 
-    budget = gen.backbone.max_positions - cfg.text_prefix_len
+    positions = gen.backbone.max_positions
+    assert positions is not None
+    budget = positions - cfg.text_prefix_len
     assert len(list(gen.stream_token_indices(text, budget))) == budget
 
 
@@ -305,7 +315,7 @@ def test_cuda_graph_decode_streams_the_same_tokens_as_eager_decode():
 
 def test_cuda_graph_decode_refuses_a_positional_backbone():
     cfg = GeneratorConfig(
-        backbone="transformer",
+        backbone=Backbone.TRANSFORMER,
         d_model=64,
         n_layers=2,
         d_text=32,
@@ -320,7 +330,7 @@ def test_cuda_graph_decode_refuses_a_positional_backbone():
 
 def test_anchored_stream_runs_a_positional_backbone_past_its_learned_positions():
     cfg = GeneratorConfig(
-        backbone="transformer",
+        backbone=Backbone.TRANSFORMER,
         d_model=64,
         n_layers=2,
         d_text=32,
@@ -333,13 +343,14 @@ def test_anchored_stream_runs_a_positional_backbone_past_its_learned_positions()
     gen = MotionTokenGenerator(cfg).eval()
     text = torch.randn(1, 32)
     limit = gen.backbone.max_positions
+    assert limit is not None
     tokens = list(gen.stream_token_indices(text, 3 * limit, anchor_every=8, anchor_context=8))
     assert len(tokens) == 3 * limit
 
 
 def test_anchoring_that_would_overrun_the_learned_positions_is_refused():
     cfg = GeneratorConfig(
-        backbone="transformer",
+        backbone=Backbone.TRANSFORMER,
         d_model=64,
         n_layers=2,
         d_text=32,

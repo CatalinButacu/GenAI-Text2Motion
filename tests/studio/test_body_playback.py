@@ -1,9 +1,12 @@
 import threading
 import time
 from types import SimpleNamespace
+from typing import cast
 
 import numpy as np
 
+from text2motion.studio.avatar import SmplxAvatarController
+from text2motion.studio.contracts import ViewerHost
 from text2motion.studio.generation import StudioGenerationController
 from text2motion.studio.scene import (
     SmplxFitState,
@@ -18,6 +21,7 @@ class FakeScene:
         self.nodes = []
         self.selected_object = None
         self.current_frame_id = 0
+        self.n_frames = 0
 
     def add(self, node) -> None:
         self.nodes.append(node)
@@ -41,7 +45,7 @@ def __updater_with(skeleton_frames: int, body_frames: int, fitting: bool, playhe
         buffers.body_verts = np.zeros((body_frames, 4, 3))
     state = SimpleNamespace(stream_buffers=buffers, nodes=nodes, show_skin=True)
     scene.current_frame_id = playhead
-    return StreamSceneUpdater(host, state), scene
+    return StreamSceneUpdater(cast(ViewerHost, host), state), scene
 
 
 def test_playhead_waits_at_the_first_frame_until_the_first_mesh_is_fitted():
@@ -112,7 +116,9 @@ def test_every_streamed_chunk_reaches_the_body_fitter_after_a_normal_finish():
         scene=FakeScene(),
     )
     avatar = SimpleNamespace(fit_single_chunk=fit_chunk)
-    controller = StudioGenerationController(host, state, avatar)
+    controller = StudioGenerationController(
+        cast(ViewerHost, host), state, cast(SmplxAvatarController, avatar)
+    )
     original = controller.fit_motion_chunks
 
     def fit_then_signal(fit_queue, take):
@@ -146,13 +152,16 @@ def test_a_new_take_replaces_the_previous_skeleton_instead_of_appending():
     buffers = StudioStreamBuffers()
     nodes = StudioSceneNodes(scene)
     state = SimpleNamespace(stream_buffers=buffers, nodes=nodes, window_frames=600, show_skin=True)
-    updater = StreamSceneUpdater(host, state)
+    updater = StreamSceneUpdater(cast(ViewerHost, host), state)
     updater.append_chunks([np.zeros((160, 22, 3), np.float32)])
+    assert nodes.motion is not None
     assert len(nodes.motion.joint_positions) == 160
     buffers.started = False
     buffers.accum_joints = None
     updater.append_chunks([np.ones((16, 22, 3), np.float32)])
+    assert nodes.motion is not None
     assert len(nodes.motion.joint_positions) == 16
+    assert buffers.accum_joints is not None
     assert len(buffers.accum_joints) == 16
     assert sum(node.name == "Motion (streaming)" for node in scene.nodes) == 1
 
@@ -162,7 +171,9 @@ def test_the_stream_waits_until_the_playhead_is_within_the_lead():
     scene = FakeScene()
     host = SimpleNamespace(scene=scene)
     state = SimpleNamespace(stream_buffers=buffers, stream_lead_frames=32, upsample=1)
-    controller = StudioGenerationController(host, state, SimpleNamespace())
+    controller = StudioGenerationController(
+        cast(ViewerHost, host), state, cast(SmplxAvatarController, SimpleNamespace())
+    )
     assert controller.frames_ahead_of_playhead(48) == 48
     released = threading.Event()
 
@@ -183,7 +194,9 @@ def test_stop_releases_a_stream_that_is_waiting_for_playback():
     buffers = StudioStreamBuffers()
     host = SimpleNamespace(scene=FakeScene())
     state = SimpleNamespace(stream_buffers=buffers, stream_lead_frames=8, upsample=1)
-    controller = StudioGenerationController(host, state, SimpleNamespace())
+    controller = StudioGenerationController(
+        cast(ViewerHost, host), state, cast(SmplxAvatarController, SimpleNamespace())
+    )
     released = threading.Event()
 
     def accept():

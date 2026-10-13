@@ -39,7 +39,8 @@ def test_single_batch_overfit():
     x = torch.randn(2, 32, 263)
 
     recon0 = tok(x).recon
-    loss0 = feature_velocity_reconstruction_loss(recon0, x).item()
+    loss = feature_velocity_reconstruction_loss(recon0, x)
+    loss0 = loss.item()
 
     for _ in range(200):
         recon = tok(x).recon

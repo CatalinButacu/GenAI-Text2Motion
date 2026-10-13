@@ -187,7 +187,7 @@ def __abandon_server(server: socket.socket) -> None:
         request = MotionStreamProtocol.recv_json(io)
         assert request["cmd"] == "generate"
         cancelled = False
-        for index in range(50):
+        for _ in range(50):
             MotionStreamProtocol.send_array(io, "chunk", np.zeros((4, 22, 3), np.float32))
             MotionStreamProtocol.send_json(io, {"type": "placement", "yaw": 0.0})
             MotionStreamProtocol.send_array(io, "features", np.zeros((4, 263), np.float32))
