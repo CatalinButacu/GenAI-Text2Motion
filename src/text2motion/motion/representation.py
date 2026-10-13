@@ -145,8 +145,7 @@ def __uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarr
     quat_params = src_skel.inverse_kinematics_np(positions, params.face_joints)
 
     src_skel.set_offset(target_offset)
-    new_joints = src_skel.forward_kinematics_np(quat_params, tgt_root_pos)
-    return new_joints
+    return src_skel.forward_kinematics_np(quat_params, tgt_root_pos)
 
 
 def encode_joints(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarray, ...]:
@@ -213,8 +212,7 @@ def encode_joints(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndar
     def root_relative_positions(positions: np.ndarray) -> np.ndarray:
         positions[..., 0] -= positions[:, 0:1, 0]
         positions[..., 2] -= positions[:, 0:1, 2]
-        positions = qrot_np(np.repeat(r_rot[:, None], positions.shape[1], axis=1), positions)
-        return positions
+        return qrot_np(np.repeat(r_rot[:, None], positions.shape[1], axis=1), positions)
 
     positions = root_relative_positions(positions)
 
@@ -273,9 +271,7 @@ def recover_from_ric(data: torch.Tensor, joint_count: int) -> torch.Tensor:
     positions[..., 0] += r_pos[..., 0:1]
     positions[..., 2] += r_pos[..., 2:3]
 
-    positions = torch.cat([r_pos.unsqueeze(-2), positions], dim=-2)
-
-    return positions
+    return torch.cat([r_pos.unsqueeze(-2), positions], dim=-2)
 
 
 def recover_from_rot(data: torch.Tensor, joint_count: int, skeleton: Skeleton) -> torch.Tensor:
@@ -289,9 +285,7 @@ def recover_from_rot(data: torch.Tensor, joint_count: int, skeleton: Skeleton) -
     cont6d_params = torch.cat([r_rot_cont6d, cont6d_params], dim=-1)
     cont6d_params = cont6d_params.view(-1, joint_count, 6)
 
-    positions = skeleton.forward_kinematics_cont6d(cont6d_params, r_pos)
-
-    return positions
+    return skeleton.forward_kinematics_cont6d(cont6d_params, r_pos)
 
 
 def normalization_stats(clips: list[np.ndarray], joint_count: int) -> tuple[np.ndarray, np.ndarray]:

@@ -321,7 +321,7 @@ def build_amass_pretraining_corpus(
             failed += 1
             logger.info(f"FAILED {rel}: {exc}")
 
-    summary = {
+    return {
         "written": written,
         "skipped_heldout": skipped_heldout,
         "skipped_short": skipped_short,
@@ -329,4 +329,3 @@ def build_amass_pretraining_corpus(
         "frames": total_frames,
         "hours": round(total_frames / request.fps / 3600, 2),
     }
-    return summary

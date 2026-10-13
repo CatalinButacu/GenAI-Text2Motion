@@ -51,15 +51,15 @@ def qrot(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
 
 
 def qmul_np(q: np.ndarray, r: np.ndarray) -> np.ndarray:
-    q = torch.from_numpy(q).contiguous().float()
-    r = torch.from_numpy(r).contiguous().float()
-    return qmul(q, r).numpy()
+    q_tensor = torch.from_numpy(q).contiguous().float()
+    r_tensor = torch.from_numpy(r).contiguous().float()
+    return qmul(q_tensor, r_tensor).numpy()
 
 
 def qrot_np(q: np.ndarray, v: np.ndarray) -> np.ndarray:
-    q = torch.from_numpy(q).contiguous().float()
-    v = torch.from_numpy(v).contiguous().float()
-    return qrot(q, v).numpy()
+    q_tensor = torch.from_numpy(q).contiguous().float()
+    v_tensor = torch.from_numpy(v).contiguous().float()
+    return qrot(q_tensor, v_tensor).numpy()
 
 
 def quaternion_to_matrix(quaternions: torch.Tensor) -> torch.Tensor:
@@ -90,14 +90,12 @@ def quaternion_to_matrix_np(quaternions: np.ndarray) -> np.ndarray:
 
 def quaternion_to_cont6d_np(quaternions: np.ndarray) -> np.ndarray:
     rotation_mat = quaternion_to_matrix_np(quaternions)
-    cont_6d = np.concatenate([rotation_mat[..., 0], rotation_mat[..., 1]], axis=-1)
-    return cont_6d
+    return np.concatenate([rotation_mat[..., 0], rotation_mat[..., 1]], axis=-1)
 
 
 def quaternion_to_cont6d(quaternions: torch.Tensor) -> torch.Tensor:
     rotation_mat = quaternion_to_matrix(quaternions)
-    cont_6d = torch.cat([rotation_mat[..., 0], rotation_mat[..., 1]], dim=-1)
-    return cont_6d
+    return torch.cat([rotation_mat[..., 0], rotation_mat[..., 1]], dim=-1)
 
 
 def cont6d_to_matrix(cont6d: torch.Tensor) -> torch.Tensor:
@@ -115,8 +113,7 @@ def cont6d_to_matrix(cont6d: torch.Tensor) -> torch.Tensor:
     y = y[..., None]
     z = z[..., None]
 
-    mat = torch.cat([x, y, z], dim=-1)
-    return mat
+    return torch.cat([x, y, z], dim=-1)
 
 
 def cont6d_to_matrix_np(cont6d: np.ndarray) -> np.ndarray:
@@ -139,9 +136,9 @@ def qbetween_np(v0: np.ndarray, v1: np.ndarray) -> np.ndarray:
     assert v0.shape[-1] == 3, "v0 must be of the shape (*, 3)"
     assert v1.shape[-1] == 3, "v1 must be of the shape (*, 3)"
 
-    v0 = torch.from_numpy(v0).float()
-    v1 = torch.from_numpy(v1).float()
-    return qbetween(v0, v1).numpy()
+    first = torch.from_numpy(v0).float()
+    second = torch.from_numpy(v1).float()
+    return qbetween(first, second).numpy()
 
 
 class Skeleton:
@@ -232,6 +229,14 @@ class Skeleton:
 
         return quat_params
 
+    def batch_offsets(self, skel_joints: torch.Tensor | None, batch: int) -> torch.Tensor:
+        table = self._offset
+        if table is not None and len(table.shape) == 2:
+            return table.expand(batch, -1, -1)
+        if skel_joints is None:
+            raise ValueError("forward kinematics needs skeleton joints or a 2-D offset table")
+        return self.get_offsets_joints_batch(skel_joints)
+
     def forward_kinematics_np(
         self,
         quat_params: np.ndarray,
@@ -239,12 +244,8 @@ class Skeleton:
         skel_joints: np.ndarray | None = None,
         do_root_R: bool = True,
     ) -> np.ndarray:
-        if skel_joints is not None:
-            skel_joints = torch.from_numpy(skel_joints)
-            offsets = self.get_offsets_joints_batch(skel_joints)
-        if len(self._offset.shape) == 2:
-            offsets = self._offset.expand(quat_params.shape[0], -1, -1)
-        offsets = offsets.numpy()
+        joint_tensor = None if skel_joints is None else torch.from_numpy(skel_joints)
+        offsets = self.batch_offsets(joint_tensor, quat_params.shape[0]).numpy()
         joints = np.zeros(quat_params.shape[:-1] + (3,))
         joints[:, 0] = root_pos
         for chain in self._kinematic_tree:
@@ -265,10 +266,7 @@ class Skeleton:
         skel_joints: torch.Tensor | None = None,
         do_root_R: bool = True,
     ) -> torch.Tensor:
-        if skel_joints is not None:
-            offsets = self.get_offsets_joints_batch(skel_joints)
-        if len(self._offset.shape) == 2:
-            offsets = self._offset.expand(cont6d_params.shape[0], -1, -1)
+        offsets = self.batch_offsets(skel_joints, cont6d_params.shape[0])
         joints = torch.zeros(cont6d_params.shape[:-1] + (3,)).to(cont6d_params.device)
         joints[..., 0, :] = root_pos
         for chain in self._kinematic_tree:

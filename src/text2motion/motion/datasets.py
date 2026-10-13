@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sized
 from pathlib import Path
 
 import numpy as np
@@ -223,6 +224,13 @@ class MotionWindowDataset(Dataset):
             frame_count=window.shape[0],
             clip_id=self._ids[idx],
         )
+
+
+def dataset_size(loader: DataLoader) -> int:
+    dataset = loader.dataset
+    if not isinstance(dataset, Sized):
+        raise TypeError("the dataset of this loader has no length")
+    return len(dataset)
 
 
 def collate_motion_clips(clips: list[MotionClip]) -> MotionBatch:
