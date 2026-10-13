@@ -88,7 +88,7 @@ class _FakeTokenizer:
 
 
 def test_dynamics_weights_load_from_flat_train_keys_and_nested_blocks_are_refused(tmp_path):
-    from text2motion.app.config_loader import load_config
+    from text2motion.app.config import load_config
 
     good = tmp_path / "good.yaml"
     good.write_text("train:\n  w_foot_skate: 10.0\n  w_accel: 18.0\n", encoding="utf-8")
