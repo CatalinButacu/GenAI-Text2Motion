@@ -43,7 +43,7 @@ for bb in transformer mamba; do
         --config configs/generator/final100m_fsq8x1024.yaml \
         --backbone "$bb" \
         --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt \
-        --out "$GATE" \
+        --overfit_gate "$GATE" \
         > "outputs/gate_$bb.log" 2>&1
     $PY -u -m text2motion.app.cli train-generator \
         --config configs/generator/final100m_fsq8x1024.yaml \

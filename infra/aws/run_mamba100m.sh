@@ -49,7 +49,7 @@ if [ ! -f "$PRIOR.done" ]; then
         --token_pack "$PACK" \
         --epochs 30 \
         --batch_size 32 \
-        --out "$PRIOR" \
+        --ckpt "$PRIOR" \
         --resume \
         >> outputs/mamba100m_pretrain.log 2>&1
 else
@@ -63,7 +63,7 @@ mkdir -p outputs/gates
     --config "$CFG" \
     --backbone mamba \
     --tokenizer_ckpt "$TOK" \
-    --out "$GATE" \
+    --overfit_gate "$GATE" \
     > outputs/mamba100m_gate.log 2>&1
 
 $PY -u -m text2motion.app.cli train-generator \

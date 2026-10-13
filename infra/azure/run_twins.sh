@@ -120,12 +120,12 @@ train_pair() {
         $PY -u -m text2motion.app.cli pretrain \
         --config "$config" --backbone "$backbone" --token_pack "$pack" \
         --epochs "$PRETRAIN_EPOCHS" --batch_size "$BATCH" \
-        --out "artifacts/checkpoints/generator/pre_$name.pt" --resume
+        --ckpt "artifacts/checkpoints/generator/pre_$name.pt" --resume
 
     stage "gate_$name" \
         $PY -u -m text2motion.app.cli sanity-overfit \
         --config "$config" --backbone "$backbone" --tokenizer_ckpt "$tokenizer" \
-        --out "artifacts/outputs/gates/$name.json"
+        --overfit_gate "artifacts/outputs/gates/$name.json"
 
     stage "train_$name" \
         $PY -u -m text2motion.app.cli train-generator \

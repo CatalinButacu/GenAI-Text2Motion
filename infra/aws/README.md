@@ -106,7 +106,7 @@ pip install -q transformers   # plus anything else requirements lists
 export PYTHONPATH=src
 tmux new -s train             # detach with Ctrl-b d; reattach: tmux attach -t train
 for bb in transformer mamba; do
-  python -u -m text2motion.app.cli sanity-overfit --config configs/aws.yaml --backbone $bb       --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt --out outputs/gates/$bb.json
+  python -u -m text2motion.app.cli sanity-overfit --config configs/aws.yaml --backbone $bb       --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt --overfit_gate outputs/gates/$bb.json
   python -u -m text2motion.app.cli train-generator --config configs/aws.yaml --backbone $bb       --tokenizer_ckpt checkpoints/tokenizer/fsq_g8_v1024.pt --overfit_gate outputs/gates/$bb.json       --epochs 150 --batch_size 64 --resume &> outputs/$bb.log
 done
 # results back to S3 when done:
