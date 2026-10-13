@@ -9,6 +9,7 @@ import torch
 from text2motion.app.bootstrap import ApplicationContext
 from text2motion.app.run_log import log_metrics, start_run
 from text2motion.motion.contracts import Split
+from text2motion.motion.datasets import dataset_size
 from text2motion.tokenization.contracts import (
     TokenizerKind,
     TokenizerTrainingRequest,
@@ -62,7 +63,7 @@ def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) ->
         f"tokenizer_{Path(name).stem}", config, app.config.paths.logs_dir, args.model_dump()
     )
     logger.info(
-        f"train clips: {len(loader.dataset)}  device: {app.device}  "
+        f"train clips: {dataset_size(loader)}  device: {app.device}  "
         f"codebook: {module.codebook_size}"
     )
     train_tokenizer(

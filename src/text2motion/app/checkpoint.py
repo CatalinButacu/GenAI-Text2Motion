@@ -10,7 +10,7 @@ from typing import Any
 import torch
 from torch import nn
 
-from text2motion.generation.contracts import Backbone, OverfitCriteria
+from text2motion.generation.contracts import DEFAULT_OVERFIT_CRITERIA, Backbone, OverfitCriteria
 
 _BUNDLE_FORMAT = "text2motion.generator_bundle"
 _BUNDLE_VERSION = 1
@@ -161,7 +161,7 @@ class OverfitGate:
     def total_ratio(self) -> float:
         return self.final_total / self.first_total
 
-    def validate_metrics(self, criteria: OverfitCriteria = OverfitCriteria()) -> None:
+    def validate_metrics(self, criteria: OverfitCriteria = DEFAULT_OVERFIT_CRITERIA) -> None:
         if self.first_total <= 0:
             raise RuntimeError("overfit gate first_total must be positive")
         if self.token_accuracy < criteria.min_token_accuracy:

@@ -26,6 +26,7 @@ from text2motion.generation.trainer import (
     train_generator,
 )
 from text2motion.motion.contracts import Split
+from text2motion.motion.datasets import dataset_size
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,11 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
         backbone=args.backbone,
         resolved_generator_config=architecture.as_dict(),
         batch_size=args.batch_size,
-        **metrics,
+        steps=int(metrics["steps"]),
+        first_total=metrics["first_total"],
+        final_total=metrics["final_total"],
+        token_accuracy=metrics["token_accuracy"],
+        ce=metrics["ce"],
     )
     gate.validate_metrics()
     gate.save(args.overfit_gate)
@@ -143,9 +148,9 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         extra=args.model_dump(),
         existing_run_dir=Path(args.resume_run_dir) if args.resume_run_dir else None,
     )
-    log_metrics(run_dir, {"train_clips": len(loader.dataset), "device": app.device})
+    log_metrics(run_dir, {"train_clips": dataset_size(loader), "device": app.device})
     logger.info(
-        f"train clips: {len(loader.dataset)}  device: {app.device}  backbone: {args.backbone.value}"
+        f"train clips: {dataset_size(loader)}  device: {app.device}  backbone: {args.backbone.value}"
     )
 
     def evaluate(split: Split) -> dict[str, float]:

@@ -109,7 +109,7 @@ class ApplicationContext:
 
         if text_encoder_state is None and text_encoder_checkpoint:
             text_encoder_checkpoint_payload = torch.load(
-                text_encoder_checkpoint, map_location=self.device, weights_only=False
+                text_encoder_checkpoint, map_location=self.device, weights_only=True
             )
             if "text_encoder" not in text_encoder_checkpoint_payload:
                 raise KeyError(
@@ -180,7 +180,11 @@ class ApplicationContext:
         return ApplicationBootstrap.from_config(config_path, device=self.device)
 
     def with_service(self, service: MotionServiceConfig) -> ApplicationContext:
-        return replace(self, config=replace(self.config, service=service))
+        return ApplicationContext(
+            config=replace(self.config, service=service),
+            device=self.device,
+            config_path=self.config_path,
+        )
 
     def with_service_file(self, service_config: str | Path) -> ApplicationContext:
         from text2motion.app.config import load_dataclass

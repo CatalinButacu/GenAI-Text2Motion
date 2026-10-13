@@ -31,7 +31,12 @@ from text2motion.generation.contracts import (
     SanityOverfitRequest,
     TrainGeneratorRequest,
 )
-from text2motion.motion.contracts import PreparationStage, PrepareRequest, Split
+from text2motion.motion.contracts import (
+    CommandRequest,
+    PreparationStage,
+    PrepareRequest,
+    Split,
+)
 from text2motion.streaming.pydant_requests import HealthRequest, ServeRequest, StudioRequest
 from text2motion.tokenization.contracts import (
     TokenizeRequest,
@@ -52,23 +57,29 @@ COMMAND_ENUMS = (
 
 @dataclass(frozen=True)
 class Command:
-    request_model: type[BaseModel]
+    request_model: type[CommandRequest]
     handler: Callable[[ApplicationContext, Any], None]
     summary: str
 
 
 COMMANDS = {
-    "prepare":         Command( PrepareRequest,        run_prepare,         "AMASS -> HumanML3D-263 data preparation"),
-    "tokenize":        Command( TokenizeRequest,       run_tokenize,        "encode a feature corpus into tokens"),
-    "train-tokenizer": Command( TrainTokenizerRequest, run_train_tokenizer, "train the motion tokenizer"),
-    "sanity-overfit":  Command( SanityOverfitRequest,  run_sanity_overfit,  "mandatory real-batch overfit gate"),
-    "train-generator": Command( TrainGeneratorRequest, run_train_generator, "train the text-to-motion generator"),
-    "pretrain":        Command( PretrainRequest,       run_pretrain,        "unconditional token-corpus pretraining"),
-    "evaluate":        Command( EvaluateRequest,       run_evaluate,        "citable generation eval (20-rep protocol)"),
-    "benchmark":       Command( BenchmarkRequest,      run_bench,           "streaming latency/state-size benchmark"),
-    "serve":           Command( ServeRequest,          run_serve,           "local streaming generation service"),
-    "studio":          Command( StudioRequest,         run_studio,          "interactive aitviewer studio"),
-    "health":          Command( HealthRequest,         run_health,          "check the streaming service readiness"),
+    "prepare": Command(PrepareRequest, run_prepare, "AMASS -> HumanML3D-263 data preparation"),
+    "tokenize": Command(TokenizeRequest, run_tokenize, "encode a feature corpus into tokens"),
+    "train-tokenizer": Command(
+        TrainTokenizerRequest, run_train_tokenizer, "train the motion tokenizer"
+    ),
+    "sanity-overfit": Command(
+        SanityOverfitRequest, run_sanity_overfit, "mandatory real-batch overfit gate"
+    ),
+    "train-generator": Command(
+        TrainGeneratorRequest, run_train_generator, "train the text-to-motion generator"
+    ),
+    "pretrain": Command(PretrainRequest, run_pretrain, "unconditional token-corpus pretraining"),
+    "evaluate": Command(EvaluateRequest, run_evaluate, "citable generation eval (20-rep protocol)"),
+    "benchmark": Command(BenchmarkRequest, run_bench, "streaming latency/state-size benchmark"),
+    "serve": Command(ServeRequest, run_serve, "local streaming generation service"),
+    "studio": Command(StudioRequest, run_studio, "interactive aitviewer studio"),
+    "health": Command(HealthRequest, run_health, "check the streaming service readiness"),
 }
 
 
@@ -98,7 +109,7 @@ def with_flag_values(request_model: type[BaseModel], arguments: list[str]) -> li
     return completed
 
 
-def parse_request(command: str, arguments: list[str]) -> BaseModel:
+def parse_request(command: str, arguments: list[str]) -> CommandRequest:
     selected = COMMANDS[command]
     parser = RequestParser(prog=f"text2motion {command}", description=selected.summary)
     parser.add_class_arguments(selected.request_model, nested_key=None)
@@ -132,7 +143,7 @@ def main(argv: list[str] | None = None) -> None:
     logger.info(f"command: text2motion {' '.join(arguments)}")
     request = parse_request(selected.command, selected.arguments)
     app = ApplicationBootstrap.from_config(
-        getattr(request, "config"),
+        request.config,
         device=getattr(request, "device", None),
         seed=getattr(request, "seed", None),
     )
