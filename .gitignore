@@ -6,6 +6,7 @@
 *.zip
 *.npz
 *.pkl
+*.pdf
 
 # python
 .venv/
@@ -61,3 +62,6 @@ infra/azure/.terraform.lock.hcl
 .ropeproject/
 CLAUDE.md
 .claude/hooks/.graph_last
+
+# LaTeX build output
+doc/paper/build/
