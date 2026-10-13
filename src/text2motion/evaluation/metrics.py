@@ -14,11 +14,7 @@ def frechet_gaussian_distance(
     mu1: np.ndarray, sigma1: np.ndarray, mu2: np.ndarray, sigma2: np.ndarray
 ) -> float:
     diff = mu1 - mu2
-    covmean = linalg.sqrtm(sigma1 @ sigma2)
-
-    if np.iscomplexobj(covmean):
-        covmean = covmean.real
-
+    covmean = np.real(np.asarray(linalg.sqrtm(sigma1 @ sigma2)))
     return float(diff @ diff + np.trace(sigma1 + sigma2 - 2.0 * covmean))
 
 

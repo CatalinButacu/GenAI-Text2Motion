@@ -166,7 +166,8 @@ class HumanMl3dGenerationEvaluator:
             if batch is None or len(batch) < 2:
                 continue
             decoded = [
-                self.resources.denormalize(item.motion.features.cpu().numpy()) for item in batch
+                np.asarray(self.resources.denormalize(item.motion.features.cpu().numpy()))
+                for item in batch
             ]
             emb = self.compute_motion_embeddings(decoded)
             first = rng.integers(0, len(emb), 10)
@@ -259,7 +260,7 @@ class HumanMl3dGenerationEvaluator:
             )
 
         return GenerationEvaluationReport(
-            clips=metrics["clips"],
+            clips=int(metrics["clips"]),
             fid=metrics["fid"],
             r_precision=(metrics["r_top1"], metrics["r_top2"], metrics["r_top3"]),
             diversity=metrics["diversity"],

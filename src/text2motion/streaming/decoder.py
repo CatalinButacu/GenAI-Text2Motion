@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import queue as queue_mod
 from collections import deque
 from collections.abc import Iterable, Iterator
@@ -18,7 +19,7 @@ _END = None
 def measure_decoder_context(
     tokenizer: MotionTokenizerNetwork, downsample: int, probe_len: int = 32, trials: int = 4
 ) -> tuple[int, int]:
-    num_quantizers = len(tokenizer.quantizer.quantizer_units)
+    num_quantizers = len(tokenizer.latent_quantizer().quantizer_units)
     codebook_size = tokenizer.codebook_size
     device = next(tokenizer.parameters()).device
     centre = probe_len // 2
@@ -57,11 +58,8 @@ def __put_drop_oldest(out_queue: "queue_mod.Queue", item: object) -> None:
         out_queue.put_nowait(item)
 
     except queue_mod.Full:
-        try:
+        with contextlib.suppress(queue_mod.Empty):
             out_queue.get_nowait()
-
-        except queue_mod.Empty:
-            pass
 
         out_queue.put_nowait(item)
 

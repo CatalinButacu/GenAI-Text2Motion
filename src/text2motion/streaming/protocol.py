@@ -178,12 +178,12 @@ def __start_motion_server(
         str(service_config),
     ]
     Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-    log = open(log_path, "ab")
     flags = getattr(subprocess, "DETACHED_PROCESS", 0)
     env = dict(os.environ)
     env["PYTHONPATH"] = env.get("PYTHONPATH") or "src"
     env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-    subprocess.Popen(cmd, stdout=log, stderr=log, creationflags=flags, env=env)
+    with open(log_path, "ab") as log:
+        subprocess.Popen(cmd, stdout=log, stderr=log, creationflags=flags, env=env)
     logger.info(f"[service] spawned; loading the model (log: {log_path})...")
 
 

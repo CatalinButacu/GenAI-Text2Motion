@@ -131,8 +131,10 @@ _VIP_WORDS = {
 class GuoWordPosVectorizer:
     def __init__(self, meta_root, prefix):
         vectors = np.load(pjoin(meta_root, "%s_data.npy" % prefix))
-        words = pickle.load(open(pjoin(meta_root, "%s_words.pkl" % prefix), "rb"))
-        word2idx = pickle.load(open(pjoin(meta_root, "%s_idx.pkl" % prefix), "rb"))
+        with open(pjoin(meta_root, "%s_words.pkl" % prefix), "rb") as words_file:
+            words = pickle.load(words_file)
+        with open(pjoin(meta_root, "%s_idx.pkl" % prefix), "rb") as index_file:
+            word2idx = pickle.load(index_file)
         self.word2vec = {w: vectors[word2idx[w]] for w in words}
 
     def __pos_one_hot(self, pos):
@@ -222,6 +224,8 @@ class GuoMovementEncoder(nn.Module):
 
 
 class GuoMotionEncoder(nn.Module):
+    hidden: torch.Tensor
+
     def __init__(self) -> None:
         super().__init__()
         self.input_emb = nn.Linear(_GRU_INPUT, _GRU_WIDTH)
@@ -263,6 +267,8 @@ class GuoMotionEmbeddingEncoder(nn.Module):
 
 
 class GuoTextEmbeddingEncoder(nn.Module):
+    hidden: torch.Tensor
+
     def __init__(self) -> None:
         super().__init__()
         self.pos_emb = nn.Linear(_POS_DIM, _GLOVE_DIM)

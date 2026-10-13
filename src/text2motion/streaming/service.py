@@ -294,9 +294,8 @@ class MotionInferenceServer:
     ) -> None:
         server = socket.create_server((host, port))
         server.settimeout(idle_seconds)
-        logger.info(
-            f"[service] ready on {host}:{port} ({self.pipeline.backbone}, idle-exit {idle_seconds}s)"
-        )
+        backbone = "no model" if self.pipeline is None else self.pipeline.backbone
+        logger.info(f"[service] ready on {host}:{port} ({backbone}, idle-exit {idle_seconds}s)")
 
         while True:
             try:
