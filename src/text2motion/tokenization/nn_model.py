@@ -17,6 +17,7 @@ from text2motion.tokenization.contracts import (
 )
 from text2motion.tokenization.nn_quantizers import (
     GroupedFSQ,
+    LatentQuantizer,
     ResidualFSQ,
     ResidualVQ,
     reject_dropped_codes,
@@ -24,6 +25,18 @@ from text2motion.tokenization.nn_quantizers import (
 
 
 class MotionTokenizerNetwork(nn.Module, ABC):
+    encoder: nn.Module
+    decoder: nn.Module
+    pre_q: nn.Module
+    post_q: nn.Module
+    codebook_tables: list[torch.Tensor] | None = None
+
+    def latent_quantizer(self) -> LatentQuantizer:
+        quantizer = self.quantizer
+        if not isinstance(quantizer, LatentQuantizer):
+            raise TypeError("the tokenizer network has no latent quantizer")
+        return quantizer
+
     @property
     @abstractmethod
     def codebook_size(self) -> int: ...
@@ -93,11 +106,11 @@ class MotionFeatureDecoder(nn.Module):
         return self.net(x.transpose(1, 2)).transpose(1, 2)
 
 
-def __build_grouped_fsq(cfg: TokenizerConfig) -> tuple[nn.Module, int]:
+def __build_grouped_fsq(cfg: TokenizerConfig) -> tuple[LatentQuantizer, int]:
     return GroupedFSQ(cfg.fsq_levels, cfg.num_quantizers), cfg.num_quantizers * len(cfg.fsq_levels)
 
 
-def __build_residual_fsq(cfg: TokenizerConfig) -> tuple[nn.Module, int]:
+def __build_residual_fsq(cfg: TokenizerConfig) -> tuple[LatentQuantizer, int]:
     quantizer = ResidualFSQ(cfg.fsq_levels, cfg.num_quantizers, cfg.quant_dropout)
     return quantizer, len(cfg.fsq_levels)
 
@@ -109,6 +122,8 @@ _QUANTIZER_FACTORIES = {
 
 
 class FsqTokenizer(MotionTokenizerNetwork):
+    quantizer: LatentQuantizer
+
     def __init__(self, cfg: TokenizerConfig) -> None:
         super().__init__()
         self.cfg = cfg
@@ -233,7 +248,7 @@ class MotionTokenizer:
 
     @property
     def num_codebooks(self) -> int:
-        return len(self.tokenizer_model.quantizer.quantizer_units)
+        return len(self.tokenizer_model.latent_quantizer().quantizer_units)
 
     def aligned_frame_count(self, frame_count: int) -> int:
         return (frame_count // self.downsample) * self.downsample

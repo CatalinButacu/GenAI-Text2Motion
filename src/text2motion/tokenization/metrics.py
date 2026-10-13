@@ -63,7 +63,7 @@ def evaluate_tokenizer_reconstruction(
         feat = feat[:length]
 
         normalized = torch.from_numpy(scaler.normalize(feat))[None].to(device)
-        recon = scaler.denormalize(module(normalized)[0][0].cpu().numpy())
+        recon = np.asarray(scaler.denormalize(module(normalized)[0][0].cpu().numpy()))
 
         reference_feats.append(feat)
         recon_feats.append(recon)

@@ -32,20 +32,21 @@ def build_token_pack(
         feat = scaler.normalize(np.load(path).astype(np.float32))
         for start in range(0, feat.shape[0] - request.segment_frames + 1, request.stride):
             window = feat[start : start + request.segment_frames]
+            clip_id = f"{path.stem}__{start}"
             clip = MotionClip(
                 features=torch.from_numpy(window),
                 frame_count=window.shape[0],
-                clip_id=f"{path.stem}__{start}",
+                clip_id=clip_id,
             )
             tokens = tokenizer.encode(clip)
             indices = tokens.indices.cpu().numpy().astype(np.int16)
-            pack[clip.clip_id] = indices
+            pack[clip_id] = indices
             segments += 1
             token_steps += tokens.token_count
 
     out_path = Path(request.out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(out_path, **pack)
+    np.savez_compressed(out_path, allow_pickle=True, **pack)
 
     return {
         "sequences": len(features),

@@ -21,10 +21,8 @@ class ExponentialMovingAverage:
 
     @torch.no_grad()
     def update(self, model: nn.Module) -> None:
-        params = [param for param, _ in self._tracked]
-        shadows = [shadow for _, shadow in self._tracked]
-        torch._foreach_mul_(shadows, self.decay)
-        torch._foreach_add_(shadows, params, alpha=1 - self.decay)
+        for param, shadow in self._tracked:
+            shadow.mul_(self.decay).add_(param, alpha=1 - self.decay)
 
     def copy_to(self, model: nn.Module) -> None:
         self.backup = {
