@@ -8,8 +8,6 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
-from text2motion.app.logging_setup import add_run_log_file, ensure_logging_configured
-
 logger = logging.getLogger(__name__)
 
 
@@ -36,6 +34,32 @@ def __jsonable(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
+
+
+MLFLOW_RUN_ID_FILE = "mlflow_run_id"
+
+
+def __start_mlflow_run(run_dir: Path, logs_dir: Path, manifest: dict) -> None:
+    import mlflow
+
+    mlflow.set_tracking_uri(f"sqlite:///{(Path(logs_dir) / 'mlflow.db').resolve().as_posix()}")
+    mlflow.set_experiment(manifest["name"])
+    id_file = run_dir / MLFLOW_RUN_ID_FILE
+    earlier_id = id_file.read_text(encoding="utf-8") if id_file.exists() else None
+    run = mlflow.start_run(run_id=earlier_id, run_name=run_dir.name)
+    id_file.write_text(run.info.run_id, encoding="utf-8")
+    mlflow.log_params({key: str(value)[:500] for key, value in manifest["extra"].items()})
+
+
+def __log_mlflow_metrics(record: dict) -> None:
+    import mlflow
+
+    numbers = {
+        key: float(value)
+        for key, value in record.items()
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    }
+    mlflow.log_metrics(numbers, step=int(record.get("step", record.get("epoch", 0))))
 
 
 def start_run(
@@ -74,6 +98,8 @@ def start_run(
             fh.write(json.dumps(manifest) + "\n")
         ensure_logging_configured()
         add_run_log_file(run_dir)
+        if getattr(cfg, "mlflow_tracking", False):
+            __start_mlflow_run(run_dir, logs_dir, manifest)
         logger.info(f"run directory {run_dir} (resumed, commit {manifest['git_commit'][:8]})")
         return run_dir
 
@@ -82,6 +108,8 @@ def start_run(
     (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     ensure_logging_configured()
     add_run_log_file(run_dir)
+    if getattr(cfg, "mlflow_tracking", False):
+        __start_mlflow_run(run_dir, logs_dir, manifest)
     logger.info(f"run directory {run_dir} (commit {manifest['git_commit'][:8]})")
     logger.info(f"versions {versions}")
     return run_dir
@@ -94,3 +122,34 @@ def log_metrics(run_dir: Path, record: dict) -> None:
     }
     with (Path(run_dir) / "metrics.jsonl").open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record) + "\n")
+    if (Path(run_dir) / MLFLOW_RUN_ID_FILE).exists():
+        __log_mlflow_metrics(record)
+
+
+LOG_FORMAT = "%(asctime)s %(levelname)-7s %(name)s | %(message)s"
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+RUN_LOG_NAME = "run.log"
+LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
+
+
+def configure_logging(level: str = "INFO") -> None:
+    if level not in LOG_LEVELS:
+        raise ValueError(f"unknown log level {level!r} (expected one of {LOG_LEVELS})")
+    console = logging.StreamHandler(sys.stdout)
+    console.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+    root.addHandler(console)
+    root.setLevel(level)
+
+
+def ensure_logging_configured() -> None:
+    if not logging.getLogger().handlers:
+        configure_logging()
+
+
+def add_run_log_file(run_dir: Path) -> None:
+    run_log = logging.FileHandler(Path(run_dir) / RUN_LOG_NAME, encoding="utf-8")
+    run_log.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
+    logging.getLogger().addHandler(run_log)
