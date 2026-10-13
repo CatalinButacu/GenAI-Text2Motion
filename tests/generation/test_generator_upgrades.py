@@ -1,15 +1,17 @@
 import importlib.util
+from dataclasses import replace
 
 import pytest
 import torch
 
 from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, TokenizerConfig
+from text2motion.generation.contracts import Backbone
 from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.generation.trainer import GeneratorTrainer
 from text2motion.tokenization.nn_model import FsqTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
-COMMON = dict(
+BASE = GeneratorConfig(
     d_model=64,
     n_layers=2,
     d_text=32,
@@ -28,7 +30,7 @@ HAS_MAMBA_SSM = importlib.util.find_spec("mamba_ssm") is not None
 
 @pytest.mark.parametrize("backbone", ["transformer", "mamba"])
 def test_multi_token_prefix_forward_and_stream(backbone):
-    cfg = GeneratorConfig(backbone=backbone, text_prefix_len=4, **COMMON)
+    cfg = replace(BASE, backbone=Backbone(backbone), text_prefix_len=4)
     gen = MotionTokenGenerator(cfg).eval()
     tokens = torch.randint(0, cfg.codebook_size, (3, 8, cfg.num_codebooks))
     text = torch.randn(3, 4, cfg.d_text)
@@ -41,7 +43,7 @@ def test_multi_token_prefix_forward_and_stream(backbone):
 
 
 def test_prefix_length_mismatch_fails_loud():
-    cfg = GeneratorConfig(backbone="transformer", text_prefix_len=4, **COMMON)
+    cfg = replace(BASE, backbone=Backbone.TRANSFORMER, text_prefix_len=4)
     gen = MotionTokenGenerator(cfg)
 
     with pytest.raises(ValueError, match="text_prefix_len"):
@@ -49,7 +51,7 @@ def test_prefix_length_mismatch_fails_loud():
 
 
 def test_prefix_parity_with_legacy_single_token():
-    cfg = GeneratorConfig(backbone="mamba", **COMMON)
+    cfg = replace(BASE, backbone=Backbone.MAMBA)
     gen = MotionTokenGenerator(cfg).eval()
     tokens = torch.randint(0, cfg.codebook_size, (2, 8, cfg.num_codebooks))
     text = torch.randn(2, cfg.d_text)
@@ -61,7 +63,7 @@ def test_prefix_parity_with_legacy_single_token():
 
 
 def test_end_token_targets_and_masked_stream():
-    cfg = GeneratorConfig(backbone="transformer", use_end_token=True, **COMMON)
+    cfg = replace(BASE, backbone=Backbone.TRANSFORMER, use_end_token=True)
     gen = MotionTokenGenerator(cfg).eval()
     assert gen.end_id == cfg.codebook_size
 
@@ -97,7 +99,7 @@ def test_end_token_targets_and_masked_stream():
     HAS_MAMBA_SSM, reason="mamba-ssm installed: the loud-failure path can't trigger"
 )
 def test_use_kernel_without_mamba_ssm_fails_loud():
-    cfg = GeneratorConfig(backbone="mamba", use_kernel=True, **COMMON)
+    cfg = replace(BASE, backbone=Backbone.MAMBA, use_kernel=True)
     gen = MotionTokenGenerator(cfg)
 
     with pytest.raises(ImportError):
@@ -106,8 +108,8 @@ def test_use_kernel_without_mamba_ssm_fails_loud():
 
 @pytest.mark.skipif(not HAS_MAMBA_SSM, reason="mamba-ssm not installed (Linux/CUDA only)")
 def test_kernel_matches_eager_scan():
-    cfg_eager = GeneratorConfig(backbone="mamba", **COMMON)
-    cfg_kernel = GeneratorConfig(backbone="mamba", use_kernel=True, **COMMON)
+    cfg_eager = replace(BASE, backbone=Backbone.MAMBA)
+    cfg_kernel = replace(BASE, backbone=Backbone.MAMBA, use_kernel=True)
     torch.manual_seed(0)
     eager = MotionTokenGenerator(cfg_eager).cuda().eval()
     kernel = MotionTokenGenerator(cfg_kernel).cuda().eval()

@@ -5,6 +5,7 @@ import torch
 
 from text2motion.app.checkpoint import OverfitGate, sha256_file
 from text2motion.app.config import ApplicationConfig
+from text2motion.generation.contracts import Backbone
 from text2motion.generation.nn_model import GeneratorModelSpec
 
 
@@ -25,7 +26,7 @@ def test_overfit_gate_is_bound_to_architecture_config_and_tokenizer(tmp_path):
     gate = OverfitGate(
         config_sha256=sha256_file(config_path),
         tokenizer_sha256=sha256_file(tokenizer_path),
-        backbone="mamba",
+        backbone=Backbone.MAMBA,
         resolved_generator_config=resolved,
         batch_size=4,
         steps=100,
@@ -39,7 +40,7 @@ def test_overfit_gate_is_bound_to_architecture_config_and_tokenizer(tmp_path):
     OverfitGate.load(gate_path).verify_setup(
         config_path=config_path,
         tokenizer_ckpt=tokenizer_path,
-        backbone="mamba",
+        backbone=Backbone.MAMBA,
         resolved_config=resolved,
     )
 
@@ -66,7 +67,7 @@ def test_overfit_gate_ignores_dropout_difference_from_training_config(tmp_path):
     gate = OverfitGate(
         config_sha256=sha256_file(config_path),
         tokenizer_sha256=sha256_file(tokenizer_path),
-        backbone="mamba",
+        backbone=Backbone.MAMBA,
         resolved_generator_config=gate_resolved,
         batch_size=4,
         steps=100,
@@ -80,7 +81,7 @@ def test_overfit_gate_ignores_dropout_difference_from_training_config(tmp_path):
     OverfitGate.load(gate_path).verify_setup(
         config_path=config_path,
         tokenizer_ckpt=tokenizer_path,
-        backbone="mamba",
+        backbone=Backbone.MAMBA,
         resolved_config=train_resolved,
     )
 
@@ -96,7 +97,7 @@ def test_overfit_gate_rejects_weak_accuracy(tmp_path):
     OverfitGate(
         config_sha256=sha256_file(config_path),
         tokenizer_sha256=sha256_file(tokenizer_path),
-        backbone="mamba",
+        backbone=Backbone.MAMBA,
         resolved_generator_config=resolved,
         batch_size=4,
         steps=100,
@@ -110,6 +111,6 @@ def test_overfit_gate_rejects_weak_accuracy(tmp_path):
         OverfitGate.load(gate_path).verify_setup(
             config_path=config_path,
             tokenizer_ckpt=tokenizer_path,
-            backbone="mamba",
+            backbone=Backbone.MAMBA,
             resolved_config=resolved,
         )

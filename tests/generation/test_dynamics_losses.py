@@ -1,9 +1,12 @@
+from typing import cast
+
 import pytest
 import torch
 
 from text2motion.generation.contracts import LossWeights
 from text2motion.generation.losses import __dynamics_terms
 from text2motion.motion.representation import DIM, SLICES
+from text2motion.tokenization.nn_model import MotionTokenizerNetwork
 
 
 def __standing_motion(frames: int = 12) -> torch.Tensor:
@@ -65,7 +68,7 @@ def test_dynamics_losses_refuse_to_run_without_normalization_stats():
             torch.zeros(1, 2, 1, 4),
             torch.zeros(1, 2, 1, dtype=torch.long),
             torch.zeros(1, 8, DIM),
-            _FakeTokenizer(),
+            cast(MotionTokenizerNetwork, _FakeTokenizer()),
             LossWeights(foot_skate=1.0),
             4,
         )
@@ -83,8 +86,12 @@ class _FakeTokenizer:
             (),
             {"quantizer_units": [unit], "compose_latent_codes": lambda self, codes: codes[0]},
         )()
+        self.codebook_tables = None
         self.post_q = lambda codes: codes
         self.decoder = lambda codes: torch.zeros(codes.size(0), codes.size(1) * 4, DIM)
+
+    def latent_quantizer(self):
+        return self.quantizer
 
 
 def test_dynamics_weights_load_from_flat_train_keys_and_nested_blocks_are_refused(tmp_path):

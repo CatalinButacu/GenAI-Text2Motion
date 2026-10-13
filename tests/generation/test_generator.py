@@ -1,12 +1,13 @@
 import torch
 
 from text2motion.app.config import GeneratorConfig
+from text2motion.generation.contracts import Backbone
 from text2motion.generation.nn_model import MotionTokenGenerator, token_ce_loss
 
 
 def small_cfg(backbone: str) -> GeneratorConfig:
     return GeneratorConfig(
-        backbone=backbone,
+        backbone=Backbone(backbone),
         d_model=64,
         n_layers=2,
         d_text=32,
@@ -26,7 +27,8 @@ def streamed_logits(
 ) -> torch.Tensor:
     state = gen.backbone.init_state(tokens.size(0), tokens.device)
     prefix = gen.project_text_prefix(text)  # (B, P, d_model); P=1 here, stepped like stream() does
-    for position in range(prefix.size(1)):
+    h, state = gen.backbone.step(prefix[:, 0], state)
+    for position in range(1, prefix.size(1)):
         h, state = gen.backbone.step(prefix[:, position], state)
     outs = [gen.predict_token_logits(h)]
 
@@ -89,7 +91,8 @@ def test_single_batch_overfit_mamba():
     tokens = torch.randint(0, cfg.codebook_size, (2, 8, cfg.num_codebooks))
     text = torch.randn(2, cfg.d_text)
 
-    loss0 = token_ce_loss(gen(tokens, text), tokens).item()
+    loss = token_ce_loss(gen(tokens, text), tokens)
+    loss0 = loss.item()
 
     for _ in range(300):
         loss = token_ce_loss(gen(tokens, text), tokens)

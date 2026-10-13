@@ -7,6 +7,7 @@ from text2motion.app.config import (
     TextEncoderConfig,
     TokenizerConfig,
 )
+from text2motion.generation.contracts import Backbone
 from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.generation.trainer import GeneratorTrainer
@@ -14,7 +15,7 @@ from text2motion.tokenization.nn_model import FsqTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorConfig(
-    backbone="mamba",
+    backbone=Backbone.MAMBA,
     d_model=64,
     n_layers=2,
     d_text=512,  # = CLIP projection dim

@@ -2,6 +2,7 @@ import numpy as np
 import torch
 
 from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, TokenizerConfig
+from text2motion.generation.contracts import Backbone, LossWeighting
 from text2motion.generation.losses import LossWeights, soft_decode
 from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.generation.trainer import GeneratorTrainer
@@ -10,7 +11,7 @@ from text2motion.tokenization.nn_model import FsqTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorConfig(
-    backbone="mamba",
+    backbone=Backbone.MAMBA,
     d_model=64,
     n_layers=2,
     d_text=32,
@@ -103,7 +104,9 @@ def test_uncertainty_weighting_optimizes_log_vars():
     trainer = GeneratorTrainer(
         gen,
         tok,
-        GeneratorTrainingConfig(cfg_dropout=0.0, pkeep=1.0, loss_weighting="uncertainty"),
+        GeneratorTrainingConfig(
+            cfg_dropout=0.0, pkeep=1.0, loss_weighting=LossWeighting.UNCERTAINTY
+        ),
         downsample=4,
     )
     assert trainer.weighter is not None
@@ -145,7 +148,7 @@ def test_decay_groups_exempt_norms_biases_and_the_ssm_memory_params():
     from text2motion.generation.trainer import partition_parameters
 
     gen_cfg = GeneratorConfig(num_codebooks=2, codebook_size=64, d_model=64, n_layers=2)
-    mamba = MotionTokenGenerator(_replace(gen_cfg, backbone="mamba"))
+    mamba = MotionTokenGenerator(_replace(gen_cfg, backbone=Backbone.MAMBA))
     transformer = MotionTokenGenerator(_replace(gen_cfg, backbone="transformer"))
 
     for model in (mamba, transformer):
@@ -168,7 +171,7 @@ def test_pretraining_optimizer_groups_do_not_decay_ssm_memory_params():
 
     from text2motion.generation.trainer import adamw_groups
 
-    mamba = MotionTokenGenerator(_replace(GEN, backbone="mamba"))
+    mamba = MotionTokenGenerator(_replace(GEN, backbone=Backbone.MAMBA))
     cfg = GeneratorTrainingConfig(weight_decay=0.01, decay_groups=True)
     opt = torch.optim.AdamW(
         adamw_groups(mamba, cfg.lr, cfg.decay_groups),

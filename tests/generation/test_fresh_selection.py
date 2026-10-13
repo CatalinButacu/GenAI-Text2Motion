@@ -1,11 +1,12 @@
 from contextlib import contextmanager
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 import torch
 
 from text2motion.generation.contracts import GeneratorTrainingRequest
-from text2motion.generation.trainer import train_generator
+from text2motion.generation.trainer import GeneratorTrainer, train_generator
 
 
 class _FakeTrainer:
@@ -46,7 +47,7 @@ def __run(tmp_path, fresh_selection: bool, write_resume: bool = True):
     }
     loader = SimpleNamespace(dataset=SimpleNamespace(set_epoch=lambda epoch: None))
     train_generator(
-        _FakeTrainer(),
+        cast(GeneratorTrainer, _FakeTrainer()),
         loader,
         request,
         "cpu",
