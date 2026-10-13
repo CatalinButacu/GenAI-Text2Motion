@@ -142,7 +142,7 @@ class StudioSceneNodes:
         return self.body or self.motion or self.rest
 
     @property
-    def has_motion_or_body(self) -> bool:
+    def has_generated_motion(self) -> bool:
         return self.body is not None or self.motion is not None
 
 
@@ -415,7 +415,7 @@ class StreamSceneUpdater:
 
     def __apply_remesh(self, verts: np.ndarray, faces: np.ndarray, is_rest: bool) -> None:
         if is_rest:
-            if self.state.nodes.has_motion_or_body:
+            if self.state.nodes.has_generated_motion:
                 return
             self.state.nodes.show_rest(
                 Meshes(verts, faces, color=self.state.skin_color, name="Avatar (rest)")

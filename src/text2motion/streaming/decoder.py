@@ -7,9 +7,9 @@ from collections.abc import Iterable, Iterator
 import numpy as np
 import torch
 
-from text2motion.generation.model import MotionTokenGenerator
+from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.motion.representation import DIM
-from text2motion.tokenization.model import MotionTokenizerNetwork
+from text2motion.tokenization.nn_model import MotionTokenizerNetwork
 
 _END = None
 

@@ -146,7 +146,62 @@ class MotionInferenceClient:
             self.sock.close()
 
 
-def connect_or_start_motion_server(
+def __start_motion_server(
+    config: str,
+    ckpt: str,
+    tokenizer_ckpt: str,
+    backbone: str,
+    host: str,
+    port: int,
+    log_path: str | Path,
+    service_config: str | Path,
+) -> None:
+    cmd = [
+        sys.executable,
+        "-u",
+        "-m",
+        "text2motion.app.cli",
+        "serve",
+        "--config",
+        config,
+        "--ckpt",
+        ckpt,
+        "--tokenizer_ckpt",
+        tokenizer_ckpt,
+        "--backbone",
+        backbone,
+        "--host",
+        host,
+        "--port",
+        str(port),
+        "--service_config",
+        str(service_config),
+    ]
+    Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+    log = open(log_path, "ab")
+    flags = getattr(subprocess, "DETACHED_PROCESS", 0)
+    env = dict(os.environ)
+    env["PYTHONPATH"] = env.get("PYTHONPATH") or "src"
+    env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    subprocess.Popen(cmd, stdout=log, stderr=log, creationflags=flags, env=env)
+    logger.info(f"[service] spawned; loading the model (log: {log_path})...")
+
+
+def __await_motion_server(
+    host: str, port: int, wait_seconds: int, log_path: str | Path
+) -> MotionInferenceClient:
+    deadline = time.time() + wait_seconds
+    while time.time() < deadline:
+        try:
+            return MotionInferenceClient(host, port)
+        except OSError:
+            time.sleep(2)
+    raise RuntimeError(
+        f"motion service not up on {host}:{port} after {wait_seconds}s; see {log_path}"
+    )
+
+
+def motion_service_client(
     config: str,
     ckpt: str,
     tokenizer_ckpt: str,
@@ -158,51 +213,14 @@ def connect_or_start_motion_server(
     *,
     service_config: str | Path,
 ) -> MotionInferenceClient:
-    client = None
     try:
         client = MotionInferenceClient(host, port)
         logger.info(f"[service] reusing warm service ({client.hello.get('ckpt')})")
     except OSError:
-        cmd = [
-            sys.executable,
-            "-u",
-            "-m",
-            "text2motion.app.cli",
-            "serve",
-            "--config",
-            config,
-            "--ckpt",
-            ckpt,
-            "--tokenizer_ckpt",
-            tokenizer_ckpt,
-            "--backbone",
-            backbone,
-            "--host",
-            host,
-            "--port",
-            str(port),
-            "--service_config",
-            str(service_config),
-        ]
-        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-        log = open(log_path, "ab")
-        flags = getattr(subprocess, "DETACHED_PROCESS", 0)
-        env = dict(os.environ)
-        env["PYTHONPATH"] = env.get("PYTHONPATH") or "src"
-        env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-        subprocess.Popen(cmd, stdout=log, stderr=log, creationflags=flags, env=env)
-        logger.info(f"[service] spawned; loading the model (log: {log_path})...")
-        deadline = time.time() + spawn_wait_seconds
-        while time.time() < deadline:
-            try:
-                client = MotionInferenceClient(host, port)
-                break
-            except OSError:
-                time.sleep(2)
-        if client is None:
-            raise RuntimeError(
-                f"motion service not up on {host}:{port} after {spawn_wait_seconds}s; see {log_path}"
-            )
+        __start_motion_server(
+            config, ckpt, tokenizer_ckpt, backbone, host, port, log_path, service_config
+        )
+        client = __await_motion_server(host, port, spawn_wait_seconds, log_path)
     if Path(str(client.hello.get("ckpt", ""))).resolve() != Path(ckpt).resolve():
         logger.info(f"[service] switching warm service to {ckpt}")
         client.load(config, ckpt, tokenizer_ckpt, backbone)
