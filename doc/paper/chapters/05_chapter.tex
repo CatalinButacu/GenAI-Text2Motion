@@ -1,0 +1,306 @@
+\chapter{Contribution II: Token-Autoregressive State-Space Generator}
+\label{chap:generator}
+
+\section{Hypothesis: Bounded State Without Quality Loss}
+\label{sec:gen_hypothesis}
+
+A state-space layer summarises the whole past in a state of fixed size, whereas causal attention can look up any past position exactly. One would expect the fixed state to cost quality. This chapter tests that expectation.
+
+\begin{hyp}
+\label{hyp:parity}
+With tokenizer, data, seed, parameter count, training budget and sampling settings held equal, a token-autoregressive generator whose sequence mixer is a selective state-space layer reaches generation quality on HumanML3D-263 at least equal to that of the same generator with causal self-attention.
+\end{hyp}
+
+The memory side of the comparison, that the state-space generator carries $O(1)$ state where the transformer carries $O(L)$, follows from the recurrences and is measured in \chapref{chap:streaming}.
+
+\section{Method: The Token-Autoregressive S6 Generator}
+\label{sec:gen_method}
+
+\paragraph{Factorisation.} The frozen tokenizer of \chapref{chap:tokenizer} turns a motion into $S$ latent steps, each with $Q = 8$ codes of vocabulary $V = 1024$. Write $z_{t,q}$ for code $q$ of step $t$ and $c$ for the caption. The generator models
+\begin{equation}
+p_\theta(z \mid c) = \prod_{t=1}^{S} \prod_{q=1}^{Q} p_\theta\bigl(z_{t,q} \mid z_{<t},\, c\bigr),
+\label{eq:factorisation}
+\end{equation}
+so the $Q$ codes of one step are predicted in parallel from the same hidden state, and steps are predicted in order. An additional END symbol at the step after the last one lets the model decide the length of the motion.
+
+\paragraph{Inputs.} The caption is encoded by the CLIP ViT-B/32 text encoder~\cite{radford2021clip}. Its pooled, projected 512-dimensional vector is mapped linearly to the model width and placed at the start of the sequence as a prefix token. This is the conditioning used by T2M-GPT and MoMask, and it needs no cross-attention, so both backbones can share it. Each motion step is embedded as the sum of $Q$ learned embeddings, one per codebook.
+
+\paragraph{Backbone.} The sequence passes through $N$ pre-norm residual blocks,
+\begin{equation}
+h \leftarrow h + \operatorname{Mixer}\bigl(\operatorname{RMSNorm}(h)\bigr),
+\end{equation}
+where the mixer is causal. Its two variants are described below. $Q$ linear heads map the final hidden state of each position to logits over the next step's codes.
+
+\paragraph{The S6 mixer.} The input of width $d$ is projected to width $d_{\mathrm{in}} = 2d$, passed through a depthwise causal convolution of kernel 4 and a SiLU nonlinearity, and then through the selective recurrence. For each of the $d_{\mathrm{in}}$ channels there is a state of dimension $n = 16$:
+\begin{equation}
+s_t = e^{\Delta_t A} \odot s_{t-1} + \Delta_t\, B_t\, u_t, \qquad y_t = C_t^{\top} s_t + D\, u_t ,
+\label{eq:s6}
+\end{equation}
+with
+\begin{equation}
+A = -\exp(a_{\log}) < 0, \qquad \Delta_t = \operatorname{softplus}\bigl(W_\Delta\, u_t + b_\Delta\bigr) > 0,
+\label{eq:s6_param}
+\end{equation}
+and $B_t$, $C_t$ linear functions of $u_t$. The output is gated by a SiLU branch and projected back to width $d$. We implement the layer ourselves rather than depending on a compiled kernel, because the kernel is not available on the training machine.
+
+Every factor $e^{\Delta_t A}$ in \eqref{eq:s6} lies in $(0, 1)$ by \eqref{eq:s6_param}. The recurrence is therefore contractive by construction: gradients through time cannot grow, and the rate at which they decay is exactly what the input controls. A small $\Delta_t$ keeps the state; a large $\Delta_t$ overwrites it.
+
+For training, \eqref{eq:s6} is evaluated for all positions at once with a parallel prefix scan. For inference, one step of \eqref{eq:s6} is applied to the stored state. A test asserts that the two give the same outputs, so the model that is evaluated is the model that streams.
+
+\paragraph{Guidance and sampling.} During training the caption is replaced by a null condition with probability $0.1$, so one network learns both $p_\theta(z \mid c)$ and $p_\theta(z)$. At inference the logits are combined by classifier-free guidance~\cite{ho2022cfg},
+\begin{equation}
+\ell = \ell_{\varnothing} + s\,(\ell_{c} - \ell_{\varnothing}),
+\label{eq:cfg}
+\end{equation}
+with scale $s$, and tokens are drawn by nucleus sampling~\cite{holtzman2020nucleus} at temperature $\tau$. We do not use beam search. Text-to-motion is one-to-many, and a search for the most likely sequence reduces diversity; a beam of width $b$ would also multiply the recurrent state by $b$.
+
+\paragraph{Objective.} The main term is the cross-entropy of \eqref{eq:factorisation} under teacher forcing. Token cross-entropy treats all wrong codes as equally wrong, although some decode to nearly the same motion. We therefore add reconstruction terms in feature space. The predicted distribution of each code is turned into an expected code vector, the expected vectors are composed as in \eqref{eq:residual} and passed through the frozen tokenizer decoder, and the decoded features $\hat{x}$ are compared with the ground truth $x$ by an $L_1$ loss on each block of \tabref{tab:layout263}:
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{\mathrm{CE}} + \sum_{k} w_k \,\bigl\lVert \hat{x}^{(k)} - x^{(k)} \bigr\rVert_1 , \qquad k \in \{\text{root}, \text{positions}, \text{rotations}, \text{velocities}, \text{contacts}\},
+\label{eq:loss}
+\end{equation}
+with weights $(0.3, 0.5, 0.5, 0.3, 0.1)$.
+
+\paragraph{Optimisation.} We use AdamW~\cite{loshchilov2019adamw} with learning rate $2 \cdot 10^{-4}$, linear warm-up over 1000 steps and cosine decay to $1\%$ of the peak over the whole run. Weight decay is $0.01$ on weight matrices; biases, normalisation gains and the state-space parameters $a_{\log}$ and $D$ are exempt, since decaying $a_{\log}$ would shorten the memory of the recurrence. Gradients are clipped to norm $1.0$. The inputs under teacher forcing are corrupted, each token being kept with probability $0.8$, while the targets stay clean; dropout is $0.1$. An exponential moving average of the weights with decay $0.999$ is what is evaluated. The last layer, final normalisation and projection of the CLIP text encoder are fine-tuned at learning rate $10^{-5}$; the rest of it is frozen.
+
+\section{Controlled Protocol: The Parameter-Matched Transformer Twin}
+\label{sec:gen_twin}
+
+The baseline is the same generator with the S6 mixer replaced by causal multi-head self-attention followed by a feed-forward layer~\cite{vaswani2017attention}, with learned absolute position embeddings. This is the decoder-only design of T2M-GPT~\cite{zhang2023t2mgpt}. We keep it standard on purpose: a specially tuned baseline would make the comparison hard to interpret.
+
+An S6 block has no separate feed-forward layer, because its expansion projections play that role, so it has roughly half the parameters of a transformer block. The layer counts are set so that the totals match.
+
+\begin{table}[H]
+\centering
+\caption{The two generators. Everything not listed in the upper part is identical.}
+\label{tab:twin_config}
+\begin{tabular}{lrr}
+\toprule
+ & Transformer & State-space (Mamba) \\
+\midrule
+Sequence mixer & causal self-attention & selective scan (S6) \\
+Layers & 8 & 15 \\
+Attention heads & 8 & -- \\
+Parameters & 33.91M & 34.10M \\
+\midrule
+Width & \multicolumn{2}{c}{512} \\
+Tokenizer & \multicolumn{2}{c}{Grouped-FSQ $8 \times 1024$, frozen} \\
+Text conditioning & \multicolumn{2}{c}{CLIP ViT-B/32 prefix token} \\
+Data, split, seed & \multicolumn{2}{c}{HumanML3D train, seed 2026} \\
+Objective and optimiser & \multicolumn{2}{c}{\eqref{eq:loss}, AdamW as in \secref{sec:gen_method}} \\
+Batch size & \multicolumn{2}{c}{8} \\
+Checkpoint selection & \multicolumn{2}{c}{lowest validation FID} \\
+Sampling at evaluation & \multicolumn{2}{c}{$s = 6$, $\tau = 1.0$, nucleus $0.9$, ground-truth length} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+One implementation difference is forced by the 4~GB GPU. The parallel scan of the state-space model keeps several full-sequence tensors alive, so its blocks are trained with gradient checkpointing, which recomputes each block's forward pass during the backward pass. This changes the training time (\secref{sec:stream_cost}), not the gradients.
+
+Any rule adopted during the project was applied to both generators: every extension of training and every change of the objective reported below was run for both, from matched starting points.
+
+\section{Training: Motion-Prior Pretraining and Text-Conditioned Fine-Tuning}
+\label{sec:gen_training}
+
+Training has two stages.
+
+\paragraph{Stage 1: unconditional prior.} The generator is first trained on AMASS tokens with the null condition only, which is the unconditional branch of \eqref{eq:cfg}. This teaches $p_\theta(z)$, the distribution of plausible motion, on data that has no captions. The corpus for this stage is $3.25$M tokens. Both generators are pretrained for 20 epochs on the same data.
+
+\paragraph{Stage 2: captioned fine-tune.} The pretrained generator is then trained on HumanML3D with captions, with the objective \eqref{eq:loss}, for 60 epochs. Validation metrics are computed at fixed intervals on 600 clips and the best checkpoint by validation FID is kept. This selected epoch 48 for the transformer and epoch 30 for the state-space model.
+
+The 60-epoch budget was chosen after an earlier 18-epoch run of the same pair turned out to be undertrained; \secref{sec:gen_robustness} reports what happens beyond 60.
+
+\section{Results: The Converged Twin Comparison}
+\label{sec:gen_results}
+
+\tabref{tab:twin_results} gives the test results of the two selected checkpoints.
+
+\begin{table}[H]
+\centering
+\caption{Generation quality on the HumanML3D-263 test split ($2189$ clips, 20 repetitions, one sampling setting for both). Bold marks the better of the two generators. Cited rows are from the respective papers and are given for context only.}
+\label{tab:twin_results}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lrrrrrrrl}
+\toprule
+Model & FID $\downarrow$ & R@1 $\uparrow$ & R@2 $\uparrow$ & R@3 $\uparrow$ & MM-Dist $\downarrow$ & Diversity $\rightarrow$ & MModality $\uparrow$ & State \\
+\midrule
+Real motion & -- & 0.511 & -- & -- & -- & 9.5 & -- & -- \\
+Tokenizer reconstruction & 0.017 & -- & -- & -- & -- & -- & -- & -- \\
+\midrule
+Transformer, 34M & 0.132 & 0.395 & 0.570 & 0.669 & 3.796 & 9.362 & 1.758 & $O(L)$ \\
+State-space, 34M & \textbf{0.121} & \textbf{0.418} & \textbf{0.594} & \textbf{0.693} & \textbf{3.677} & \textbf{9.437} & \textbf{1.822} & $O(1)$ \\
+\midrule
+T2M-GPT~\cite{zhang2023t2mgpt} & 0.116 & -- & -- & -- & -- & -- & -- & $O(L)$ \\
+MoMask~\cite{guo2024momask} (not streaming) & 0.045 & 0.521 & -- & -- & -- & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+In point estimates the state-space generator is ahead on every column. Its FID is lower by $8\%$ ($0.121$ against $0.132$). It is ahead at all three R-precision ranks (R@1 $0.418$ against $0.395$, R@3 $0.693$ against $0.669$) and on multimodal distance ($3.677$ against $3.796$). Its diversity ($9.437$) is closer to that of real motion ($9.5$) than the transformer's ($9.362$), and its multimodality is higher.
+
+\paragraph{How large are these differences relative to evaluation noise?} The evaluation reports two measures of its own uncertainty. For R@1, the standard deviation across the 20 repetitions is $0.007$ for the transformer and $0.008$ for the state-space model, so the difference of $0.022$ is about three standard deviations of a single repetition. For FID, a bootstrap over test clips with 200 resamples gives a $95\%$ interval of $[0.127, 0.230]$ for the transformer and $[0.114, 0.212]$ for the state-space model. These intervals overlap almost entirely. The lead in text--motion matching is therefore resolved by the evaluation, and the lead in FID is not: on FID the two generators are indistinguishable at this test-set size.
+
+\paragraph{Paired analysis.} The two generators produce one motion for each of the same $2189$ captions, so each caption gives a pair. A paired test uses these pairs and is more sensitive than two separate intervals. \tabref{tab:twin_paired} gives four such tests, computed from one additional generation pass of the two selected checkpoints.
+
+\begin{table}[H]
+\centering
+\caption{Paired comparison of the two generators on the same $2189$ test captions. Distance is between a motion and its first caption in the evaluator space.}
+\label{tab:twin_paired}
+\begin{tabular}{p{0.30\textwidth}rrp{0.32\textwidth}}
+\toprule
+Measure & Transformer & State-space & Paired test \\
+\midrule
+FID difference & \multicolumn{2}{r}{$+0.013$ (transformer minus state-space)} & bootstrap $95\%$ interval $[-0.032, +0.059]$; state-space lower in $70\%$ of 1000 resamples \\
+\addlinespace
+Distance to caption $\downarrow$ & 3.113 & 2.938 & state-space nearer on 1165 captions, transformer on 1024; Wilcoxon $p = 3.5 \cdot 10^{-5}$ \\
+\addlinespace
+Own caption at rank 1 $\uparrow$ & 0.497 & 0.520 & only one model correct: 346 against 296; McNemar $p = 0.053$ \\
+\addlinespace
+Foot sliding (m/s) $\downarrow$ & 0.261 & 0.253 & Wilcoxon $p = 0.12$; real motion $0.171$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The paired tests give the same picture with sharper edges. The state-space generator is nearer to the caption, and this difference is significant. The rank-1 difference is at the border of significance. The FID difference is not significant. Foot sliding, acceleration and jerk do not differ between the two generators; both slide about $50\%$ more than real motion on the full test set, which confirms the 64-clip measurement of \secref{sec:gen_dynamics}. The rank-1 rates of this table are higher than those of \tabref{tab:twin_results} because this analysis uses the first caption of each clip and one fixed grouping, while the protocol draws captions and groupings at random over 20 repetitions.
+
+\hypref{hyp:parity} asks for quality at least equal to the transformer's, and it is supported: the fixed-size state did not cost quality in this comparison, and it improved text--motion matching.
+
+Three qualifications apply. First, this is one seed. Second, both models have 34M parameters. Third, the comparison with the cited rows is not controlled. Our FID is close to that of T2M-GPT, a considerably larger model, but the two come from different training runs and we make no claim relative to it. MoMask remains far ahead in absolute quality and is bidirectional.
+
+\section{Results: Epoch-Budget Robustness}
+\label{sec:gen_robustness}
+
+An earlier version of \tabref{tab:twin_results}, at 18 epochs, had the transformer ahead on FID ($3.30$ against $4.06$). The order reversed at 60 epochs. This raises the question whether it would reverse again with more training. Both generators were resumed from their 60-epoch state and trained to 100 epochs with the same recipe, continuing the same best-by-validation selection.
+
+\begin{table}[H]
+\centering
+\caption{Test FID of the validation-selected checkpoint at two budgets.}
+\label{tab:twin_100}
+\begin{tabular}{lrrr}
+\toprule
+Model & 60-epoch budget & 100-epoch budget & Selected epoch (100-epoch run) \\
+\midrule
+Transformer, 34M & 0.132 & 0.163 & 100 \\
+State-space, 34M & 0.121 & 0.121 & 30 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{State-space model.} No epoch after 30 improved the validation FID ($0.183$ at epoch 30; between about $0.24$ and $0.34$ afterwards, without trend). The selected checkpoint, and so the test result, is unchanged.
+
+\paragraph{Transformer.} The validation FID improved twice more, to $0.242$ at epoch 72 and $0.230$ at epoch 100, so the selection rule moved to the epoch-100 checkpoint. On test, that checkpoint scores $0.163$, worse than the $0.132$ of the epoch-48 checkpoint. By the protocol of \secref{sec:protocol_selection}, $0.163$ is the result for the 100-epoch budget. Reporting the earlier checkpoint because it tests better would be selection on the test set.
+
+In both models the training loss kept falling smoothly over all 100 epochs while validation and test quality did not improve. More epochs on this corpus buy memorisation, which \secref{sec:disc_data} explains by counting the data. The gap between the two models widens from $8\%$ at 60 epochs to $26\%$ at 100 epochs, and the bootstrap interval of the transformer's epoch-100 checkpoint, $[0.152, 0.275]$, still overlaps that of the state-space model. The ordering of \tabref{tab:twin_results} is therefore not an artefact of where training was stopped, although its size on FID remains within the evaluation's uncertainty.
+
+\section{Ablation: Effect of Motion-Prior Pretraining}
+\label{sec:gen_prior}
+
+\paragraph{Does the prior help?} \tabref{tab:prior_ablation} compares a generator fine-tuned from the AMASS prior with one trained on HumanML3D only. This ablation was run early in the project on a pilot configuration and a smaller validation sample, so its absolute numbers are not comparable with \tabref{tab:twin_results}. The relative effect is a three-fold reduction in FID, with fewer fine-tuning epochs, and a diversity closer to that of real motion.
+
+\begin{table}[H]
+\centering
+\caption{Effect of the unconditional AMASS prior (pilot configuration, 300 validation clips, guidance scale 3).}
+\label{tab:prior_ablation}
+\begin{tabular}{lrr}
+\toprule
+Model & FID $\downarrow$ & Diversity $\rightarrow$ \\
+\midrule
+No prior, 113 epochs & 6.58 & 7.71 \\
+AMASS prior, then 40 epochs & \textbf{2.12} & \textbf{8.38} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{What the pretraining loss does not measure.} The training cross-entropy of a prior does not show how well it models unseen motion. The pretraining corpus is small, and the windowing used to build it left a natural hold-out: only sequences of at least 196 frames entered pretraining, so $10{,}030$ shorter AMASS clips ($14.4$ hours) were never seen. \tabref{tab:prior_holdout} scores three priors on 200 unseen clips and on 200 training clips truncated to the same lengths.
+
+\begin{table}[H]
+\centering
+\caption{Cross-entropy of three unconditional priors on trained and never-seen AMASS clips of equal length.}
+\label{tab:prior_holdout}
+\begin{tabular}{lrrrr}
+\toprule
+Prior & Parameters & Trained clips & Unseen clips & Gap \\
+\midrule
+Transformer, 34M & 33.91M & 4.75 & 5.87 & $+1.12$ \\
+State-space, 34M & 34.10M & 2.10 & 6.93 & $+4.83$ \\
+Transformer, 100M & 98.07M & 1.38 & 7.19 & $+5.81$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The order on unseen clips is the reverse of the order on training clips. Lowering the training cross-entropy from $4.75$ to $1.38$ made the cross-entropy on unseen motion worse, from $5.87$ to $7.19$. Since
+\begin{equation}
+\mathrm{CE}(\theta) = H(p_{\mathrm{data}}) + D_{\mathrm{KL}}\bigl(p_{\mathrm{data}} \,\Vert\, p_\theta\bigr)
+\label{eq:ce_decomposition}
+\end{equation}
+is bounded below by the entropy of the data~\cite{cover2006elements}, a training cross-entropy that keeps falling on a small corpus is fitting the sample, not the distribution. The unseen clips are shorter than the training windows and so are not an identically distributed hold-out, but that shift is the same for all three priors and cannot explain why their gaps differ.
+
+Two conclusions follow. The value of the prior is established downstream, by \tabref{tab:prior_ablation}, and not by its loss. And a prior should be stopped at the knee of its loss curve; training it further is memorisation.
+
+\paragraph{An asymmetry between the two priors.} The two priors of the twin were trained for the same number of epochs on the same data, but with different batch sizes because of the memory limit: 64 for the transformer and 8 for the state-space model. The state-space prior therefore received about eight times more optimiser steps. \tabref{tab:prior_holdout} shows the effect: it fits the training clips much more closely ($2.10$ against $4.75$) and models unseen motion \emph{worse} ($6.93$ against $5.87$). The asymmetry thus gives the state-space generator the weaker starting point of the two, not the stronger. We keep it on record in \secref{sec:gen_threats} because a batch-matched prior would remove the question.
+
+\section{Ablation: Dynamics-Aware Loss Terms}
+\label{sec:gen_dynamics}
+
+\paragraph{Motivation.} We measured the physical plausibility of generated motion on 64 test clips, comparing ground truth and generated joints with the same captions and lengths. Generated motion is as smooth as ground truth in acceleration and jerk and contains no discontinuities of the root. Its one measured defect is foot sliding: the horizontal speed of the feet while they are in contact with the ground is about $50\%$ above that of real motion ($0.276$ against $0.184$~m/s for the state-space model).
+
+\paragraph{Terms.} Let $\hat{p}_t$ and $p_t$ be the joint positions recovered from the soft-decoded features and from the ground truth, let $\mathcal{F}$ be the foot joints and let $g_{t,j} \in \{0,1\}$ be the ground-truth contact label. We add
+\begin{align}
+\mathcal{L}_{\mathrm{skate}} &= \frac{1}{\sum_{t,j} g_{t,j}} \sum_{t} \sum_{j \in \mathcal{F}} g_{t,j}\, \bigl\lVert \bigl(\hat{p}_{t+1,j} - \hat{p}_{t,j}\bigr)_{\mathrm{horizontal}} \bigr\rVert_2 , \\
+\mathcal{L}_{\mathrm{accel}} &= \bigl\lVert \hat{a} - a \bigr\rVert_1 , \qquad a_t = p_{t+1} - 2p_t + p_{t-1} .
+\end{align}
+The first penalises foot motion during contact. The second matches accelerations to those of the ground truth; it does not push acceleration towards zero, so it does not over-smooth. The weights, $10$ and $18$, were chosen from the measured magnitudes of the two terms so that each contributes about as much as one of the existing terms of \eqref{eq:loss}.
+
+\paragraph{Protocol.} Both generators were resumed from their 60-epoch state and fine-tuned to epoch 72 with the two terms added, with a fresh best-by-validation selection inside the fine-tune. Both selected epoch 72.
+
+\begin{table}[H]
+\centering
+\caption{Test results before and after the dynamics fine-tune ($2189$ clips).}
+\label{tab:dyn_test}
+\begin{tabular}{lrrrrr}
+\toprule
+Model & FID $\downarrow$ & R@1 $\uparrow$ & R@3 $\uparrow$ & MM-Dist $\downarrow$ & Diversity \\
+\midrule
+Transformer, epoch 60 & 0.132 & 0.395 & 0.669 & 3.796 & 9.362 \\
+Transformer, dynamics, epoch 72 & 0.158 & 0.407 & 0.681 & 3.746 & 9.359 \\
+State-space, epoch 60 & 0.121 & 0.418 & 0.693 & 3.677 & 9.437 \\
+State-space, dynamics, epoch 72 & 0.127 & 0.419 & 0.696 & 3.661 & 9.401 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Plausibility measures on 64 test clips with fixed captions, lengths and seed. Acceleration in cm per frame$^2$, jerk in cm per frame$^3$, foot sliding in m/s. ``Over limit'' is the share of frames above the probe's acceleration limit.}
+\label{tab:dyn_natural}
+\begin{tabular}{lrrrr}
+\toprule
+Motion & Acceleration & Jerk & Over limit & Foot sliding \\
+\midrule
+Ground truth & 0.674 & 0.559 & 3.3\% & 0.184 \\
+\midrule
+Transformer, epoch 60 & 0.717 & 0.572 & 2.68\% & 0.287 \\
+Transformer, dynamics, epoch 72 & 0.688 & 0.553 & 3.05\% & 0.277 \\
+State-space, epoch 60 & 0.666 & 0.535 & 2.66\% & 0.276 \\
+State-space, dynamics, epoch 72 & 0.659 & 0.538 & 2.14\% & 0.262 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Reading.} The terms move both generators in the intended direction. Foot sliding falls by $3.5\%$ for the transformer and $5\%$ for the state-space model, and the transformer's acceleration and jerk move towards the ground-truth values. Text alignment improves slightly for both. FID is nearly unchanged for the state-space model and worse for the transformer, although no worse than the $0.163$ that plain additional training gave it in \tabref{tab:twin_100}. The effect is modest: foot sliding is still $42\%$ (state-space) and $51\%$ (transformer) above ground truth.
+
+\paragraph{A longer fine-tune does not help.} Continuing the same fine-tune to epoch 84 did not produce a better checkpoint for either generator. The validation FID at epoch 84 was $0.275$ for the transformer and $0.262$ for the state-space model, against $0.248$ and $0.240$ at epoch 72, while the training losses continued to fall. Epoch 72 therefore remains the selected checkpoint of this ablation.
+
+The epoch-60 rows of \tabref{tab:twin_results} remain the headline result of the thesis. The ordering of the two generators is the same in every row of this section.
+
+\section{Threats to Validity}
+\label{sec:gen_threats}
+
+\begin{itemize}
+\item \textbf{Single seed.} The comparison of \tabref{tab:twin_results} is one training run per model. The evaluation itself is averaged over 20 repetitions, which controls sampling noise but not the variation between training runs. The consistency of the ordering across the 60-epoch, 100-epoch and dynamics checkpoints is evidence that it is stable, but those checkpoints share one seed and one initialisation and are not independent.
+\item \textbf{Prior batch size.} The two unconditional priors were trained at different batch sizes (\secref{sec:gen_prior}). The hold-out measurement indicates that this does not favour the state-space model, but only a batch-matched prior would settle it.
+\item \textbf{Scale.} The result is established at 34M parameters. \secref{sec:disc_data} argues that this data set does not support much larger models, but we have not measured a matched pair at another scale.
+\item \textbf{Validation sample.} Selection uses 600 validation clips. \secref{sec:gen_robustness} shows a case where a better validation score did not carry over to test. The reported numbers are always from the full test split.
+\item \textbf{Baseline design.} The transformer uses learned absolute positions and no architectural refinements. A more elaborate transformer might do better; we chose the standard form so that the baseline is recognisable.
+\end{itemize}
