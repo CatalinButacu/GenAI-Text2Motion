@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 import numpy as np
 import torch
 
+from text2motion.app.bootstrap import required_path
 from text2motion.app.config import load_config
 from text2motion.generation.contracts import Backbone
 from text2motion.generation.nn_model import GeneratorModelSpec
@@ -36,7 +36,7 @@ def run(a: argparse.Namespace) -> None:
     )
     generator = architecture.create_model(dev)
     text_encoder = CLIPTextEncoder(cfg.text_encoder).to(dev)
-    out = Path(cfg.paths.hml3d_out_dir)
+    out = required_path(cfg.paths.hml3d_out_dir, "hml3d_out_dir")
     mean = np.load(out / "Mean.npy").astype(np.float32)
     std = np.load(out / "Std.npy").astype(np.float32)
     trainer = GeneratorTrainer(

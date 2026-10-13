@@ -51,6 +51,7 @@ def run(args: argparse.Namespace) -> None:
         ).long()
 
         first = trainer.train_step(motion, text, lengths)
+        last = first
         for step in range(args.steps):
             last = trainer.train_step(motion, text, lengths)
             if step % args.report_every == 0:

@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from text2motion.app.bootstrap import seed_everything
+from text2motion.app.bootstrap import required_path, seed_everything
 from text2motion.app.config import load_config
 from text2motion.app.run_log import log_metrics, start_run
 from text2motion.generation.nn_model import MotionTokenGenerator, token_ce_loss
@@ -106,7 +106,7 @@ def run(args: argparse.Namespace) -> None:
     trained_idx = rng.choice(len(trained), args.num_clips, replace=False)
     trained_sample = [(trained[i][0], lengths[k]) for k, i in enumerate(trained_idx)]
 
-    out_dir = Path(cfg.paths.hml3d_out_dir)
+    out_dir = required_path(cfg.paths.hml3d_out_dir, "hml3d_out_dir")
     mean = np.load(out_dir / "Mean.npy").astype(np.float32)
     std = np.load(out_dir / "Std.npy").astype(np.float32)
 

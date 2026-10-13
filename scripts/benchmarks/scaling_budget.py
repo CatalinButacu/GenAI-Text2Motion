@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
+from text2motion.app.bootstrap import required_path
 from text2motion.app.config import load_config
 from text2motion.app.run_log import log_metrics, start_run
 
@@ -55,7 +56,7 @@ def effective_tokens(unique_tokens: int, epochs: int, repeat_half_life: float) -
 
 def run(args: argparse.Namespace) -> None:
     cfg = load_config(args.config)
-    out_dir = Path(cfg.paths.hml3d_out_dir)
+    out_dir = required_path(cfg.paths.hml3d_out_dir, "hml3d_out_dir")
     downsample = cfg.tokenizer.downsample
     num_quantizers = cfg.tokenizer.num_quantizers
     vocab_bits = math.log2(args.codebook_size)

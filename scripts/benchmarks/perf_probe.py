@@ -79,7 +79,7 @@ def determinism_check(args) -> None:
         print("BIT-EXACT across two fresh runs -- the determinism claim holds")
 
 
-def median_ms(fn: Callable[[], None], repeats: int) -> float:
+def median_ms(fn: Callable[[], object], repeats: int) -> float:
     fn()
     torch.cuda.synchronize()
     samples = []
@@ -230,11 +230,10 @@ def demo_probe(args) -> None:
         model_for(args.chunk_tokens * downsample)
 
     timer = StageTimer()
-    with timer.stage("clip_encode"):
-        with torch.no_grad():
-            text_emb = generator.text_encoder([args.prompt])
+    with timer.stage("clip_encode"), torch.no_grad():
+        text_emb = generator.text_encoder([args.prompt])
 
-    fit_queue: queue.Queue | None = None
+    fit_queue: queue.Queue = queue.Queue()
     fit_state: dict = {"frames": 0, "err": []}
 
     def run_fit(joints, warm):
@@ -269,7 +268,6 @@ def demo_probe(args) -> None:
 
     worker = None
     if args.fit == "threaded":
-        fit_queue = queue.Queue()
         worker = threading.Thread(target=fit_consumer, daemon=True)
         worker.start()
 

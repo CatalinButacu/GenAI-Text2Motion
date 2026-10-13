@@ -72,9 +72,9 @@ def package_edges() -> set[tuple[str, str]]:
             if not isinstance(node, ast.ImportFrom) or not node.module:
                 continue
             parts = node.module.split(".")
-            if len(parts) > 1 and parts[0] == "text2motion" and parts[1] in LAYERS:
-                if parts[1] != owner:
-                    edges.add((owner, parts[1]))
+            is_layer = len(parts) > 1 and parts[0] == "text2motion" and parts[1] in LAYERS
+            if is_layer and parts[1] != owner:
+                edges.add((owner, parts[1]))
     return edges
 
 

@@ -78,9 +78,9 @@ def class_ancestors(trees: dict[Path, ast.Module]) -> dict[str, set[str]]:
     return resolved
 
 
-def find_hazards(trees: dict[Path, ast.Module], usages: dict[str, NameUsage]) -> None:
+def mark_inheritance_hazards(trees: dict[Path, ast.Module], usages: dict[str, NameUsage]) -> None:
     ancestors = class_ancestors(trees)
-    for name, usage in usages.items():
+    for usage in usages.values():
         owners = sorted(usage.method_owners)
         for first in owners:
             for second in owners:
@@ -88,6 +88,34 @@ def find_hazards(trees: dict[Path, ast.Module], usages: dict[str, NameUsage]) ->
                     usage.reasons.add(f"overridden: {first} extends {second}")
         if usage.module_definitions and usage.method_owners:
             usage.reasons.add("both a module function and a method")
+
+
+def mark_node_hazards(
+    node: ast.AST, class_spans: list, usages: dict[str, NameUsage], path: Path
+) -> None:
+    if isinstance(node, ast.Name) and node.id in usages:
+        enclosing = [span for span in class_spans if span[0] <= node.lineno <= span[1]]
+        if enclosing:
+            usages[node.id].reasons.add(f"module name used inside class {enclosing[-1][2]}")
+    if isinstance(node, ast.Attribute) and node.attr in usages:
+        enclosing = [span for span in class_spans if span[0] <= node.lineno <= span[1]]
+        innermost = max(enclosing, key=lambda span: span[0]) if enclosing else None
+        receiver_is_own = isinstance(node.value, ast.Name) and node.value.id in (
+            "self",
+            "cls",
+        )
+        if innermost is None or node.attr not in innermost[3] or not receiver_is_own:
+            usages[node.attr].reasons.add(f"reached from outside its class in {path.name}")
+    if isinstance(node, ast.ImportFrom):
+        for alias in node.names:
+            if alias.name in usages and any(
+                span[0] <= node.lineno <= span[1] for span in class_spans
+            ):
+                usages[alias.name].reasons.add("imported inside a class")
+
+
+def find_hazards(trees: dict[Path, ast.Module], usages: dict[str, NameUsage]) -> None:
+    mark_inheritance_hazards(trees, usages)
     for path, tree in trees.items():
         source = path.read_text(encoding="utf-8")
         for name in usages:
@@ -104,25 +132,7 @@ def find_hazards(trees: dict[Path, ast.Module], usages: dict[str, NameUsage]) ->
             if isinstance(node, ast.ClassDef)
         ]
         for node in ast.walk(tree):
-            if isinstance(node, ast.Name) and node.id in usages:
-                enclosing = [span for span in class_spans if span[0] <= node.lineno <= span[1]]
-                if enclosing:
-                    usages[node.id].reasons.add(f"module name used inside class {enclosing[-1][2]}")
-            if isinstance(node, ast.Attribute) and node.attr in usages:
-                enclosing = [span for span in class_spans if span[0] <= node.lineno <= span[1]]
-                innermost = max(enclosing, key=lambda span: span[0]) if enclosing else None
-                receiver_is_own = isinstance(node.value, ast.Name) and node.value.id in (
-                    "self",
-                    "cls",
-                )
-                if innermost is None or node.attr not in innermost[3] or not receiver_is_own:
-                    usages[node.attr].reasons.add(f"reached from outside its class in {path.name}")
-            if isinstance(node, ast.ImportFrom):
-                for alias in node.names:
-                    if alias.name in usages and any(
-                        span[0] <= node.lineno <= span[1] for span in class_spans
-                    ):
-                        usages[alias.name].reasons.add("imported inside a class")
+            mark_node_hazards(node, class_spans, usages, path)
 
 
 def all_identifiers(trees: dict[Path, ast.Module]) -> set[str]:

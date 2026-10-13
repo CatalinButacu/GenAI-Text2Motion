@@ -34,7 +34,7 @@ def run(args: argparse.Namespace) -> None:
 
     base = ApplicationBootstrap.from_config(next(iter(_CHECKPOINT_CONFIGS.values())), device=device)
     evaluator = base.create_humanml3d_generation_evaluator()
-    checkpoint_dir = Path(base.paths.checkpoints_dir) / "tokenizer"
+    checkpoint_dir = Path(base.config.paths.checkpoints_dir) / "tokenizer"
 
     stems = [s for s in (args.only.split(",") if args.only else _CHECKPOINT_CONFIGS) if s]
     rows: list[tuple[str, float, float, float]] = []
@@ -76,7 +76,7 @@ def run(args: argparse.Namespace) -> None:
             f"{gap:+10.4f} {tv:8.4f}"
         )
 
-    md = Path(base.paths.outputs_dir) / "generalization.md"
+    md = Path(base.config.paths.outputs_dir) / "generalization.md"
     lines = [
         f"# Tokenizer generalization audit (recon-FID, {args.clips} clips/split, seed 2026)",
         "",

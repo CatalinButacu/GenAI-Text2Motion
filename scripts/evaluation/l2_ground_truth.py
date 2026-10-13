@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from text2motion.app.bootstrap import required_path
 from text2motion.app.config import load_config
 from text2motion.evaluation.contracts import DIVERSITY_PAIRS, GenerationEvaluationProtocol
 from text2motion.evaluation.metrics import (
@@ -27,7 +28,7 @@ _MIN_FRAMES = 20
 def main() -> None:
     config = load_config("configs/default.yaml")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    root = Path(config.paths.hml3d_out_dir)
+    root = required_path(config.paths.hml3d_out_dir, "hml3d_out_dir")
     text_dir = Path(config.paths.texts_dir or root / "texts")
     if config.paths.eval_matcher is None or config.paths.eval_stats_dir is None:
         raise ValueError("paths.eval_matcher and paths.eval_stats_dir are required")
