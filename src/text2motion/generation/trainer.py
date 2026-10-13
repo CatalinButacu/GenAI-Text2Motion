@@ -23,13 +23,13 @@ from text2motion.generation.losses import (
     UncertaintyWeighter,
     generator_loss,
 )
-from text2motion.generation.model import MotionTokenGenerator
-from text2motion.generation.text import CLIPTextEncoder
+from text2motion.generation.nn_model import MotionTokenGenerator
+from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.motion.contracts import Split
 from text2motion.motion.kinematics import Skeleton
 from text2motion.motion.representation import KINEMATIC_CHAINS, RAW_OFFSETS
 from text2motion.tokenization.ema import ExponentialMovingAverage
-from text2motion.tokenization.model import MotionTokenizerNetwork
+from text2motion.tokenization.nn_model import MotionTokenizerNetwork
 
 logger = logging.getLogger(__name__)
 

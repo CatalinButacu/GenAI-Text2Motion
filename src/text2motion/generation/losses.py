@@ -5,7 +5,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from text2motion.generation.contracts import LossWeights as LossWeights
-from text2motion.generation.model import token_ce_loss
+from text2motion.generation.nn_model import token_ce_loss
 from text2motion.motion.representation import (
     FOOT_CONTACT_JOINTS,
     JOINTS,
@@ -13,7 +13,7 @@ from text2motion.motion.representation import (
     recover_from_ric,
     recover_from_rot,
 )
-from text2motion.tokenization.model import MotionTokenizerNetwork
+from text2motion.tokenization.nn_model import MotionTokenizerNetwork
 
 
 def __codebook_tables(

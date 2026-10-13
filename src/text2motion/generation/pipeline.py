@@ -5,14 +5,14 @@ from collections.abc import Iterator, Sequence
 import torch
 
 from text2motion.generation.contracts import SamplingConfig, TextToMotionGenerationRequest
-from text2motion.generation.model import MotionTokenGenerator, seeded_sampling_uniforms
-from text2motion.generation.text import CLIPTextEncoder
+from text2motion.generation.nn_model import MotionTokenGenerator, seeded_sampling_uniforms
+from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.motion.model import (
     GeneratedMotion,
     MotionClip,
     MotionTokens,
 )
-from text2motion.tokenization.model import MotionTokenizer
+from text2motion.tokenization.nn_model import MotionTokenizer
 
 
 class TextToMotionGenerator:

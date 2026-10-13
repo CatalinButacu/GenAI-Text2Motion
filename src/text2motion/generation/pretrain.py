@@ -14,7 +14,7 @@ from text2motion.generation.contracts import (
     GeneratorTrainingConfig,
     MixedPrecisionMode,
 )
-from text2motion.generation.model import GeneratorModelSpec, token_ce_loss
+from text2motion.generation.nn_model import GeneratorModelSpec, token_ce_loss
 from text2motion.generation.trainer import adamw_groups, warmup_cosine_factor
 
 logger = logging.getLogger(__name__)

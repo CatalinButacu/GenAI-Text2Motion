@@ -6,9 +6,9 @@ from text2motion.generation.contracts import (
     TextEncoderConfig,
     TextToMotionGenerationRequest,
 )
-from text2motion.generation.model import GeneratorModelSpec, MotionTokenGenerator
+from text2motion.generation.nn_model import GeneratorModelSpec, MotionTokenGenerator
+from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.generation.pipeline import TextToMotionGenerator
-from text2motion.generation.text import CLIPTextEncoder
 
 __all__ = [
     "Backbone",
