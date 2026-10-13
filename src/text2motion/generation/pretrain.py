@@ -16,6 +16,7 @@ from text2motion.generation.contracts import (
 )
 from text2motion.generation.nn_model import GeneratorModelSpec, token_ce_loss
 from text2motion.generation.trainer import adamw_groups, warmup_cosine_factor
+from text2motion.motion.datasets import dataset_size
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +100,11 @@ class TokenPack(Dataset):
         return {**self.__dict__, "_z": None}
 
     def __getitem__(self, i: int) -> torch.Tensor:
-        if self._z is None:
-            self._z = np.load(self._path)
-        return torch.from_numpy(self._z[self.keys[i]].astype(np.int64))
+        archive = self._z
+        if archive is None:
+            archive = np.load(self._path)
+            self._z = archive
+        return torch.from_numpy(archive[self.keys[i]].astype(np.int64))
 
 
 def collate_tokens(batch: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
@@ -155,8 +158,8 @@ def pretrain_generator(
 ) -> None:
     loader, val_loader, budget = build_token_loaders(request, seed)
     logger.info(
-        f"pretrain split by clip: {len(loader.dataset)} train windows, "
-        f"{0 if val_loader is None else len(val_loader.dataset)} val windows"
+        f"pretrain split by clip: {dataset_size(loader)} train windows, "
+        f"{0 if val_loader is None else dataset_size(val_loader)} val windows"
     )
 
     groups = adamw_groups(generator, train.lr, train.decay_groups)
@@ -174,7 +177,7 @@ def pretrain_generator(
 
     amp_on = train.amp == MixedPrecisionMode.BF16 and device == "cuda"
     logger.info(
-        f"segments {len(loader.dataset)}  examples/epoch {budget.consumed_examples}  "
+        f"segments {dataset_size(loader)}  examples/epoch {budget.consumed_examples}  "
         f"microbatches/epoch {budget.microbatches}  "
         f"optimizer_steps/epoch {budget.optimizer_steps}  "
         f"effective_batch {budget.effective_batch}  device {device}  amp {train.amp}"

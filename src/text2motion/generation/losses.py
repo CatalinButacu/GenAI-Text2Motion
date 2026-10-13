@@ -19,15 +19,15 @@ from text2motion.tokenization.nn_model import MotionTokenizerNetwork
 def __codebook_tables(
     tokenizer: MotionTokenizerNetwork, device: torch.device
 ) -> list[torch.Tensor]:
-    cached = getattr(tokenizer, "_codebook_tables_cache", None)
+    cached = tokenizer.codebook_tables
     if cached is not None and cached[0].device == device:
         return cached
 
     tables = []
-    for unit in tokenizer.quantizer.quantizer_units:
+    for unit in tokenizer.latent_quantizer().quantizer_units:
         all_idx = torch.arange(unit.codebook_size, device=device)
         tables.append(unit.indices_to_codes(all_idx))
-    tokenizer._codebook_tables_cache = tables
+    tokenizer.codebook_tables = tables
     return tables
 
 
@@ -39,7 +39,7 @@ def soft_decode(logits: torch.Tensor, tokenizer: MotionTokenizerNetwork) -> torc
         real = logits[..., token_index, : codebook.size(0)]
         expected_codes.append(real.softmax(-1) @ codebook)
 
-    soft_codes = tokenizer.quantizer.compose_latent_codes(expected_codes)
+    soft_codes = tokenizer.latent_quantizer().compose_latent_codes(expected_codes)
     return tokenizer.decoder(tokenizer.post_q(soft_codes))
 
 
@@ -162,6 +162,8 @@ def generator_loss(
     terms = __geometric_terms(recon, gt_motion, lengths)
     weight_map = weights.as_dict()
     if weights.fk_enabled and skeleton is not None:
+        if mean is None or std is None:
+            raise ValueError("the FK losses need mean and std to recover joint positions")
         terms.update(__fk_consistency_terms(recon, gt_motion, lengths, mean, std, skeleton))
     if weights.dynamics_enabled:
         if mean is None or std is None:

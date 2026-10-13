@@ -4,6 +4,7 @@ import importlib
 import importlib.util
 import sys
 import types
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
@@ -159,7 +160,19 @@ class MambaBlock(nn.Module):
         return x + self.drop(self.mixer(self.norm(x)))
 
 
-class MambaBackbone(nn.Module):
+class SequenceBackbone(nn.Module, ABC):
+    @property
+    @abstractmethod
+    def max_positions(self) -> int | None: ...
+
+    @abstractmethod
+    def init_state(self, batch: int, device: torch.device) -> list: ...
+
+    @abstractmethod
+    def step(self, x_t: torch.Tensor, state: list) -> tuple[torch.Tensor, list]: ...
+
+
+class MambaBackbone(SequenceBackbone):
     def __init__(self, cfg: GeneratorConfig) -> None:
         super().__init__()
         self.blocks = nn.ModuleList([MambaBlock(cfg) for _ in range(cfg.n_layers)])
@@ -244,7 +257,7 @@ class TransformerBlock(nn.Module):
         return x_t, (k, v)
 
 
-class TransformerBackbone(nn.Module):
+class TransformerBackbone(SequenceBackbone):
     def __init__(self, cfg: GeneratorConfig) -> None:
         super().__init__()
         self.pos = nn.Embedding(cfg.max_seq_len + 1, cfg.d_model)
@@ -295,7 +308,7 @@ _BACKBONE_FACTORIES = {
 }
 
 
-def instantiate_backbone(cfg: GeneratorConfig) -> nn.Module:
+def instantiate_backbone(cfg: GeneratorConfig) -> SequenceBackbone:
     build = _BACKBONE_FACTORIES.get(Backbone(cfg.backbone))
     if build is None:
         raise ValueError(

@@ -16,6 +16,7 @@ from text2motion.generation.contracts import (
 from text2motion.generation.contracts import BackboneChoice as BackboneChoice
 from text2motion.generation.nn_backbones import (
     MambaBackbone,
+    TransformerBackbone,
     instantiate_backbone,
 )
 
@@ -143,6 +144,7 @@ class MotionTokenGenerator(nn.Module):
         guided = cfg_scale != 1.0
         if text_at is not None and not anchor_every:
             raise ValueError("text_at changes the text at a reset; set anchor_every above 0")
+        text_for = text_at or (lambda index: text_emb)
 
         def prefix_of(text: torch.Tensor) -> torch.Tensor:
             if guided:
@@ -156,14 +158,16 @@ class MotionTokenGenerator(nn.Module):
         )
 
         def start_from(context: list[torch.Tensor]):
-            if hasattr(self.backbone, "prefill"):
+            backbone = self.backbone
+            if isinstance(backbone, TransformerBackbone):
                 embedded = [self.embed_motion_tokens(feed) for feed in context]
                 sequence = torch.cat([prefix, *[e.unsqueeze(1) for e in embedded]], dim=1)
-                h, state = self.backbone.prefill(sequence)
+                h, state = backbone.prefill(sequence)
                 return self.predict_token_logits(h), self.decode_step_for(state, batch)
-            state = self.backbone.init_state(batch, device)
-            for position in range(prefix.size(1)):
-                h, state = self.backbone.step(prefix[:, position], state)
+            state = backbone.init_state(batch, device)
+            h, state = backbone.step(prefix[:, 0], state)
+            for position in range(1, prefix.size(1)):
+                h, state = backbone.step(prefix[:, position], state)
             step = self.decode_step_for(state, batch)
             logits = self.predict_token_logits(h)
             for feed in context:
@@ -197,8 +201,7 @@ class MotionTokenGenerator(nn.Module):
             if since_anchor < anchor_every:
                 logits = decode_step(feed)
                 continue
-            if text_at is not None:
-                prefix = prefix_of(text_at(index))
+            prefix = prefix_of(text_for(index))
             logits, decode_step = start_from(list(recent))
             since_anchor = 0
 
@@ -232,13 +235,13 @@ class CapturedDecodeStep:
         with torch.cuda.graph(self.graph):
             embedded = model.embed_motion_tokens(self.tokens)
             h, next_state = model.backbone.step(embedded, list(self.state))
-            for (ssm, conv), (next_ssm, next_conv) in zip(self.state, next_state):
+            for (ssm, conv), (next_ssm, next_conv) in zip(self.state, next_state, strict=True):
                 ssm.copy_(next_ssm)
                 conv.copy_(next_conv)
             self.logits = model.predict_token_logits(h)
 
     def load_state(self, state: list) -> None:
-        for (ssm, conv), (source_ssm, source_conv) in zip(self.state, state):
+        for (ssm, conv), (source_ssm, source_conv) in zip(self.state, state, strict=True):
             ssm.copy_(source_ssm)
             conv.copy_(source_conv)
 

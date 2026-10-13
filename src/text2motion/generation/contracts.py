@@ -45,6 +45,9 @@ class OverfitCriteria:
         )
 
 
+DEFAULT_OVERFIT_CRITERIA = OverfitCriteria()
+
+
 @dataclass(frozen=True)
 class GeneratorConfig:
     backbone: Backbone = Backbone.MAMBA

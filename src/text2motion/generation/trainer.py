@@ -13,6 +13,7 @@ import torch
 from torch import nn
 
 from text2motion.generation.contracts import (
+    DEFAULT_OVERFIT_CRITERIA,
     GeneratorTrainingConfig,
     GeneratorTrainingRequest,
     LossWeighting,
@@ -67,9 +68,8 @@ class ParameterPartition:
 def __undecayed_parameter_ids(module: nn.Module) -> set[int]:
     ids: set[int] = set()
     for submodule in module.modules():
-        if isinstance(submodule, (nn.Embedding, *_NORM_TYPES)):
-            ids.update(id(parameter) for parameter in submodule.parameters(recurse=False))
-        elif type(submodule).__name__ == "RMSNorm":
+        is_norm = isinstance(submodule, (nn.Embedding, *_NORM_TYPES))
+        if is_norm or type(submodule).__name__ == "RMSNorm":
             ids.update(id(parameter) for parameter in submodule.parameters(recurse=False))
     return ids
 
@@ -204,15 +204,16 @@ class GeneratorTrainer:
     ) -> tuple[torch.Tensor, torch.Tensor]:
         batch, t_tokens, _ = target_tokens.shape
         device = target_tokens.device
+        end_id = self.token_generator.end_id
+        if end_id is None:
+            raise ValueError("the generator has no end token; set use_end_token")
         if lengths is None:
             token_lengths = torch.full((batch,), t_tokens, device=device, dtype=torch.long)
         else:
             token_lengths = (lengths // self.downsample).clamp(min=1, max=t_tokens)
-        pad = torch.full_like(target_tokens[:, :1], self.token_generator.end_id)
+        pad = torch.full_like(target_tokens[:, :1], end_id)
         target_tokens = torch.cat([target_tokens, pad], dim=1)
-        target_tokens[torch.arange(batch, device=device), token_lengths] = (
-            self.token_generator.end_id
-        )
+        target_tokens[torch.arange(batch, device=device), token_lengths] = end_id
         return target_tokens, token_lengths + 1
 
     def train_step(
@@ -446,11 +447,13 @@ def overfit_single_batch(
     lengths: torch.Tensor,
     captions: list[str],
     steps: int,
-    criteria: OverfitCriteria = OverfitCriteria(),
+    criteria: OverfitCriteria = DEFAULT_OVERFIT_CRITERIA,
 ) -> dict[str, float]:
     generator = trainer.token_generator
     text_encoder = trainer.text_encoder
-    first_total = None
+    if text_encoder is None:
+        raise ValueError("the overfit gate needs the text encoder of the trainer")
+    first_total: float | None = None
     parts: dict[str, float] = {}
     step = 0
 
@@ -494,6 +497,8 @@ def overfit_single_batch(
     if any(parameter.grad is not None for parameter in trainer.tokenizer_network.parameters()):
         raise RuntimeError("frozen tokenizer received gradients during overfit gate")
 
+    if first_total is None:
+        raise RuntimeError("the overfit gate ran no step")
     return {
         "steps": step + 1,
         "first_total": float(first_total),
