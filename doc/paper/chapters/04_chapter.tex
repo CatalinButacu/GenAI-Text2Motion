@@ -1,0 +1,134 @@
+\chapter{Contribution I: Grouped-FSQ Motion Tokenizer}
+\label{chap:tokenizer}
+
+\section{Problem: Codebook Fragility in Vector Quantization}
+\label{sec:tok_problem}
+
+The quality of a token-based generator is bounded by its tokenizer: the generator cannot produce motion that the decoder cannot reconstruct. In vector quantization the bottleneck is a learned codebook, and \secref{sec:bg_tokenization} recalled that it works only with additional machinery. An exponential moving average replaces the gradient update of the codes, a commitment term keeps the encoder close to them, and codes that fall out of use are periodically reinitialised. Each of these adds hyperparameters, and the codebook itself adds parameters.
+
+The question of this chapter is whether a quantizer with no learned codebook can do better than a well-tuned residual vector quantizer on the standard motion representation, at the same bit-rate and with everything else held equal.
+
+\section{Method: Grouped Finite Scalar Quantization}
+\label{sec:tok_method}
+
+\paragraph{Encoder and decoder.} A 1D convolutional encoder maps $T$ frames of dimension 263 to $T/4$ latent vectors of width 512, using two stride-2 stages followed by three residual blocks at the latent rate. At 20 frames per second the latent rate is 5~Hz. The decoder mirrors the encoder with transposed convolutions.
+
+\paragraph{Finite scalar quantization.} FSQ~\cite{mentzer2023fsq} quantizes each channel of a low-dimensional projection independently. A channel with $L$ levels is bounded and rounded:
+\begin{equation}
+f(z) = \frac{L-1}{2}\tanh(z), \qquad \hat{z} = z + \operatorname{sg}\bigl(\operatorname{round}(f(z)) - z\bigr),
+\label{eq:fsq}
+\end{equation}
+where $\operatorname{sg}$ is the stop-gradient operator. In the forward pass $\hat{z} = \operatorname{round}(f(z))$; in the backward pass the gradient of $\hat{z}$ with respect to $z$ is the identity, which is the straight-through estimator. A group of channels with levels $(L_1, \dots, L_G)$ defines an implicit codebook of
+\begin{equation}
+V = \prod_{g=1}^{G} L_g
+\end{equation}
+entries, and a code index is the mixed-radix number formed by the $G$ rounded values. No entry of this codebook is a parameter.
+
+\paragraph{Grouped-residual structure.} One group does not carry enough information for a 263-dimensional frame at 5~Hz. We therefore apply $Q$ such quantizers in sequence. With $r_1$ the encoder output,
+\begin{equation}
+\hat{z}_i = \operatorname{FSQ}_i(r_i), \qquad r_{i+1} = r_i - \hat{z}_i, \qquad \hat{z} = \sum_{i=1}^{Q} \hat{z}_i ,
+\label{eq:residual}
+\end{equation}
+so each quantizer encodes what the previous ones missed. A latent step is thus described by $Q$ integer codes, and the bit-rate per step is
+\begin{equation}
+R = Q \sum_{g=1}^{G} \log_2 L_g = Q \log_2 V .
+\end{equation}
+The configuration used by the generator has $Q = 8$ and levels $(8, 8, 4, 4)$, so $V = 1024$ and $R = 80$ bits per latent step. During training, the number of active quantizers is randomly truncated with probability $0.2$, which makes the first codes carry the coarse structure.
+
+FSQ has been applied to motion before~\cite{lu2024scamo,wang2025stmsq}, and residual quantization is standard~\cite{guo2024momask}. What is evaluated here is their combination on HumanML3D-263 against a matched residual VQ.
+
+\section{Controlled Baseline: A Strong Residual VQ}
+\label{sec:tok_baseline}
+
+The baseline is a residual vector quantizer that shares the encoder and decoder of \secref{sec:tok_method}, so that the comparison isolates the quantizer. It uses the recipe that the literature has shown to be necessary~\cite{zhang2023t2mgpt,guo2024momask}: codebook updates by exponential moving average with decay $0.99$, commitment weight $0.02$, reinitialisation of dead codes, quantizer dropout $0.2$ and an auxiliary velocity loss of weight $0.1$.
+
+Both tokenizers are trained for 500 epochs with the same data, seed and budget. We vary the number of codes per step, $Q \in \{4, 6, 8\}$, and the vocabulary per code. Cells with equal $Q$ and equal vocabulary have equal bit-rate.
+
+\section{Results: Rate--Distortion Across Matched Bit-Rates}
+\label{sec:tok_rd}
+
+\tabref{tab:tok_matrix} gives the reconstruction FID on the HumanML3D test split for all fifteen cells.
+
+\begin{table}[H]
+\centering
+\caption{Reconstruction FID (lower is better) on the HumanML3D-263 test split. Columns with the same vocabulary are matched in bit-rate. Single seed per cell.}
+\label{tab:tok_matrix}
+\begin{tabular}{crrrrr}
+\toprule
+Codes per step & RVQ-512 & RVQ-1024 & FSQ-512 & FSQ-1024 & FSQ-1000 \\
+\midrule
+4 & 0.0626 & 0.0558 & 0.0612 & 0.0527 & 0.0514 \\
+6 & 0.0342 & 0.0310 & 0.0305 & 0.0283 & 0.0274 \\
+8 & 0.0277 & 0.0221 & 0.0196 & \textbf{0.0170} & 0.0199 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Let $D_{\mathrm{FSQ}}(R)$ and $D_{\mathrm{RVQ}}(R)$ be the reconstruction FID at bit-rate $R$. At vocabulary 512 the three matched pairs are $0.0612 < 0.0626$, $0.0305 < 0.0342$ and $0.0196 < 0.0277$. At vocabulary 1024 they are $0.0527 < 0.0558$, $0.0283 < 0.0310$ and $0.0170 < 0.0221$. Hence
+\begin{equation}
+D_{\mathrm{FSQ}}(R) < D_{\mathrm{RVQ}}(R) \quad \text{at all six matched rates.}
+\end{equation}
+Because the inequality holds at equal vocabulary, the gain cannot be attributed to a larger codebook. The margin grows with the bit-rate: it is about $2\%$ at four codes of 512 and about $23\%$ at eight codes of 1024.
+
+The residual VQ carries between $1.6$M and $3$M codebook parameters depending on the cell; Grouped-FSQ carries none.
+
+For context, T2M-GPT reports $0.071$ for its VQ tokenizer~\cite{zhang2023t2mgpt} and MoMask reports $0.019$ for its residual VQ~\cite{guo2024momask}. Our best cell, $0.0170$, is below both. We do not read this as beating a best-tuned residual VQ in general: our own residual VQ reaches $0.0221$, so it is weaker than MoMask's, and the claim of this section is the controlled inequality above.
+
+\section{Results: Codebook Health}
+\label{sec:tok_health}
+
+Reconstruction error does not show how a codebook is used. A tokenizer can reconstruct well while most of its codes are idle. We report two standard diagnostics at the end of training. With $p$ the empirical distribution over the $V$ codes of one quantizer, the \emph{perplexity} is
+\begin{equation}
+\mathrm{PPL} = \exp\Bigl(-\sum_{k=1}^{V} p_k \ln p_k\Bigr),
+\end{equation}
+which equals $V$ under uniform use and $1$ under collapse onto a single code. The \emph{usage} is the fraction of codes selected at least once.
+
+\begin{table}[H]
+\centering
+\caption{Perplexity and usage (in parentheses) at the final epoch, for the same cells as \tabref{tab:tok_matrix}.}
+\label{tab:tok_health}
+\begin{tabular}{crrrrr}
+\toprule
+Codes per step & RVQ-512 & RVQ-1024 & FSQ-512 & FSQ-1024 & FSQ-1000 \\
+\midrule
+4 & 313 (81\%) & 496 (63\%) & 341 (89\%) & 589 (74\%) & 597 (76\%) \\
+6 & 321 (81\%) & 547 (68\%) & 345 (89\%) & 586 (74\%) & 561 (73\%) \\
+8 & 343 (85\%) & 543 (67\%) & 340 (88\%) & 577 (73\%) & 542 (72\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At equal vocabulary, FSQ has higher usage than the residual VQ in all six matched pairs, and higher perplexity in five of them; the exception is eight codes of 512, where the two are within one percent (340 against 343). The reconstruction advantage of \secref{sec:tok_rd} is therefore not obtained by concentrating on fewer codes.
+
+\section{Results: Downstream Generation Quality}
+\label{sec:tok_downstream}
+
+A lower reconstruction FID is useful only if a generator trained on the tokens is also better. We trained the transformer generator of \chapref{chap:generator} on the tokens of the Grouped-FSQ $8 \times 1024$ tokenizer and on those of the residual VQ $8 \times 1024$ tokenizer, with the protocol of \chapref{chap:generator}, and scored both on the full test split.
+
+\begin{table}[H]
+\centering
+\caption{Test FID of a generator trained on each token stream, at two epoch budgets.}
+\label{tab:tok_downstream}
+\begin{tabular}{lrr}
+\toprule
+Token stream & 18 epochs & 60 epochs \\
+\midrule
+Residual VQ $8 \times 1024$ & 0.832 & 0.294 \\
+Grouped-FSQ $8 \times 1024$ & 3.30 & \textbf{0.132} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At 18 epochs the residual VQ tokens give the better generator. At 60 epochs the order is reversed: FID $0.132$ for FSQ tokens against $0.294$ for residual VQ tokens. The $95\%$ bootstrap intervals over test clips, $[0.127, 0.230]$ and $[0.251, 0.428]$, do not overlap. R@1 is not distinguishable between the two ($0.395$ against $0.392$). The 18-epoch reading reflected an undertrained generator. The FSQ token stream is harder to fit early and better once fitted.
+
+With this result, Grouped-FSQ leads the residual VQ on all three axes we measured: reconstruction, codebook usage and downstream generation.
+
+\section{Threats to Validity}
+\label{sec:tok_threats}
+
+\begin{itemize}
+\item \textbf{Single seed.} Every cell of Tables~\ref{tab:tok_matrix}--\ref{tab:tok_downstream} is one run. The smallest margins, at four codes per step, could change sign under a different seed. The margins at eight codes per step are large relative to any variation we observed between cells.
+\item \textbf{Baseline strength.} Our residual VQ ($0.0221$) is weaker than the published MoMask tokenizer ($0.019$), which was trained with more compute. The comparison is controlled; it is not a comparison against the best residual VQ ever trained.
+\item \textbf{Overfitting.} We compared reconstruction FID on train, validation and test splits at equal clip counts. The train--test gap is non-positive in 13 of the 15 cells, and both positive gaps belong to residual VQ cells, so the FSQ advantage is not memorisation of the training split.
+\item \textbf{Non-causal decoder.} The decoder uses symmetric convolutions and therefore needs a short lookahead when streaming. \chapref{chap:streaming} measures this and its cost.
+\end{itemize}
