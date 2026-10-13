@@ -29,7 +29,7 @@ def test_matcher_loads_without_dropping_keys():
     if not cfg.paths.eval_matcher or not Path(cfg.paths.eval_matcher).is_file():
         pytest.skip("finest.tar unavailable")
 
-    from text2motion.evaluation.matcher import load_frozen_guo_embedding_encoders
+    from text2motion.evaluation.nn_matcher import load_frozen_guo_embedding_encoders
 
     motion, text = load_frozen_guo_embedding_encoders(cfg.paths.eval_matcher, device="cpu")
 

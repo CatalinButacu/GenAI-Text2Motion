@@ -8,7 +8,7 @@ from text2motion.app.checkpoint import (
     load_generator_checkpoint,
 )
 from text2motion.app.config import GeneratorConfig
-from text2motion.generation.model import MotionTokenGenerator
+from text2motion.generation.nn_model import MotionTokenGenerator
 
 
 def test_generator_bundle_keeps_generator_encoder_and_tokenizer_identity(tmp_path):

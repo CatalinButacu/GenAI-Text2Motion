@@ -5,8 +5,7 @@ import torch
 
 from text2motion.app.config import load_config
 from text2motion.motion.contracts import Split
-from text2motion.motion.datamodule import MotionDataModule
-from text2motion.motion.datasets import collate_motion_clips
+from text2motion.motion.datasets import MotionDataModule, collate_motion_clips
 from text2motion.motion.model import MotionClip
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import FEATURES_DIR, MEAN_FILE

@@ -5,7 +5,7 @@ import torch
 
 from text2motion.app.checkpoint import OverfitGate, sha256_file
 from text2motion.app.config import ApplicationConfig
-from text2motion.generation.model import GeneratorModelSpec
+from text2motion.generation.nn_model import GeneratorModelSpec
 
 
 def resolve_generator_config(config: ApplicationConfig, backbone: str, codebook_size: int) -> dict:

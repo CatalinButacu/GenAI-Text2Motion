@@ -3,13 +3,13 @@ import torch
 
 from text2motion.app.config import RvqConfig, TokenizerConfig
 from text2motion.tokenization.contracts import DROPPED_CODE
-from text2motion.tokenization.model import (
+from text2motion.tokenization.nn_model import (
     FsqTokenizer,
-    LatentQuantizer,
     MotionTokenizerNetwork,
     RvqBaselineTokenizer,
     resample_stages,
 )
+from text2motion.tokenization.nn_quantizers import LatentQuantizer
 
 FSQ_CFG = TokenizerConfig(
     in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(8, 8, 4, 4), n_resblocks=1

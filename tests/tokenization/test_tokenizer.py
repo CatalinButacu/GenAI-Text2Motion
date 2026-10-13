@@ -1,7 +1,8 @@
 import torch
 
 from text2motion.app.config import TokenizerConfig
-from text2motion.tokenization.model import FSQ, FsqTokenizer, feature_velocity_reconstruction_loss
+from text2motion.tokenization.nn_model import FsqTokenizer, feature_velocity_reconstruction_loss
+from text2motion.tokenization.nn_quantizers import FSQ
 
 CFG = TokenizerConfig(
     in_dim=263, width=128, downsample=4, num_quantizers=4, fsq_levels=(8, 5, 5, 5)

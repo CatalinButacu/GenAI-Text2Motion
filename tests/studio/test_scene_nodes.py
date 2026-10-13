@@ -81,18 +81,18 @@ def test_focus_prefers_body_then_motion_then_rest():
     assert nodes.focus is body
 
 
-def test_has_motion_or_body_tracks_clears():
+def test_has_generated_motion_tracks_clears():
     nodes, _ = make()
-    assert not nodes.has_motion_or_body
+    assert not nodes.has_generated_motion
 
     nodes.show_rest(FakeNode("rest"))
-    assert not nodes.has_motion_or_body  # rest alone must not block the rest-pose remesh
+    assert not nodes.has_generated_motion  # rest alone must not block the rest-pose remesh
 
     nodes.show_motion(FakeNode("motion"))
-    assert nodes.has_motion_or_body
+    assert nodes.has_generated_motion
 
     nodes.clear_motion()
-    assert not nodes.has_motion_or_body
+    assert not nodes.has_generated_motion
 
 
 def test_clearing_an_empty_slot_is_a_noop():

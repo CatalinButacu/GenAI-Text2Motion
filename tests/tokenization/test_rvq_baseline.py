@@ -1,7 +1,7 @@
 import torch
 
 from text2motion.app.config import RvqConfig
-from text2motion.tokenization.model import (
+from text2motion.tokenization.nn_model import (
     RvqBaselineTokenizer,
     feature_velocity_reconstruction_loss,
 )

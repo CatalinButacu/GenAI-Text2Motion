@@ -7,10 +7,10 @@ from text2motion.app.config import (
     TextEncoderConfig,
     TokenizerConfig,
 )
-from text2motion.generation.model import MotionTokenGenerator
-from text2motion.generation.text import CLIPTextEncoder
+from text2motion.generation.nn_model import MotionTokenGenerator
+from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.generation.trainer import GeneratorTrainer
-from text2motion.tokenization.model import FsqTokenizer
+from text2motion.tokenization.nn_model import FsqTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorConfig(
