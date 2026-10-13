@@ -6,6 +6,7 @@ import time
 import traceback
 from collections import Counter
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 
 import imgui
@@ -35,7 +36,7 @@ def build_studio_viewer(visible: bool, **kwargs) -> StreamingStudioViewer:
     return studio_class(**kwargs)
 
 
-HeadlessWindow.keys = StudioWindowKeys
+type.__setattr__(HeadlessWindow, "keys", StudioWindowKeys)
 
 
 @dataclass
@@ -48,7 +49,7 @@ class Finding:
 
 @dataclass
 class HumanDriver:
-    viewer: HeadlessStudio
+    viewer: StreamingStudioViewer
     out_dir: Path
     scenario: str = "setup"
     findings: list[Finding] = field(default_factory=list)
@@ -376,6 +377,8 @@ def scenario_switch_models(driver: HumanDriver) -> None:
         str(labels),
     ):
         return
+    if transformer is None or mamba is None:
+        return
     state.steps = 0
     state.model_idx = transformer
     driver.viewer.generation.start_model_load()
@@ -447,7 +450,7 @@ def scenario_long_forever_stream(driver: HumanDriver) -> None:
         f"{played_rate:.1f} frames/s played",
     )
     poses = [sample[3] for sample in samples if sample[3] is not None]
-    moved = [float(np.abs(a - b).max()) for a, b in zip(poses, poses[1:])]
+    moved = [float(np.abs(a - b).max()) for a, b in pairwise(poses)]
     driver.check(
         "the avatar pose changes over time",
         len(moved) >= 3 and min(moved) > 0.01,

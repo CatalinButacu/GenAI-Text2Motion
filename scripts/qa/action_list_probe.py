@@ -118,7 +118,9 @@ def main() -> None:
                 "joined_caption": (joined, None),
                 "action_list": (
                     for_action[0],
-                    lambda index: for_action[min(index // args.action_tokens, ACTIONS - 1)],
+                    lambda index, texts=for_action: texts[
+                        min(index // args.action_tokens, ACTIONS - 1)
+                    ],
                 ),
             }
             for method, (first_text, text_at) in streams.items():

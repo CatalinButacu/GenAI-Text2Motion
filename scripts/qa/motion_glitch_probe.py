@@ -109,10 +109,9 @@ def main() -> None:
     report = {}
     with torch.no_grad():
         for mode, anchor_every in modes:
-            if anchor_every == 0 and getattr(
-                pipeline.token_generator.backbone, "max_positions", None
-            ):
-                steps = min(args.steps, pipeline.token_generator.backbone.max_positions - 1)
+            position_limit = pipeline.token_generator.backbone.max_positions
+            if anchor_every == 0 and position_limit:
+                steps = min(args.steps, position_limit - 1)
             else:
                 steps = args.steps
             anchor_frames = anchor_every * decoder.downsample

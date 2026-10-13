@@ -6,6 +6,8 @@ from pathlib import Path
 
 import matplotlib
 
+from text2motion.app.bootstrap import required_path
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -68,7 +70,7 @@ def run(a):
     st = torch.load(a.ckpt, map_location="cpu")
     gen.load_state_dict(st["generator"] if isinstance(st, dict) and "generator" in st else st)
     te = CLIPTextEncoder(cfg.text_encoder).to(dev).eval()
-    out = Path(cfg.paths.hml3d_out_dir)
+    out = required_path(cfg.paths.hml3d_out_dir, "hml3d_out_dir")
     mean = torch.from_numpy(np.load(out / "Mean.npy").astype("float32")).to(dev)
     std = torch.from_numpy(np.load(out / "Std.npy").astype("float32")).to(dev)
 

@@ -83,7 +83,10 @@ def main() -> None:
             stages["tokenizer_roundtrip"].append(
                 motion_statistics(recover_skeleton(resources.denormalize(roundtrip)))
             )
-            generated = pipeline.generate_batch([caption], frames // downsample, sampling)[0]
+            generated_batch = pipeline.generate_batch([caption], frames // downsample, sampling)
+            if generated_batch is None:
+                raise RuntimeError("the generator returned no clip")
+            generated = generated_batch[0]
             joints = recover_skeleton(
                 resources.denormalize(generated.motion.features.cpu().numpy())
             )

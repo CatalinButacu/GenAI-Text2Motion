@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import replace
-from pathlib import Path
 
 import matplotlib
 import numpy as np
 import torch
 
+from text2motion.app.bootstrap import required_path
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 from text2motion.app.bootstrap import seed_everything
 from text2motion.app.config import load_config
@@ -43,7 +45,7 @@ def run(a: argparse.Namespace) -> None:
     te = CLIPTextEncoder(cfg.text_encoder).to(dev).eval()
     with torch.no_grad():
         emb = te([a.prompt]).to(dev)
-    out = Path(cfg.paths.hml3d_out_dir)
+    out = required_path(cfg.paths.hml3d_out_dir, "hml3d_out_dir")
     mean = torch.from_numpy(np.load(out / "Mean.npy").astype("float32")).to(dev)
     std = torch.from_numpy(np.load(out / "Std.npy").astype("float32")).to(dev)
     dec = StreamingMotionDecoder(tok, cfg.tokenizer.downsample, mean, std)
@@ -75,6 +77,8 @@ def run(a: argparse.Namespace) -> None:
     fig = plt.figure(figsize=(2.6 * len(idx), 3.2))
     for k, fi in enumerate(idx):
         ax = fig.add_subplot(1, len(idx), k + 1, projection="3d")
+        if not isinstance(ax, Axes3D):
+            raise TypeError("the 3d projection did not give 3D axes")
         p = joints[fi]
         for b in bones:
             ax.plot(
@@ -84,7 +88,9 @@ def run(a: argparse.Namespace) -> None:
                 color="tab:blue",
                 lw=2,
             )
-        ax.scatter(p[:, 0], p[:, 2], p[:, 1], s=6, color="tab:red")
+        ax.plot(
+            p[:, 0], p[:, 2], p[:, 1], linestyle="", marker="o", markersize=2.5, color="tab:red"
+        )
         ax.set_xlim(lo[0], hi[0])
         ax.set_ylim(lo[2], hi[2])
         ax.set_zlim(lo[1], hi[1])
