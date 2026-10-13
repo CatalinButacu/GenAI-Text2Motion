@@ -14,11 +14,15 @@ import numpy as np
 from aitviewer.renderables.meshes import Meshes
 from aitviewer.viewer import Viewer
 
-from text2motion.studio.actions import log_action, log_result, log_toggle
 from text2motion.studio.avatar import SmplxAvatarController, create_smplx_rest_pose_mesh
 from text2motion.studio.config import StudioConfig
 from text2motion.studio.contracts import MotionInferenceClientPort, ViewerHost
-from text2motion.studio.generation import StudioGenerationController
+from text2motion.studio.generation import (
+    StudioGenerationController,
+    log_action,
+    log_result,
+    log_toggle,
+)
 from text2motion.studio.scene import StreamSceneUpdater, StudioSession
 
 logger = logging.getLogger(__name__)

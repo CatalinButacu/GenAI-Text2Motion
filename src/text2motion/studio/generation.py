@@ -10,12 +10,23 @@ import numpy as np
 
 from text2motion.motion.model import StreamedChunk
 from text2motion.motion.representation import JOINTS
-from text2motion.studio.actions import log_action, log_result
 from text2motion.studio.avatar import SmplxAvatarController
 from text2motion.studio.contracts import ViewerHost
 from text2motion.studio.scene import StudioModelEntry
 
 logger = logging.getLogger(__name__)
+
+
+def log_action(name: str, detail: str = "") -> None:
+    logger.info(f"[UI] {name}{f' {detail}' if detail else ''}")
+
+
+def log_toggle(name: str, value: bool) -> None:
+    logger.info(f"[UI] {name} -> {'ON' if value else 'OFF'}")
+
+
+def log_result(name: str, ok: bool, detail: str = "") -> None:
+    logger.info(f"[UI] {name} -> {'OK' if ok else 'FAILED'}{f' ({detail})' if detail else ''}")
 
 
 def upsample_joints(previous: np.ndarray | None, joints: np.ndarray, factor: int) -> np.ndarray:
