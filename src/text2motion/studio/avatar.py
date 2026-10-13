@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 import numpy as np
+import roma
 import smplx
 import torch
 
@@ -16,10 +17,6 @@ from text2motion.studio.config import SmplxFitConfig
 from text2motion.studio.contracts import ViewerHost
 
 logger = logging.getLogger(__name__)
-
-
-class FitCancelled(Exception):
-    pass
 
 
 def create_skeleton_sequence_node(joints: np.ndarray):
@@ -215,83 +212,26 @@ def fit_smplx_to_joints(
     )
 
 
-def __kabsch_rotations(
-    rest_vectors: torch.Tensor, target_vectors: torch.Tensor, weights: torch.Tensor
-) -> torch.Tensor:
-    covariance = torch.einsum("tk,tki,tkj->tij", weights, rest_vectors, target_vectors)
-    u, _, vh = torch.linalg.svd(covariance)
-    v = vh.transpose(-1, -2)
-    reflection = torch.det(v @ u.transpose(-1, -2))
-    signs = torch.stack([torch.ones_like(reflection), torch.ones_like(reflection), reflection], -1)
-    return v @ torch.diag_embed(signs) @ u.transpose(-1, -2)
-
-
-def rotation_matrix_to_axis_angle(matrix: torch.Tensor) -> torch.Tensor:
-    m = matrix
-    trace = m[..., 0, 0] + m[..., 1, 1] + m[..., 2, 2]
-    candidates = torch.stack(
-        [
-            torch.stack(
-                [
-                    1 + trace,
-                    m[..., 2, 1] - m[..., 1, 2],
-                    m[..., 0, 2] - m[..., 2, 0],
-                    m[..., 1, 0] - m[..., 0, 1],
-                ],
-                -1,
-            ),
-            torch.stack(
-                [
-                    m[..., 2, 1] - m[..., 1, 2],
-                    1 + m[..., 0, 0] - m[..., 1, 1] - m[..., 2, 2],
-                    m[..., 0, 1] + m[..., 1, 0],
-                    m[..., 0, 2] + m[..., 2, 0],
-                ],
-                -1,
-            ),
-            torch.stack(
-                [
-                    m[..., 0, 2] - m[..., 2, 0],
-                    m[..., 0, 1] + m[..., 1, 0],
-                    1 - m[..., 0, 0] + m[..., 1, 1] - m[..., 2, 2],
-                    m[..., 1, 2] + m[..., 2, 1],
-                ],
-                -1,
-            ),
-            torch.stack(
-                [
-                    m[..., 1, 0] - m[..., 0, 1],
-                    m[..., 0, 2] + m[..., 2, 0],
-                    m[..., 1, 2] + m[..., 2, 1],
-                    1 - m[..., 0, 0] - m[..., 1, 1] + m[..., 2, 2],
-                ],
-                -1,
-            ),
-        ],
-        -2,
-    )
-    diagonal = torch.stack(
-        [
-            1 + trace,
-            1 + m[..., 0, 0] - m[..., 1, 1] - m[..., 2, 2],
-            1 - m[..., 0, 0] + m[..., 1, 1] - m[..., 2, 2],
-            1 - m[..., 0, 0] - m[..., 1, 1] + m[..., 2, 2],
-        ],
-        -1,
-    )
-    best = diagonal.argmax(-1)
-    quaternion = torch.gather(
-        candidates, -2, best[..., None, None].expand(*best.shape, 1, 4)
-    ).squeeze(-2)
-    quaternion = quaternion / quaternion.norm(dim=-1, keepdim=True)
-    quaternion = torch.where(quaternion[..., :1] < 0, -quaternion, quaternion)
-    sine = quaternion[..., 1:].norm(dim=-1)
-    angle = 2 * torch.atan2(sine, quaternion[..., 0])
-    axis = quaternion[..., 1:] / sine.clamp_min(1e-8).unsqueeze(-1)
-    return axis * angle.unsqueeze(-1)
-
-
 SHORT_BONE_PARENT_PULL = {12: 1.0}
+
+
+def bone_directions(
+    rest: torch.Tensor, target: torch.Tensor, joint: int, children: dict[int, list[int]]
+) -> tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]:
+    frames = target.shape[0]
+    rest_pairs, target_pairs, weight_pairs = [], [], []
+    for child in children[joint]:
+        for depth, node in enumerate([child] + children[child]):
+            rest_vector = rest[node] - rest[joint]
+            target_vector = target[:, node] - target[:, joint]
+            rest_pairs.append((rest_vector / rest_vector.norm()).expand(frames, 3))
+            target_pairs.append(
+                target_vector / target_vector.norm(dim=-1, keepdim=True).clamp_min(1e-6)
+            )
+            weight_pairs.append(
+                torch.full((frames,), 1.0 if depth == 0 else 0.5, device=target.device)
+            )
+    return rest_pairs, target_pairs, weight_pairs
 
 
 def solve_smplx_pose_from_joints(
@@ -316,18 +256,7 @@ def solve_smplx_pose_from_joints(
         global_rotation: list[torch.Tensor] = []
         for joint in range(JOINTS):
             parent_rotation = identity if joint == 0 else global_rotation[parents[joint]]
-            rest_pairs, target_pairs, weight_pairs = [], [], []
-            for child in children[joint]:
-                for depth, node in enumerate([child] + children[child]):
-                    rest_vector = rest[node] - rest[joint]
-                    target_vector = target[:, node] - target[:, joint]
-                    rest_pairs.append((rest_vector / rest_vector.norm()).expand(frames, 3))
-                    target_pairs.append(
-                        target_vector / target_vector.norm(dim=-1, keepdim=True).clamp_min(1e-6)
-                    )
-                    weight_pairs.append(
-                        torch.full((frames,), 1.0 if depth == 0 else 0.5, device=device)
-                    )
+            rest_pairs, target_pairs, weight_pairs = bone_directions(rest, target, joint, children)
             if not rest_pairs:
                 global_rotation.append(parent_rotation)
                 continue
@@ -339,18 +268,19 @@ def solve_smplx_pose_from_joints(
                         (frames,), SHORT_BONE_PARENT_PULL.get(joint, parent_pull), device=device
                     )
                 )
-            global_rotation.append(
-                __kabsch_rotations(
-                    torch.stack(rest_pairs, 1),
-                    torch.stack(target_pairs, 1),
-                    torch.stack(weight_pairs, 1),
-                )
+            joint_rotation = roma.rigid_vectors_registration(
+                torch.stack(rest_pairs, 1),
+                torch.stack(target_pairs, 1),
+                torch.stack(weight_pairs, 1),
             )
+            if not isinstance(joint_rotation, torch.Tensor):
+                raise TypeError("the vector registration must return one rotation tensor")
+            global_rotation.append(joint_rotation)
         local_rotation = [global_rotation[0]] + [
             global_rotation[parents[joint]].transpose(-1, -2) @ global_rotation[joint]
             for joint in range(1, JOINTS)
         ]
-        axis_angle = rotation_matrix_to_axis_angle(torch.stack(local_rotation, 1))
+        axis_angle = roma.rotmat_to_rotvec(torch.stack(local_rotation, 1))
         global_orient = axis_angle[:, 0]
         body_pose = axis_angle[:, 1:].reshape(frames, 63)
         transl = target[:, 0] - rest[0]
@@ -384,39 +314,8 @@ class SmplxAvatarController:
         warm_start: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
         n_frames_so_far: int,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
-        gender = self.state.gender
-        cfg = replace(self.state.config.fit, model_dir=self.state.model_dir, gender=gender)
-        duration_so_far = n_frames_so_far / self.host.playback_fps
-        t = joints.shape[0]
         try:
-            if self.state.device == "cuda":
-                torch.cuda.empty_cache()
-
-            model = self.state.smplx_fit.model_cache.get((t, gender))
-            if model is None:
-                model = build_smplx_body_model(cfg, t, self.state.device)
-                self.state.smplx_fit.model_cache[(t, gender)] = model
-
-            if self.state.stream_buffers.fit_is_stale():
-                raise FitCancelled
-            res = solve_smplx_pose_from_joints(model, joints, self.state.device)
-            self.state.stream_buffers.fit_progress = 1.0
-
-            display_verts = self.__shaped_vertices(model, res, t)
-            appended = self.state.stream_buffers.append_fitted_chunk(
-                self.state.smplx_fit, display_verts, res.faces, res
-            )
-            if not appended:
-                raise FitCancelled
-
-            self.state.status = (
-                f"{'streaming' if self.state.generating else 'fitting body'}... "
-                f"{n_frames_so_far} frames (~{duration_so_far:.1f}s), "
-                f"body fit {res.joint_err_cm:.1f} cm"
-            )
-            return (res.global_orient[-1], res.body_pose[-1], res.betas)
-        except FitCancelled:
-            return warm_start
+            fitted = self.__fitted_chunk(joints, n_frames_so_far)
         except Exception as exc:
             traceback.print_exc()
             self.state.status = (
@@ -424,6 +323,37 @@ class SmplxAvatarController:
                 f"{type(exc).__name__}: {exc}"
             )
             return warm_start
+        return warm_start if fitted is None else fitted
+
+    def __fitted_chunk(
+        self, joints: np.ndarray, n_frames_so_far: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+        gender = self.state.gender
+        frames = joints.shape[0]
+        if self.state.device == "cuda":
+            torch.cuda.empty_cache()
+        model = self.state.smplx_fit.model_cache.get((frames, gender))
+        if model is None:
+            cfg = replace(self.state.config.fit, model_dir=self.state.model_dir, gender=gender)
+            model = build_smplx_body_model(cfg, frames, self.state.device)
+            self.state.smplx_fit.model_cache[(frames, gender)] = model
+        if self.state.stream_buffers.fit_is_stale():
+            return None
+        res = solve_smplx_pose_from_joints(model, joints, self.state.device)
+        self.state.stream_buffers.fit_progress = 1.0
+        display_verts = self.__shaped_vertices(model, res, frames)
+        appended = self.state.stream_buffers.append_fitted_chunk(
+            self.state.smplx_fit, display_verts, res.faces, res
+        )
+        if not appended:
+            return None
+        duration_so_far = n_frames_so_far / self.host.playback_fps
+        self.state.status = (
+            f"{'streaming' if self.state.generating else 'fitting body'}... "
+            f"{n_frames_so_far} frames (~{duration_so_far:.1f}s), "
+            f"body fit {res.joint_err_cm:.1f} cm"
+        )
+        return (res.global_orient[-1], res.body_pose[-1], res.betas)
 
     def __shaped_vertices(self, model, res, t: int) -> np.ndarray:
         user = self.state.user_betas
@@ -457,22 +387,23 @@ class SmplxAvatarController:
             self.state.smplx_fit.note = "body-fit choice applies to the next generation"
             return
         if not self.state.fit_body:
-            self.state.nodes.clear_body()
-            self.state.nodes.clear_rest()
-            if (
-                self.state.stream_buffers.accum_joints is not None
-                and self.state.nodes.motion is None
-            ):
-                self.state.nodes.motion = create_skeleton_sequence_node(
-                    self.state.stream_buffers.accum_joints
-                )
-                self.state.nodes.motion.name = "Motion (streaming)"
-                self.host.scene.add(self.state.nodes.motion)
+            self.__show_skeleton_only()
             return
         if self.state.stream_buffers.accum_joints is None or self.state.smplx_fit.orient:
             self.schedule_remesh()
-        else:
-            self.__start_retrofit()
+            return
+        self.__start_retrofit()
+
+    def __show_skeleton_only(self) -> None:
+        self.state.nodes.clear_body()
+        self.state.nodes.clear_rest()
+        joints = self.state.stream_buffers.accum_joints
+        if joints is None or self.state.nodes.motion is not None:
+            return
+        node = create_skeleton_sequence_node(joints)
+        node.name = "Motion (streaming)"
+        self.state.nodes.motion = node
+        self.host.scene.add(node)
 
     def __start_retrofit(self) -> None:
         joints = self.state.stream_buffers.accum_joints
@@ -520,69 +451,56 @@ class SmplxAvatarController:
         threading.Thread(target=self.__rebuild_avatar_mesh, daemon=True).start()
 
     def __rebuild_avatar_mesh(self) -> None:
+        fit = self.state.smplx_fit
         try:
-            while self.state.smplx_fit.done_version != self.state.smplx_fit.version:
-                version = self.state.smplx_fit.version
-                gender = self.state.gender
-                user = self.state.user_betas.copy()
-                with self.state.stream_buffers.lock:
-                    orient = (
-                        np.concatenate(self.state.smplx_fit.orient, 0)
-                        if self.state.smplx_fit.orient
-                        else None
-                    )
-                    pose = (
-                        np.concatenate(self.state.smplx_fit.pose, 0)
-                        if self.state.smplx_fit.pose
-                        else None
-                    )
-                    transl = (
-                        np.concatenate(self.state.smplx_fit.transl, 0)
-                        if self.state.smplx_fit.transl
-                        else None
-                    )
-                    fit_betas = (
-                        None
-                        if self.state.smplx_fit.betas is None
-                        else self.state.smplx_fit.betas.copy()
-                    )
-                cfg = replace(self.state.config.fit, model_dir=self.state.model_dir, gender=gender)
-                try:
-                    self.state.smplx_fit.note = f"updating avatar ({gender})..."
-                    if orient is None:
-                        zero = np.zeros((1, 3), dtype=np.float32)
-                        verts, faces = smplx_mesh_from_fit_parameters(
-                            cfg,
-                            zero,
-                            np.zeros((1, 63), dtype=np.float32),
-                            zero,
-                            user,
-                            gender,
-                            "cpu",
-                        )
-                        is_rest = True
-                    else:
-                        if pose is None or transl is None:
-                            raise ValueError("smplx fit lacks pose or translation")
-                        betas = user if fit_betas is None else fit_betas + user
-                        verts, faces = smplx_mesh_from_fit_parameters(
-                            cfg,
-                            orient,
-                            pose,
-                            transl,
-                            betas.astype(np.float32),
-                            gender,
-                            self.state.device,
-                        )
-                        is_rest = False
-                    with self.state.stream_buffers.lock:
-                        self.state.stream_buffers.pending_remesh = (verts, faces, is_rest)
-                    self.state.smplx_fit.note = ""
-                except Exception as exc:
-                    traceback.print_exc()
-                    self.state.smplx_fit.note = f"avatar update failed: {type(exc).__name__}: {exc}"
-                self.state.smplx_fit.done_version = version
+            while fit.done_version != fit.version:
+                version = fit.version
+                self.__update_avatar_mesh()
+                fit.done_version = version
         finally:
-            self.state.smplx_fit.running = False
-        if self.state.smplx_fit.done_version != self.state.smplx_fit.version:
+            fit.running = False
+        if fit.done_version != fit.version:
             self.schedule_remesh()
+
+    def __update_avatar_mesh(self) -> None:
+        gender = self.state.gender
+        user_betas = self.state.user_betas.copy()
+        try:
+            self.state.smplx_fit.note = f"updating avatar ({gender})..."
+            pending = self.__avatar_mesh(gender, user_betas)
+            with self.state.stream_buffers.lock:
+                self.state.stream_buffers.pending_remesh = pending
+            self.state.smplx_fit.note = ""
+        except Exception as exc:
+            traceback.print_exc()
+            self.state.smplx_fit.note = f"avatar update failed: {type(exc).__name__}: {exc}"
+
+    def __fit_parameters(self):
+        fit = self.state.smplx_fit
+        with self.state.stream_buffers.lock:
+            if not fit.orient:
+                return None
+            if not fit.pose or not fit.transl:
+                raise ValueError("smplx fit lacks pose or translation")
+            betas = None if fit.betas is None else fit.betas.copy()
+            orient = np.concatenate(fit.orient, 0)
+            return orient, np.concatenate(fit.pose, 0), np.concatenate(fit.transl, 0), betas
+
+    def __avatar_mesh(
+        self, gender: str, user_betas: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, bool]:
+        cfg = replace(self.state.config.fit, model_dir=self.state.model_dir, gender=gender)
+        parameters = self.__fit_parameters()
+        if parameters is None:
+            zero = np.zeros((1, 3), dtype=np.float32)
+            rest_pose = np.zeros((1, 63), dtype=np.float32)
+            vertices, faces = smplx_mesh_from_fit_parameters(
+                cfg, zero, rest_pose, zero, user_betas, gender, "cpu"
+            )
+            return vertices, faces, True
+        orient, pose, transl, fit_betas = parameters
+        betas = user_betas if fit_betas is None else fit_betas + user_betas
+        vertices, faces = smplx_mesh_from_fit_parameters(
+            cfg, orient, pose, transl, betas.astype(np.float32), gender, self.state.device
+        )
+        return vertices, faces, False
