@@ -53,7 +53,7 @@ epoch 1 is 6.399 with the kernel and 6.408 without it. The overfit gate passes i
 the two cases.
 
 **In the training code.** The import repair for problem 6 is in
-`src/text2motion/generation/scan_kernel.py`, so `use_kernel: true` works in a config.
+`src/text2motion/generation/nn_backbones.py`, so `use_kernel: true` works in a config.
 
 ## 2. Memory of the training computer (2026-10-12)
 

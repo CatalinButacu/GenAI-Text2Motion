@@ -44,8 +44,8 @@ prevent bugs by existing; they prevent bugs when the boundary is *verified*, not
 | studio | `studio/contracts.py` | `ViewerHost`, `MotionInferenceClientPort` (structural `Protocol`s, not dataclasses -- ISP at the GUI/network boundary) |
 
 `app/config.py`'s `ApplicationConfig` composes one instance of each stage's top-level config into a
-single object, loaded by `app/config_loader.py::load_config` and checked by
-`app/config_loader.py::validate_config` before any command runs.
+single object, loaded by `app/config.py::load_config` and checked by
+`app/config.py::validate_config` before any command runs.
 
 ## C.3 Case study 1 -- vocabulary size that assumed one tokenizer kind
 
@@ -65,7 +65,7 @@ from the actual defect.
 
 Fix (`app/commands/generator.py:186`): branch on `config.tokenizer.kind` and read
 `config.rvq_baseline.codebook_size` for RVQ, matching how `RvqBaselineTokenizer.codebook_size`
-(`tokenization/model.py:418`) already derives it for the real tokenizer object. `pretrain` had simply
+(`tokenization/nn_model.py:418`) already derives it for the real tokenizer object. `pretrain` had simply
 never been exercised against an RVQ config before -- `run_twins.sh`'s `transformer_rvq` pair calls the
 same code path and would have failed identically on the (never-yet-run) cloud campaign.
 
@@ -73,7 +73,7 @@ same code path and would have failed identically on the (never-yet-run) cloud ca
 
 The mandatory overfit gate (`sanity-overfit`, CLAUDE.md's golden rule) captures
 `resolved_generator_config` with `dropout` forced to $0$ for a clean, deterministic overfit signal
-(`load_tokenizer_and_generator_spec(..., dropout=0.0)`). Real training resolves the same config with
+(`app.resolve_generator_spec(..., dropout=0.0)`). Real training resolves the same config with
 its normal dropout ($0.1$ by default). `OverfitGate.verify_setup` (`app/checkpoint.py:174`) then
 compared the gate's `resolved_generator_config` against training's **by strict equality, including
 dropout** -- so *any* config with nonzero dropout would pass its gate and then fail its own
@@ -99,7 +99,7 @@ Fix: added `num_workers: int = 0` to `GeneratorTrainingRequest`
 (`generation/contracts.py:137`), the `--num_workers` flag to the `train-generator` subparser
 (`app/cli.py:114`), and threaded it into the loader call (`app/commands/generator.py:100`). Measured
 effect after also adding `pin_memory` / `persistent_workers` / `prefetch_factor` to
-`MotionDataModule`'s loaders (`motion/datamodule.py`): epoch time on the transformer+RVQ fine-tune
+`MotionDataModule`'s loaders (`motion/datasets.py`): epoch time on the transformer+RVQ fine-tune
 dropped from ~15 min to ~9 min, a ~40% reduction, with a one-time ~15s worker-spawn cost absorbed once
 per run rather than once per epoch.
 
@@ -110,12 +110,12 @@ per run rather than once per epoch.
 independently in YAML (`tokenizer: {num_quantizers: 8}` and `rvq_baseline: {num_quantizers: 8}`).
 `app/bootstrap.py:76` and `app/commands/evaluation.py:92` resolve the **generator's** `num_codebooks`
 from `tokenizer.num_quantizers`; the **tokenizer model itself** is built from
-`rvq_baseline.num_quantizers` (`tokenization/model.py:354`). Every config in this repository happens
+`rvq_baseline.num_quantizers` (`tokenization/nn_model.py:354`). Every config in this repository happens
 to keep the two numbers equal today -- verified directly, not assumed -- but nothing enforced it, and
 the failure mode is the same class as C.3: a generator embedding table shaped for the wrong number of
 codebooks, discovered only by a crash deep in an unrelated kernel.
 
-Fix: `validate_config` (`app/config_loader.py:208-217`) now raises loud, at config-load time, if
+Fix: `validate_config` (`app/config.py:208-217`) now raises loud, at config-load time, if
 `tokenizer.kind == RVQ` and the two fields disagree -- before any model is constructed, not after.
 Regression test:
 `tests/generation/test_generator_upgrades.py::test_config_rejects_rvq_num_quantizers_mismatch`.

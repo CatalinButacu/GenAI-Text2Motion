@@ -48,7 +48,7 @@ The build takes ~35 minutes from source. That is expected — the AWS idle watch
 | 3 | rollout latency, eager vs fused | **expect ~1.00x** |
 
 Gate 3 is not a bug. `use_kernel` only affects `MambaMixer.forward`
-(`src/text2motion/generation/model.py:142`), the training path. Streaming uses
+(`src/text2motion/generation/nn_model.py:142`), the training path. Streaming uses
 `MambaMixer.step` (`:109`), which has **no fused path at all**. Making the *latency*
 comparison fair additionally needs `mamba_ssm.ops.triton.selective_state_update` wired into
 `step()` — that is not implemented, and gate 3 documents the gap.

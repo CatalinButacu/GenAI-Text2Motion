@@ -9,7 +9,7 @@ permission notices of those parts are in licenses/third_party/:
 - HumanML3D processing code, Copyright (c) 2022 Chuan Guo
   (src/text2motion/motion: 263-feature representation, kinematics, joint recovery)
 - text-to-motion evaluator, Copyright (c) 2022 Chuan Guo
-  (src/text2motion/evaluation/matcher.py)
+  (src/text2motion/evaluation/nn_matcher.py)
 - CLIP, Copyright (c) 2021 OpenAI (text encoder, loaded through the transformers package)
 - aitviewer, Copyright (C) 2022-2026 ETH Zurich, Manuel Kaufmann, Velko Vechev,
   Dario Mylonopoulos (viewer, used as a package)
