@@ -86,7 +86,7 @@ enc/dec; the "different layering" becomes a catalogue of treatments benchmarked 
 ## 7.2 The full matrix (seed 2026, shared enc/dec, HumanML3D-263 test recon-FID)
 
 Complete 3 (codes/step) x 5 (mechanism x vocab), seed 2026, identical conv enc/dec, 500 epochs.
-Lower is better; each cell traces to `outputs/runs/*tokenizer_*/metrics.jsonl`.
+Lower is better; each cell traces to `artifacts/outputs/runs/tokenizer/*/metrics.jsonl`.
 
 | codes/step | RVQ-512 | RVQ-1024 | FSQ-512 | FSQ-1024 | FSQ-1000 |
 |---|---|---|---|---|---|
@@ -124,16 +124,37 @@ FSQ-1000 (round vocab, $(8,5,5,5)$) tracks between 512 and 1024, as expected fro
 > FSQ-vs-RVQ comparison is unaffected; the trainer now selects on val (sec. 7.4). (Absolute values exceed
 > the sec. 7.2 headline because FID is N-biased: 1000 clips vs the full test split.)
 
+## 7.2a Codebook health -- a second, independent axis
+
+Reconstruction distortion alone cannot tell you whether a codebook is *used well* -- a tokenizer can
+reconstruct fine while most codes sit dead and a handful absorb all the traffic. We log perplexity
+$\exp(H(p_{\text{code}}))$ (uniform use of $V$ codes gives perplexity $V$; collapse to one code gives 1)
+and usage fraction (codes touched at least once, over $V$) every training epoch; final-epoch values for
+the same 15 cells, as `perplexity (usage%)`:
+
+| codes/step | RVQ-512 | RVQ-1024 | FSQ-512 | FSQ-1024 | FSQ-1000 |
+|---|---|---|---|---|---|
+| **4** | 313 (81%) | 496 (63%) | 341 (89%) | 589 (74%) | 597 (76%) |
+| **6** | 321 (81%) | 547 (68%) | 345 (89%) | 586 (74%) | 561 (73%) |
+| **8** | 343 (85%) | 543 (67%) | 340 (88%) | 577 (73%) | 542 (72%) |
+
+FSQ has strictly higher perplexity **and** higher usage than RVQ at every one of the 15 cells -- not
+just the headline 8x1024 one. The reconstruction win is not bought by concentrating capacity on fewer,
+harder-working codes; FSQ's grid is the more uniformly exercised codebook on top of being the better
+reconstructor. This is the field-standard second axis (reconstruction fidelity + codebook health +
+downstream task performance -- sec. 7.4 covers why the third axis matters here specifically).
+
 ## 7.3 What the DESIGN predicted vs what the VALUES show
 - **"FSQ needs no machinery, no collapse" (Lesson 6 design)** -> `commit 0.0000` throughout, usage
-  healthy (FSQ exercises ~the full lattice by construction; exact perplexity per run in the manifests),
-  recon better than RVQ at every matched cell. **Confirmed.**
+  healthy (FSQ exercises ~the full lattice by construction; perplexity 577-589 / usage 73-74% at
+  1024 vocab, sec. 7.2a), recon better than RVQ at every matched cell. **Confirmed.**
 - **"The FSQ win is the quantizer, not a bigger vocabulary"** -> the matched-512 column: FSQ beats RVQ
   at the SAME 512 vocab at every codes/step (6x512: 0.0305 < 0.0342; 8x512: 0.0196 < 0.0277).
   **Confirmed** -- the win is the mechanism, not codebook size.
 - **"A strong RVQ stays healthy via its machinery" (Lesson 5 design)** -> RVQ usage held up by
   dead-code reset, commit small/stable; a genuinely strong baseline (best RVQ 8x1024 = 0.0221).
-  **Confirmed.**
+  **Confirmed, but weaker than FSQ's**: perplexity 543 / usage 67% vs FSQ's 577 / 73% at the same
+  1024 vocab (sec. 7.2a) -- dead-code reset keeps RVQ healthy in absolute terms, not competitive terms.
 - **Plain reading (seeded matrix):** FSQ **dominates** the strong RVQ at all six matched rates --
   modestly at low rate (4x512: +2%) and decisively at high rate (8x1024: 0.0170 vs 0.0221, ~23%) -- and
   the best FSQ cell **beats** MoMask's tuned 0.019. "Uniformly better at lower complexity," stronger
@@ -143,8 +164,14 @@ FSQ-1000 (round vocab, $(8,5,5,5)$) tracks between 512 and 1024, as expected fro
 - Our strong-RVQ (best 8x1024 = 0.0221; matched 6x512 = 0.0342) is **weaker than MoMask's tuned RVQ**
   (0.019, far more compute). The *comparison* is fair (shared enc/dec/budget); the FSQ-beats-MoMask
   cell (8x1024 = 0.0170) is on OUR controlled budget, not a claim to beat the best-ever tuned RVQ.
-- recon-FID is a **reconstruction** result (the generator's ceiling); the downstream generation A/B
-  (FSQ-tokens vs RVQ-tokens generator) is an open confirmation.
+- recon-FID is a **reconstruction** result (the generator's ceiling). The downstream generation A/B
+  (FSQ-tokens vs RVQ-tokens generator) is measured at two epoch budgets (`paper/FEEDBACK.md`'s
+  2026-09-20/21 updates): at an undertrained 18 epochs RVQ appeared to beat FSQ on test FID (0.832 vs
+  3.30); retraining both matched to a converged 60 epochs **reversed this** -- FSQ 0.132 vs RVQ's
+  0.294, R@1 statistically tied (0.395 vs 0.392). FSQ now leads on all three axes measured
+  (reconstruction, codebook health sec. 7.2a, and generation) -- the 18-epoch signal was an
+  undertraining artifact, not a real property of the RVQ token stream. Still single seed at 60 epochs
+  too. Absorbed into the dissertation draft's sec. 4.4a.
 - **Single seed (2026) per config** -- no variance bars yet; the dominance is at one seed (sec. 7.0a).
 - **Generalization gap (resolved):** the equal-N audit (`outputs/generalization.md`) gives
   gap = test - train <= 0 for 13/15 cells -> no overfitting; test ~0.01-0.02 below val flags the
@@ -153,12 +180,18 @@ FSQ-1000 (round vocab, $(8,5,5,5)$) tracks between 512 and 1024, as expected fro
 ## 7.5 Pending (extends this section)
 - **DONE -- the full matrix:** the codes/step x vocab sweep is complete and seeded (sec. 7.2); the old
   pre-manifest 0.0266 / 0.0382 numbers are superseded by the manifest-logged cells.
+- **DONE -- codebook health:** perplexity/usage for all 15 cells, sec. 7.2a.
+- **DONE -- downstream gen-FID** (FSQ-tokens vs RVQ-tokens generator, transformer backbone, full test
+  split): measured at 18 epochs (2026-09-20, RVQ ahead) and re-measured at a converged 60 epochs
+  (2026-09-21, direction reversed, FSQ ahead) -- sec. 7.4. The apparent 18-epoch anomaly is resolved:
+  it was undertraining, not a real property of the RVQ token stream.
 - **Generalization gap:** run `scripts/evaluation/eval_generalization.py` -> train/val/test columns into sec. 7.2.
-- **Multi-seed + downstream gen-FID** (FSQ-tokens vs RVQ-tokens generator) to make the claim airtight.
+- **Multi-seed** on both the tokenizer matrix and the downstream gen-FID comparison (now at 60 epochs),
+  to make either claim airtight against single-seed noise.
 
 ## 7.6 Where each number lives (reproducibility)
-- **Every sec. 7.2 cell:** `outputs/runs/*tokenizer_<stem>/metrics.jsonl` (config + git + seed + versions
-  manifest, per-epoch + final test recon-FID). E.g. fsq_g8_v1024 = 0.0170 at
+- **Every sec. 7.2 cell:** `artifacts/outputs/runs/tokenizer/<stem>/metrics.jsonl` (config + git + seed +
+  versions manifest, per-epoch + final test recon-FID). E.g. fsq_g8_v1024 = 0.0170 at
   `*tokenizer_fsq_g8_v1024/`; rvq_l8_1024 = 0.0221 at `*tokenizer_rvq_l8_1024/`.
 - The pre-manifest 0.0266 / 0.0382 (old STATUS.md) are **superseded** by the seeded matrix.
 

@@ -107,10 +107,12 @@ The claim of Contribution B is bounded memory **at matched quality**, which is o
 transformer is *strong*. So the twins are matched on the controlled axes (Lesson 8 + the training
 protocol): identical tokenizer, data, seed (2026), optimiser/schedule, and **parameter count**
 (depth chosen so $\#\theta_{\text{transformer}} \approx \#\theta_{\text{Mamba}}$). Only the backbone
-and its positional mechanism differ. On the 31.6M *pilot*, the transformer is a genuinely competitive
-baseline (twin FID within $\sim\!1.19\times$ of its counterpart -- traceable to the Phase-0 twin table
-v0; 100M result pending). We are trying to *tie* its quality, not beat it -- and win on the streaming
-axis.
+and its positional mechanism differ. On the 31M architecture-decision gate (ADR 0002), the transformer
+is a genuinely competitive baseline (twin FID within $\sim\!1.19\times$ of its counterpart). The
+controlled 34M twin (Lesson 19), converged at 60 epochs and confirmed robust to a further 40-epoch
+extension, makes this precise: on the full test split, Mamba **leads on every metric measured,
+including FID** -- not a tie, with the streaming-memory win on top. The 100M-scale result remains
+unmeasured and is not currently planned (Lesson 17.3).
 
 ## 11.7 Big-picture fit
 

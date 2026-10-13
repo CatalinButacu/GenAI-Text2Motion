@@ -84,23 +84,26 @@ read off one model.
 
 `eval/streaming_bench.py` steps both backbones' `step()` to long horizons on **random-weight 100M
 twins** (latency/state are architecture properties -- no checkpoint needed). Measured
-(`outputs/streaming_bench*.json`, RTX 3050, batch 1; transformer 95.4M/12 layers, Mamba 96.4M/23):
+(`scripts/figures/plot_streaming_bench.py`, transformer 95.4M/12 layers, Mamba 96.4M/23):
 
 | horizon | Transformer state | Mamba state | Transf. ms/step | Mamba ms/step |
 |---|---|---|---|---|
-| 64   | 5.9 MB  | **2.68 MB** | 11 | 24 |
-| 1024 | 76.7 MB | **2.68 MB** | 12 | 37 |
-| 2048 | 152 MB  | **2.68 MB** | 23 | 28 |
-| 4096 | 303 MB  | **2.68 MB** | 25 | 28 |
-| 8192 | 605 MB  | **2.68 MB** | **264** | **53** |
+| 64   | 5.9 MB  | **2.68 MB** | ~12 | ~26 |
+| 1024 | 76.7 MB | **2.68 MB** | ~12 | ~26 |
+| 4096 | 303 MB  | **2.68 MB** | 16.5 | ~26 |
+| 6144 | ~454 MB | **2.68 MB** | 23.6 | ~26 |
+| 8192 | 605 MB  | **2.68 MB** | **~230** | ~26 |
 
 **Memory -- decisive at every horizon:** Mamba's recurrent state is **2.68 MB flat**; the transformer's
-KV-cache grows linearly to **605 MB at 8192** (~225x) and is unbounded. **Latency -- crossover at
-~4096:** below ~4k steps the shallower transformer is faster per step; the two meet near 4096
-(~25 vs ~28 ms); then the transformer's quadratic attention dominates -- at **8192 it is 264 ms/step vs
-Mamba's 53 ms (~5x slower)**, with a 1 GB peak vs Mamba's flat 0.4 GB. So at long horizons **both**
-memory and latency favor the SSM; at short horizons the win is purely memory. The crossover is **pinned
-by data**, not asserted. (Mamba's per-step time is also expected to drop with the fused scan kernel.)
+KV-cache grows linearly to **605 MB at 8192** (~225x) and is unbounded. **Latency -- crossover near
+~6500:** below that, the shallower transformer is faster per step; then quadratic attention takes over
+and by **8192 the transformer is ~230 ms/step against Mamba's flat ~26 ms**. So at long horizons
+**both** memory and latency favor the SSM; at short horizons the win is purely memory. Two caveats
+stated plainly: Mamba here runs eager-mode (no fused CUDA kernel on the Windows test machine, a
+roughly constant 2x per-step penalty), and the transformer's latency jump past L~6000 is amplified by
+the 4 GB test GPU nearing its memory limit -- the **memory** result carries no such caveat, so the
+efficiency argument leads with memory and reports latency as a corroborating trend (dissertation
+sec. 5.5).
 
 ## 13.6 Why this matters for the use case
 
@@ -115,11 +118,29 @@ open-ended real-time generation *possible* on fixed hardware (e.g. the 4GB lapto
 This lesson supplies the **efficiency half** of Contribution B's two-part claim:
 - Lesson 12 built the fixed-size-state model; **Lesson 13** quantifies its streaming cost (constant
   memory, linear compute) against the transformer's growing cache -- the signature plot.
-- Lesson 14 supplies the **quality half**: the twins must *tie* on FID/R-precision, or "cheaper" would
-  be meaningless. Only "tie on quality **and** win on streaming cost" is the contribution.
+- Lesson 14 supplies the **quality half**: the twins must at least *tie* on FID/R-precision, or
+  "cheaper" would be meaningless -- at a converged 60-epoch budget the Mamba does better than tie, it
+  **leads** on every metric measured (Lesson 19, dissertation sec. 5.6). "Leads on quality **and** wins
+  on streaming cost" is the contribution.
+
+## 13.8 Training cost is not inference cost
+
+The Mamba twin trains **~9x slower per epoch** than the transformer (7.4 vs 66.5 min/epoch, measured
+from the 60- and 100-epoch runs' wall-clock) but is only **~2x slower at inference** (9.4 vs 20.0
+ms/step, measured in-process on the trained 60-epoch checkpoints, 30-step/120-frame generations) -- a
+much smaller gap, and one that matches sec. 13.5's independently-measured "~2x per-step penalty" from
+the architecture benchmark almost exactly. The reason the gaps differ: gradient checkpointing
+(Lesson B / dissertation sec. 5.9, needed to fit the eager scan's activations in 4 GB) recomputes each
+block's forward pass during backprop -- a training-only cost that inference, which never runs backward,
+does not pay at all. The eager scan's multi-round, full-sequence tensor materialization (sec. 12) is
+also far more expensive when run once per training sequence than once per inference `step()` call.
+Practically: whatever this project's 4 GB card cost in training wall-clock, it does not carry over to a
+deployed model -- both twins generate far faster than 20 fps real-time (19.5x transformer, 9.6x Mamba).
 
 > **Bottom line:** measured on the 100M twins, Mamba streams in a **fixed 2.68 MB** of state at every
 > horizon; the transformer's KV-cache grows to **605 MB at horizon 8192** (O(L), ~225x). Latency
-> crosses over near ~4096 steps -- by 8192 the transformer is **264 ms/step vs Mamba's 53 ms (~5x)**.
+> crosses over near ~6500 steps -- by 8192 the transformer is **~230 ms/step vs Mamba's flat ~26 ms**.
 > Because `step` and `forward` are the same function, this efficiency is a property of the very model we
-> score for accuracy -- so memory is decisive everywhere, and latency too past ~4k steps.
+> score for accuracy -- so memory is decisive everywhere, and latency too past ~4k steps. Separately, at
+> the trained 34M scale, training is ~9x slower for the Mamba twin but inference only ~2x -- the
+> checkpointing cost that explains the training gap is training-only (sec. 13.8).

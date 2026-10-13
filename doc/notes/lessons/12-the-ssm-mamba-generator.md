@@ -122,10 +122,14 @@ fallback (loud import error if the kernel is requested but absent -- no silent d
 - **Structural (proven now):** the state shape is horizon-independent (sec. 12.5), and stream==batch
   parity holds (`test_parity_mamba`). The $O(1)$/$O(L)$ asymptotics are a *fact about the architecture*,
   not an experimental hope.
-- **Empirical (pending):** that Mamba **matches** the transformer's FID at equal params/data/seed, and
-  that the memory/latency-vs-horizon curves separate as predicted, are the 100M twin run + the
-  streaming benchmark (Lessons 13-14). The pilot is encouraging but the citable numbers are not in yet
-  -- say so to examiners.
+- **Empirical (measured at 34M, converged, robustness-checked -- sec. 13.5 + Lesson 19):** the
+  memory/latency-vs-horizon curves separate exactly as predicted (streaming benchmark, Lessons 13-14).
+  On the 34M controlled twin at a converged 60-epoch budget, full test split, Mamba **leads the
+  transformer on every metric measured, including FID** -- reversing an earlier 18-epoch reading. A
+  further 40-epoch extension (100 total) changed nothing for Mamba (best-by-val checkpoint stayed at
+  epoch 30) while the transformer's checkpoint at 100 epochs generalized worse than at 60, widening
+  Mamba's lead. The 100M scale-up remains unmeasured and is not currently planned (Lesson 17.3) -- say
+  so to examiners.
 
 ## 12.8 Big-picture fit
 

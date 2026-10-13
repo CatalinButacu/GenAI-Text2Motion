@@ -7,8 +7,13 @@ grounded in the actual code (file named in its header), uses LaTeX math, and mos
 "The picture" diagram. Read in the order below; the numbering is historical, the **grouping** is the
 reading order.
 
-> Status (2026-06-17): compute is RUNNING (tokenizer matrix finishing locally; the 100M twin run is the
-> next cloud step). The lesson spine is complete.
+> Status (2026-09-27): both contributions have measured, epoch-budget-robust results. The tokenizer
+> matrix and its downstream generation A/B are done at a converged 60 epochs (sec. 7); the 34M
+> transformer-vs-mamba twin is measured at the same converged 60 epochs (sec. 19) -- the SSM leads on
+> every metric, including FID, reversing an earlier 18-epoch reading. A further 40-epoch extension to
+> 100 total confirmed this: the SSM's checkpoint never improved past epoch 30, and the transformer's
+> checkpoint at 100 epochs generalizes worse than at 60, widening the SSM's lead. The lesson spine is
+> complete.
 
 ## Foundations -- representation and data
 | Lesson | Covers | Diagram |
@@ -42,6 +47,7 @@ reading order.
 |---|---|---|
 | **A -- loss and optimizer** | term-split CE + soft-decode geometric, L1, AdamW + warmup/cosine + EMA + clip | |
 | **B -- escaping the plateau** | the plateau-avoidance checklist, CFG dropout, pkeep, text-unfreeze, reproducibility | yes (training step) |
+| **C -- contracts and configuration correctness** | the ADR 0004 stage-boundary contracts; four real cross-contract defects found and fixed (RVQ vocab size, gate dropout comparison, missing DataLoader workers, duplicated `num_quantizers`), each with its fix and (where applicable) its regression test | yes (dependency rule) |
 
 ## System, framing, future work
 | Lesson | Covers | Diagram |
@@ -55,4 +61,5 @@ reading order.
 ## What remains (finishing, not new theory)
 - **DONE:** seeded full matrix + Lesson 7 rewrite; all diagrams; numeric consistency; **generalization
   audit** (`outputs/generalization.md`: no overfitting, gap <= 0 for 13/15 cells).
-- The **100M twin run** -> Table 1's generator rows + the streaming figure (Lesson 19). [cloud-gated]
+- The **100M twin run** -> Table 1's generator rows (Lesson 19); not yet measured. The streaming
+  figure itself is already done at 100M scale (random-weight benchmark, no trained checkpoint needed).

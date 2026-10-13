@@ -147,9 +147,12 @@ The math above predicts that **CFG and non-greedy sampling matter**. On the 31.6
 (validation split, 300 clips; traceable to `outputs/cfg_sweep.log`), locking $s=5$ moved
 $\mathrm{FID}\ 6.14\!\to\!3.55$ ($-42\%$) and R@1 $0.105\!\to\!0.22$ ($\times 2.1$), with the
 temperature/top-$p$ pair fixed at $(\tau,p)=(1.1,0.9)$. These confirm the sampling theory on the
-pilot. **They are not the thesis result**: the 100M transformer-vs-Mamba twin at matched
-params/data/seed is the run that produces the citable numbers, and it is still pending. Stated plainly
-so an examiner sees exactly which claims are evidenced and which are forthcoming.
+pilot. **They are not the thesis result on their own**: the citable numbers are the 34M
+transformer-vs-Mamba controlled twin table (Lesson 19), measured on the full test split at these fixed
+sampling settings. That table is complete and epoch-budget-robust at a converged 60 epochs (the SSM
+leads on every metric), confirmed by a further 40-epoch extension that changed nothing for the SSM and
+only made the transformer's citable result worse; the 100M scale-up remains unmeasured and is not
+currently planned (Lesson 17.3). Stated plainly so an examiner sees exactly which claims are evidenced.
 
 ## 8.10 Why this lesson is the hinge
 

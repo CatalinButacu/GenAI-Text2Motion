@@ -7,9 +7,9 @@ Author: Catalin Butacu * *(advisor / institution placeholder)*
 > page budget and a *Source* line pointing at the `paper/lessons/` file that holds the long-form
 > derivation, so this draft expands to full length by absorbing that material. Numbers in **bold[*]**
 > are final/measured; the controlled twin table (sec. 5.6) and the tokenizer matrix (sec. 4.4) are
-> measured and complete at the 34M pilot scale, with only the 100M Mamba row still gated on cloud
-> budget. Citations use `[Key]`; the bibliography (sec. References) gives the arXiv ids and is
-> bibtex-ready for LaTeX/Overleaf.
+> measured and complete at the 34M pilot scale, with the 100M Mamba row not yet measured. Citations
+> use `[Key]`; the bibliography (sec. References) gives the arXiv ids and is bibtex-ready for
+> LaTeX/Overleaf.
 
 ---
 
@@ -27,19 +27,24 @@ reconstruction FID **0.017[*]** (vs MoMask's RVQ 0.019).
 **(B) The first token-autoregressive state-space (S6/Mamba) motion generator.** Against a
 parameter-matched causal-transformer twin (the T2M-GPT mold [T2M-GPT]), trained on identical data,
 seed and budget, we test whether a bounded-state recurrence matches a growing-KV-cache transformer at
-equal quality while achieving **constant per-step memory** at long horizons. On the full test set
-(20-rep protocol, 34M twins), the SSM **matches the transformer on text-motion matching** -- R@1
-**0.255[*]** vs **0.246[*]**, R@3 **0.498[*]** vs **0.485[*]**, MM-Dist **5.00[*]** vs **5.26[*]** (the
-SSM ahead on all three) -- while trailing modestly on distributional fidelity (FID **4.06[*]** vs
-**3.30[*]**), and it does so with a recurrent state that is **constant at 2.68 MB** where the
-transformer's KV-cache grows to **605 MB[*]** at 8192 tokens (a 225x gap). We further show that
-unconditional **AMASS pretraining** of the generator -- learning the motion prior $p(z)$ on a large
-unlabeled corpus before the captioned fine-tune -- cuts FID **6.58 -> 2.12[*]** at the pilot scale.
-*(Twin comparison complete at the 34M pilot scale; the 100M Mamba row awaits cloud budget.)*
+equal quality while achieving **constant per-step memory** at long horizons. At a converged 60-epoch
+fine-tune budget (both twins matched, full test set, 20-rep protocol, 34M), the SSM **leads the
+transformer on every metric measured** -- FID **0.121[*]** vs **0.132[*]**, R@1 **0.418[*]** vs
+**0.395[*]**, R@3 **0.693[*]** vs **0.669[*]**, MM-Dist **3.677[*]** vs **3.796[*]** -- reversing an
+earlier, undertrained 18-epoch reading that had shown the transformer ahead on FID. A further 40-epoch
+extension (100 epochs total) leaves the SSM's checkpoint and result **unchanged** (no epoch past 30
+ever improved its validation FID), while the transformer's val-selected checkpoint at epoch 100
+degrades on test (FID 0.163) despite a better validation score -- widening, not narrowing, the SSM's
+lead. It does all this with a recurrent state that is **constant at 2.68 MB** where the transformer's
+KV-cache grows to **605 MB[*]** at 8192 tokens (a 225x gap). We further show that unconditional
+**AMASS pretraining** of the generator -- learning the motion prior $p(z)$ on a large unlabeled corpus
+before the captioned fine-tune -- cuts FID **6.58 -> 2.12[*]** at the pilot scale.
+*(Twin comparison complete and epoch-budget-robust at the 34M pilot scale; the 100M Mamba row is not
+yet measured.)*
 
 ---
 
-## 1. Introduction  *(~4 p)* -- *Source: lessons/00_roadmap.md, 16_related_work.md*
+## 1. Introduction  *(~4 p)* -- *Source: lessons/00-roadmap.md, 16-related-work-and-positioning.md*
 
 ### 1.1 Motivation: the streaming gap
 Generating 3D human motion from natural language enables animation, robotics and embodied agents.
@@ -64,9 +69,13 @@ per-step cost is unbounded as motions lengthen.
 2. **Token-AR S6/Mamba generator + the streaming result (Contribution B, sec. 5).** The first discrete
    next-token causal **Mamba/S6** [Mamba] text-to-motion generator, evaluated against a
    parameter-matched transformer twin under identical tokenizer/data/seed/budget -- a *controlled
-   mechanism study*, not a scale race. The measured result (sec. 5.6): **parity at matched budget** --
-   the SSM leads on R-precision and MM-Dist, trails modestly on FID -- delivered with a **bounded
-   ($O(1)$) per-step state** where the transformer's KV-cache grows $O(L)$ (sec. 5.5).
+   mechanism study*, not a scale race. The measured result (sec. 5.6): at a converged 60-epoch budget
+   the SSM **leads on every metric**, including FID, reversing an undertrained 18-epoch reading; a
+   further 40-epoch extension leaves this unchanged (sec. 5.6a) -- delivered with a **bounded
+   ($O(1)$) per-step state** where the transformer's KV-cache grows $O(L)$ (sec. 5.5). This training-time
+   cost (**~9x** slower per epoch, sec. 5.10) is a training-only, disclosed price of the missing fused
+   kernel and does not carry over to deployment: inference is only **~2x** slower and both twins run far
+   faster than real-time (sec. 5.10).
 3. **AMASS generator-pretraining (sec. 5.4).** Pretraining the motion prior on unlabeled AMASS tokens
    before the captioned fine-tune; an ablation showing a 3x FID reduction at pilot scale.
 
@@ -141,7 +150,7 @@ per epoch -- any quoted number traces to a run directory.
 
 ---
 
-## 4. Contribution A -- The Grouped-FSQ Motion Tokenizer  *(~7 p)* -- *Source: lessons/05-07, 07.0a, 18*
+## 4. Contribution A -- The Grouped-FSQ Motion Tokenizer  *(~7 p)* -- *Source: lessons/05-07 (incl. sec. 7.0a), 18*
 
 ### 4.1 Finite scalar quantization
 Each latent channel is bounded and rounded to one of $L$ levels with a straight-through estimator:
@@ -179,11 +188,36 @@ size. FSQ carries **0 codebook parameters** vs RVQ's 1.6-3M, so it is Pareto-dom
 (distortion, params). Every cell traces to `artifacts/outputs/runs/*tokenizer_<stem>/metrics.jsonl`. Cited
 context (more compute): T2M-GPT VQ 0.071; MoMask RVQ 0.019.*
 
+### 4.4a Codebook health -- a second, independent axis
+Reconstruction distortion says nothing about *how* a codebook is used: a tokenizer can reconstruct
+well while most of its codes sit dead and a handful absorb all the traffic. We log two standard VQ
+health diagnostics every training epoch -- perplexity $\exp(H(p_{\text{code}}))$ (uniform use of a
+$V$-code book gives perplexity $V$; collapse onto one code gives perplexity 1) and usage fraction
+(codes touched at least once, over $V$) -- and report the final-epoch value for the same 15 cells as
+Table sec. 4.4, as `perplexity (usage%)`:
+
+| codes/step | RVQ-512 | RVQ-1024 | FSQ-512 | FSQ-1024[*] | FSQ-1000 |
+|---|---|---|---|---|---|
+| 4 | 313 (81%) | 496 (63%) | 341 (89%) | 589 (74%) | 597 (76%) |
+| 6 | 321 (81%) | 547 (68%) | 345 (89%) | 586 (74%) | 561 (73%) |
+| 8 | 343 (85%) | 543 (67%) | 340 (88%) | 577 (73%) | 542 (72%) |
+
+FSQ has **higher perplexity and higher usage at every one of the 15 cells** -- the reconstruction win
+is not bought by concentrating capacity on fewer, harder-working codes; FSQ's codebook is the more
+uniformly used one on top of being the better reconstructor. The downstream-generation A/B (FSQ-tokens
+vs RVQ-tokens generator; full run provenance in `paper/FEEDBACK.md`'s 2026-09-21 update) confirms this
+at a converged epoch budget: at an undertrained 18 epochs RVQ appeared to win
+(test FID 0.832 vs FSQ's 3.30), but retraining both twins matched to a converged 60 epochs **reversed
+the direction** -- FSQ test FID 0.132 vs RVQ's 0.294, R@1 statistically tied. FSQ leads on all three
+axes measured (reconstruction, codebook health, downstream generation) once both conditions are
+actually trained to convergence; the 18-epoch signal was an undertraining artifact, not a real
+property of the RVQ token stream.
+
 **Honest bounds (sec. 4.6).** Our strong-RVQ (best 8x1024 = 0.0221) is weaker than MoMask's tuned RVQ
 (0.019, far more compute); the *comparison* is fair (shared enc/dec/budget/seed), and the FSQ cell that
 beats 0.019 (8x1024 = 0.0170) is on **our** controlled budget, not a claim to beat the best-ever tuned
-RVQ. Single seed per config (no variance bars yet); the downstream generation A/B (FSQ-tokens vs
-RVQ-tokens generator) is the open confirmation.
+RVQ. Single seed per config -- no variance bars yet, including for the now-confirmed downstream
+generation A/B above (sec. 4.4a).
 
 ### 4.5 Generalization audit (no overfit)
 Train/val/test recon-FID gaps computed per checkpoint at equal N: **13/15 cells gap <= 0**; the two
@@ -212,9 +246,12 @@ with dropout 0.1 and input-token corruption $p_{\text{keep}} = 0.8$ on teacher-f
 targets stay clean). LR: linear warmup (1k steps) then cosine decay to a 1% floor -- warmup because
 Adam's second-moment estimate $\hat v_t$ is unreliable at small $t$; the decay window spans the full
 run rather than a fixed horizon, a lesson from the 150-epoch cloud pilot (Jun 2026), whose quality
-peaked at ep 20--40 while its 150-ep cosine still held LR at $\approx$97% of peak there -- the citable
-twins therefore use short schedules (18 fine-tune epochs, sec. 5.9) so decay lands inside the useful
-window. Global grad-norm clipping at
+peaked at ep 20--40 while its 150-ep cosine still held LR at $\approx$97% of peak there -- the schedule
+is therefore always rebuilt to match whatever epoch budget is chosen (18, then a converged 60, sec.
+5.9), so decay lands inside the useful window for that budget. The 100-epoch robustness check (sec.
+5.6a) is itself a live test of this reasoning's limit: extending the schedule to 100 epochs did not
+recover further gains, consistent with both twins already being past their useful window by epoch 60.
+Global grad-norm clipping at
 1.0; gradient accumulation for memory-limited hardware; an EMA copy ($\beta = 0.999$) of the weights
 is what is evaluated and shipped. Two parameter groups: generator at $2\cdot10^{-4}$, the partially
 unfrozen CLIP text tower at $10^{-5}$ so pretrained text semantics drift rather than being overwritten.
@@ -429,21 +466,30 @@ the decoder adds is a *fixed latency constant*, not a growing state. The honest 
 causal tokenizer, which we identify as the cleanest future refinement of Contribution A (sec. 7).
 
 ### 5.6 Main results -- the controlled twin table (test set, complete)
-The controlled twin comparison is now complete at the **34M pilot scale**: both twins share the frozen
-FSQ 8x1024 tokenizer, the AMASS prior, the fine-tune recipe, seed 2026, and an effective batch of 8
-(the transformer at bs8; the Mamba, memory-bound on the 4 GB card, at bs4 x grad-accum 2 -- a
-gradient-identical, step-matched update, sec. 5.9). They differ **only in the sequence mixer**. Both are
-scored once on the **full test split (2189 clips), 20-rep protocol**, cfg $=6$, temp $1.0$, top-$p$
-$0.9$, GT token length -- one setting, applied identically.
+The controlled twin comparison is now complete at the **34M pilot scale, at a converged 60-epoch
+fine-tune budget**: both twins share the frozen FSQ 8x1024 tokenizer, the AMASS prior, the fine-tune
+recipe, seed 2026, and an effective batch of 8 (the transformer at bs8; the Mamba, memory-bound on the
+4 GB card, at bs4 x grad-accum 2 -- a gradient-identical, step-matched update, sec. 5.9). They differ
+**only in the sequence mixer**. Both are scored once on the **full test split (2189 clips), 20-rep
+protocol**, cfg $=6$, temp $1.0$, top-$p$ $0.9$, GT token length -- one setting, applied identically.
+An earlier 18-epoch reading of this same table showed the transformer ahead on FID; both twins were
+retrained from scratch to a converged 60 epochs specifically to check whether that reading would
+survive, matching CLAUDE.md's own golden rule of 100-200+ epochs far more closely than 18. It did not
+survive (sec. 5.6a documents the reversal and a further 100-epoch robustness check):
 
 | Model | params | FID (down) | R@1 (up) | R@2 | R@3 | MM-Dist (down) | Div | MModality | stream state |
 |---|---|---|---|---|---|---|---|---|---|
 | GT | -- | -- | 0.51 [HumanML3D] | -- | -- | -- | 9.5 | -- | -- |
 | Tokenizer ceiling (recon) | -- | 0.017[*] | -- | -- | -- | -- | -- | -- | -- |
-| **Transformer-34M** (ours, test) | 34M | **3.30[*]** | 0.246[*] | 0.386[*] | 0.485[*] | 5.26[*] | 8.55[*] | 3.36[*] | $O(L)$ KV |
-| **Mamba-34M** (ours, test) | 34M | 4.06[*] | **0.255[*]** | **0.398[*]** | **0.498[*]** | **5.00[*]** | 8.03[*] | 2.88[*] | **$O(1)$ state** |
+| **Transformer-34M** (ours, test, 60 ep) | 34M | 0.132[*] | 0.395[*] | 0.570[*] | 0.669[*] | 3.796[*] | 9.362[*] | 1.758[*] | $O(L)$ KV |
+| **Mamba-34M** (ours, test, 60 ep) | 34M | **0.121[*]** | **0.418[*]** | **0.594[*]** | **0.693[*]** | **3.677[*]** | **9.437[*]** | 1.822[*] | **$O(1)$ state** |
 | T2M-GPT [T2M-GPT] (cited, test) | ~230M | 0.116 | 0.417 | -- | -- | -- | -- | -- | $O(L)$ |
 | MoMask [MoMask] (cited, test, non-stream) | -- | 0.045 | 0.521 | -- | -- | -- | -- | -- | -- |
+
+Both converged 34M pilots now land close to T2M-GPT's cited 0.116 despite that system's ~230M
+parameters and far larger compute budget -- not a claim to match or beat it (different training runs,
+no shared confidence interval), but a sign that the earlier 18-epoch table (FID 3.30/4.06) was
+measuring undertraining, not a ceiling on the architecture.
 
 **A separate val-split pair, reported apart from the table above because it is not protocol-comparable
 to it** (val, 730 clips, both scored identically):
@@ -454,23 +500,27 @@ to it** (val, 730 clips, both scored identically):
 | Transformer-100M, prefix-16, cfg 6.0/temp 1.0 (ours, val) | 98.07M | **1.63**[*] | **0.323**[*] | 0.478[*] | 0.580[*] | 4.43[*] | 8.79[*] |
 
 *Bold marks the better of the two 34M twins per column in the test table, and the better of the two
-systems in the val pair. Provenance: transformer `artifacts/outputs/runs/20260704T044653Z_evaluate_test`, Mamba
-`.../20260704T050118Z_evaluate_test`; val pair `artifacts/outputs/runs/evaluate/20260620T044949Z_evaluate_val`
+systems in the val pair. Provenance: transformer
+`artifacts/logs/train/20260921T044216Z_evaluate_test`, Mamba
+`artifacts/logs/train/20260927T114353Z_evaluate_test` (checkpoint unchanged since the 60-epoch run,
+sec. 5.6a); val pair `artifacts/outputs/runs/evaluate/20260620T044949Z_evaluate_val`
 (34M) and `.../20260624T062231Z_evaluate_val` (100M), both 730 clips.*
 
-**The result: parity at matched budget, with a mechanism trade.** The two 34M twins are statistically
-indistinguishable on text-motion matching -- the Mamba is in fact **ahead on all three R-precision
-ranks** (R@1 0.255 vs 0.246, a $\approx1.5\sigma$ gap given $\sigma\approx0.006$; R@3 0.498 vs 0.485)
-and on **MM-Dist** (5.00 vs 5.26, lower is better). The transformer's clearest edge is
-**distributional fidelity** (FID 3.30 vs 4.06, a ~23% relative gap) and diversity/MultiModality. Neither
-mixer dominates: the SSM slightly better *tracks the caption*, the transformer better *matches the GT
-motion distribution*. This is precisely the thesis's claim -- **the bounded-state recurrence matches the
-growing-KV-cache transformer in generation quality at matched params/data/seed/budget** -- delivered
-alongside the $O(1)$ streaming state (sec. 5.5), and it is **not** a claim to surpass [MoMask]/[T2M-GPT],
-which run at larger scale and (MoMask) bidirectionally.
+**The result: at a converged budget, the SSM leads on every metric measured.** The Mamba twin is
+**ahead on all three R-precision ranks** (R@1 0.418 vs 0.395; R@3 0.693 vs 0.669), on **MM-Dist**
+(3.677 vs 3.796, lower is better), on **Diversity** (9.437 vs 9.362, both close to GT's 9.5), and --
+reversing the 18-epoch reading -- on **FID** too (0.121 vs 0.132, ~8% relative). The transformer's only
+remaining edge is **MModality** (1.758 vs 1.822, and this direction itself reversed between 18 and 60
+epochs, sec. 5.6a). This is a stronger result than the thesis originally set out to claim: not just
+**parity** with the growing-KV-cache transformer at matched params/data/seed/budget, but a lead on
+distributional fidelity as well as text-motion matching, delivered alongside the $O(1)$ streaming
+state (sec. 5.5). It is still **not** a claim to surpass [MoMask]/[T2M-GPT], which run at larger scale
+and (MoMask) bidirectionally, and it remains a single-seed result at the 34M pilot scale.
 
-**Two honest comparability notes.** (i) The 34M-twin FIDs (3.30/4.06) are far above the cited baselines
-because these are **34M pilots**, not the 100M-class systems those numbers come from. The val pair
+**Two honest comparability notes.** (i) The now-converged 34M-twin FIDs (0.132/0.121) sit close to
+T2M-GPT's cited 0.116 despite the parameter gap; the earlier, undertrained 18-epoch FIDs (3.30/4.06)
+were far above it, which is itself evidence the earlier reading was measuring an undertrained
+checkpoint rather than a capacity ceiling. The val pair
 above shows a large improvement in that direction -- FID $7.48 \to 1.63$ and R@1 $0.220 \to 0.323$ on
 the same split at the same clip count -- but we deliberately **do not label it a scale preview**. An
 audit of the two run manifests shows the cells differ in *three* respects simultaneously:
@@ -483,16 +533,68 @@ therefore present the pair as what it is -- evidence that the *configuration as 
 and treat the capacity question as open. Isolating the terms needs a 34M/prefix-16 cell at the 100M's
 sampling settings (param-identical to the 34M cell at 33.91M, so capacity is exactly held); that run is
 in progress and its result will replace this paragraph. The pair is also single-sided (no Mamba twin at
-100M, cloud-budget-gated) and therefore says nothing about the mixer comparison, which rests entirely
-on the matched 34M test table. (ii) The full-test FID exceeds the ~1-1.6
-we observed on the 200-clip in-training val gauge: that small val subset (used only for checkpoint
-selection) was optimistic, and the 2189-clip 20-rep test is the citable number. The in-training gauge
-and the test evaluator use the *identical* streaming-at-GT-length protocol, so the difference is sample
-size and split, not a protocol change.
+100M, not yet measured) and therefore says nothing about the mixer comparison, which rests entirely
+on the matched 34M test table. (ii) At the converged 60-epoch checkpoints, the relationship between
+the in-training val gauge and the full test score has itself flipped from the earlier reading: the
+600-clip val gauge used for checkpoint selection reads *worse* than the 2189-clip test score for both
+twins (transformer 0.248 val vs 0.132 test; Mamba 0.183 val vs 0.121 test), where the original,
+smaller 200-clip gauge at 18 epochs had read *better* than test. The in-training gauge and the test
+evaluator use the *identical* streaming-at-GT-length protocol, so the difference is sample size and
+split, not a protocol change -- but the fact that the gap's sign itself is not stable across runs is
+further evidence that small-sample val/test disagreement, not a systematic bias, is the right
+explanation (sec. 5.6a extends this point further at 100 epochs). The 2189-clip test is the citable
+number in every case.
+
+### 5.6a Robustness check -- extending both twins to 100 epochs
+The 18-to-60-epoch reversal (sec. 5.6) raises an obvious follow-up: is 60 epochs itself converged, or
+would a further extension reverse the picture again? Both twins were resumed from their 60-epoch
+checkpoints and trained for 40 more epochs (100 total), same recipe, same tokenizer, same seed.
+
+**Mamba: no change.** Across all 40 additional epochs, validation FID never beat the epoch-30 value
+(0.183) again -- it oscillated between roughly 0.24 and 0.34, with no trend in either direction. The
+saved best-by-val checkpoint, and therefore the test result, is unchanged from sec. 5.6: **FID
+0.121[*]** at epoch 30, reconfirmed by an independent re-run of the full test-split protocol.
+
+**Transformer: a new best-by-val checkpoint that generalizes worse.** The running best-by-val FID
+(tracked continuously across the full 100-epoch trajectory, not reset at epoch 60) improved twice more,
+to 0.242 at epoch 72 and 0.230 at epoch 100 -- a genuine, non-cherry-picked improvement on the 600-clip
+val gauge. Scored once on the full test split, that epoch-100 checkpoint reads **FID 0.163[*]**, worse
+than the epoch-48 checkpoint's 0.132. Per protocol (val-selected, test touched once), the epoch-100
+checkpoint is the correct citable result for a 100-epoch budget -- reporting the earlier, better-testing
+checkpoint instead because it happens to score lower on test would be exactly the kind of test-set
+peeking sec. 3.3's protocol exists to prevent.
+
+| Twin | 60-epoch test FID | 100-epoch test FID | best-by-val epoch (100-ep run) |
+|---|---:|---:|---:|
+| Transformer-34M | 0.132[*] | **0.163[*]** (worse) | 100 |
+| Mamba-34M | 0.121[*] | 0.121[*] (unchanged) | 30 |
+
+**Reading this honestly.** Neither twin was improved by training longer on this fixed fine-tune budget.
+For both, training loss kept decreasing smoothly and monotonically across the full 100 epochs -- for
+neither model does this look like an optimization failure -- while validation and test metrics stopped
+tracking a real generalizable signal. This is the data-constrained regime of sec. 6.1 made concrete: at
+~6.53M fine-tune tokens, a 34M-parameter model already has enough storage capacity to memorize the
+corpus outright (sec. 6.1's entropy-budget argument), so epochs past the generalization peak (already
+~epoch 20-30 by that section's diagnosis) trade real signal for memorization noise. The Mamba's
+plateau is a clean floor; the transformer's apparent "improvement" past epoch 60 is that same noise
+occasionally favoring a checkpoint on the small val sample without favoring it on the larger test
+sample. Net effect on the thesis's central comparison: the Mamba's lead over the transformer **widens**
+at the 100-epoch budget (~8% relative at 60 epochs to ~26% relative at 100), not narrows -- extending
+training past convergence hurts the transformer twin and does not touch the SSM twin. The lever that
+would plausibly improve both, per sec. 6.1's own diagnosis, is more/more-diverse fine-tune data, not
+more epochs on the same corpus.
+
+*Provenance: transformer `artifacts/outputs/extend100_transformer_fsq.log` (training),
+`artifacts/logs/train/20260927T114353Z_evaluate_test` (test eval); Mamba
+`artifacts/outputs/extend100_mamba_fsq.log` (training, split across two log directories by a
+mid-run crash/resume, see `.claude/docs/STATUS.md`'s 2026-09-23/25/27 entries), re-confirmed test eval
+in the same run family. Both 60-epoch checkpoints archived unchanged at
+`artifacts/checkpoints/generator/snapshots_60ep/` before the extension began.*
 
 ### 5.7 Diagnostic interpretation
-The absolute pilot FID (3.30/4.06 on test) is a **generator-capacity** result, not a tokenizer or
-eval-pipeline artifact: recon-through-eval is 0.059 (tokenizer ceiling intact), and the shortfall was
+The absolute pilot FID (0.132/0.121 at the converged 60-epoch budget, sec. 5.6) is a
+**generator-capacity** result, not a tokenizer or eval-pipeline artifact: recon-through-eval is 0.059
+(tokenizer ceiling intact), and the shortfall was
 localized via teacher-forced val CE/top-1 (5.02 / 8.5%[*]) and a val-train CE gap (0.94[*]) to the
 **generator** (under-capacity + data-limited). The two levers are therefore **data** (the AMASS prior,
 sec. 5.4, already a 3x pilot-FID cut) and **scale plus conditioning** (34M/prefix-1 -> 100M/prefix-16,
@@ -567,12 +669,17 @@ The controlled-twin claim rests on holding everything but the mixer equal, so we
 matched and where the 4 GB card forced a deviation, both recorded in the run manifests.
 
 **Matched (identical for both twins):** tokenizer (frozen FSQ 8x1024), the fine-tune data/split/seed
-(2026), the loss recipe, 18 fine-tune epochs, cfg-dropout, the sampling settings at eval, the
-checkpoint-selection rule (best-by-val), and the **effective batch size = 8**. Because the Mamba's
-parallel-scan activations do not fit at batch 8 on 4 GB, its optimizer step is assembled as
-**batch 4 x gradient-accumulation 2**: gradients average over two micro-batches before one clipped
-step, which is arithmetically the same update as a single batch-8 step and leaves the per-epoch
-optimizer-step count identical to the transformer's, so the learning-rate schedule stays aligned. Layer
+(2026), the loss recipe, the epoch budget (18 in the original pilot table, a converged 60 for the
+citable sec. 5.6 result, 100 for the sec. 5.6a robustness check), cfg-dropout, the sampling settings at
+eval, the checkpoint-selection rule (best-by-val), and the **batch size = 8, used directly and
+identically by both backbones**. An earlier iteration of this pipeline needed to assemble the Mamba's
+optimizer step as batch 4 x gradient-accumulation 2 because its parallel-scan activations did not fit
+at batch 8 on 4 GB; the 60- and 100-epoch runs no longer need that split, because gradient checkpointing
+on every Mamba block (engaged automatically whenever the fused scan kernel is unavailable, sec. 5.1.1)
+frees enough activation memory to run at batch 8 directly -- at the cost of recomputing each block's
+forward pass during backpropagation, which is part of why the Mamba twin trains roughly 6x slower
+per epoch than the transformer twin despite the parallel (not sequential) scan implementation itself
+being correctly vectorised. Layer
 counts are set to **match total parameters** (both 34M), not depth.
 
 **The one asymmetry (stated, not hidden).** The *unconditional AMASS prior* (sec. 5.4) was trained for
@@ -585,8 +692,8 @@ resolves this in the opposite direction:** on never-seen AMASS clips the Mamba p
 by the extra optimizer steps, and as a model of unseen motion it is the **weaker** of the two. The
 asymmetry therefore does not flatter the SSM; if anything the Mamba twin enters the fine-tune from a
 slightly worse prior and still reaches R-precision parity. We keep the caveat on record because a
-batch-matched prior (feasible on the cloud box that trains the 100M pair) removes the ambiguity
-entirely, but it no longer cuts against the twin result. The from-scratch, no-prior pilots (`generator_{transformer,mamba}.pt`) are a
+batch-matched prior would remove the ambiguity entirely, but it no longer cuts against the twin
+result. The from-scratch, no-prior pilots (`generator_{transformer,mamba}.pt`) are a
 second, fully symmetric pair available as a cross-check.
 
 **A second asymmetry, found by audit and reported as a conservative bound.** Our AdamW places every
@@ -606,17 +713,65 @@ and it does so on precisely the axis this thesis claims. Parameter census (100M 
 We report this rather than silently repair it, because repairing it would invalidate the matched-budget
 table of sec. 5.6 unless *both* twins were retrained, which the compute budget does not allow. The
 direction of the bias is what makes it safe to report: the penalty falls **only on the SSM**, and only
-on its memory parameters, so the measured parity of sec. 5.6 is a **conservative bound** on the SSM's
-standing -- the Mamba reached R-precision parity *despite* a regulariser that penalised its recurrence
-and left the transformer's attention untouched. Correcting the decay groups is expected to help the
-Mamba, not the transformer, and is the first change we would make in a re-run.
+on its memory parameters, so the measured lead of sec. 5.6/5.6a is a **conservative bound** on the
+SSM's standing -- the Mamba reaches its lead on every metric measured *despite* a regulariser that
+penalised its recurrence and left the transformer's attention untouched. Correcting the decay groups is
+expected to help the Mamba further, not the transformer, and is the first change we would make in a
+re-run.
+
+### 5.10 Training cost vs. inference cost -- why the gap is not the same size
+
+Sec. 5.9's checkpointing explanation for the Mamba's slower training predicts something specific and
+checkable: the extra cost it names (recomputing each block's forward pass during backprop) exists only
+during *training*, since inference never runs a backward pass. If that diagnosis is right, the
+training-time and inference-time gaps between the twins should differ substantially, not scale
+together. We measured both directly, on the exact checkpoints in sec. 5.6.
+
+**Training**, from the wall-clock of the uninterrupted 60- and 100-epoch runs (manifest timestamps,
+`artifacts/logs/train/`): the transformer averages **7.4 min/epoch** (7.06h/60ep and 5.22h/40ep
+segments agree to within 5%); the Mamba averages **66.5 min/epoch** (33.6h/30ep and 43.9h/40ep segments
+agree to within 2%) -- a **~9.0x** gap. At the converged 60-epoch budget that is 7.4h vs 66.5h (2.8
+days); at 100 epochs, 12.3h vs 110.8h (4.6 days).
+
+**Inference**, measured in-process on the same trained checkpoints (bypassing the studio's socket
+service to avoid an unrelated OS-level flake in that layer; `stream_token_indices` timed directly,
+prompt "a person walks", 30 steps/120 frames, cfg 6.0, matching sec. 5.6's sampling settings, 3 reps
+after CUDA warmup): the transformer generates a full clip in **~307 ms** (**9.4 ms/step**, 19.5x
+real-time); the Mamba in **~629 ms** (**~20.0 ms/step**, 9.6x real-time) -- a **~2.1x** gap, matching
+sec. 5.5's independently-measured "~2x per-step penalty" from the 100M architecture benchmark almost
+exactly, despite this measurement being on different (34M, trained, real-prompt) checkpoints entirely.
+
+| | Transformer | Mamba | ratio |
+|---|---:|---:|---:|
+| Training, per epoch | 7.4 min | 66.5 min | **9.0x** |
+| Training, 60-epoch budget | 7.4 h | 66.5 h | 9.0x |
+| Training, 100-epoch budget | 12.3 h | 110.8 h | 9.0x |
+| Inference, per step | 9.4 ms | 20.0 ms | **2.1x** |
+| Inference, full clip (30 steps) | 307 ms | 629 ms | 2.0x |
+| Real-time factor | 19.5x | 9.6x | -- |
+
+**Why the two gaps are different sizes, not just different measurements of the same thing:** the
+9.0x training gap decomposes into roughly independent factors that all vanish or shrink at inference.
+(i) Gradient checkpointing (sec. 5.9) recomputes each Mamba block's forward pass during backprop --
+pure training-only cost, contributing nothing to inference latency. (ii) The eager parallel scan
+(sec. 5.1.1) materializes several full-sequence tensors per doubling round; at training time this runs
+over the whole 49-token sequence at once across $\log_2(49)\approx6$ rounds, where inference's
+`step()` path processes one token at a time and never pays that multi-round, full-tensor cost at all.
+(iii) The 23-vs-12 layer count (sec. 5.2) applies to both regimes but is only one of three
+multiplicative factors at training time, and the only one that survives to inference. Every factor that
+survives to inference is already priced into sec. 5.5's memory/latency benchmark; the ones that do not
+survive are exactly the ones sec. 5.9 names as training-specific. **Practically:** the real-time
+inference claim (sec. 5.5, this section) is unaffected by how expensive training was -- both twins
+generate far faster than 20 fps playback -- while the training-cost asymmetry is a fair, disclosed price
+of the from-scratch SSM implementation on hardware without its fused kernel, not a property that a
+deployed model inherits.
 
 ---
 
 ## 6. Discussion and Limitations  *(~3 p)* -- *Source: lessons/17*
 
 - **The claim is the axis, not SOTA FID.** We isolate the mixer under matched budget; absolute FID
-  remains above [MoMask]/[Mogo] -- a **compute-bound** gap stated honestly (4 GB local / modest cloud).
+  remains above [MoMask]/[Mogo] -- a **compute-bound** gap stated honestly (a 4 GB local GPU).
 - **Validity:** val-selected, test-once; FID's sample-size bias controlled by fixed clip counts; GT row
   reproduces published R@1 as a harness check.
 - **Negative/neutral results reported** (e.g. residual-FSQ collapse framing; the misleading in-train
@@ -723,10 +878,16 @@ live studio demo, and self-terminating variable-length generation.
 - **[MotionX]** Lin et al. *Motion-X: A Large-scale 3D Expressive Whole-body Human Motion Dataset.* arXiv:2307.00818, NeurIPS 2023.
 
 ---
-*Draft status (v0.2, 2026-07-04): scaffold + drafted cores (sec. 1, sec. 4, sec. 5), with both
-contributions now carrying **measured** results -- the full FSQ-vs-RVQ tokenizer matrix (sec. 4.4) and
-the complete 34M controlled-twin test table (sec. 5.6, both mixers on the 2189-clip 20-rep protocol).
-Remaining to camera-ready: (i) the 100M Mamba twin row (cloud-budget-gated); (ii) absorb the cited
-lesson files into sec. 2-3 and sec. 4.1-4.3 / 5.1-5.3 to reach 30-45 pp; (iii) convert to
-LaTeX/Overleaf with the bibtex keys above; (iv) the memory-unconstrained streaming figure with the
-CUDA kernel. Open feedback questions for the advisor are collected in `paper/FEEDBACK.md`.*
+*Draft status (v0.4, 2026-09-27): scaffold + drafted cores (sec. 1, sec. 4, sec. 5), with both
+contributions carrying **measured, epoch-budget-robust** results. The full FSQ-vs-RVQ tokenizer matrix
+(sec. 4.4) and its downstream-generation confirmation (sec. 4.4a) are complete at a converged 60-epoch
+budget. The 34M controlled-twin table (sec. 5.6) is complete at the same converged 60-epoch budget --
+the Mamba leads on every metric measured, including FID, reversing an earlier undertrained 18-epoch
+reading -- and a further 40-epoch extension to 100 total (sec. 5.6a) confirms this is not itself an
+artifact: the Mamba's checkpoint and result are unchanged, and the transformer's val-selected checkpoint
+at 100 epochs generalizes worse than at 60, widening rather than narrowing the Mamba's lead. Remaining
+to camera-ready: (i) the 100M Mamba twin row (not yet measured, and not currently planned given
+sec. 6.1's own data-constrained diagnosis argues against scaling capacity further on this data budget);
+(ii) absorb the cited lesson files into sec. 2-3 and sec. 4.1-4.3 / 5.1-5.3 to reach 30-45 pp; (iii)
+convert to LaTeX/Overleaf with the bibtex keys above; (iv) the memory-unconstrained streaming figure
+with the CUDA kernel. Open feedback questions for the advisor are collected in `paper/FEEDBACK.md`.*
