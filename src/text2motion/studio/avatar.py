@@ -82,6 +82,31 @@ def __yaw_init(
     return best_aa
 
 
+def __start_parameters(
+    model,
+    target: torch.Tensor,
+    cfg: SmplxFitConfig,
+    warm_start: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
+    device: str,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    frames = target.shape[0]
+    if warm_start is None:
+        root_position = target[:, 0].detach()
+        yaw = __yaw_init(model, target, root_position, device, cfg.yaw_candidates_deg)
+        body_pose = torch.zeros(frames, 63, device=device, requires_grad=True)
+        betas = torch.zeros(1, cfg.num_betas, device=device, requires_grad=True)
+        return yaw.requires_grad_(True), body_pose, betas
+    last_orient, last_pose, last_betas = warm_start
+    orient = torch.tensor(last_orient, dtype=torch.float32, device=device).expand(frames, -1)
+    pose = torch.tensor(last_pose, dtype=torch.float32, device=device).expand(frames, -1)
+    betas = torch.tensor(last_betas, dtype=torch.float32, device=device).unsqueeze(0)
+    return orient.clone().requires_grad_(True), pose.clone().requires_grad_(True), betas
+
+
+def __is_report_step(step: int, steps: int, every: int) -> bool:
+    return step % every == 0 or step == steps - 1
+
+
 def create_smplx_rest_pose_mesh(
     cfg: SmplxFitConfig, device: str = "cpu"
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -134,27 +159,7 @@ def fit_smplx_to_joints(
     total_iters = max(1, cfg.stage1_iters + cfg.stage2_iters)
 
     transl = target[:, 0].clone().requires_grad_(True)
-    if warm_start is not None:
-        last_orient, last_pose, last_betas = warm_start
-        global_orient = (
-            torch.tensor(last_orient, dtype=torch.float32, device=dev)
-            .expand(t, -1)
-            .clone()
-            .requires_grad_(True)
-        )
-        body_pose = (
-            torch.tensor(last_pose, dtype=torch.float32, device=dev)
-            .expand(t, -1)
-            .clone()
-            .requires_grad_(True)
-        )
-        betas = torch.tensor(last_betas, dtype=torch.float32, device=dev).unsqueeze(0)
-    else:
-        global_orient = __yaw_init(
-            model, target, target[:, 0].detach(), dev, cfg.yaw_candidates_deg
-        ).requires_grad_(True)
-        body_pose = torch.zeros(t, 63, device=dev, requires_grad=True)
-        betas = torch.zeros(1, cfg.num_betas, device=dev, requires_grad=True)
+    global_orient, body_pose, betas = __start_parameters(model, target, cfg, warm_start, dev)
 
     def forward():
         return model(
@@ -164,19 +169,16 @@ def fit_smplx_to_joints(
             betas=betas.expand(t, -1),
         ).joints[:, :JOINTS]
 
-    if cfg.stage1_iters > 0:
-        stage1 = torch.optim.Adam([global_orient, transl], lr=cfg.lr)
-        for it in range(cfg.stage1_iters):
-            stage1.zero_grad()
-            ((forward() - target) ** 2).sum(-1).mean().backward()
-            stage1.step()
-            if on_progress is not None and (
-                it % cfg.progress_every == 0 or it == cfg.stage1_iters - 1
-            ):
-                on_progress(it, total_iters)
+    stage1 = torch.optim.Adam([global_orient, transl], lr=cfg.lr, weight_decay=0.0)
+    for it in range(cfg.stage1_iters):
+        stage1.zero_grad()
+        ((forward() - target) ** 2).sum(-1).mean().backward()
+        stage1.step()
+        if on_progress is not None and __is_report_step(it, cfg.stage1_iters, cfg.progress_every):
+            on_progress(it, total_iters)
 
     stage2_params = [global_orient, body_pose, transl] + ([] if warm_start is not None else [betas])
-    stage2 = torch.optim.Adam(stage2_params, lr=cfg.lr)
+    stage2 = torch.optim.Adam(stage2_params, lr=cfg.lr, weight_decay=0.0)
     for it in range(cfg.stage2_iters):
         stage2.zero_grad()
         joints = forward()
@@ -187,9 +189,9 @@ def fit_smplx_to_joints(
         loss = data + cfg.w_smooth * smooth + cfg.w_reg * body_pose.pow(2).mean()
         loss.backward()
         stage2.step()
-        if on_progress is not None and (it % cfg.progress_every == 0 or it == cfg.stage2_iters - 1):
+        if on_progress is not None and __is_report_step(it, cfg.stage2_iters, cfg.progress_every):
             on_progress(cfg.stage1_iters + it, total_iters)
-        if verbose and (it % cfg.verbose_every == 0 or it == cfg.stage2_iters - 1):
+        if verbose and __is_report_step(it, cfg.stage2_iters, cfg.verbose_every):
             err = (joints.detach() - target).norm(dim=-1).mean().item() * 100
             logger.info(f"  fit it {it:3d}  joint err {err:.1f} cm")
 

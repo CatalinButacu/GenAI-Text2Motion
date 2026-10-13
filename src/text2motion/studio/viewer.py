@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import logging
 import time
 import traceback
@@ -16,7 +15,11 @@ from aitviewer.viewer import Viewer
 
 from text2motion.studio.avatar import SmplxAvatarController, create_smplx_rest_pose_mesh
 from text2motion.studio.config import StudioConfig
-from text2motion.studio.contracts import MotionInferenceClientPort, ViewerHost
+from text2motion.studio.contracts import (
+    MotionInferenceClientPort,
+    StudioLaunchArguments,
+    ViewerHost,
+)
 from text2motion.studio.generation import (
     StudioGenerationController,
     log_action,
@@ -145,6 +148,14 @@ class GuiPanels:
         self.__dock(env)
         imgui.begin("Environment", False, _WINDOW_FLAGS)
 
+        self.__scene_controls()
+        self.__section("lights")
+        for i, light in enumerate(self.host.scene.lights):
+            self.__light_controls(i, light)
+        self.__floor_controls()
+        imgui.end()
+
+    def __scene_controls(self) -> None:
         self.__section("scene")
         changed, color = imgui.color_edit4("background", *self.host.scene.background_color)
         if changed:
@@ -153,38 +164,30 @@ class GuiPanels:
             "ambient", self.host.scene.ambient_strength, 0.0, 4.0
         )
         imgui.text("mood:")
-        imgui.same_line()
-        if imgui.small_button("default"):
-            self.host.scene.light_mode = "default"
-        imgui.same_line()
-        if imgui.small_button("dark"):
-            self.host.scene.light_mode = "dark"
-        imgui.same_line()
-        if imgui.small_button("diffuse"):
-            self.host.scene.light_mode = "diffuse"
+        for mood in ("default", "dark", "diffuse"):
+            imgui.same_line()
+            if imgui.small_button(mood):
+                self.host.scene.light_mode = mood
         _, self.host.shadows_enabled = imgui.checkbox("shadows [S]", self.host.shadows_enabled)
 
-        self.__section("lights")
-        for i, light in enumerate(self.host.scene.lights):
-            flags = imgui.TREE_NODE_DEFAULT_OPEN if i == 0 else 0
-            if imgui.tree_node(f"light {i + 1}##light{i}", flags):
-                _, light.strength = imgui.slider_float(f"strength##l{i}", light.strength, 0.0, 10.0)
-                changed, elevation = imgui.slider_float(
-                    f"elevation##l{i}", light.elevation, -90.0, 90.0
-                )
-                if changed:
-                    light.elevation = elevation
-                changed, azimuth = imgui.slider_float(f"azimuth##l{i}", light.azimuth, 0.0, 360.0)
-                if changed:
-                    light.azimuth = azimuth
-                changed, col = imgui.color_edit3(f"color##l{i}", *light.light_color[:3])
-                if changed:
-                    light.light_color = col
-                _, light.shadow_enabled = imgui.checkbox(
-                    f"cast shadows##l{i}", light.shadow_enabled
-                )
-                imgui.tree_pop()
+    def __light_controls(self, i: int, light) -> None:
+        flags = imgui.TREE_NODE_DEFAULT_OPEN if i == 0 else 0
+        if not imgui.tree_node(f"light {i + 1}##light{i}", flags):
+            return
+        _, light.strength = imgui.slider_float(f"strength##l{i}", light.strength, 0.0, 10.0)
+        changed, elevation = imgui.slider_float(f"elevation##l{i}", light.elevation, -90.0, 90.0)
+        if changed:
+            light.elevation = elevation
+        changed, azimuth = imgui.slider_float(f"azimuth##l{i}", light.azimuth, 0.0, 360.0)
+        if changed:
+            light.azimuth = azimuth
+        changed, col = imgui.color_edit3(f"color##l{i}", *light.light_color[:3])
+        if changed:
+            light.light_color = col
+        _, light.shadow_enabled = imgui.checkbox(f"cast shadows##l{i}", light.shadow_enabled)
+        imgui.tree_pop()
 
+    def __floor_controls(self) -> None:
         self.__section("floor & origin")
         floor = self.host.scene.floor
         changed, floor.enabled = imgui.checkbox("show floor", floor.enabled)
@@ -199,7 +202,30 @@ class GuiPanels:
         _, self.host.scene.origin.enabled = imgui.checkbox(
             "origin axes", self.host.scene.origin.enabled
         )
-        imgui.end()
+
+    def __generate_button(self, width: float, enter: bool) -> None:
+        if not self.state.generating or self.state.live.enabled:
+            if imgui.button("Generate", width=width) or enter:
+                self.generation.submit_prompt()
+            return
+        if imgui.button("Stop", width=width):
+            log_action("press Stop", f"at {self.state.stream_buffers.frames_emitted} frames")
+            self.generation.stop()
+
+    def __progress_bars(self) -> None:
+        buffers = self.state.stream_buffers
+        avail = imgui.get_content_region_available()[0]
+        done = buffers.frames_emitted
+        total = self.state.steps * self.state.downsample * self.state.upsample
+        label = f"motion {done}/{total} frames" if total else f"motion {done} frames (forever)"
+        bar = buffers.gen_progress if total else (done % 100) / 100.0
+        if not buffers.current_fit_body:
+            imgui.progress_bar(bar, (-1, 15), label)
+            return
+        imgui.progress_bar(bar, (avail * 0.55, 15), label)
+        imgui.same_line()
+        fit = buffers.fit_progress or 0.0
+        imgui.progress_bar(fit, (-1, 15), f"body fit {int(fit * 100)}%")
 
     def gui_params(self) -> None:
         *_, params, _, _ = self.__rects()
@@ -278,29 +304,46 @@ class GuiPanels:
 
     def __avatar_controls(self) -> None:
         self.__section("avatar")
+        self.__skin_toggle()
+        self.__gender_selector()
+        self.__skin_color_editor()
+        self.__shape_controls()
+        if self.state.smplx_fit.note:
+            self.__dim_text(self.state.smplx_fit.note)
+
+    def __skin_toggle(self) -> None:
         clicked, self.state.fit_body = imgui.checkbox(
             "avatar skin (SMPL-X body)", self.state.fit_body
         )
-        if clicked:
-            log_toggle("avatar skin (fit body)", self.state.fit_body)
-        if clicked and self.state.fit_body and not self.state.model_dir:
-            self.state.fit_body = False
-        elif clicked:
-            self.avatar.on_fit_body_toggled()
         if not self.state.model_dir:
             self.__dim_text("SMPL-X models not found: skeleton only.")
-        for i, name in enumerate(self.state.config.genders):
+        if not clicked:
+            return
+        log_toggle("avatar skin (fit body)", self.state.fit_body)
+        if self.state.fit_body and not self.state.model_dir:
+            self.state.fit_body = False
+            return
+        self.avatar.on_fit_body_toggled()
+
+    def __gender_selector(self) -> None:
+        genders = self.state.config.genders
+        for i, name in enumerate(genders):
             if imgui.radio_button(name, self.state.gender_idx == i) and self.state.gender_idx != i:
                 self.state.gender_idx = i
                 self.avatar.on_avatar_changed()
-            if i < len(self.state.config.genders) - 1:
+            if i < len(genders) - 1:
                 imgui.same_line()
+
+    def __skin_color_editor(self) -> None:
         changed, col = imgui.color_edit3("skin", *self.state.skin_color[:3])
-        if changed:
-            self.state.skin_color = (col[0], col[1], col[2], 1.0)
-            for node in (self.state.nodes.body, self.state.nodes.rest):
-                if node is not None:
-                    node.color = self.state.skin_color
+        if not changed:
+            return
+        self.state.skin_color = (col[0], col[1], col[2], 1.0)
+        for node in (self.state.nodes.body, self.state.nodes.rest):
+            if node is not None:
+                node.color = self.state.skin_color
+
+    def __shape_controls(self) -> None:
         self.__beta_slider(0, "height")
         self.__beta_slider(1, "build")
         if imgui.collapsing_header("more shape dimensions")[0]:
@@ -315,8 +358,6 @@ class GuiPanels:
         if imgui.button("refresh avatar", width=half):
             log_action("press refresh avatar")
             self.avatar.on_avatar_changed()
-        if self.state.smplx_fit.note:
-            self.__dim_text(self.state.smplx_fit.note)
 
     def __prompt_history(self) -> None:
         if len(self.state.history) > 0 and imgui.collapsing_header("prompt history")[0]:
@@ -400,12 +441,7 @@ class GuiPanels:
             self.state.live.mark_dirty(self.state.prompt_text, time.perf_counter())
         imgui.pop_item_width()
         imgui.same_line()
-        if self.state.generating and not self.state.live.enabled:
-            if imgui.button("Stop", width=button_w):
-                log_action("press Stop", f"at {self.state.stream_buffers.frames_emitted} frames")
-                self.generation.stop()
-        elif imgui.button("Generate", width=button_w) or enter:
-            self.generation.submit_prompt()
+        self.__generate_button(button_w, enter)
         changed, self.state.live.enabled = imgui.checkbox(
             "live (regenerate as you type)", self.state.live.enabled
         )
@@ -418,18 +454,7 @@ class GuiPanels:
             log_toggle("skin", self.state.show_skin)
 
         if self.state.generating:
-            avail = imgui.get_content_region_available()[0]
-            done = self.state.stream_buffers.frames_emitted
-            total = self.state.steps * self.state.downsample * self.state.upsample
-            label = f"motion {done}/{total} frames" if total else f"motion {done} frames (forever)"
-            bar = self.state.stream_buffers.gen_progress if total else (done % 100) / 100.0
-            if self.state.stream_buffers.current_fit_body:
-                imgui.progress_bar(bar, (avail * 0.55, 15), label)
-                imgui.same_line()
-                fit = self.state.stream_buffers.fit_progress or 0.0
-                imgui.progress_bar(fit, (-1, 15), f"body fit {int(fit * 100)}%")
-            else:
-                imgui.progress_bar(bar, (-1, 15), label)
+            self.__progress_bars()
         self.__dim_text(self.state.status)
         imgui.end()
 
@@ -442,7 +467,7 @@ class StreamingStudioViewer(Viewer):
         client: MotionInferenceClientPort,
         model_dir: str,
         device: str,
-        args: argparse.Namespace,
+        args: StudioLaunchArguments,
         config: StudioConfig,
         reload_config=None,
     ) -> None:

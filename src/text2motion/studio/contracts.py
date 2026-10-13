@@ -23,6 +23,40 @@ class ViewerHost(Protocol):
 
     def reload_settings(self) -> None: ...
 
+    def center_view_on_node(self, node: Any) -> None: ...
+
+
+class StudioLaunchArguments(Protocol):
+    @property
+    def config(self) -> object: ...
+
+    @property
+    def ckpt(self) -> object: ...
+
+    @property
+    def tokenizer_ckpt(self) -> object: ...
+
+    @property
+    def backbone(self) -> object: ...
+
+    @property
+    def fps(self) -> float: ...
+
+    @property
+    def steps(self) -> int: ...
+
+    @property
+    def seconds(self) -> float: ...
+
+    @property
+    def temperature(self) -> float: ...
+
+    @property
+    def top_p(self) -> float: ...
+
+    @property
+    def cfg_scale(self) -> float: ...
+
 
 @runtime_checkable
 class MotionInferenceClientPort(Protocol):

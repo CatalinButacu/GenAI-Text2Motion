@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import logging
 import math
 import threading
@@ -14,7 +13,11 @@ from aitviewer.scene.camera import ViewerCamera
 
 from text2motion.studio.avatar import append_skeleton_sequence_frames, create_skeleton_sequence_node
 from text2motion.studio.config import StudioConfig
-from text2motion.studio.contracts import MotionInferenceClientPort, ViewerHost
+from text2motion.studio.contracts import (
+    MotionInferenceClientPort,
+    StudioLaunchArguments,
+    ViewerHost,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +44,7 @@ def default_step_budget(trained_steps: int, max_steps: int) -> int:
     return min(trained_steps, max_steps) if max_steps else trained_steps
 
 
-def resolve_step_budget(args, downsample: int, max_steps: int) -> int:
+def resolve_step_budget(args: StudioLaunchArguments, downsample: int, max_steps: int) -> int:
     fps = max(1, int(args.fps))
     requested = int(args.steps)
     if float(args.seconds) > 0.0:
@@ -103,11 +106,10 @@ class StudioSceneNodes:
 
     def __drop(self, node):
         if node is None:
-            return None
+            return
         if self.scene.selected_object is node:
             self.scene.select(None)
         self.scene.remove(node)
-        return None
 
     def clear_rest(self) -> None:
         self.rest = self.__drop(self.rest)
@@ -431,33 +433,29 @@ class StreamSceneUpdater:
 
     def __current_center(self) -> np.ndarray | None:
         frame = self.host.scene.current_frame_id
-        body_frames = (
-            0
-            if self.state.stream_buffers.body_verts is None
-            else len(self.state.stream_buffers.body_verts)
-        )
-        if self.state.nodes.body is not None and (
-            self.state.nodes.motion is None or frame < body_frames
-        ):
-            arr = self.state.stream_buffers.body_verts
-        elif (
-            self.state.nodes.motion is not None
-            and self.state.stream_buffers.accum_joints is not None
-        ):
-            arr = self.state.stream_buffers.accum_joints
-        else:
+        nodes = self.state.nodes
+        body_verts = self.state.stream_buffers.body_verts
+        joints = self.state.stream_buffers.accum_joints
+        body_frames = 0 if body_verts is None else len(body_verts)
+        body_is_shown = nodes.body is not None and (nodes.motion is None or frame < body_frames)
+        if body_is_shown and body_verts is not None:
+            return body_verts[min(frame, len(body_verts) - 1)].mean(axis=0)
+        if body_is_shown or nodes.motion is None or joints is None:
             return None
-        return arr[min(frame, len(arr) - 1)].mean(axis=0)
+        return joints[min(frame, len(joints) - 1)].mean(axis=0)
 
     def update_follow_cam(self) -> None:
         if not self.state.follow_cam:
             return
+
         camera = self.host.scene.camera
         if not isinstance(camera, ViewerCamera):
             return
+
         center = self.__current_center()
         if center is None:
             return
+
         if self.state.nodes.follow_center is None:
             offset = camera.position - camera.target
             camera.target = center
@@ -466,6 +464,7 @@ class StreamSceneUpdater:
             delta = center - self.state.nodes.follow_center
             camera.position = camera.position + delta
             camera.target = camera.target + delta
+
         self.state.nodes.follow_center = center
 
 
@@ -475,7 +474,7 @@ class StudioSession:
         client: MotionInferenceClientPort,
         model_dir: str,
         device: str,
-        args: argparse.Namespace,
+        args: StudioLaunchArguments,
         scene,
         config: StudioConfig,
     ) -> None:
@@ -508,12 +507,12 @@ class StudioSession:
 
         self.backbone = args.backbone
         launch_entry = StudioModelEntry(
-            name=Path(args.ckpt).stem,
+            name=Path(str(args.ckpt)).stem,
             version="local",
-            config=args.config,
-            ckpt=args.ckpt,
-            tokenizer_ckpt=args.tokenizer_ckpt,
-            backbone=args.backbone,
+            config=str(args.config),
+            ckpt=str(args.ckpt),
+            tokenizer_ckpt=str(args.tokenizer_ckpt),
+            backbone=str(args.backbone),
         )
         self.launch_entry = launch_entry
         self.models, self.model_idx = load_model_registry(launch_entry, config.model_registry)
