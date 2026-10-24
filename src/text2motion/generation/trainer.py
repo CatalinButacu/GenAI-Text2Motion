@@ -453,10 +453,10 @@ def train_generator(
         due = (epoch + 1) % request.eval_every == 0 or epoch + 1 == request.epochs
         if due:
             with trainer.ema_weights():
-                metrics = evaluate(request.eval_split)
-            on_metrics({"epoch": epoch + 1, "split": request.eval_split.value, **metrics})
+                metrics = evaluate(Split.VALIDATION)
+            on_metrics({"epoch": epoch + 1, "split": Split.VALIDATION.value, **metrics})
             logger.info(
-                f"  [gen-eval:{request.eval_split.value}] clips {metrics['clips']}  "
+                f"  [gen-eval:{Split.VALIDATION.value}] clips {metrics['clips']}  "
                 f"FID {metrics['fid']:.4f}  R@1 {metrics['r_top1']:.3f}  "
                 f"R@3 {metrics['r_top3']:.3f}  MM {metrics['mm_dist']:.3f}  "
                 f"Div {metrics['diversity']:.3f}"

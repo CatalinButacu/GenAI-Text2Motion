@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import Field
 
-from text2motion.motion.contracts import CommandRequest, CorpusLayout, Split
+from text2motion.motion.contracts import CommandRequest, CorpusLayout
 from text2motion.motion.representation import DYNAMICS_TERMS, FK_TERMS, GEO_TERMS
 
 
@@ -164,7 +164,6 @@ class GeneratorTrainingRequest:
     num_workers: int = 0
     grad_accum: int = 1
     eval_every: int = 5
-    eval_split: Split = Split.VALIDATION
     max_eval_clips: int = 600
     eval_batch_size: int = 32
     temperature: float = 1.0
@@ -249,10 +248,6 @@ class TrainGeneratorRequest(CommandRequest):
     cfg_scale: float = Field(
         default=GeneratorTrainingRequest().cfg_scale,
         description="guidance scale for the validation samples; higher follows the text more closely",
-    )
-    eval_split: Split = Field(
-        default=GeneratorTrainingRequest().eval_split,
-        description="split for checkpoint selection; use val, test is for the final score only",
     )
     eval_every: int = Field(
         default=GeneratorTrainingRequest().eval_every,

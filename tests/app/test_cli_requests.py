@@ -29,6 +29,21 @@ def test_benchmark_request_rejects_a_wrong_type():
         parse_request("benchmark", ["--warmup", "many"])
 
 
+def test_train_generator_has_no_option_to_select_on_the_test_split():
+    required = [
+        "--config",
+        "configs/default.yaml",
+        "--backbone",
+        "mamba",
+        "--overfit_gate",
+        "g.json",
+    ]
+    parse_request("train-generator", required)
+
+    with pytest.raises(SystemExit):
+        parse_request("train-generator", [*required, "--eval_split", "test"])
+
+
 def test_each_request_field_has_a_help_text():
     for command in COMMANDS.values():
         for name, field in command.request_model.model_fields.items():
@@ -65,13 +80,10 @@ def test_enum_flags_read_the_lower_case_value():
             "mamba",
             "--overfit_gate",
             "g.json",
-            "--eval_split",
-            "val",
         ],
     )
     dumped = request.model_dump()
     assert dumped["backbone"].name == "MAMBA"
-    assert dumped["eval_split"].value == "val"
 
 
 def test_a_flag_without_a_value_is_true():

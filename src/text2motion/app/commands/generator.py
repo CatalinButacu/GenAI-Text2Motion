@@ -124,7 +124,6 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         batch_size=args.batch_size,
         grad_accum=args.grad_accum,
         eval_every=args.eval_every,
-        eval_split=args.eval_split,
         max_eval_clips=args.max_eval_clips,
         eval_batch_size=args.eval_batch_size,
         temperature=args.temperature,
