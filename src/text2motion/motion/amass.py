@@ -193,6 +193,16 @@ class AmassPoseExtractor:
         )
         return output.joints[:, : self._joint_count, :]
 
+    def __stride(self, source_fps: float, src_path: str | Path) -> int:
+        ratio = source_fps / self._fps
+        stride = round(ratio)
+        if stride < 1 or abs(ratio - stride) > 1e-6:
+            raise ValueError(
+                f"{src_path}: {source_fps} fps is not an integer multiple of {self._fps} fps; "
+                "a frame stride would change the motion speed"
+            )
+        return stride
+
     @torch.inference_mode()
     def extract(self, src_path: str | Path) -> np.ndarray | None:
         with np.load(src_path, allow_pickle=True) as data:
@@ -203,10 +213,8 @@ class AmassPoseExtractor:
                 None,
             )
             if fps_key is None:
-                return None
-
-            step = max(int(float(data[fps_key]) / self._fps), 1)
-            sample = slice(None, None, step)
+                raise ValueError(f"{src_path} has motion but no frame-rate field")
+            sample = slice(None, None, self.__stride(float(data[fps_key]), src_path))
             root = np.asarray(data["root_orient"][sample], dtype=np.float32)
             if root.shape[0] == 0:
                 return None
