@@ -1,12 +1,18 @@
 import pickle
+from typing import cast
 
 import numpy as np
 import pytest
+import torch
 
+from text2motion.app.config import GeneratorTrainingConfig
+from text2motion.generation.contracts import GeneratorPretrainingRequest
+from text2motion.generation.nn_model import GeneratorModelSpec
 from text2motion.generation.pretrain import (
     PretrainingBudget,
     TokenPack,
     collate_tokens,
+    pretrain_generator,
     split_keys_by_clip,
 )
 
@@ -19,6 +25,22 @@ def make_pack(tmp_path, clips=("clipA", "clipB", "clipC", "clipD"), windows=3):
             arrays[f"{clip}__{w}"] = np.full((4 + w, 2), c_index, dtype=np.int64)
     np.savez(path, **arrays)
     return path
+
+
+def test_pretrain_resume_without_the_resume_file_fails(tmp_path):
+    request = GeneratorPretrainingRequest(
+        token_pack=make_pack(tmp_path), epochs=1, batch_size=2, resume=True
+    )
+
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        pretrain_generator(
+            cast(GeneratorModelSpec, None),
+            torch.nn.Linear(2, 2),
+            request,
+            GeneratorTrainingConfig(),
+            "cpu",
+            tmp_path / "pretrained.pt",
+        )
 
 
 def test_windows_of_one_clip_never_straddle_the_split(tmp_path):

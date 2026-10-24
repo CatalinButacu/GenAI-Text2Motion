@@ -11,6 +11,7 @@ from torch import nn
 
 from text2motion.motion.contracts import Split
 from text2motion.motion.model import MotionBatch
+from text2motion.motion.storage import atomic_torch_save
 from text2motion.tokenization.contracts import TokenizerTrainingRequest
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_model import (
@@ -127,7 +128,11 @@ def train_tokenizer(
     best_fid = float("inf")
     start_epoch = 0
 
-    if request.resume and resume_path.is_file():
+    if request.resume and not resume_path.is_file():
+        raise FileNotFoundError(
+            f"--resume continues from {resume_path}, which does not exist; start without --resume"
+        )
+    if request.resume:
         start_epoch, best_fid = trainer.load_resume_state(
             torch.load(resume_path, map_location=device), device
         )
@@ -162,9 +167,9 @@ def train_tokenizer(
         if metrics["recon_fid"] < best_fid:
             best_fid = metrics["recon_fid"]
             with trainer.ema_weights() as module:
-                torch.save(module.state_dict(), checkpoint_path)
+                atomic_torch_save(module.state_dict(), checkpoint_path)
             logger.info(f"  saved best (val) -> {checkpoint_path} (val recon-FID {best_fid:.4f})")
 
-        torch.save(trainer.resume_state(epoch, best_fid), resume_path)
+        atomic_torch_save(trainer.resume_state(epoch, best_fid), resume_path)
 
     return best_fid

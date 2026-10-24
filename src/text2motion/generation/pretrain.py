@@ -17,6 +17,7 @@ from text2motion.generation.contracts import (
 from text2motion.generation.nn_model import GeneratorModelSpec, token_ce_loss
 from text2motion.generation.trainer import adamw_groups, warmup_cosine_factor
 from text2motion.motion.datasets import dataset_size
+from text2motion.motion.storage import atomic_torch_save
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +186,11 @@ def pretrain_generator(
 
     step = 0
     start_epoch = 0
-    if request.resume and resume_path.is_file():
+    if request.resume and not resume_path.is_file():
+        raise FileNotFoundError(
+            f"--resume continues from {resume_path}, which does not exist; start without --resume"
+        )
+    if request.resume:
         state = torch.load(resume_path, map_location=device)
         generator.load_state_dict(state["generator"])
         opt.load_state_dict(state["optimizer"])
@@ -257,8 +262,8 @@ def pretrain_generator(
 
         on_metrics(record)
         logger.info(line)
-        torch.save(generator.state_dict(), out_path)
-        torch.save(
+        atomic_torch_save(generator.state_dict(), out_path)
+        atomic_torch_save(
             {
                 "generator": generator.state_dict(),
                 "optimizer": opt.state_dict(),

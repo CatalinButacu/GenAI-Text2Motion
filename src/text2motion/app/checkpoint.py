@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -12,6 +11,7 @@ import torch
 from torch import nn
 
 from text2motion.generation.contracts import DEFAULT_OVERFIT_CRITERIA, Backbone, OverfitCriteria
+from text2motion.motion.storage import atomic_torch_save
 
 _BUNDLE_FORMAT = "text2motion.generator_bundle"
 _BUNDLE_VERSION = 1
@@ -105,17 +105,6 @@ class GeneratorBundle:
             epoch=int(payload["epoch"]),
             validation_fid=float(payload["validation_fid"]),
         )
-
-
-def atomic_torch_save(state: Any, path: str | Path) -> None:
-    destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
-    try:
-        torch.save(state, temporary)
-        temporary.replace(destination)
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 def load_generator_checkpoint(

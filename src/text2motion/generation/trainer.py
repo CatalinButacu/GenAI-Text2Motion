@@ -29,6 +29,7 @@ from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.motion.contracts import Split
 from text2motion.motion.kinematics import Skeleton
 from text2motion.motion.representation import KINEMATIC_CHAINS, RAW_OFFSETS
+from text2motion.motion.storage import atomic_torch_save
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_model import MotionTokenizerNetwork
 
@@ -352,12 +353,12 @@ def train_generator(
     stale_evaluations = 0
     heartbeat = None if run_dir is None else Path(run_dir) / "heartbeat"
 
-    if request.fresh_selection and not resume_path.is_file():
+    if request.resume and not resume_path.is_file():
         raise FileNotFoundError(
-            f"--fresh_selection fine-tunes from {resume_path}, which does not exist; "
-            "copy the source run's *_last.pt there first"
+            f"--resume continues from {resume_path}, which does not exist; "
+            "start without --resume, or copy the source run's *_last.pt there first"
         )
-    if request.resume and resume_path.is_file():
+    if request.resume:
         state = torch.load(resume_path, map_location="cpu")
         start_epoch, best_fid, stale_evaluations = trainer.load_resume_state(state, device)
         if request.fresh_selection:
@@ -411,7 +412,7 @@ def train_generator(
             else:
                 stale_evaluations += 1
 
-        torch.save(trainer.resume_state(epoch, best_fid, stale_evaluations), resume_path)
+        atomic_torch_save(trainer.resume_state(epoch, best_fid, stale_evaluations), resume_path)
 
         if device == "cuda":
             torch.cuda.empty_cache()

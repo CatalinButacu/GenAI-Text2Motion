@@ -58,3 +58,18 @@ def test_a_non_finite_recon_fid_stops_the_run_without_a_save(tmp_path):
 
     assert not checkpoint_path.exists()
     assert not resume_path.exists()
+
+
+def test_resume_without_the_resume_file_fails(tmp_path):
+    loader = SimpleNamespace(dataset=SimpleNamespace(set_epoch=lambda epoch: None))
+
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        train_tokenizer(
+            cast(TokenizerTrainer, _FakeTrainer()),
+            loader,
+            TokenizerTrainingRequest(epochs=1, eval_every=1, resume=True),
+            "cpu",
+            evaluate=lambda split: {},
+            checkpoint_path=tmp_path / "tokenizer.pt",
+            resume_path=tmp_path / "tokenizer_last.pt",
+        )

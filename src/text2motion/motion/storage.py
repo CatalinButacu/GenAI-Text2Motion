@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+import torch
 
 from text2motion.motion.contracts import Split
 
@@ -16,6 +19,17 @@ CLIP_LENGTHS_FILE = "clip_lengths.json"
 
 
 SPLIT_FILES = {split: f"{split.value}.txt" for split in Split}
+
+
+def atomic_torch_save(state: Any, path: str | Path) -> None:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    try:
+        torch.save(state, temporary)
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def item_rng(seed: int, epoch: int, index: int) -> np.random.RandomState:
