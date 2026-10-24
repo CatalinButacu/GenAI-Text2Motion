@@ -9,7 +9,10 @@ import torch
 
 from text2motion.evaluation.contracts import (
     DIVERSITY_PAIRS,
+    GUO_MAX_FRAMES,
+    GUO_MIN_FRAMES,
     R_PRECISION_POOL,
+    EvaluationSample,
     GenerationEvaluationProtocol,
     GenerationEvaluationReport,
     GenerationEvaluationSet,
@@ -27,8 +30,9 @@ from text2motion.evaluation.metrics import (
 from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.generation.contracts import SamplingConfig
 from text2motion.generation.pipeline import TextToMotionGenerator
-from text2motion.motion.contracts import Split
+from text2motion.motion.contracts import Split, TextAnnotation
 from text2motion.motion.datasets import parse_text_file
+from text2motion.motion.representation import FPS
 from text2motion.motion.storage import FEATURES_DIR
 
 logger = logging.getLogger(__name__)
@@ -38,13 +42,14 @@ def deterministic_generation_seed(clip_id: str, run: int = 0) -> int:
     return zlib.crc32(clip_id.encode("utf-8")) + run
 
 
+def chosen_caption_index(sample: EvaluationSample, run: int) -> int:
+    seed = deterministic_generation_seed(sample.sample_id, run)
+    return int(np.random.default_rng(seed).integers(len(sample.captions)))
+
+
 class HumanMl3dGenerationEvaluator:
-    def __init__(
-        self, resources: GuoEvaluationResources, max_frames: int, min_tokens: int = 2
-    ) -> None:
+    def __init__(self, resources: GuoEvaluationResources) -> None:
         self.resources = resources
-        self.max_frames = max_frames
-        self.min_tokens = min_tokens
 
     def compute_motion_embeddings(self, feats: list[np.ndarray]) -> np.ndarray:
         return compute_guo_motion_embeddings(
@@ -60,19 +65,56 @@ class HumanMl3dGenerationEvaluator:
     ) -> float:
         return fid(self.compute_motion_embeddings(reference), self.compute_motion_embeddings(recon))
 
-    def load_scorable_reference_clip(self, clip_id: str) -> tuple[np.ndarray, int] | None:
-        vec_path = self.resources.motion_dataset_dir / FEATURES_DIR / f"{clip_id}.npy"
-        if not vec_path.is_file():
-            return None
-        feat = np.load(vec_path).astype(np.float32)
-        if np.isnan(feat).any():
-            return None
-        token_len = (
-            min(feat.shape[0], self.max_frames) // self.resources.tokenizer_downsample_factor
-        )
-        if token_len < self.min_tokens:
-            return None
-        return feat[: token_len * self.resources.tokenizer_downsample_factor], token_len
+    @staticmethod
+    def __guo_pieces(
+        clip_id: str, motion: np.ndarray, annotations: list[TextAnnotation]
+    ) -> list[tuple[str, np.ndarray, list[TextAnnotation]]]:
+        whole = [item for item in annotations if item.start_time == 0.0 and item.end_time == 0.0]
+        tagged = [item for item in annotations if item not in whole]
+        pieces = [(clip_id, motion, whole)] if whole else []
+        for index, item in enumerate(tagged):
+            segment = motion[int(item.start_time * FPS) : int(item.end_time * FPS)]
+            pieces.append((f"{clip_id}#{index}", segment, [item]))
+        return pieces
+
+    def evaluation_samples(
+        self, split: Split | str, max_clips: int | None
+    ) -> tuple[list[EvaluationSample], dict[str, int]]:
+        downsample = self.resources.tokenizer_downsample_factor
+        dropped = {"missing_files": 0, "not_finite": 0, "out_of_length": 0, "no_caption": 0}
+        samples: list[EvaluationSample] = []
+        for clip_id in self.resources.clip_ids(split)[:max_clips]:
+            text_path = self.resources.annotation_dir / f"{clip_id}.txt"
+            vec_path = self.resources.motion_dataset_dir / FEATURES_DIR / f"{clip_id}.npy"
+            if not text_path.is_file() or not vec_path.is_file():
+                dropped["missing_files"] += 1
+                continue
+            motion = np.load(vec_path).astype(np.float32)
+            if not np.isfinite(motion).all():
+                dropped["not_finite"] += 1
+                continue
+            annotations = parse_text_file(text_path)
+            for sample_id, piece, piece_annotations in self.__guo_pieces(
+                clip_id, motion, annotations
+            ):
+                if not GUO_MIN_FRAMES <= piece.shape[0] < GUO_MAX_FRAMES:
+                    dropped["out_of_length"] += 1
+                    continue
+                captioned = [item for item in piece_annotations if item.tokens]
+                if not captioned:
+                    dropped["no_caption"] += 1
+                    continue
+                token_len = piece.shape[0] // downsample
+                samples.append(
+                    EvaluationSample(
+                        sample_id=sample_id,
+                        reference=piece[: token_len * downsample],
+                        token_len=token_len,
+                        captions=[item.caption for item in captioned],
+                        caption_tokens=[item.tokens for item in captioned],
+                    )
+                )
+        return samples, dropped
 
     @torch.no_grad()
     def generate_evaluation_set(
@@ -85,71 +127,42 @@ class HumanMl3dGenerationEvaluator:
         run: int = 0,
     ) -> GenerationEvaluationSet:
         generator.eval()
-        ids = self.resources.clip_ids(split)[:max_clips]
-        dropped = {"missing_files": 0, "too_short": 0, "no_caption": 0, "empty_generation": 0}
-
-        entries: list[dict] = []
-        for clip_id in ids:
-            text_path = self.resources.annotation_dir / f"{clip_id}.txt"
-            if not text_path.is_file():
-                dropped["missing_files"] += 1
-                continue
-            clip = self.load_scorable_reference_clip(clip_id)
-            if clip is None:
-                dropped["too_short"] += 1
-                continue
-            feat, token_len = clip
-
-            annotations = parse_text_file(text_path)
-            caption_tokens = [item.tokens for item in annotations if item.tokens]
-            if not caption_tokens:
-                dropped["no_caption"] += 1
-                continue
-
-            entries.append(
-                {
-                    "clip_id": clip_id,
-                    "feat": feat,
-                    "token_len": token_len,
-                    "caption": annotations[0].caption,
-                    "caption_tokens": caption_tokens,
-                    "generated": None,
-                }
-            )
+        samples, dropped = self.evaluation_samples(split, max_clips)
+        chosen = [chosen_caption_index(sample, run) for sample in samples]
+        generated: list[np.ndarray | None] = [None] * len(samples)
 
         buckets: dict[int, list[int]] = defaultdict(list)
-        for position, entry in enumerate(entries):
-            buckets[entry["token_len"]].append(position)
+        for position, sample in enumerate(samples):
+            buckets[sample.token_len].append(position)
 
         for token_len, positions in buckets.items():
             for start in range(0, len(positions), max(1, batch_size)):
                 group = positions[start : start + max(1, batch_size)]
                 batch = generator.generate_batch(
-                    [entries[i]["caption"] for i in group],
+                    [samples[i].captions[chosen[i]] for i in group],
                     token_len,
                     sampling,
-                    seeds=[
-                        deterministic_generation_seed(entries[i]["clip_id"], run) for i in group
-                    ],
+                    seeds=[deterministic_generation_seed(samples[i].sample_id, run) for i in group],
                 )
                 if batch is None:
                     continue
                 for position, item in zip(group, batch, strict=True):
-                    entries[position]["generated"] = self.resources.denormalize(
-                        item.motion.features.cpu().numpy()
+                    generated[position] = np.asarray(
+                        self.resources.denormalize(item.motion.features.cpu().numpy())
                     )
 
-        scorable = [entry for entry in entries if entry["generated"] is not None]
-        dropped["empty_generation"] += len(entries) - len(scorable)
+        scorable = [index for index, motion in enumerate(generated) if motion is not None]
+        dropped["empty_generation"] = len(samples) - len(scorable)
         if not scorable:
-            raise RuntimeError(f"no scorable clips in split {split!r}; dropped {dropped}")
+            raise RuntimeError(f"no scorable samples in split {split!r}; dropped {dropped}")
 
         return GenerationEvaluationSet(
-            reference=[entry["feat"] for entry in scorable],
-            generated=[entry["generated"] for entry in scorable],
-            token_lists=[entry["caption_tokens"] for entry in scorable],
-            captions=[entry["caption"] for entry in scorable],
-            requested=len(ids),
+            sample_ids=[samples[i].sample_id for i in scorable],
+            reference=[samples[i].reference for i in scorable],
+            generated=[motion for motion in generated if motion is not None],
+            token_lists=[[samples[i].caption_tokens[chosen[i]]] for i in scorable],
+            captions=[samples[i].captions[chosen[i]] for i in scorable],
+            requested=len(samples),
             dropped=dropped,
         )
 
@@ -249,11 +262,14 @@ class HumanMl3dGenerationEvaluator:
                 request.batch_size,
                 run=run,
             )
-            if repeated.captions != split.captions:
-                raise RuntimeError(f"generation run {run} scored a different clip set than run 0")
+            if repeated.sample_ids != split.sample_ids:
+                raise RuntimeError(f"generation run {run} scored a different sample set than run 0")
             repeated_emb = self.compute_motion_embeddings(repeated.generated)
+            run_caption_emb, run_per_clip = self.caption_embeddings(repeated)
             runs.append(
-                self.calculate_run_metrics(reference_emb, repeated_emb, caption_emb, per_clip, rng)
+                self.calculate_run_metrics(
+                    reference_emb, repeated_emb, run_caption_emb, run_per_clip, rng
+                )
             )
             logger.info(f"generation run {run + 1}/{request.reps}  FID {runs[-1]['fid']:.4f}")
         summary = {name: replication_summary([run[name] for run in runs]) for name in runs[0]}
@@ -266,7 +282,7 @@ class HumanMl3dGenerationEvaluator:
         multimodality = float("nan")
         if request.mm_clips > 0:
             token_lens = [
-                min(feat.shape[0], self.max_frames) // self.resources.tokenizer_downsample_factor
+                feat.shape[0] // self.resources.tokenizer_downsample_factor
                 for feat in split.reference
             ]
             multimodality = self.calculate_multimodality(

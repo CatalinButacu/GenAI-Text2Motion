@@ -1,14 +1,19 @@
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 
 from text2motion.app.config import load_config
-from text2motion.motion.contracts import Split
-from text2motion.motion.datasets import MotionDataModule, collate_motion_clips
+from text2motion.motion.contracts import MotionDataConfig, Split
+from text2motion.motion.datasets import (
+    CaptionedMotionDataset,
+    MotionDataModule,
+    collate_motion_clips,
+)
 from text2motion.motion.model import MotionClip
 from text2motion.motion.representation import DIM
-from text2motion.motion.storage import FEATURES_DIR, MEAN_FILE
+from text2motion.motion.storage import FEATURES_DIR, MEAN_FILE, SPLIT_FILES, STD_FILE, TEXTS_DIR
 
 
 def __repository_or_skip() -> MotionDataModule:
@@ -47,6 +52,19 @@ def test_batch_shape_and_normalization():
 
     denorm = repository.load_scaler().denormalize(batch.features[0, : batch.lengths[0]])
     assert torch.isfinite(denorm).all()
+
+
+def test_a_clip_without_a_caption_of_minimum_length_stops_the_dataset(tmp_path):
+    (tmp_path / FEATURES_DIR).mkdir()
+    (tmp_path / TEXTS_DIR).mkdir()
+    np.save(tmp_path / MEAN_FILE, np.zeros(DIM, np.float32))
+    np.save(tmp_path / STD_FILE, np.ones(DIM, np.float32))
+    np.save(tmp_path / FEATURES_DIR / "A.npy", np.zeros((60, DIM), np.float32))
+    (tmp_path / TEXTS_DIR / "A.txt").write_text("a person walks#a/DET#0.0#1.0\n", encoding="utf-8")
+    (tmp_path / SPLIT_FILES[Split.TRAIN]).write_text("A\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="no caption that covers"):
+        CaptionedMotionDataset(tmp_path, MotionDataConfig(), Split.TRAIN)
 
 
 def test_collate_pads_to_max():

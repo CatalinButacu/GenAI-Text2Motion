@@ -12,6 +12,8 @@ from text2motion.motion.contracts import DefaultConfigRequest, Split
 
 R_PRECISION_POOL = 32
 DIVERSITY_PAIRS = 300
+GUO_MIN_FRAMES = 40
+GUO_MAX_FRAMES = 200
 
 
 class GenerationLengthPolicy(StrEnum):
@@ -59,7 +61,17 @@ class GenerationEvaluationReport:
 
 
 @dataclass(frozen=True)
+class EvaluationSample:
+    sample_id: str
+    reference: np.ndarray
+    token_len: int
+    captions: list[str]
+    caption_tokens: list[list[str]]
+
+
+@dataclass(frozen=True)
 class GenerationEvaluationSet:
+    sample_ids: list[str]
     reference: list[np.ndarray]
     generated: list[np.ndarray]
     token_lists: list[list[list[str]]]

@@ -154,10 +154,7 @@ class ApplicationContext:
     def create_humanml3d_generation_evaluator(
         self, vocab_dir: str | Path | None = None
     ) -> HumanMl3dGenerationEvaluator:
-        return HumanMl3dGenerationEvaluator(
-            self.load_guo_evaluation_resources(vocab_dir),
-            max_frames=self.config.data.max_motion_len,
-        )
+        return HumanMl3dGenerationEvaluator(self.load_guo_evaluation_resources(vocab_dir))
 
     def create_hml3d_preparation_request(self) -> PreparationRequest:
         path_config = self.config.paths

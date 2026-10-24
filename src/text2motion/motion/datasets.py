@@ -52,6 +52,12 @@ class CaptionedMotionDataset(Dataset):
         self._ids = self.__select_usable_clip_ids(base_names)
         if not self._ids:
             raise RuntimeError(f"no usable clips for split {split!r} under {self._vec_dir}")
+        uncaptioned = self.__clips_without_usable_caption()
+        if uncaptioned:
+            raise ValueError(
+                f"{len(uncaptioned)} clips of split {split!r} have no caption that covers "
+                f"{self._min_len} frames (first: {uncaptioned[:5]}); remove them from the split list"
+            )
 
     @property
     def clip_ids(self) -> list[str]:
@@ -120,16 +126,32 @@ class CaptionedMotionDataset(Dataset):
         end = min(int(annotation.end_time * FPS), total)
         return start, end
 
+    def __usable_annotations(
+        self, annotations: list[TextAnnotation], total: int
+    ) -> list[tuple[TextAnnotation, tuple[int, int] | None]]:
+        usable = []
+        for annotation in annotations:
+            segment = self.__annotation_frame_range(annotation, total)
+            if segment is None or segment[1] - segment[0] >= self._min_len:
+                usable.append((annotation, segment))
+        return usable
+
+    def __clips_without_usable_caption(self) -> list[str]:
+        lengths = clip_frame_counts(self._vec_dir, self._ids)
+        return [
+            clip_id
+            for clip_id in self._ids
+            if not self.__usable_annotations(
+                parse_text_file(self._text_dir / f"{clip_id}.txt"), lengths[clip_id]
+            )
+        ]
+
     def __select_captioned_segment(
         self, annotations: list[TextAnnotation], feat: np.ndarray, rng: np.random.RandomState
     ) -> tuple[TextAnnotation, np.ndarray]:
-        usable = []
-        for annotation in annotations:
-            segment = self.__annotation_frame_range(annotation, feat.shape[0])
-            if segment is None or segment[1] - segment[0] >= self._min_len:
-                usable.append((annotation, segment))
+        usable = self.__usable_annotations(annotations, feat.shape[0])
         if not usable:
-            return annotations[rng.randint(len(annotations))], feat
+            raise ValueError("no caption of this clip covers a segment of the minimum length")
         annotation, segment = usable[rng.randint(len(usable))]
         return annotation, feat if segment is None else feat[segment[0] : segment[1]]
 
