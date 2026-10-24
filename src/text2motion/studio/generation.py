@@ -8,7 +8,6 @@ import traceback
 
 import numpy as np
 
-from text2motion.motion.model import StreamedChunk
 from text2motion.motion.representation import JOINTS
 from text2motion.studio.avatar import SmplxAvatarController
 from text2motion.studio.contracts import ViewerHost
@@ -98,6 +97,7 @@ class StudioGenerationController:
         with self.state.stream_buffers.lock:
             self.state.stream_buffers.take += 1
             self.state.stream_buffers.interpolation_anchor = None
+            self.state.stream_buffers.fit_anchor = None
             self.state.stream_buffers.new_chunks.clear()
             self.state.stream_buffers.pending_body_chunks = []
             self.state.stream_buffers.pending_remesh = None
@@ -179,8 +179,10 @@ class StudioGenerationController:
                     break
                 if buffers.fit_is_stale():
                     continue
-                n_frames += len(chunk.joints)
-                warm_start = self.avatar.fit_single_chunk(chunk.joints, warm_start, n_frames)
+                n_frames += len(chunk.joints) * self.state.upsample
+                warm_start = self.avatar.fit_single_chunk(
+                    chunk.joints, warm_start, n_frames, self.state.upsample
+                )
         except Exception as exc:
             traceback.print_exc()
             log_result("body fit", False, f"{type(exc).__name__}: {exc}")
@@ -257,7 +259,6 @@ class StudioGenerationController:
         buffers = self.state.stream_buffers
         joints = upsample_joints(buffers.interpolation_anchor, chunk.joints, self.state.upsample)
         buffers.interpolation_anchor = chunk.joints[-1]
-        chunk = StreamedChunk(joints=joints, features=chunk.features, yaw=chunk.yaw)
         assert joints.ndim == 3 and joints.shape[1:] == (JOINTS, 3), f"bad joints {joints.shape}"
         emitted = n_frames + len(joints)
         logger.info(

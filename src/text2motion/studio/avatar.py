@@ -55,6 +55,35 @@ def build_smplx_body_model(cfg: SmplxFitConfig, t: int, device: str):
     ).to(device)
 
 
+def upsample_pose_parameters(
+    anchor: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
+    global_orient: np.ndarray,
+    body_pose: np.ndarray,
+    transl: np.ndarray,
+    factor: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    if factor == 1:
+        return global_orient, body_pose, transl
+    frames = global_orient.shape[0]
+    rotations = np.concatenate([global_orient[:, None], body_pose.reshape(frames, -1, 3)], axis=1)
+    start_orient, start_pose, start_transl = (
+        (global_orient[0], body_pose[0], transl[0]) if anchor is None else anchor
+    )
+    start_rotations = np.concatenate([start_orient[None], start_pose.reshape(-1, 3)])[None]
+    rotation_keys = torch.as_tensor(np.concatenate([start_rotations, rotations]))
+    steps = torch.arange(1, factor + 1, dtype=torch.float32) / factor
+    blended = roma.rotvec_slerp(rotation_keys[:-1], rotation_keys[1:], steps)
+    blended = blended.transpose(0, 1).reshape(frames * factor, -1, 3).numpy()
+    transl_keys = np.concatenate([start_transl[None], transl])
+    weights = steps.numpy()[None, :, None]
+    moved = transl_keys[:-1, None] + (transl_keys[1:, None] - transl_keys[:-1, None]) * weights
+    return (
+        blended[:, 0].astype(np.float32),
+        blended[:, 1:].reshape(frames * factor, -1).astype(np.float32),
+        moved.reshape(frames * factor, 3).astype(np.float32),
+    )
+
+
 def __yaw_init(
     model,
     target: torch.Tensor,
@@ -315,9 +344,10 @@ class SmplxAvatarController:
         joints: np.ndarray,
         warm_start: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
         n_frames_so_far: int,
+        factor: int,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
         try:
-            fitted = self.__fitted_chunk(joints, n_frames_so_far)
+            fitted = self.__fitted_chunk(joints, n_frames_so_far, factor)
         except Exception as exc:
             traceback.print_exc()
             self.state.status = (
@@ -327,25 +357,62 @@ class SmplxAvatarController:
             return warm_start
         return warm_start if fitted is None else fitted
 
-    def __fitted_chunk(
-        self, joints: np.ndarray, n_frames_so_far: int
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
-        gender = self.state.gender
-        frames = joints.shape[0]
-        if self.state.device == "cuda":
-            torch.cuda.empty_cache()
+    def __body_model(self, frames: int, gender: str):
         model = self.state.smplx_fit.model_cache.get((frames, gender))
         if model is None:
             cfg = replace(self.state.config.fit, model_dir=self.state.model_dir, gender=gender)
             model = build_smplx_body_model(cfg, frames, self.state.device)
             self.state.smplx_fit.model_cache[(frames, gender)] = model
+        return model
+
+    def __display_rate_result(
+        self, res: SmplxFitResult, factor: int, gender: str
+    ) -> SmplxFitResult:
+        if factor == 1:
+            return res
+        buffers = self.state.stream_buffers
+        orient, pose, transl = upsample_pose_parameters(
+            buffers.fit_anchor, res.global_orient, res.body_pose, res.transl, factor
+        )
+        buffers.fit_anchor = (res.global_orient[-1], res.body_pose[-1], res.transl[-1])
+        model = self.__body_model(len(orient), gender)
+        dev = self.state.device if torch.cuda.is_available() else "cpu"
+        with torch.no_grad():
+            out = model(
+                global_orient=torch.tensor(orient, device=dev),
+                body_pose=torch.tensor(pose, device=dev),
+                transl=torch.tensor(transl, device=dev),
+                betas=torch.tensor(res.betas, dtype=torch.float32, device=dev)
+                .unsqueeze(0)
+                .expand(len(orient), -1),
+            )
+        return replace(
+            res,
+            vertices=out.vertices.cpu().numpy(),
+            global_orient=orient,
+            body_pose=pose,
+            transl=transl,
+        )
+
+    def __fitted_chunk(
+        self, joints: np.ndarray, n_frames_so_far: int, factor: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+        gender = self.state.gender
+        frames = joints.shape[0]
+        if self.state.device == "cuda":
+            torch.cuda.empty_cache()
+        model = self.__body_model(frames, gender)
         if self.state.stream_buffers.fit_is_stale():
             return None
         res = solve_smplx_pose_from_joints(model, joints, self.state.device)
         self.state.stream_buffers.fit_progress = 1.0
-        display_verts = self.__shaped_vertices(model, res, frames)
+        display = self.__display_rate_result(res, factor, gender)
+        display_frames = len(display.global_orient)
+        display_verts = self.__shaped_vertices(
+            self.__body_model(display_frames, gender), display, display_frames
+        )
         appended = self.state.stream_buffers.append_fitted_chunk(
-            self.state.smplx_fit, display_verts, res.faces, res
+            self.state.smplx_fit, display_verts, display.faces, display
         )
         if not appended:
             return None
@@ -435,7 +502,7 @@ class SmplxAvatarController:
                     break
                 piece = joints[start : start + window]
                 n_frames += len(piece)
-                warm_start = self.fit_single_chunk(piece, warm_start, n_frames)
+                warm_start = self.fit_single_chunk(piece, warm_start, n_frames, 1)
         finally:
             verb = "stopped" if self.state.stream_buffers.cancel else "done"
             self.state.status = f"body fit {verb} -- {n_frames} frames"

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import numpy as np
+import pytest
 
 from text2motion.studio.avatar import SmplxAvatarController
 from text2motion.studio.contracts import ViewerHost
@@ -80,13 +81,16 @@ def test_a_new_take_makes_the_running_fit_stale():
     assert buffers.fit_is_stale()
 
 
-def test_every_streamed_chunk_reaches_the_body_fitter_after_a_normal_finish():
+@pytest.mark.parametrize("upsample", [1, 3])
+def test_every_streamed_chunk_reaches_the_body_fitter_after_a_normal_finish(upsample):
     fitted = []
+    counted = []
     fitter_done = threading.Event()
 
-    def fit_chunk(joints, warm_start, n_frames):
+    def fit_chunk(joints, warm_start, n_frames, factor):
         time.sleep(0.05)
-        fitted.append(len(joints))
+        fitted.append((len(joints), factor))
+        counted.append(n_frames)
         return warm_start
 
     chunks = [
@@ -105,7 +109,7 @@ def test_every_streamed_chunk_reaches_the_body_fitter_after_a_normal_finish():
         client=client,
         fit_lookahead_chunks=2,
         stream_lead_frames=10_000,
-        upsample=1,
+        upsample=upsample,
         generating=True,
         status="",
     )
@@ -130,7 +134,7 @@ def test_every_streamed_chunk_reaches_the_body_fitter_after_a_normal_finish():
     params = {
         "steps": 24,
         "downsample": 4,
-        "upsample": 1,
+        "upsample": upsample,
         "fit_body": True,
         "temperature": 1.0,
         "top_p": 0.9,
@@ -138,7 +142,8 @@ def test_every_streamed_chunk_reaches_the_body_fitter_after_a_normal_finish():
     }
     controller.stream_generation("walk", params)
     assert fitter_done.wait(timeout=5)
-    assert fitted == [16] * 6
+    assert fitted == [(16, upsample)] * 6
+    assert counted[-1] == 96 * upsample
     assert not buffers.fitting
 
 
@@ -220,3 +225,40 @@ def test_upsampling_interpolates_between_frames_and_ends_on_each_source_frame():
     continued = upsample_joints(joints[-1], joints[:1] + 4.0, 3)
     np.testing.assert_allclose(continued[:, 0, 0], [3 + 1 / 3, 3 + 2 / 3, 4.0], rtol=1e-6)
     assert upsample_joints(None, joints, 1) is joints
+
+
+def __z_rotation(degrees: float) -> np.ndarray:
+    return np.array([0.0, 0.0, np.radians(degrees)], np.float32)
+
+
+def test_pose_upsampling_ends_on_each_source_frame_and_moves_translation_linearly():
+    from text2motion.studio.avatar import upsample_pose_parameters
+
+    orient = np.stack([__z_rotation(0), __z_rotation(30), __z_rotation(60)])
+    pose = np.zeros((3, 63), np.float32)
+    transl = np.array([[0, 0, 0], [3, 0, 0], [6, 0, 0]], np.float32)
+
+    up_orient, up_pose, up_transl = upsample_pose_parameters(None, orient, pose, transl, 3)
+
+    assert up_orient.shape == (9, 3)
+    assert up_pose.shape == (9, 63)
+    np.testing.assert_allclose(up_orient[2::3], orient, atol=1e-5)
+    np.testing.assert_allclose(up_orient[3:6, 2], np.radians([10, 20, 30]), atol=1e-5)
+    np.testing.assert_allclose(up_transl[3:6, 0], [1, 2, 3], atol=1e-5)
+    assert upsample_pose_parameters(None, orient, pose, transl, 1)[0] is orient
+
+
+def test_pose_upsampling_takes_the_short_way_across_180_degrees():
+    from text2motion.studio.avatar import upsample_pose_parameters
+
+    anchor = (__z_rotation(170), np.zeros(63, np.float32), np.zeros(3, np.float32))
+    orient = __z_rotation(-170)[None]
+
+    up_orient, _, _ = upsample_pose_parameters(
+        anchor, orient, np.zeros((1, 63), np.float32), np.zeros((1, 3), np.float32), 2
+    )
+
+    angle = np.linalg.norm(up_orient[0])
+    axis_z = abs(up_orient[0, 2]) / angle
+    assert angle == pytest.approx(np.pi, abs=1e-4)
+    assert axis_z == pytest.approx(1.0, abs=1e-4)

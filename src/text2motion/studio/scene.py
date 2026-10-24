@@ -192,6 +192,7 @@ class StudioStreamBuffers:
         self.take = 0
         self.trimmed_frames = 0
         self.interpolation_anchor: np.ndarray | None = None
+        self.fit_anchor: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
         self.fit_take = -1
         self.fitting = False
         self.started = False
@@ -236,6 +237,7 @@ class StudioStreamBuffers:
     def reset_fit_track(self, fit) -> None:
         with self.lock:
             self.pending_body_chunks = []
+            self.fit_anchor = None
             fit.reset_track()
 
     def accumulate(self, joints: np.ndarray) -> np.ndarray:
