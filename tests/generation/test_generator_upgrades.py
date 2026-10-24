@@ -1,14 +1,18 @@
 import importlib.util
 from dataclasses import replace
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 import torch
 
 from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, TokenizerConfig
-from text2motion.generation.contracts import Backbone
+from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.generation.nn_model import MotionTokenGenerator
+from text2motion.generation.nn_text import CLIPTextEncoder
+from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.generation.trainer import GeneratorTrainer
-from text2motion.tokenization.nn_model import FsqTokenizer
+from text2motion.tokenization.nn_model import FsqTokenizer, MotionTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 BASE = GeneratorConfig(
@@ -93,6 +97,58 @@ def test_end_token_targets_and_masked_stream():
     )  # END allowed but never yielded (B=1)
     assert len(stopped) <= 10
     assert all((step != gen.end_id).all() for step in stopped)
+
+
+def test_end_cannot_end_a_stream_at_the_first_step(monkeypatch):
+    cfg = replace(BASE, backbone=Backbone.TRANSFORMER, use_end_token=True)
+    gen = MotionTokenGenerator(cfg).eval()
+    end_id = gen.end_id
+    assert end_id is not None
+
+    def end_is_most_likely(h):
+        logits = torch.zeros(h.shape[0], cfg.num_codebooks, cfg.codebook_size + 1)
+        logits[..., end_id] = 50.0
+        return logits
+
+    monkeypatch.setattr(gen, "predict_token_logits", end_is_most_likely)
+    steps = list(gen.stream_token_indices(torch.randn(1, cfg.d_text), 10, stop_at_end=True))
+
+    assert len(steps) == 1
+    assert (steps[0] != end_id).all()
+
+
+def test_each_row_stops_at_its_own_end_and_the_decoder_never_sees_end():
+    end_id = 16
+    script = [
+        [[1, 2], [3, 4]],
+        [[5, 6], [7, 8]],
+        [[end_id, 9], [1, 2]],
+        [[0, 0], [end_id, 5]],
+    ]
+    decoded_inputs = []
+
+    def decode(indices):
+        decoded_inputs.append(indices)
+        return torch.zeros(indices.shape[0], indices.shape[1] * 4, 263)
+
+    token_generator = SimpleNamespace(
+        end_id=end_id,
+        cfg=SimpleNamespace(num_codebooks=2),
+        stream_token_indices=lambda *args, **kwargs: iter(torch.tensor(step) for step in script),
+    )
+    tokenizer = SimpleNamespace(downsample=4, tokenizer_model=SimpleNamespace(decode=decode))
+    pipeline = TextToMotionGenerator(
+        cast(MotionTokenGenerator, token_generator),
+        cast(CLIPTextEncoder, lambda captions: torch.zeros(len(captions), 32)),
+        cast(MotionTokenizer, tokenizer),
+    )
+
+    motions = pipeline.generate_batch(["a", "b"], 4, SamplingConfig(stop_at_end=True))
+
+    assert motions is not None
+    assert [motion.tokens.token_count for motion in motions] == [2, 3]
+    assert [motion.motion.frame_count for motion in motions] == [8, 12]
+    assert all(int(indices.max()) < end_id for indices in decoded_inputs)
 
 
 @pytest.mark.skipif(

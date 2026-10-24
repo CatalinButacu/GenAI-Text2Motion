@@ -182,7 +182,7 @@ class MotionTokenGenerator(nn.Module):
             if guided:
                 cond, uncond = logits.chunk(2, dim=0)
                 logits = uncond + cfg_scale * (cond - uncond)
-            if self.end_id is not None and not stop_at_end:
+            if self.end_id is not None and (not stop_at_end or index == 0):
                 logits[..., self.end_id] = float("-inf")
             uniform = None if uniforms is None else uniforms[:, index]
             tokens = sample_logits(logits, temperature, top_p, uniform)

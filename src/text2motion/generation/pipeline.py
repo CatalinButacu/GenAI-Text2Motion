@@ -45,7 +45,7 @@ class TextToMotionGenerator:
         token_steps: int,
         sampling: SamplingConfig,
         seeds: Sequence[int] | None = None,
-    ) -> torch.Tensor | None:
+    ) -> tuple[torch.Tensor, list[int]] | None:
         text_emb = self.text_encoder(captions)
         uniforms = None
         if seeds is not None:
@@ -65,7 +65,24 @@ class TextToMotionGenerator:
         )
         if not steps:
             return None
-        return torch.stack(steps, dim=1)
+        indices = torch.stack(steps, dim=1)
+        return indices, self.__row_lengths(indices)
+
+    def __row_lengths(self, indices: torch.Tensor) -> list[int]:
+        end_id = self.token_generator.end_id
+        if end_id is None:
+            return [indices.shape[1]] * indices.shape[0]
+        ended = (indices == end_id).any(dim=-1)
+        first_end = ended.int().argmax(dim=1)
+        return torch.where(ended.any(dim=1), first_end, indices.shape[1]).tolist()
+
+    def __decode_rows(self, indices: torch.Tensor, lengths: list[int]) -> list[torch.Tensor]:
+        decoder = self.tokenizer.tokenizer_model
+        if len(set(lengths)) == 1:
+            return list(decoder.decode(indices[:, : lengths[0]]))
+        return [
+            decoder.decode(indices[row : row + 1, :length])[0] for row, length in enumerate(lengths)
+        ]
 
     def generate_batch(
         self,
@@ -74,21 +91,22 @@ class TextToMotionGenerator:
         sampling: SamplingConfig,
         seeds: Sequence[int] | None = None,
     ) -> list[GeneratedMotion] | None:
-        indices = self.sample_token_sequences(captions, token_steps, sampling, seeds)
-        if indices is None:
+        sampled = self.sample_token_sequences(captions, token_steps, sampling, seeds)
+        if sampled is None:
             return None
-        decoded = self.tokenizer.tokenizer_model.decode(indices)
+        indices, lengths = sampled
+        decoded = self.__decode_rows(indices, lengths)
         return [
             GeneratedMotion(
                 prompt=caption,
                 tokens=MotionTokens(
-                    indices=indices[row],
-                    token_count=int(indices.shape[1]),
-                    frame_count=int(decoded.shape[1]),
+                    indices=indices[row, : lengths[row]],
+                    token_count=lengths[row],
+                    frame_count=int(decoded[row].shape[0]),
                 ),
                 motion=MotionClip(
                     features=decoded[row],
-                    frame_count=int(decoded.shape[1]),
+                    frame_count=int(decoded[row].shape[0]),
                     caption=caption,
                 ),
             )
