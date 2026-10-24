@@ -1,114 +1,54 @@
+# powershell -ExecutionPolicy Bypass -File scripts/training/run_rvq_ablation_local.ps1 -BudgetHours 8
 param([double]$BudgetHours = 8, [int]$StaleMinutes = 45)
-$ErrorActionPreference = "Continue"
-$root = $PSScriptRoot
-while ($root -and -not (Test-Path (Join-Path $root "pyproject.toml"))) {
-    $root = Split-Path $root -Parent
-}
-if (-not $root) {
-    throw "repo root (pyproject.toml) not found above $PSScriptRoot"
-}
-Set-Location $root
-$env:PYTHONPATH = "src"
-$env:PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"  # anti-frag for the 4GB card
-$py = ".\.venv\Scripts\python.exe"
+$ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+$null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $start = Get-Date
+$config = "configs/generator/gen_pilot_rvq8x1024.yaml"
+$tokenizer = "artifacts/checkpoints/tokenizer/rvq_l8_1024.pt"
+$pretrained = "artifacts/checkpoints/generator/generator_transformer_rvq_pretrained.pt"
+$pretrainResume = "artifacts/checkpoints/generator/generator_transformer_rvq_pretrained_last.pt"
+$finetuneResume = "artifacts/checkpoints/generator/generator_transformer_rvq_bs8_last.pt"
+$gate = "artifacts/outputs/gates/transformer_rvq_34m_overfit.json"
+Write-Host "=== transformer+RVQ downstream-generation ablation start $(Get-Date -Format u)  budget ${BudgetHours}h ==="
 
-function Hrs {
-    return [math]::Round(((Get-Date) - $start).TotalHours, 1)
+function Get-HoursLeft {
+    return [math]::Round($BudgetHours - ((Get-Date) - $start).TotalHours, 2)
 }
 
-New-Item -ItemType Directory -Force artifacts/outputs | Out-Null
-Write-Output "=== transformer+RVQ downstream-generation ablation start $(Get-Date -Format u)  budget ${BudgetHours}h ==="
-
-function Invoke-Guarded([string]$tag, [string]$argList, [string]$logFile, [double]$maxHours, [int]$staleMin = $StaleMinutes) {
-    if ($maxHours -le 0.5) {
-        Write-Output "SKIP $tag (budget exhausted, ${maxHours}h left)"
-        return 0
-    }
-    $before = Get-Date
-    $p = Start-Process -FilePath $py -ArgumentList "-u -m $argList" -PassThru -NoNewWindow `
-        -RedirectStandardOutput $logFile -RedirectStandardError "$logFile.err"
-    Start-Sleep -Seconds 45  # let start_run create the timestamped run dir
-    $hbDir = Get-ChildItem artifacts/outputs/runs -Directory -EA SilentlyContinue |
-        Where-Object { $_.LastWriteTime -ge $before } |
-        Sort-Object LastWriteTime -Desc |
-        Select-Object -First 1
-    while (-not $p.HasExited) {
-        Start-Sleep -Seconds 120
-        $el = ((Get-Date) - $before).TotalHours
-        if ($el -ge $maxHours) {
-            $r = "max-hours ($maxHours h)"
-            break
-        }
-        if ($hbDir) {
-            $newest = Get-ChildItem $hbDir.FullName -File -EA SilentlyContinue |
-                Sort-Object LastWriteTime -Descending |
-                Select-Object -First 1
-            if ($newest) {
-                $age = ((Get-Date) - $newest.LastWriteTime).TotalMinutes
-                if ($age -ge $staleMin) {
-                    $r = "stall (${age}min stale heartbeat)"
-                    break
-                }
-            }
-        }
-    }
-    if (-not $p.HasExited) {
-        Stop-Process -Id $p.Id -Force
-        Start-Sleep 5
-        "$((Get-Date).ToString('u'))  $tag KILLED: $r" | Out-File -Append artifacts/outputs/GUARD_KILL.txt -Encoding utf8
-        Write-Output "GUARD KILLED ${tag}: $r  (best-by-val checkpoint is safe; --resume to continue)"
-        return -1
-    }
-    Write-Output "$tag exited on its own (code $($p.ExitCode)) at $(Hrs)h"
-    return $p.ExitCode
-}
-
-$CONFIG = "configs/generator/gen_pilot_rvq8x1024.yaml"
-$TOKENIZER = "artifacts/checkpoints/tokenizer/rvq_l8_1024.pt"
-$TOKEN_PACK = "data/amass_tokens_rvq8x1024.npz"
-$PRETRAIN_CKPT = "artifacts/checkpoints/generator/generator_transformer_rvq_pretrained.pt"
-$GATE = "artifacts/outputs/gates/transformer_rvq_34m_overfit.json"
-
-if (Test-Path artifacts/checkpoints/generator/generator_transformer_rvq_bs8.pt) {
-    Write-Output "SKIP: generator_transformer_rvq_bs8.pt already exists"
-    exit 0
-}
-
-Write-Output "`n=== STAGE 1  [$(Hrs)h] AMASS pretrain, transformer, RVQ tokens (mirrors the FSQ pretrain: 20 epochs, batch 64) ==="
-if (-not (Test-Path $PRETRAIN_CKPT)) {
-    $code = Invoke-Guarded "pretrain_transformer_rvq" `
-        "text2motion.app.cli pretrain --config $CONFIG --backbone transformer --token_pack $TOKEN_PACK --epochs 20 --batch_size 64 --ckpt $PRETRAIN_CKPT --resume" `
-        "artifacts/outputs/rvq_ablation_pretrain.log" $BudgetHours
+function Stop-OnFailure([int]$code, [string]$stage) {
     if ($code -ne 0) {
-        Write-Output "PRETRAIN did not finish cleanly -- inspect artifacts/outputs/rvq_ablation_pretrain.log, rerun this script to resume"
-        exit 1
+        Write-Host "ABLATION STOPPED at ${stage} (exit code $code); no DONE marker"
+        exit $code
     }
-} else {
-    Write-Output "SKIP pretrain (checkpoint already exists)"
 }
 
-Write-Output "`n=== STAGE 2  [$(Hrs)h] sanity-overfit gate (mandatory pre-flight) ==="
-if (-not (Test-Path $GATE)) {
-    & $py -u -m text2motion.app.cli sanity-overfit --config $CONFIG `
-        --backbone transformer --tokenizer_ckpt $TOKENIZER --overfit_gate $GATE
-    if ($LASTEXITCODE -ne 0) {
-        Write-Output "GATE FAILED -- do not proceed to the real run. Inspect $GATE."
-        exit 1
-    }
-} else {
-    Write-Output "SKIP gate (already exists)"
+if (-not (Test-RunComplete -ResumePath $pretrainResume -Epochs 20)) {
+    Stop-OnFailure (Invoke-TrainingStep -Tag "pretrain_transformer_rvq" -LogFile "artifacts/outputs/rvq_ablation_pretrain.log" `
+            -MaxHours (Get-HoursLeft) -StaleMinutes $StaleMinutes -Arguments @(
+                "-m", "text2motion.app.cli", "pretrain", "--config", $config, "--backbone", "transformer",
+                "--token_pack", "data/amass_tokens_rvq8x1024.npz", "--epochs", "20", "--batch_size", "64",
+                "--ckpt", $pretrained, (Get-ResumeFlag -ResumePath $pretrainResume)
+            )) "pretrain"
 }
 
-Write-Output "`n=== STAGE 3  [$(Hrs)h] HumanML3D fine-tune, transformer, RVQ tokens (mirrors the FSQ twin: 18 epochs, batch 8) ==="
-$remaining = $BudgetHours - ((Get-Date) - $start).TotalHours
-$code = Invoke-Guarded "train_transformer_rvq" `
-    "text2motion.app.cli train-generator --config $CONFIG --backbone transformer --tokenizer_ckpt $TOKENIZER --overfit_gate $GATE --init_ckpt $PRETRAIN_CKPT --ckpt_name generator_transformer_rvq_bs8.pt --epochs 18 --batch_size 8 --num_workers 4 --eval_every 6 --cfg_scale 6.0 --temperature 1.0 --resume" `
-    "artifacts/outputs/rvq_ablation_finetune.log" $remaining
-if ($code -eq 0) {
-    Write-Output "`n=== ABLATION COMPLETE  total $(Hrs)h ==="
-    "done $(Get-Date -Format u)  total $(Hrs)h" | Out-File artifacts/outputs/RVQ_ABLATION_DONE.txt -Encoding utf8
-} else {
-    Write-Output "`n=== FINE-TUNE did not finish cleanly -- inspect artifacts/outputs/rvq_ablation_finetune.log, rerun this script to resume ==="
-    exit 1
+if (-not (Test-Path $gate)) {
+    Stop-OnFailure (Invoke-TrainingStep -Tag "gate_transformer_rvq" -LogFile "artifacts/outputs/rvq_ablation_gate.log" `
+            -MaxHours 2 -Arguments @(
+                "-m", "text2motion.app.cli", "sanity-overfit", "--config", $config,
+                "--backbone", "transformer", "--tokenizer_ckpt", $tokenizer, "--overfit_gate", $gate
+            )) "gate"
 }
+
+if (-not (Test-RunComplete -ResumePath $finetuneResume -Epochs 18)) {
+    Stop-OnFailure (Invoke-TrainingStep -Tag "train_transformer_rvq" -LogFile "artifacts/outputs/rvq_ablation_finetune.log" `
+            -MaxHours (Get-HoursLeft) -StaleMinutes $StaleMinutes -Arguments @(
+                "-m", "text2motion.app.cli", "train-generator", "--config", $config, "--backbone", "transformer",
+                "--tokenizer_ckpt", $tokenizer, "--overfit_gate", $gate, "--init_ckpt", $pretrained,
+                "--ckpt_name", "generator_transformer_rvq_bs8.pt", "--epochs", "18", "--batch_size", "8",
+                "--num_workers", "4", "--eval_every", "6", "--cfg_scale", "6.0", "--temperature", "1.0",
+                (Get-ResumeFlag -ResumePath $finetuneResume)
+            )) "fine-tune"
+}
+
+$null = Write-DoneMarker -Path "artifacts/outputs/RVQ_ABLATION_DONE.txt" -ExitCodes @(0)

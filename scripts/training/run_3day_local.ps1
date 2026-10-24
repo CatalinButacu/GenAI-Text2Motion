@@ -1,159 +1,83 @@
+# powershell -ExecutionPolicy Bypass -File scripts/training/run_3day_local.ps1 -BudgetHours 70
 param([double]$BudgetHours = 70, [int]$StaleMinutes = 45)
-$ErrorActionPreference = "Continue"
-$root = $PSScriptRoot
-while ($root -and -not (Test-Path (Join-Path $root "pyproject.toml"))) {
-    $root = Split-Path $root -Parent
-}
-if (-not $root) {
-    throw "repo root (pyproject.toml) not found above $PSScriptRoot"
-}
-Set-Location $root
-$env:PYTHONPATH = "src"
-$env:PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"  # anti-frag for the 4GB card
-$py = ".\.venv\Scripts\python.exe"
+$ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+$null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $start = Get-Date
+$fsqConfig = "configs/generator/gen_pilot_fsq8x1024.yaml"
+$fsqTokenizer = "artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
+Write-Host "=== 3-day local chain start $(Get-Date -Format u)  budget ${BudgetHours}h ==="
 
-function Hrs {
-    return [math]::Round(((Get-Date) - $start).TotalHours, 1)
-}
-
-function Left {
+function Get-HoursLeft {
     return [math]::Round($BudgetHours - ((Get-Date) - $start).TotalHours, 1)
 }
 
-New-Item -ItemType Directory -Force artifacts/outputs | Out-Null
-Write-Output "=== 3-day local chain start $(Get-Date -Format u)  budget ${BudgetHours}h ==="
+function Invoke-WithRetries([string]$tag, [string]$resume, [int]$epochs, [int]$tries, [string[]]$arguments) {
+    for ($try = 1; $try -le $tries; $try++) {
+        if (Test-RunComplete -ResumePath $resume -Epochs $epochs) {
+            Write-Host "SKIP $tag (all $epochs epochs are in $resume)"
+            return 0
+        }
+        $left = Get-HoursLeft
+        if ($left -le 1) {
+            Write-Host "STOP ${tag}: budget exhausted"
+            return 1
+        }
+        $code = Invoke-TrainingStep -Tag "$tag (try $try)" -LogFile "artifacts/outputs/$tag.log" `
+            -MaxHours $left -StaleMinutes $StaleMinutes `
+            -Arguments ($arguments + @(Get-ResumeFlag -ResumePath $resume))
+        if ($code -ne 124) {
+            return $code
+        }
+    }
+    return 124
+}
 
-function Invoke-Guarded([string]$tag, [string]$argList, [string]$logFile, [double]$maxHours, [int]$staleMin = $StaleMinutes) {
-    if ($maxHours -le 0.5) {
-        Write-Output "SKIP $tag (budget exhausted, ${maxHours}h left)"
+function Invoke-Gate([string]$backbone, [string]$gate) {
+    if (Test-Path $gate) {
         return 0
     }
-    $before = Get-Date
-    $p = Start-Process -FilePath $py -ArgumentList "-u -m $argList" -PassThru -NoNewWindow `
-        -RedirectStandardOutput $logFile -RedirectStandardError "$logFile.err"
-    Start-Sleep -Seconds 45  # let start_run create the timestamped run dir
-    $hbDir = Get-ChildItem artifacts/outputs/runs -Directory -EA SilentlyContinue |
-        Where-Object { $_.LastWriteTime -ge $before } |
-        Sort-Object LastWriteTime -Desc |
-        Select-Object -First 1
-    while (-not $p.HasExited) {
-        Start-Sleep -Seconds 120
-        $el = ((Get-Date) - $before).TotalHours
-        if ($el -ge $maxHours) {
-            $r = "max-hours ($maxHours h)"
-            break
-        }
-        if ($hbDir) {
-            $newest = Get-ChildItem $hbDir.FullName -File -EA SilentlyContinue |
-                Sort-Object LastWriteTime -Descending |
-                Select-Object -First 1
-            if ($newest) {
-                $age = ((Get-Date) - $newest.LastWriteTime).TotalMinutes
-                if ($age -ge $staleMin) {
-                    $r = "stall (${age}min stale heartbeat)"
-                    break
-                }
-            }
-        }
-    }
-    if (-not $p.HasExited) {
-        Stop-Process -Id $p.Id -Force
-        Start-Sleep 5
-        "$((Get-Date).ToString('u'))  $tag KILLED: $r" | Out-File -Append artifacts/outputs/GUARD_KILL.txt -Encoding utf8
-        Write-Output "GUARD KILLED ${tag}: $r  (best-by-val checkpoint is safe; --resume to continue)"
-        return -1
-    }
-    Write-Output "$tag exited on its own (code $($p.ExitCode)) at $(Hrs)h"
-    return $p.ExitCode
+    return Invoke-TrainingStep -Tag "gate_$backbone" -LogFile "artifacts/outputs/gate_$backbone.log" `
+        -MaxHours 2 -Arguments @(
+            "-m", "text2motion.app.cli", "sanity-overfit", "--config", $fsqConfig,
+            "--backbone", $backbone, "--tokenizer_ckpt", $fsqTokenizer, "--overfit_gate", $gate
+        )
 }
 
-function EpochsLogged([string]$pat) {
-    $d = Get-ChildItem artifacts/outputs/runs -Directory -EA SilentlyContinue |
-        Where-Object { $_.Name -match $pat } |
-        Sort-Object LastWriteTime -Desc |
-        Select-Object -First 1
-    if (-not $d) {
-        return 0
-    }
-    $m = Join-Path $d.FullName "metrics.jsonl"
-    if (-not (Test-Path $m)) {
-        return 0
-    }
-    return (Get-Content $m | Select-String '"epoch"' | Measure-Object).Count
-}
-
-if (Test-Path artifacts/checkpoints/tokenizer/tokenizer_isovocab.pt) {
-    Write-Output "`n=== PHASE 1  [$(Hrs)h] SKIP iso-vocab (already done; tokenizer_isovocab.pt exists) ==="
-} else {
-    Write-Output "`n=== PHASE 1  [$(Hrs)h] iso-vocab tokenizer ==="
-    & $py -u -m text2motion.app.cli train-tokenizer --config configs/tokenizer/tokenizer_isovocab.yaml `
-        --tokenizer fsq --ckpt_name tokenizer_isovocab.pt --epochs 50 --eval_every 5 *>&1 |
-        Tee-Object artifacts/outputs/phase1_isovocab.log
-}
-
-if (Test-Path artifacts/checkpoints/generator/generator_transformer_bs8.pt) {
-    Write-Output "`n=== PHASE 2  [$(Hrs)h] SKIP transformer-bs8 (done; generator_transformer_bs8.pt exists) ==="
-} else {
-    Write-Output "`n=== PHASE 2  [$(Hrs)h] transformer-34M bs8 (matched twin partner) ==="
-    if (-not (Test-Path artifacts/outputs/gates/transformer_34m_overfit.json)) {
-        & $py -u -m text2motion.app.cli sanity-overfit --config configs/generator/gen_pilot_fsq8x1024.yaml `
-            --backbone transformer --tokenizer_ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt `
-            --overfit_gate artifacts/outputs/gates/transformer_34m_overfit.json
-    }
-    & $py -u -m text2motion.app.cli train-generator --config configs/generator/gen_pilot_fsq8x1024.yaml `
-        --backbone transformer --tokenizer_ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt `
-        --overfit_gate artifacts/outputs/gates/transformer_34m_overfit.json `
-        --init_ckpt artifacts/checkpoints/generator/generator_transformer_pretrained.pt `
-        --ckpt_name generator_transformer_bs8.pt --epochs 18 --batch_size 8 `
-        --eval_every 6 --cfg_scale 6.0 --temperature 1.0 --resume *>&1 |
-        Tee-Object artifacts/outputs/phase2_transformer_bs8.log
-}
-
-$P3_DONE = "artifacts/checkpoints/generator/generator_mamba_pretrained.pt.done"
-for ($try = 1; $try -le 6; $try++) {
-    if (Test-Path $P3_DONE) {
-        Write-Output "PHASE 3 complete (marker present)"
-        break
-    }
-    if ((Left) -le 1) {
-        Write-Output "PHASE 3 stop: budget exhausted"
-        break
-    }
-    Write-Output "`n=== PHASE 3  [$(Hrs)h, $(Left)h left] mamba pretrain (try $try) ==="
-    $maxHours = [math]::Min(14, (Left))
-    $code = Invoke-Guarded "phase3_mamba_pretrain" `
-        "text2motion.app.cli pretrain --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --token_pack data/amass_tokens_fsq8x1024.npz --epochs 20 --batch_size 8 --grad_accum 8 --ckpt artifacts/checkpoints/generator/generator_mamba_pretrained.pt --resume" `
-        "artifacts/outputs/phase3_mamba_pretrain.log" $maxHours
-    if ($code -eq 0 -and (Test-Path $P3_DONE)) {
-        Write-Output "PHASE 3 complete (clean exit)"
-        break
+function Stop-OnFailure([int]$code, [string]$phase) {
+    if ($code -ne 0) {
+        Write-Host "CHAIN STOPPED at ${phase} (exit code $code); no DONE marker"
+        exit $code
     }
 }
 
-if (-not (Test-Path $P3_DONE)) {
-    Write-Output "`n=== PHASE 4 SKIP: mamba prior incomplete (no .done marker) ==="
-} else {
-    if (-not (Test-Path artifacts/outputs/gates/mamba_34m_overfit.json)) {
-        & $py -u -m text2motion.app.cli sanity-overfit --config configs/generator/gen_pilot_fsq8x1024.yaml `
-            --backbone mamba --tokenizer_ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt `
-            --overfit_gate artifacts/outputs/gates/mamba_34m_overfit.json
-    }
-    for ($try = 1; $try -le 4; $try++) {
-        if ((Left) -le 1) {
-            Write-Output "PHASE 4 stop: budget exhausted"
-            break
-        }
-        Write-Output "`n=== PHASE 4  [$(Hrs)h, $(Left)h left] mamba bs8 finetune (try $try) ==="
-        $code = Invoke-Guarded "phase4_mamba_finetune" `
-            "text2motion.app.cli train-generator --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --tokenizer_ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt --overfit_gate artifacts/outputs/gates/mamba_34m_overfit.json --init_ckpt artifacts/checkpoints/generator/generator_mamba_pretrained.pt --ckpt_name generator_mamba_bs8.pt --epochs 18 --batch_size 4 --grad_accum 2 --eval_every 6 --cfg_scale 6.0 --temperature 1.0 --resume" `
-            "artifacts/outputs/phase4_mamba_finetune.log" (Left)
-        if ($code -eq 0) {
-            Write-Output "PHASE 4 complete (clean exit)"
-            break
-        }
-    }
-}
+Stop-OnFailure (Invoke-WithRetries "phase1_isovocab" "artifacts/checkpoints/tokenizer/tokenizer_isovocab_last.pt" 50 1 @(
+        "-m", "text2motion.app.cli", "train-tokenizer", "--config", "configs/tokenizer/tokenizer_isovocab.yaml",
+        "--tokenizer", "fsq", "--ckpt_name", "tokenizer_isovocab.pt", "--epochs", "50", "--eval_every", "5"
+    )) "phase 1"
 
-Write-Output "`n=== CHAIN DONE  total $(Hrs)h ==="
-"done $(Get-Date -Format u)  total $(Hrs)h" | Out-File artifacts/outputs/CHAIN_DONE.txt -Encoding utf8
+Stop-OnFailure (Invoke-Gate "transformer" "artifacts/outputs/gates/transformer_34m_overfit.json") "phase 2 gate"
+Stop-OnFailure (Invoke-WithRetries "phase2_transformer_bs8" "artifacts/checkpoints/generator/generator_transformer_bs8_last.pt" 18 1 @(
+        "-m", "text2motion.app.cli", "train-generator", "--config", $fsqConfig, "--backbone", "transformer",
+        "--tokenizer_ckpt", $fsqTokenizer, "--overfit_gate", "artifacts/outputs/gates/transformer_34m_overfit.json",
+        "--init_ckpt", "artifacts/checkpoints/generator/generator_transformer_pretrained.pt",
+        "--ckpt_name", "generator_transformer_bs8.pt", "--epochs", "18", "--batch_size", "8",
+        "--eval_every", "6", "--cfg_scale", "6.0", "--temperature", "1.0"
+    )) "phase 2"
+
+Stop-OnFailure (Invoke-WithRetries "phase3_mamba_pretrain" "artifacts/checkpoints/generator/generator_mamba_pretrained_last.pt" 20 6 @(
+        "-m", "text2motion.app.cli", "pretrain", "--config", $fsqConfig, "--backbone", "mamba",
+        "--token_pack", "data/amass_tokens_fsq8x1024.npz", "--epochs", "20", "--batch_size", "8",
+        "--grad_accum", "8", "--ckpt", "artifacts/checkpoints/generator/generator_mamba_pretrained.pt"
+    )) "phase 3"
+
+Stop-OnFailure (Invoke-Gate "mamba" "artifacts/outputs/gates/mamba_34m_overfit.json") "phase 4 gate"
+Stop-OnFailure (Invoke-WithRetries "phase4_mamba_finetune" "artifacts/checkpoints/generator/generator_mamba_bs8_last.pt" 18 4 @(
+        "-m", "text2motion.app.cli", "train-generator", "--config", $fsqConfig, "--backbone", "mamba",
+        "--tokenizer_ckpt", $fsqTokenizer, "--overfit_gate", "artifacts/outputs/gates/mamba_34m_overfit.json",
+        "--init_ckpt", "artifacts/checkpoints/generator/generator_mamba_pretrained.pt",
+        "--ckpt_name", "generator_mamba_bs8.pt", "--epochs", "18", "--batch_size", "4", "--grad_accum", "2",
+        "--eval_every", "6", "--cfg_scale", "6.0", "--temperature", "1.0"
+    )) "phase 4"
+
+$null = Write-DoneMarker -Path "artifacts/outputs/CHAIN_DONE.txt" -ExitCodes @(0)

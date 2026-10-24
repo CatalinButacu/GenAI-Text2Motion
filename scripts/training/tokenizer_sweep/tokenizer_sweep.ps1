@@ -1,18 +1,12 @@
+# powershell -ExecutionPolicy Bypass -File scripts/training/tokenizer_sweep/tokenizer_sweep.ps1
 $ErrorActionPreference = "Stop"
-$env:PYTHONPATH = "src"
-$py = ".venv\Scripts\python.exe"
-$variants = @(
-    @{ cfg = "configs/tokenizer/tok_g4_v1000.yaml";  name = "tok_g4_v1000.pt" },
-    @{ cfg = "configs/tokenizer/tok_g8_v1000.yaml";  name = "tok_g8_v1000.pt" },
-    @{ cfg = "configs/tokenizer/tok_g6_v2560.yaml";  name = "tok_g6_v2560.pt" }
+Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "TrainingRun.psm1") -Force
+$null = Enter-RepoRoot -StartDirectory $PSScriptRoot
+$done = Invoke-TokenizerSweep -DoneMarker "artifacts/outputs/SWEEP_DONE.txt" -Variants @(
+    @{ cfg = "configs/tokenizer/tok_g4_v1000.yaml"; mech = "fsq"; name = "tok_g4_v1000.pt" },
+    @{ cfg = "configs/tokenizer/tok_g8_v1000.yaml"; mech = "fsq"; name = "tok_g8_v1000.pt" },
+    @{ cfg = "configs/tokenizer/tok_g6_v2560.yaml"; mech = "fsq"; name = "tok_g6_v2560.pt" }
 )
-foreach ($v in $variants) {
-    $stem = [System.IO.Path]::GetFileNameWithoutExtension($v.name)
-    $log = "outputs/sweep_$stem.log"
-    "=== $(Get-Date -Format o)  training $stem ===" | Out-File -Append $log -Encoding utf8
-    & $py -u -m text2motion.app.cli train-tokenizer --config $v.cfg --tokenizer fsq `
-        --epochs 500 --batch_size 128 --eval_every 25 --ckpt_name $v.name --resume `
-        2>&1 | Out-File -Append $log -Encoding utf8
-    "=== $(Get-Date -Format o)  done $stem ===" | Out-File -Append $log -Encoding utf8
+if (-not $done) {
+    exit 1
 }
-"=== SWEEP COMPLETE ===" | Out-File -Append outputs/sweep_done.txt -Encoding utf8

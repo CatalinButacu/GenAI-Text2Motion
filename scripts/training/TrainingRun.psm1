@@ -125,4 +125,44 @@ function Write-DoneMarker {
     return $true
 }
 
-Export-ModuleMember -Function Enter-RepoRoot, Get-ResumeFlag, Test-RunComplete, Invoke-TrainingStep, Write-DoneMarker
+function Assert-NoTokenizerTraining {
+    $busy = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+        Where-Object { $_.CommandLine -like "*train-tokenizer*" })
+    if ($busy.Count -gt 0) {
+        throw "a tokenizer trainer already runs (PID $($busy[0].ProcessId)); the 4 GB GPU fits one"
+    }
+}
+
+function Invoke-TokenizerSweep {
+    param(
+        [Parameter(Mandatory = $true)][hashtable[]]$Variants,
+        [Parameter(Mandatory = $true)][string]$DoneMarker,
+        [int]$Epochs = 500,
+        [double]$MaxHoursPerRun = 72
+    )
+    Assert-NoTokenizerTraining
+    $codes = @()
+    foreach ($variant in $Variants) {
+        $stem = [IO.Path]::GetFileNameWithoutExtension($variant.name)
+        $resume = "artifacts/checkpoints/tokenizer/${stem}_last.pt"
+        if (Test-RunComplete -ResumePath $resume -Epochs $Epochs) {
+            Write-Host "SKIP $stem (all $Epochs epochs are in $resume)"
+            $codes += 0
+            continue
+        }
+        $code = Invoke-TrainingStep -Tag "sweep_$stem" -LogFile "artifacts/outputs/sweep_$stem.log" `
+            -MaxHours $MaxHoursPerRun -Arguments @(
+                "-m", "text2motion.app.cli", "train-tokenizer", "--config", $variant.cfg,
+                "--tokenizer", $variant.mech, "--epochs", "$Epochs", "--batch_size", "128",
+                "--eval_every", "25", "--ckpt_name", $variant.name,
+                (Get-ResumeFlag -ResumePath $resume)
+            )
+        $codes += $code
+        if ($code -ne 0) {
+            break
+        }
+    }
+    return Write-DoneMarker -Path $DoneMarker -ExitCodes $codes
+}
+
+Export-ModuleMember -Function Enter-RepoRoot, Get-ResumeFlag, Test-RunComplete, Invoke-TrainingStep, Write-DoneMarker, Invoke-TokenizerSweep

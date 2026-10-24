@@ -1,3 +1,4 @@
+# powershell -ExecutionPolicy Bypass -File scripts/training/local_guard.ps1 -TargetPid 1234 -HeartbeatPath artifacts/logs/train/RUN/heartbeat
 param(
     [Parameter(Mandatory = $true)][int]$TargetPid,
     [string]$HeartbeatPath = "",
@@ -19,10 +20,11 @@ while ($true) {
         $reason = "max-hours budget ($MaxHours h) reached"
         break
     }
-    if ($StaleMinutes -gt 0 -and $HeartbeatPath -and (Test-Path $HeartbeatPath)) {
-        $age = ((Get-Date) - (Get-Item $HeartbeatPath).LastWriteTime).TotalMinutes
+    if ($StaleMinutes -gt 0 -and $HeartbeatPath) {
+        $lastSign = if (Test-Path $HeartbeatPath) { (Get-Item $HeartbeatPath).LastWriteTime } else { $started }
+        $age = ((Get-Date) - $lastSign).TotalMinutes
         if ($age -ge $StaleMinutes) {
-            $reason = "heartbeat stale for $([math]::Round($age)) min (frozen run)"
+            $reason = "no heartbeat for $([math]::Round($age)) min (frozen run)"
             break
         }
     }
