@@ -37,10 +37,10 @@ class SmplxFitSchedule:
 
 @dataclass(frozen=True)
 class StreamDisplayConfig:
-    window_frames: int = 600
+    window_frames: int = 1200
     fit_lookahead_chunks: int = 8
     stream_lead_frames: int = 120
-    upsample: int = 3
+    upsample: int = 6
 
 
 @dataclass(frozen=True)

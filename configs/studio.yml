@@ -20,10 +20,10 @@ schedule:
   retrofit_window: 16
 
 display:
-  window_frames: 600
+  window_frames: 1200
   fit_lookahead_chunks: 8
   stream_lead_frames: 120
-  upsample: 3
+  upsample: 6
 
 live:
   steps: 20
