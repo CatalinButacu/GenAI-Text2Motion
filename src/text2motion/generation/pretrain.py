@@ -15,13 +15,25 @@ from text2motion.generation.contracts import (
     MixedPrecisionMode,
 )
 from text2motion.generation.nn_model import GeneratorModelSpec, token_ce_loss
-from text2motion.generation.trainer import adamw_groups, warmup_cosine_factor
+from text2motion.generation.trainer import (
+    adamw_groups,
+    check_schedule_horizon,
+    warmup_cosine_factor,
+)
 from text2motion.motion.datasets import dataset_size
-from text2motion.motion.storage import atomic_torch_save
+from text2motion.motion.storage import (
+    RESUME_VERSION,
+    atomic_torch_save,
+    capture_rng_state,
+    is_legacy_resume,
+    restore_rng_state,
+)
 
 logger = logging.getLogger(__name__)
 
 _MetricSink = Callable[[dict[str, object]], None]
+
+PRETRAIN_RESUME_FORMAT = "text2motion.pretrain_resume"
 
 
 @dataclass(frozen=True)
@@ -147,6 +159,32 @@ def build_token_loaders(
     return loader, val_loader, budget
 
 
+def __load_pretraining_resume(
+    generator,
+    optimizer: torch.optim.Optimizer,
+    resume_path: Path,
+    request: GeneratorPretrainingRequest,
+    total_steps: int,
+    device: str,
+) -> tuple[int, int]:
+    state = torch.load(resume_path, map_location=device, weights_only=True)
+    legacy = is_legacy_resume(
+        state, resume_path, PRETRAIN_RESUME_FORMAT, request.accept_legacy_resume
+    )
+    generator.load_state_dict(state["generator"])
+    optimizer.load_state_dict(state["optimizer"])
+    step, start_epoch = state["step"], state["epoch"] + 1
+    logger.info(f"resumed pretrain from {resume_path} at epoch {start_epoch} (step {step})")
+    if legacy:
+        logger.warning(
+            "old resume file: the RNG state and the schedule horizon are not in it; they start fresh"
+        )
+        return step, start_epoch
+    check_schedule_horizon(state["total_steps"], total_steps, request.extend_schedule)
+    restore_rng_state(state["rng"])
+    return step, start_epoch
+
+
 def pretrain_generator(
     architecture: GeneratorModelSpec,
     generator,
@@ -191,11 +229,9 @@ def pretrain_generator(
             f"--resume continues from {resume_path}, which does not exist; start without --resume"
         )
     if request.resume:
-        state = torch.load(resume_path, map_location=device)
-        generator.load_state_dict(state["generator"])
-        opt.load_state_dict(state["optimizer"])
-        step, start_epoch = state["step"], state["epoch"] + 1
-        logger.info(f"resumed pretrain from {resume_path} at epoch {start_epoch} (step {step})")
+        step, start_epoch = __load_pretraining_resume(
+            generator, opt, resume_path, request, total_steps, device
+        )
 
     def null_condition(batch_size: int) -> torch.Tensor:
         return torch.zeros(
@@ -265,8 +301,12 @@ def pretrain_generator(
         atomic_torch_save(generator.state_dict(), out_path)
         atomic_torch_save(
             {
+                "format": PRETRAIN_RESUME_FORMAT,
+                "version": RESUME_VERSION,
                 "generator": generator.state_dict(),
                 "optimizer": opt.state_dict(),
+                "total_steps": total_steps,
+                "rng": capture_rng_state(),
                 "step": step,
                 "epoch": epoch,
             },

@@ -79,6 +79,7 @@ def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) ->
             num_workers=args.num_workers,
             checkpoint_name=name,
             resume=args.resume,
+            accept_legacy_resume=args.accept_legacy_resume,
         ),
         device=app.device,
         evaluate=evaluate,

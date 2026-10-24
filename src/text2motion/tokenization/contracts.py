@@ -70,6 +70,7 @@ class TokenizerTrainingRequest:
     num_workers: int = 0
     checkpoint_name: str | None = None
     resume: bool = False
+    accept_legacy_resume: bool = False
 
 
 @dataclass(frozen=True)
@@ -140,4 +141,8 @@ class TrainTokenizerRequest(CommandRequest):
     )
     resume: bool = Field(
         default=False, description="continue from the saved state of this checkpoint"
+    )
+    accept_legacy_resume: bool = Field(
+        default=False,
+        description="with --resume: load an old resume file; its RNG state starts fresh",
     )

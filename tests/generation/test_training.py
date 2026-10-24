@@ -6,7 +6,12 @@ from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, Tok
 from text2motion.generation.contracts import Backbone, LossWeighting
 from text2motion.generation.losses import LossWeights, soft_decode
 from text2motion.generation.nn_model import MotionTokenGenerator
-from text2motion.generation.trainer import GeneratorTrainer
+from text2motion.generation.trainer import (
+    GENERATOR_RESUME_FORMAT,
+    GeneratorTrainer,
+    check_schedule_horizon,
+)
+from text2motion.motion.storage import RESUME_VERSION, atomic_torch_save, is_legacy_resume
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_model import FsqTokenizer
 
@@ -154,6 +159,79 @@ def test_generator_step_with_a_nan_loss_raises_before_the_update():
 
     for name, value in gen.state_dict().items():
         assert torch.equal(value, before[name])
+
+
+def __resumable_trainer(grad_accum: int = 1) -> GeneratorTrainer:
+    torch.manual_seed(0)
+    config = GeneratorTrainingConfig(
+        cfg_dropout=0.3,
+        pkeep=0.8,
+        grad_accum=grad_accum,
+        loss_weighting=LossWeighting.UNCERTAINTY,
+    )
+    trainer = GeneratorTrainer(MotionTokenGenerator(GEN), FsqTokenizer(TOK), config, downsample=4)
+    trainer.build_scheduler(8)
+    return trainer
+
+
+def __train_one_epoch(trainer: GeneratorTrainer, motion: torch.Tensor, text: torch.Tensor) -> None:
+    for _ in range(2):
+        trainer.train_step(motion, text)
+    trainer.apply_pending_gradients()
+
+
+def test_a_resumed_run_continues_like_an_uninterrupted_run(tmp_path):
+    motion = torch.randn(2, 32, 263, generator=torch.Generator().manual_seed(1))
+    text = torch.randn(2, GEN.d_text, generator=torch.Generator().manual_seed(2))
+    path = tmp_path / "generator_last.pt"
+    uninterrupted = __resumable_trainer()
+    __train_one_epoch(uninterrupted, motion, text)
+    atomic_torch_save(uninterrupted.resume_state(0, 1.0, 0), path)
+    __train_one_epoch(uninterrupted, motion, text)
+
+    resumed = __resumable_trainer()
+    resumed.load_resume_state(torch.load(path, weights_only=True), False, False)
+    __train_one_epoch(resumed, motion, text)
+
+    resumed_weights = resumed.token_generator.state_dict()
+    for name, value in uninterrupted.token_generator.state_dict().items():
+        assert torch.equal(value, resumed_weights[name]), name
+    for name, shadow in uninterrupted.parameter_ema.shadow.items():
+        assert torch.equal(shadow, resumed.parameter_ema.shadow[name]), name
+    assert uninterrupted.weighter is not None
+    assert resumed.weighter is not None
+    assert torch.equal(uninterrupted.weighter.log_vars, resumed.weighter.log_vars)
+
+
+def test_a_resume_state_with_pending_gradients_fails():
+    trainer = __resumable_trainer(grad_accum=2)
+    trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
+
+    with pytest.raises(RuntimeError, match="pending gradients"):
+        trainer.resume_state(0, 1.0, 0)
+
+
+def test_an_old_resume_file_needs_the_legacy_flag(tmp_path):
+    path = tmp_path / "generator_last.pt"
+    with pytest.raises(ValueError, match="accept_legacy_resume"):
+        is_legacy_resume({"epoch": 3}, path, GENERATOR_RESUME_FORMAT, False)
+    with pytest.raises(ValueError, match="not 'text2motion.generator_resume'"):
+        is_legacy_resume(
+            {"format": "text2motion.tokenizer_resume", "version": RESUME_VERSION},
+            path,
+            GENERATOR_RESUME_FORMAT,
+            True,
+        )
+
+    assert is_legacy_resume({"epoch": 3}, path, GENERATOR_RESUME_FORMAT, True)
+
+
+def test_a_new_schedule_horizon_needs_the_extend_flag():
+    with pytest.raises(ValueError, match="extend_schedule"):
+        check_schedule_horizon(100, 160, extend=False)
+
+    check_schedule_horizon(100, 160, extend=True)
+    check_schedule_horizon(100, 100, extend=False)
 
 
 def test_ema_update_after_resume_moves_the_loaded_shadow():

@@ -29,7 +29,13 @@ from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.motion.contracts import Split
 from text2motion.motion.kinematics import Skeleton
 from text2motion.motion.representation import KINEMATIC_CHAINS, RAW_OFFSETS
-from text2motion.motion.storage import atomic_torch_save
+from text2motion.motion.storage import (
+    RESUME_VERSION,
+    atomic_torch_save,
+    capture_rng_state,
+    is_legacy_resume,
+    restore_rng_state,
+)
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_model import MotionTokenizerNetwork
 
@@ -41,6 +47,8 @@ _NORM_TYPES = (nn.LayerNorm, nn.GroupNorm, nn.BatchNorm1d)
 _MetricSink = Callable[[dict[str, object]], None]
 _Evaluator = Callable[[Split], dict[str, float]]
 _CheckpointSink = Callable[[int, float], None]
+
+GENERATOR_RESUME_FORMAT = "text2motion.generator_resume"
 
 
 @dataclass(frozen=True)
@@ -101,6 +109,20 @@ def warmup_cosine_factor(step: int, warmup: int, total_steps: int, floor: float)
     progress = (step - warmup) / max(total_steps - warmup, 1)
     cosine = 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
     return floor + (1.0 - floor) * cosine
+
+
+def check_schedule_horizon(saved_steps: int | None, total_steps: int | None, extend: bool) -> None:
+    if saved_steps == total_steps:
+        return
+    if not extend:
+        raise ValueError(
+            f"the resume file has a schedule of {saved_steps} optimizer steps and this run has "
+            f"{total_steps}; pass --extend_schedule to change the horizon on purpose"
+        )
+    logger.warning(
+        f"schedule horizon changes from {saved_steps} to {total_steps} optimizer steps; "
+        "the learning rate jumps to the value of the new schedule"
+    )
 
 
 def adamw_groups(
@@ -175,9 +197,11 @@ class GeneratorTrainer:
         )
         self.parameter_ema = ExponentialMovingAverage(token_generator, training_config.ema_decay)
         self.scheduler: torch.optim.lr_scheduler.LambdaLR | None = None
+        self.total_steps: int | None = None
         self._accum_count = 0
 
     def build_scheduler(self, total_steps: int) -> None:
+        self.total_steps = total_steps
         warmup = self.training_config.warmup_steps
         floor = self.training_config.lr_min_ratio
 
@@ -315,18 +339,27 @@ class GeneratorTrainer:
             self.parameter_ema.restore(self.token_generator)
 
     def resume_state(self, epoch: int, best_fid: float, stale_evaluations: int) -> dict:
+        if self._accum_count:
+            raise RuntimeError("a resume state needs an epoch boundary with no pending gradients")
         return {
+            "format": GENERATOR_RESUME_FORMAT,
+            "version": RESUME_VERSION,
             "generator": self.token_generator.state_dict(),
             "text_encoder": self.text_encoder.state_dict() if self.text_encoder else None,
             "optimizer": self.optimizer.state_dict(),
             "ema": self.parameter_ema.shadow,
             "scheduler": self.scheduler.state_dict() if self.scheduler else None,
+            "weighter": self.weighter.state_dict() if self.weighter else None,
+            "total_steps": self.total_steps,
+            "rng": capture_rng_state(),
             "epoch": epoch,
             "best_fid": best_fid,
             "stale_evaluations": stale_evaluations,
         }
 
-    def load_resume_state(self, state: dict, device: str) -> tuple[int, float, int]:
+    def load_resume_state(
+        self, state: dict, legacy: bool, extend_schedule: bool
+    ) -> tuple[int, float, int]:
         self.token_generator.load_state_dict(state["generator"])
         if self.text_encoder is not None and state.get("text_encoder") is not None:
             self.text_encoder.load_state_dict(state["text_encoder"])
@@ -334,7 +367,22 @@ class GeneratorTrainer:
         self.parameter_ema.load_state_dict(state["ema"])
         if self.scheduler is not None and state.get("scheduler") is not None:
             self.scheduler.load_state_dict(state["scheduler"])
-        return state["epoch"] + 1, state["best_fid"], state.get("stale_evaluations", 0)
+        if legacy:
+            logger.warning(
+                "old resume file: the uncertainty weights, the RNG state and the schedule "
+                "horizon are not in it; they start fresh"
+            )
+            return state["epoch"] + 1, state["best_fid"], state.get("stale_evaluations", 0)
+        self.__load_weighter(state["weighter"])
+        check_schedule_horizon(state["total_steps"], self.total_steps, extend_schedule)
+        restore_rng_state(state["rng"])
+        return state["epoch"] + 1, state["best_fid"], state["stale_evaluations"]
+
+    def __load_weighter(self, weighter_state: dict | None) -> None:
+        if (self.weighter is None) != (weighter_state is None):
+            raise ValueError("the resume file and this run disagree on the uncertainty weighting")
+        if self.weighter is not None and weighter_state is not None:
+            self.weighter.load_state_dict(weighter_state)
 
 
 def train_generator(
@@ -359,8 +407,13 @@ def train_generator(
             "start without --resume, or copy the source run's *_last.pt there first"
         )
     if request.resume:
-        state = torch.load(resume_path, map_location="cpu")
-        start_epoch, best_fid, stale_evaluations = trainer.load_resume_state(state, device)
+        state = torch.load(resume_path, map_location="cpu", weights_only=True)
+        legacy = is_legacy_resume(
+            state, resume_path, GENERATOR_RESUME_FORMAT, request.accept_legacy_resume
+        )
+        start_epoch, best_fid, stale_evaluations = trainer.load_resume_state(
+            state, legacy, request.extend_schedule
+        )
         if request.fresh_selection:
             logger.info(
                 f"fresh selection: ignoring inherited best FID {best_fid:.4f} from the resumed run"

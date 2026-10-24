@@ -11,7 +11,13 @@ from torch import nn
 
 from text2motion.motion.contracts import Split
 from text2motion.motion.model import MotionBatch
-from text2motion.motion.storage import atomic_torch_save
+from text2motion.motion.storage import (
+    RESUME_VERSION,
+    atomic_torch_save,
+    capture_rng_state,
+    is_legacy_resume,
+    restore_rng_state,
+)
 from text2motion.tokenization.contracts import TokenizerTrainingRequest
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_model import (
@@ -23,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 _MetricSink = Callable[[dict[str, object]], None]
 _Evaluator = Callable[[Split], dict[str, float]]
+
+TOKENIZER_RESUME_FORMAT = "text2motion.tokenizer_resume"
 
 
 class TokenizerTrainer:
@@ -101,17 +109,24 @@ class TokenizerTrainer:
 
     def resume_state(self, epoch: int, best_fid: float) -> dict:
         return {
+            "format": TOKENIZER_RESUME_FORMAT,
+            "version": RESUME_VERSION,
             "tokenizer": self.tokenizer_network.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "ema": self.parameter_ema.shadow,
+            "rng": capture_rng_state(),
             "epoch": epoch,
             "best_fid": best_fid,
         }
 
-    def load_resume_state(self, state: dict, device: str) -> tuple[int, float]:
+    def load_resume_state(self, state: dict, legacy: bool) -> tuple[int, float]:
         self.tokenizer_network.load_state_dict(state["tokenizer"])
         self.optimizer.load_state_dict(state["optimizer"])
         self.parameter_ema.load_state_dict(state["ema"])
+        if legacy:
+            logger.warning("old resume file: the RNG state is not in it; it starts fresh")
+            return state["epoch"] + 1, state["best_fid"]
+        restore_rng_state(state["rng"])
         return state["epoch"] + 1, state["best_fid"]
 
 
@@ -133,9 +148,11 @@ def train_tokenizer(
             f"--resume continues from {resume_path}, which does not exist; start without --resume"
         )
     if request.resume:
-        start_epoch, best_fid = trainer.load_resume_state(
-            torch.load(resume_path, map_location=device), device
+        state = torch.load(resume_path, map_location=device, weights_only=True)
+        legacy = is_legacy_resume(
+            state, resume_path, TOKENIZER_RESUME_FORMAT, request.accept_legacy_resume
         )
+        start_epoch, best_fid = trainer.load_resume_state(state, legacy)
         logger.info(
             f"resumed from {resume_path} at epoch {start_epoch} (best recon-FID {best_fid:.4f})"
         )

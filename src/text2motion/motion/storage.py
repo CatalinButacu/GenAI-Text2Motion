@@ -16,6 +16,7 @@ MEAN_FILE = "Mean.npy"
 STD_FILE = "Std.npy"
 STATS_PROVENANCE_FILE = "stats_provenance.json"
 CLIP_LENGTHS_FILE = "clip_lengths.json"
+RESUME_VERSION = 2
 
 
 SPLIT_FILES = {split: f"{split.value}.txt" for split in Split}
@@ -30,6 +31,36 @@ def atomic_torch_save(state: Any, path: str | Path) -> None:
         temporary.replace(destination)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def capture_rng_state() -> dict[str, Any]:
+    cuda_states = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else []
+    return {"torch": torch.get_rng_state(), "cuda": cuda_states}
+
+
+def restore_rng_state(state: dict[str, Any]) -> None:
+    torch.set_rng_state(state["torch"].cpu())
+    if not state["cuda"]:
+        return
+    if not torch.cuda.is_available():
+        raise ValueError("the resume file has a CUDA RNG state, but CUDA is not available")
+    torch.cuda.set_rng_state_all([cuda_state.cpu() for cuda_state in state["cuda"]])
+
+
+def is_legacy_resume(state: dict[str, Any], path: Path, kind: str, accept_legacy: bool) -> bool:
+    version = state.get("version", 1)
+    if version == RESUME_VERSION and state.get("format") == kind:
+        return False
+    if version == RESUME_VERSION:
+        raise ValueError(f"{path} is a {state.get('format')!r} resume file, not {kind!r}")
+    if version != 1:
+        raise ValueError(f"{path}: resume version {version} is not supported")
+    if not accept_legacy:
+        raise ValueError(
+            f"{path} is an old resume file (version 1) without the RNG and schedule state; "
+            "pass --accept_legacy_resume to load it anyway"
+        )
+    return True
 
 
 def item_rng(seed: int, epoch: int, index: int) -> np.random.RandomState:

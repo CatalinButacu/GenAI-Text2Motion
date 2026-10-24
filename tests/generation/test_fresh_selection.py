@@ -6,7 +6,12 @@ import pytest
 import torch
 
 from text2motion.generation.contracts import GeneratorTrainingRequest
-from text2motion.generation.trainer import GeneratorTrainer, train_generator
+from text2motion.generation.trainer import (
+    GENERATOR_RESUME_FORMAT,
+    GeneratorTrainer,
+    train_generator,
+)
+from text2motion.motion.storage import RESUME_VERSION
 
 
 class _FakeTrainer:
@@ -15,7 +20,7 @@ class _FakeTrainer:
     def __init__(self) -> None:
         self.saved_states = []
 
-    def load_resume_state(self, state, device):
+    def load_resume_state(self, state, legacy, extend_schedule):
         return state["epoch"] + 1, state["best_fid"], 0
 
     def train_epoch(self, loader, device, heartbeat=None):
@@ -38,7 +43,15 @@ def __run(
 ):
     resume_path = tmp_path / "generator_last.pt"
     if write_resume:
-        torch.save({"epoch": 59, "best_fid": 0.18}, resume_path)
+        torch.save(
+            {
+                "format": GENERATOR_RESUME_FORMAT,
+                "version": RESUME_VERSION,
+                "epoch": 59,
+                "best_fid": 0.18,
+            },
+            resume_path,
+        )
     saved = [] if saved is None else saved
     request = GeneratorTrainingRequest(
         epochs=62, eval_every=1, resume=True, fresh_selection=fresh_selection

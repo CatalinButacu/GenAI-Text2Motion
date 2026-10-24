@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from text2motion.app.config import TokenizerConfig
+from text2motion.motion.storage import atomic_torch_save
 from text2motion.tokenization.contracts import TokenizerTrainingRequest
 from text2motion.tokenization.nn_model import FsqTokenizer
 from text2motion.tokenization.trainer import TokenizerTrainer, train_tokenizer
@@ -23,6 +24,32 @@ class _FakeTrainer:
 
     def resume_state(self, epoch, best_fid):
         return {"epoch": epoch, "best_fid": best_fid}
+
+
+def __resumable_trainer() -> TokenizerTrainer:
+    torch.manual_seed(0)
+    return TokenizerTrainer(FsqTokenizer(CFG), lr=1e-3, weight_decay=0.0, ema_decay=0.9)
+
+
+def test_a_resumed_tokenizer_run_continues_like_an_uninterrupted_run(tmp_path):
+    motion = torch.randn(2, 32, 263, generator=torch.Generator().manual_seed(1))
+    path = tmp_path / "tokenizer_last.pt"
+    uninterrupted = __resumable_trainer()
+    uninterrupted.train_step(motion)
+    atomic_torch_save(uninterrupted.resume_state(0, 1.0), path)
+    uninterrupted.train_step(motion)
+    uninterrupted.train_step(motion)
+
+    resumed = __resumable_trainer()
+    resumed.load_resume_state(torch.load(path, weights_only=True), False)
+    resumed.train_step(motion)
+    resumed.train_step(motion)
+
+    resumed_weights = resumed.tokenizer_network.state_dict()
+    for name, value in uninterrupted.tokenizer_network.state_dict().items():
+        assert torch.equal(value, resumed_weights[name]), name
+    for name, shadow in uninterrupted.parameter_ema.shadow.items():
+        assert torch.equal(shadow, resumed.parameter_ema.shadow[name]), name
 
 
 def test_tokenizer_step_with_a_nan_loss_raises_before_the_update():

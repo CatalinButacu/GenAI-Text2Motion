@@ -173,6 +173,8 @@ class GeneratorTrainingRequest:
     resume: bool = False
     fresh_selection: bool = False
     patience: int = 0
+    accept_legacy_resume: bool = False
+    extend_schedule: bool = False
 
 
 @dataclass(frozen=True)
@@ -185,6 +187,8 @@ class GeneratorPretrainingRequest:
     val_fraction: float = 0.05
     out_path: Path | None = None
     resume: bool = False
+    accept_legacy_resume: bool = False
+    extend_schedule: bool = False
 
 
 class SanityOverfitRequest(CommandRequest):
@@ -289,6 +293,14 @@ class TrainGeneratorRequest(CommandRequest):
         default=GeneratorTrainingRequest().patience,
         description="stop after this many validations without a better FID; 0 never stops early",
     )
+    accept_legacy_resume: bool = Field(
+        default=False,
+        description="with --resume: load an old resume file; its RNG and schedule state start fresh",
+    )
+    extend_schedule: bool = Field(
+        default=False,
+        description="with --resume: accept a new --epochs; the learning rate follows the new cosine",
+    )
 
 
 class PretrainRequest(CommandRequest):
@@ -325,4 +337,12 @@ class PretrainRequest(CommandRequest):
     )
     resume: bool = Field(
         default=False, description="continue from the saved state of this checkpoint"
+    )
+    accept_legacy_resume: bool = Field(
+        default=False,
+        description="with --resume: load an old resume file; its RNG and schedule state start fresh",
+    )
+    extend_schedule: bool = Field(
+        default=False,
+        description="with --resume: accept a new --epochs; the learning rate follows the new cosine",
     )

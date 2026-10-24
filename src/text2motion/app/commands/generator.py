@@ -133,6 +133,8 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         resume=args.resume,
         fresh_selection=args.fresh_selection,
         patience=args.patience,
+        accept_legacy_resume=args.accept_legacy_resume,
+        extend_schedule=args.extend_schedule,
     )
     if args.fresh_selection and not args.resume:
         raise SystemExit("--fresh_selection only applies to a resumed run (pass --resume)")
@@ -222,6 +224,8 @@ def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
             val_fraction=args.val_fraction,
             out_path=out_path,
             resume=args.resume,
+            accept_legacy_resume=args.accept_legacy_resume,
+            extend_schedule=args.extend_schedule,
         ),
         train=app.config.train,
         device=app.device,
