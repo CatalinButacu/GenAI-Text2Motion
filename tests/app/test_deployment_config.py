@@ -4,6 +4,7 @@ import pytest
 
 from text2motion.app.cli import parse_request
 from text2motion.app.config import ProjectPathsConfig, load_config, load_service_config
+from text2motion.streaming.pydant_requests import ServiceAddressRequest
 
 
 def test_default_deployment_paths_are_portable_atomic_bundles():
@@ -49,7 +50,8 @@ def test_the_service_file_keeps_the_environment_overrides(monkeypatch, tmp_path)
 def test_health_serve_and_studio_read_the_same_service_file():
     for command in ("health", "serve", "studio"):
         request = parse_request(command, ["--service_config", "configs/service.yml"])
-        assert getattr(request, "service_config") == Path("configs/service.yml")
+        assert isinstance(request, ServiceAddressRequest)
+        assert request.service_config == Path("configs/service.yml")
 
 
 def test_legacy_service_host_remains_a_connect_host_fallback(monkeypatch):
