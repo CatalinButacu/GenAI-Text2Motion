@@ -29,17 +29,23 @@ class _FakeTrainer:
         return {"epoch": epoch, "best_fid": best_fid}
 
 
-def __run(tmp_path, fresh_selection: bool, write_resume: bool = True):
+def __run(
+    tmp_path,
+    fresh_selection: bool,
+    write_resume: bool = True,
+    fid: float = 0.30,
+    saved: list | None = None,
+):
     resume_path = tmp_path / "generator_last.pt"
     if write_resume:
         torch.save({"epoch": 59, "best_fid": 0.18}, resume_path)
-    saved = []
+    saved = [] if saved is None else saved
     request = GeneratorTrainingRequest(
         epochs=62, eval_every=1, resume=True, fresh_selection=fresh_selection
     )
     metrics = {
         "clips": 1,
-        "fid": 0.30,
+        "fid": fid,
         "r_top1": 0.4,
         "r_top3": 0.7,
         "mm_dist": 3.7,
@@ -66,3 +72,12 @@ def test_fresh_selection_saves_the_fine_tunes_own_best(tmp_path):
 def test_fresh_selection_refuses_to_start_without_the_resume_file(tmp_path):
     with pytest.raises(FileNotFoundError, match="does not exist"):
         __run(tmp_path, fresh_selection=True, write_resume=False)
+
+
+def test_a_non_finite_fid_stops_the_run_without_a_save(tmp_path):
+    saved = []
+    with pytest.raises(RuntimeError, match="not finite"):
+        __run(tmp_path, fresh_selection=True, fid=float("nan"), saved=saved)
+
+    assert saved == []
+    assert torch.load(tmp_path / "generator_last.pt")["epoch"] == 59

@@ -142,6 +142,20 @@ def test_ema_tracks_and_restores():
     assert torch.allclose(dict(gen.named_parameters())[name], param)
 
 
+def test_generator_step_with_a_nan_loss_raises_before_the_update():
+    gen = MotionTokenGenerator(GEN)
+    trainer = GeneratorTrainer(
+        gen, FsqTokenizer(TOK), GeneratorTrainingConfig(cfg_dropout=0.0, pkeep=1.0), downsample=4
+    )
+    before = {name: value.clone() for name, value in gen.state_dict().items()}
+
+    with pytest.raises(RuntimeError, match="non-finite"):
+        trainer.train_step(torch.randn(2, 32, 263), torch.full((2, GEN.d_text), float("nan")))
+
+    for name, value in gen.state_dict().items():
+        assert torch.equal(value, before[name])
+
+
 def test_ema_update_after_resume_moves_the_loaded_shadow():
     model = torch.nn.Linear(1, 1, bias=False)
     torch.nn.init.constant_(model.weight, 2.0)

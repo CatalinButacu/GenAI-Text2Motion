@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -62,7 +63,9 @@ class TokenizerTrainer:
 
         self.optimizer.zero_grad()
         total.backward()
-        nn.utils.clip_grad_norm_(self.tokenizer_network.parameters(), self.grad_clip)
+        nn.utils.clip_grad_norm_(
+            self.tokenizer_network.parameters(), self.grad_clip, error_if_nonfinite=True
+        )
         self.optimizer.step()
         self.parameter_ema.update(self.tokenizer_network)
 
@@ -153,6 +156,9 @@ def train_tokenizer(
             f"feat-L2 {metrics['feature_l2']:.4f}  recon-FID {metrics['recon_fid']:.4f}"
         )
 
+        not_finite = sorted(name for name, value in metrics.items() if not math.isfinite(value))
+        if not_finite:
+            raise RuntimeError(f"epoch {epoch + 1}: evaluation metrics not finite: {not_finite}")
         if metrics["recon_fid"] < best_fid:
             best_fid = metrics["recon_fid"]
             with trainer.ema_weights() as module:

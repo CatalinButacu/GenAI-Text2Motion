@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -162,6 +163,25 @@ class OverfitGate:
         return self.final_total / self.first_total
 
     def validate_metrics(self, criteria: OverfitCriteria = DEFAULT_OVERFIT_CRITERIA) -> None:
+        measured = {
+            "first_total": self.first_total,
+            "final_total": self.final_total,
+            "token_accuracy": self.token_accuracy,
+            "ce": self.ce,
+        }
+        not_finite = sorted(name for name, value in measured.items() if not math.isfinite(value))
+        if not_finite:
+            raise RuntimeError(f"overfit gate metrics are not finite: {not_finite}")
+        if self.batch_size < 1:
+            raise RuntimeError(f"overfit gate batch_size must be at least 1, got {self.batch_size}")
+        if self.steps < 1:
+            raise RuntimeError(f"overfit gate steps must be at least 1, got {self.steps}")
+        if not 0.0 <= self.token_accuracy <= 1.0:
+            raise RuntimeError(
+                f"overfit gate token accuracy {self.token_accuracy} is not in [0, 1]"
+            )
+        if self.ce < 0:
+            raise RuntimeError(f"overfit gate CE {self.ce} is negative")
         if self.first_total <= 0:
             raise RuntimeError("overfit gate first_total must be positive")
         if self.token_accuracy < criteria.min_token_accuracy:

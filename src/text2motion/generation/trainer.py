@@ -278,7 +278,9 @@ class GeneratorTrainer:
         if self._accum_count == 0:
             return
         self._accum_count = 0
-        nn.utils.clip_grad_norm_(self._clip_params, self.training_config.grad_clip)
+        nn.utils.clip_grad_norm_(
+            self._clip_params, self.training_config.grad_clip, error_if_nonfinite=True
+        )
         self.optimizer.step()
         if self.scheduler is not None:
             self.scheduler.step()
@@ -396,6 +398,11 @@ def train_generator(
                 f"R@3 {metrics['r_top3']:.3f}  MM {metrics['mm_dist']:.3f}  "
                 f"Div {metrics['diversity']:.3f}"
             )
+            not_finite = sorted(name for name, value in metrics.items() if not math.isfinite(value))
+            if not_finite:
+                raise RuntimeError(
+                    f"epoch {epoch + 1}: evaluation metrics not finite: {not_finite}"
+                )
             if metrics["fid"] < best_fid:
                 best_fid = metrics["fid"]
                 stale_evaluations = 0

@@ -1,3 +1,4 @@
+import math
 from dataclasses import asdict, replace
 
 import pytest
@@ -84,6 +85,47 @@ def test_overfit_gate_ignores_dropout_difference_from_training_config(tmp_path):
         backbone=Backbone.MAMBA,
         resolved_config=train_resolved,
     )
+
+
+def __gate(**overrides) -> OverfitGate:
+    fields = {
+        "config_sha256": "config",
+        "tokenizer_sha256": "tokenizer",
+        "backbone": Backbone.MAMBA,
+        "resolved_generator_config": {},
+        "batch_size": 4,
+        "steps": 100,
+        "first_total": 10.0,
+        "final_total": 0.4,
+        "token_accuracy": 0.995,
+        "ce": 0.05,
+    }
+    return OverfitGate(**{**fields, **overrides})
+
+
+def test_overfit_gate_accepts_valid_metrics():
+    __gate().validate_metrics()
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {
+            "first_total": math.nan,
+            "final_total": math.nan,
+            "token_accuracy": math.nan,
+            "ce": math.nan,
+        },
+        {"batch_size": 0, "steps": 0},
+        {"final_total": math.inf},
+        {"token_accuracy": 1.5},
+        {"ce": -0.1},
+    ],
+    ids=["all_nan", "zero_counts", "infinite_total", "accuracy_above_one", "negative_ce"],
+)
+def test_overfit_gate_rejects_invalid_metrics(overrides):
+    with pytest.raises(RuntimeError):
+        __gate(**overrides).validate_metrics()
 
 
 def test_overfit_gate_rejects_weak_accuracy(tmp_path):

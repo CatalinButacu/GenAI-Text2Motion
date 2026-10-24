@@ -217,7 +217,9 @@ def pretrain_generator(
                 loss = raw_loss / request.grad_accum
             loss.backward()
             if (microbatch_index + 1) % request.grad_accum == 0:
-                torch.nn.utils.clip_grad_norm_(generator.parameters(), train.grad_clip)
+                torch.nn.utils.clip_grad_norm_(
+                    generator.parameters(), train.grad_clip, error_if_nonfinite=True
+                )
                 for group in opt.param_groups:
                     group["lr"] = train.lr * lr_multiplier(step)
                 opt.step()
