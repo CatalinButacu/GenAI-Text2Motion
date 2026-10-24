@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from text2motion.app.run_log import resumed_run_dir
+from text2motion.app.run_log import resumed_run_dir, run_dir_to_continue
 
 
 def test_a_resume_continues_the_run_directory_that_the_resume_file_records(tmp_path):
@@ -27,6 +27,17 @@ def test_an_old_resume_file_uses_the_requested_run_directory(tmp_path):
 
     assert resumed_run_dir(resume_path, tmp_path / "run") == tmp_path / "run"
     assert resumed_run_dir(resume_path, None) is None
+
+
+def test_a_fresh_selection_fine_tune_starts_its_own_run_directory(tmp_path):
+    resume_path = tmp_path / "generator_last.pt"
+    torch.save({"run_dir": str(tmp_path / "source_run")}, resume_path)
+
+    assert run_dir_to_continue(True, True, resume_path, None) is None
+    assert run_dir_to_continue(True, False, resume_path, None) == tmp_path / "source_run"
+    assert (
+        run_dir_to_continue(False, False, resume_path, tmp_path / "manual") == tmp_path / "manual"
+    )
 
 
 def test_a_resume_without_the_resume_file_fails(tmp_path):

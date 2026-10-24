@@ -8,7 +8,12 @@ import torch
 
 from text2motion.app.bootstrap import ApplicationContext
 from text2motion.app.checkpoint import GeneratorBundle, OverfitGate, sha256_file
-from text2motion.app.run_log import log_metrics, resumed_run_dir, start_run
+from text2motion.app.run_log import (
+    log_metrics,
+    resumed_run_dir,
+    run_dir_to_continue,
+    start_run,
+)
 from text2motion.generation.contracts import (
     GeneratorPretrainingRequest,
     GeneratorTrainingRequest,
@@ -149,8 +154,8 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         app.config,
         app.config.paths.logs_dir,
         extra=args.model_dump(),
-        existing_run_dir=(
-            resumed_run_dir(resume_path, requested_run_dir) if args.resume else requested_run_dir
+        existing_run_dir=run_dir_to_continue(
+            args.resume, args.fresh_selection, resume_path, requested_run_dir
         ),
     )
     log_metrics(run_dir, {"train_clips": dataset_size(loader), "device": app.device})

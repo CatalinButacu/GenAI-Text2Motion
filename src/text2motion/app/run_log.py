@@ -85,6 +85,14 @@ def resumed_run_dir(resume_path: Path, requested: Path | None) -> Path | None:
     return recorded or requested
 
 
+def run_dir_to_continue(
+    resume: bool, fresh_selection: bool, resume_path: Path, requested: Path | None
+) -> Path | None:
+    if not resume or fresh_selection:
+        return requested
+    return resumed_run_dir(resume_path, requested)
+
+
 def start_run(
     name: str,
     cfg: Any,
