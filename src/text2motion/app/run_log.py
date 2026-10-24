@@ -62,6 +62,29 @@ def __log_mlflow_metrics(record: dict) -> None:
     mlflow.log_metrics(numbers, step=int(record.get("step", record.get("epoch", 0))))
 
 
+def resumed_run_dir(resume_path: Path, requested: Path | None) -> Path | None:
+    if not resume_path.is_file():
+        raise FileNotFoundError(
+            f"--resume continues from {resume_path}, which does not exist; start without --resume"
+        )
+
+    import torch
+
+    state = torch.load(resume_path, map_location="cpu", weights_only=True, mmap=True)
+    recorded = None if state.get("run_dir") is None else Path(state["run_dir"])
+    if recorded is not None and requested is not None and recorded.resolve() != requested.resolve():
+        raise ValueError(
+            f"--resume_run_dir {requested} differs from the run directory {recorded} "
+            f"that {resume_path} records"
+        )
+    if recorded is None and requested is None:
+        logger.warning(
+            f"{resume_path} does not record its run directory (old resume file); "
+            "this resume starts a new run directory"
+        )
+    return recorded or requested
+
+
 def start_run(
     name: str,
     cfg: Any,

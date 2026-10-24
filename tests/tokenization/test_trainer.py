@@ -22,7 +22,7 @@ class _FakeTrainer:
     def ema_weights(self):
         yield torch.nn.Linear(1, 1)
 
-    def resume_state(self, epoch, best_fid):
+    def resume_state(self, epoch, best_fid, run_dir):
         return {"epoch": epoch, "best_fid": best_fid}
 
 
@@ -36,7 +36,7 @@ def test_a_resumed_tokenizer_run_continues_like_an_uninterrupted_run(tmp_path):
     path = tmp_path / "tokenizer_last.pt"
     uninterrupted = __resumable_trainer()
     uninterrupted.train_step(motion)
-    atomic_torch_save(uninterrupted.resume_state(0, 1.0), path)
+    atomic_torch_save(uninterrupted.resume_state(0, 1.0, None), path)
     uninterrupted.train_step(motion)
     uninterrupted.train_step(motion)
 

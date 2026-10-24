@@ -8,7 +8,7 @@ import torch
 
 from text2motion.app.bootstrap import ApplicationContext
 from text2motion.app.checkpoint import GeneratorBundle, OverfitGate, sha256_file
-from text2motion.app.run_log import log_metrics, start_run
+from text2motion.app.run_log import log_metrics, resumed_run_dir, start_run
 from text2motion.generation.contracts import (
     GeneratorPretrainingRequest,
     GeneratorTrainingRequest,
@@ -19,7 +19,7 @@ from text2motion.generation.contracts import (
     TrainGeneratorRequest,
 )
 from text2motion.generation.pipeline import TextToMotionGenerator
-from text2motion.generation.pretrain import pretrain_generator
+from text2motion.generation.pretrain import pretrain_generator, pretraining_resume_path
 from text2motion.generation.trainer import (
     GeneratorTrainer,
     overfit_single_batch,
@@ -143,12 +143,16 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
     sampling = SamplingConfig(temperature=request.temperature, cfg_scale=request.cfg_scale)
     checkpoint_dir = app.checkpoint_directory("generator")
     checkpoint_path = checkpoint_dir / name
+    resume_path = checkpoint_dir / f"{Path(name).stem}_last.pt"
+    requested_run_dir = Path(args.resume_run_dir) if args.resume_run_dir else None
     run_dir = start_run(
         f"generator_{args.backbone.value}",
         app.config,
         app.config.paths.logs_dir,
         extra=args.model_dump(),
-        existing_run_dir=Path(args.resume_run_dir) if args.resume_run_dir else None,
+        existing_run_dir=(
+            resumed_run_dir(resume_path, requested_run_dir) if args.resume else requested_run_dir
+        ),
     )
     log_metrics(run_dir, {"train_clips": dataset_size(loader), "device": app.device})
     logger.info(
@@ -183,7 +187,7 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         device=app.device,
         evaluate=evaluate,
         save_best=save_best,
-        resume_path=checkpoint_dir / f"{Path(name).stem}_last.pt",
+        resume_path=resume_path,
         run_dir=run_dir,
         on_metrics=lambda record: log_metrics(run_dir, record),
     )
@@ -210,7 +214,13 @@ def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
         or app.checkpoint_directory("generator") / f"generator_{args.backbone.value}_pretrained.pt"
     )
     run_dir = start_run(
-        f"pretrain_{args.backbone.value}", app.config, app.config.paths.logs_dir, args.model_dump()
+        f"pretrain_{args.backbone.value}",
+        app.config,
+        app.config.paths.logs_dir,
+        args.model_dump(),
+        existing_run_dir=(
+            resumed_run_dir(pretraining_resume_path(out_path), None) if args.resume else None
+        ),
     )
     pretrain_generator(
         architecture,
@@ -232,4 +242,5 @@ def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
         out_path=out_path,
         on_metrics=lambda record: log_metrics(run_dir, record),
         seed=app.config.seed,
+        run_dir=run_dir,
     )

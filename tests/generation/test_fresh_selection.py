@@ -30,7 +30,7 @@ class _FakeTrainer:
     def ema_weights(self):
         yield None
 
-    def resume_state(self, epoch, best_fid, stale):
+    def resume_state(self, epoch, best_fid, stale, run_dir):
         return {"epoch": epoch, "best_fid": best_fid}
 
 

@@ -344,7 +344,9 @@ class GeneratorTrainer:
         finally:
             self.parameter_ema.restore(self.token_generator)
 
-    def resume_state(self, epoch: int, best_fid: float, stale_evaluations: int) -> dict:
+    def resume_state(
+        self, epoch: int, best_fid: float, stale_evaluations: int, run_dir: Path | None
+    ) -> dict:
         if self._accum_count:
             raise RuntimeError("a resume state needs an epoch boundary with no pending gradients")
         return {
@@ -358,6 +360,7 @@ class GeneratorTrainer:
             "weighter": self.weighter.state_dict() if self.weighter else None,
             "total_steps": self.total_steps,
             "rng": capture_rng_state(),
+            "run_dir": None if run_dir is None else str(run_dir),
             "epoch": epoch,
             "best_fid": best_fid,
             "stale_evaluations": stale_evaluations,
@@ -471,7 +474,9 @@ def train_generator(
             else:
                 stale_evaluations += 1
 
-        atomic_torch_save(trainer.resume_state(epoch, best_fid, stale_evaluations), resume_path)
+        atomic_torch_save(
+            trainer.resume_state(epoch, best_fid, stale_evaluations, run_dir), resume_path
+        )
 
         if device == "cuda":
             torch.cuda.empty_cache()

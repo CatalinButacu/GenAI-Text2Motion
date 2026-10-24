@@ -159,6 +159,10 @@ def build_token_loaders(
     return loader, val_loader, budget
 
 
+def pretraining_resume_path(out_path: Path) -> Path:
+    return out_path.with_name(out_path.stem + "_last.pt")
+
+
 def __load_pretraining_resume(
     generator,
     optimizer: torch.optim.Optimizer,
@@ -194,6 +198,7 @@ def pretrain_generator(
     out_path: Path,
     on_metrics: _MetricSink = lambda metrics: None,
     seed: int = 2026,
+    run_dir: Path | None = None,
 ) -> None:
     loader, val_loader, budget = build_token_loaders(request, seed)
     logger.info(
@@ -212,7 +217,7 @@ def pretrain_generator(
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    resume_path = out_path.with_name(out_path.stem + "_last.pt")
+    resume_path = pretraining_resume_path(out_path)
 
     amp_on = train.amp == MixedPrecisionMode.BF16 and device == "cuda"
     logger.info(
@@ -307,6 +312,7 @@ def pretrain_generator(
                 "optimizer": opt.state_dict(),
                 "total_steps": total_steps,
                 "rng": capture_rng_state(),
+                "run_dir": None if run_dir is None else str(run_dir),
                 "step": step,
                 "epoch": epoch,
             },

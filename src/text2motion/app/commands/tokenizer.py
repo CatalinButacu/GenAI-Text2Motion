@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 
 from text2motion.app.bootstrap import ApplicationContext
-from text2motion.app.run_log import log_metrics, start_run
+from text2motion.app.run_log import log_metrics, resumed_run_dir, start_run
 from text2motion.motion.contracts import Split
 from text2motion.motion.datasets import dataset_size
 from text2motion.tokenization.contracts import (
@@ -59,8 +59,13 @@ def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) ->
 
     name = args.ckpt_name or f"tokenizer_{args.tokenizer.value}.pt"
     checkpoint_dir = app.checkpoint_directory("tokenizer")
+    resume_path = checkpoint_dir / f"{Path(name).stem}_last.pt"
     run_dir = start_run(
-        f"tokenizer_{Path(name).stem}", config, app.config.paths.logs_dir, args.model_dump()
+        f"tokenizer_{Path(name).stem}",
+        config,
+        app.config.paths.logs_dir,
+        args.model_dump(),
+        existing_run_dir=resumed_run_dir(resume_path, None) if args.resume else None,
     )
     logger.info(
         f"train clips: {dataset_size(loader)}  device: {app.device}  "
@@ -84,8 +89,9 @@ def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) ->
         device=app.device,
         evaluate=evaluate,
         checkpoint_path=checkpoint_dir / name,
-        resume_path=checkpoint_dir / f"{Path(name).stem}_last.pt",
+        resume_path=resume_path,
         on_metrics=lambda record: log_metrics(run_dir, record),
+        run_dir=run_dir,
     )
 
     best_path = checkpoint_dir / name

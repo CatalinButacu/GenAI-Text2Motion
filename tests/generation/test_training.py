@@ -186,7 +186,7 @@ def test_a_resumed_run_continues_like_an_uninterrupted_run(tmp_path):
     path = tmp_path / "generator_last.pt"
     uninterrupted = __resumable_trainer()
     __train_one_epoch(uninterrupted, motion, text)
-    atomic_torch_save(uninterrupted.resume_state(0, 1.0, 0), path)
+    atomic_torch_save(uninterrupted.resume_state(0, 1.0, 0, None), path)
     __train_one_epoch(uninterrupted, motion, text)
 
     resumed = __resumable_trainer()
@@ -233,7 +233,7 @@ def test_a_resume_state_with_pending_gradients_fails():
     trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
 
     with pytest.raises(RuntimeError, match="pending gradients"):
-        trainer.resume_state(0, 1.0, 0)
+        trainer.resume_state(0, 1.0, 0, None)
 
 
 def test_an_old_resume_file_needs_the_legacy_flag(tmp_path):

@@ -107,7 +107,7 @@ class TokenizerTrainer:
         finally:
             self.parameter_ema.restore(self.tokenizer_network)
 
-    def resume_state(self, epoch: int, best_fid: float) -> dict:
+    def resume_state(self, epoch: int, best_fid: float, run_dir: Path | None) -> dict:
         return {
             "format": TOKENIZER_RESUME_FORMAT,
             "version": RESUME_VERSION,
@@ -115,6 +115,7 @@ class TokenizerTrainer:
             "optimizer": self.optimizer.state_dict(),
             "ema": self.parameter_ema.shadow,
             "rng": capture_rng_state(),
+            "run_dir": None if run_dir is None else str(run_dir),
             "epoch": epoch,
             "best_fid": best_fid,
         }
@@ -139,6 +140,7 @@ def train_tokenizer(
     checkpoint_path: Path,
     resume_path: Path,
     on_metrics: _MetricSink = lambda metrics: None,
+    run_dir: Path | None = None,
 ) -> float:
     best_fid = float("inf")
     start_epoch = 0
@@ -187,6 +189,6 @@ def train_tokenizer(
                 atomic_torch_save(module.state_dict(), checkpoint_path)
             logger.info(f"  saved best (val) -> {checkpoint_path} (val recon-FID {best_fid:.4f})")
 
-        atomic_torch_save(trainer.resume_state(epoch, best_fid), resume_path)
+        atomic_torch_save(trainer.resume_state(epoch, best_fid, run_dir), resume_path)
 
     return best_fid
