@@ -22,6 +22,7 @@ from text2motion.evaluation.metrics import (
     fid,
     mm_dist,
     r_precision,
+    replication_summary,
 )
 from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.generation.contracts import SamplingConfig
@@ -33,8 +34,8 @@ from text2motion.motion.storage import FEATURES_DIR
 logger = logging.getLogger(__name__)
 
 
-def deterministic_generation_seed(clip_id: str) -> int:
-    return zlib.crc32(clip_id.encode("utf-8"))
+def deterministic_generation_seed(clip_id: str, run: int = 0) -> int:
+    return zlib.crc32(clip_id.encode("utf-8")) + run
 
 
 class HumanMl3dGenerationEvaluator:
@@ -81,6 +82,7 @@ class HumanMl3dGenerationEvaluator:
         max_clips: int | None,
         sampling: SamplingConfig,
         batch_size: int = 1,
+        run: int = 0,
     ) -> GenerationEvaluationSet:
         generator.eval()
         ids = self.resources.clip_ids(split)[:max_clips]
@@ -126,7 +128,9 @@ class HumanMl3dGenerationEvaluator:
                     [entries[i]["caption"] for i in group],
                     token_len,
                     sampling,
-                    seeds=[deterministic_generation_seed(entries[i]["clip_id"]) for i in group],
+                    seeds=[
+                        deterministic_generation_seed(entries[i]["clip_id"], run) for i in group
+                    ],
                 )
                 if batch is None:
                     continue
@@ -175,12 +179,9 @@ class HumanMl3dGenerationEvaluator:
             per_caption.append(float(np.linalg.norm(emb[first] - emb[second], axis=1).mean()))
         return float(np.mean(per_caption)) if per_caption else float("nan")
 
-    def calculate_generation_metrics(
-        self, split: GenerationEvaluationSet, reps: int, bootstrap: int
-    ) -> dict[str, float]:
-        reference_emb = self.compute_motion_embeddings(split.reference)
-        generated_emb = self.compute_motion_embeddings(split.generated)
-
+    def caption_embeddings(
+        self, split: GenerationEvaluationSet
+    ) -> tuple[np.ndarray, list[np.ndarray]]:
         flat, owner = [], []
         for clip_index, token_lists in enumerate(split.token_lists):
             for tokens in token_lists:
@@ -191,35 +192,27 @@ class HumanMl3dGenerationEvaluator:
         )
         owner = np.array(owner)
         per_clip = [np.where(owner == index)[0] for index in range(len(split.generated))]
+        return text_emb, per_clip
 
-        rng = np.random.default_rng(0)
-        precisions, distances = [], []
-        for _ in range(reps):
-            chosen = np.array([rng.choice(indices) for indices in per_clip])
-            selected = text_emb[chosen]
-            perm = rng.permutation(len(generated_emb))
-            precisions.append(
-                r_precision(
-                    selected[perm], generated_emb[perm], pool_size=R_PRECISION_POOL, top_k=3
-                )
-            )
-            distances.append(mm_dist(selected[perm], generated_emb[perm]))
-        precisions = np.stack(precisions)
-
-        interval = (
-            bootstrap_fid(reference_emb, generated_emb, resamples=bootstrap)
-            if bootstrap > 0
-            else {}
-        )
+    def calculate_run_metrics(
+        self,
+        reference_emb: np.ndarray,
+        generated_emb: np.ndarray,
+        caption_emb: np.ndarray,
+        per_clip: list[np.ndarray],
+        rng: np.random.Generator,
+    ) -> dict[str, float]:
+        chosen = np.array([rng.choice(indices) for indices in per_clip])
+        order = rng.permutation(len(generated_emb))
+        selected = caption_emb[chosen][order]
+        motions = generated_emb[order]
+        top1, top2, top3 = r_precision(selected, motions, pool_size=R_PRECISION_POOL, top_k=3)
         return {
-            "clips": len(split.generated),
             "fid": fid(reference_emb, generated_emb),
-            **interval,
-            "r_top1": float(precisions[:, 0].mean()),
-            "r_top1_std": float(precisions[:, 0].std()),
-            "r_top2": float(precisions[:, 1].mean()),
-            "r_top3": float(precisions[:, 2].mean()),
-            "mm_dist": float(np.mean(distances)),
+            "r_top1": float(top1),
+            "r_top2": float(top2),
+            "r_top3": float(top3),
+            "mm_dist": mm_dist(selected, motions),
             "diversity": diversity(generated_emb, num_pairs=DIVERSITY_PAIRS),
         }
 
@@ -227,6 +220,8 @@ class HumanMl3dGenerationEvaluator:
         self, generator: TextToMotionGenerator, request: GenerationEvaluationProtocol | None = None
     ) -> GenerationEvaluationReport:
         request = request or GenerationEvaluationProtocol()
+        if request.reps < 1:
+            raise ValueError(f"the protocol needs at least 1 generation run, got {request.reps}")
         split = self.generate_evaluation_set(
             generator,
             request.split,
@@ -240,8 +235,32 @@ class HumanMl3dGenerationEvaluator:
                 f"(dropped {split.dropped}). FID is only comparable at equal clip counts."
             )
 
-        metrics = self.calculate_generation_metrics(
-            split, reps=request.reps, bootstrap=request.bootstrap
+        reference_emb = self.compute_motion_embeddings(split.reference)
+        first_emb = self.compute_motion_embeddings(split.generated)
+        caption_emb, per_clip = self.caption_embeddings(split)
+        rng = np.random.default_rng(0)
+        runs = [self.calculate_run_metrics(reference_emb, first_emb, caption_emb, per_clip, rng)]
+        for run in range(1, request.reps):
+            repeated = self.generate_evaluation_set(
+                generator,
+                request.split,
+                request.max_clips,
+                request.sampling,
+                request.batch_size,
+                run=run,
+            )
+            if repeated.captions != split.captions:
+                raise RuntimeError(f"generation run {run} scored a different clip set than run 0")
+            repeated_emb = self.compute_motion_embeddings(repeated.generated)
+            runs.append(
+                self.calculate_run_metrics(reference_emb, repeated_emb, caption_emb, per_clip, rng)
+            )
+            logger.info(f"generation run {run + 1}/{request.reps}  FID {runs[-1]['fid']:.4f}")
+        summary = {name: replication_summary([run[name] for run in runs]) for name in runs[0]}
+        bootstrap = (
+            bootstrap_fid(reference_emb, first_emb, resamples=request.bootstrap)
+            if request.bootstrap > 0
+            else {}
         )
 
         multimodality = float("nan")
@@ -260,15 +279,19 @@ class HumanMl3dGenerationEvaluator:
             )
 
         return GenerationEvaluationReport(
-            clips=int(metrics["clips"]),
-            fid=metrics["fid"],
-            r_precision=(metrics["r_top1"], metrics["r_top2"], metrics["r_top3"]),
-            diversity=metrics["diversity"],
+            clips=len(split.generated),
+            runs=request.reps,
+            fid=summary["fid"][0],
+            r_precision=(summary["r_top1"][0], summary["r_top2"][0], summary["r_top3"][0]),
+            diversity=summary["diversity"][0],
             multimodality=multimodality,
-            matching_distance=metrics["mm_dist"],
-            r_top1_std=metrics["r_top1_std"],
-            fid_ci_lo=metrics.get("fid_ci_lo", float("nan")),
-            fid_ci_hi=metrics.get("fid_ci_hi", float("nan")),
+            matching_distance=summary["mm_dist"][0],
+            fid_ci95=summary["fid"][1],
+            r_precision_ci95=(summary["r_top1"][1], summary["r_top2"][1], summary["r_top3"][1]),
+            diversity_ci95=summary["diversity"][1],
+            matching_distance_ci95=summary["mm_dist"][1],
+            fid_bootstrap_lo=bootstrap.get("fid_ci_lo", float("nan")),
+            fid_bootstrap_hi=bootstrap.get("fid_ci_hi", float("nan")),
         )
 
     @torch.no_grad()

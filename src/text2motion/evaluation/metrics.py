@@ -57,6 +57,11 @@ def bootstrap_fid(
     }
 
 
+def replication_summary(values: list[float]) -> tuple[float, float]:
+    array = np.asarray(values, dtype=np.float64)
+    return float(array.mean()), float(1.96 * array.std() / np.sqrt(len(array)))
+
+
 def paired_fid_delta(
     real_feats: np.ndarray,
     gen_a: np.ndarray,

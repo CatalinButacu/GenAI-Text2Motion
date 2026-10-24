@@ -34,20 +34,27 @@ class GenerationEvaluationProtocol:
 @dataclass(frozen=True)
 class GenerationEvaluationReport:
     clips: int
+    runs: int
     fid: float
     r_precision: tuple[float, float, float]
     diversity: float
     multimodality: float
     matching_distance: float
-    r_top1_std: float = 0.0
-    fid_ci_lo: float = float("nan")
-    fid_ci_hi: float = float("nan")
+    fid_ci95: float
+    r_precision_ci95: tuple[float, float, float]
+    diversity_ci95: float
+    matching_distance_ci95: float
+    fid_bootstrap_lo: float = float("nan")
+    fid_bootstrap_hi: float = float("nan")
 
     def as_dict(self) -> dict[str, float]:
         record = asdict(self)
         top1, top2, top3 = self.r_precision
+        top1_ci, top2_ci, top3_ci = self.r_precision_ci95
         record.pop("r_precision")
+        record.pop("r_precision_ci95")
         record.update({"r_top1": top1, "r_top2": top2, "r_top3": top3})
+        record.update({"r_top1_ci95": top1_ci, "r_top2_ci95": top2_ci, "r_top3_ci95": top3_ci})
         return record
 
 
@@ -135,7 +142,11 @@ class EvaluateRequest(DefaultConfigRequest):
     )
     bootstrap: int = Field(
         default=GenerationEvaluationProtocol().bootstrap,
-        description="resamples for the FID confidence interval; more gives a steadier interval",
+        description="clip resamples for a bootstrap FID interval of generation run 0",
+    )
+    reps: int = Field(
+        default=GenerationEvaluationProtocol().reps,
+        description="generation runs; each run samples all clips again; the report gives mean and 95% interval",
     )
     eval_batch_size: int = Field(
         default=GenerationEvaluationProtocol().batch_size,

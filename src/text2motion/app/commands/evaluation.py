@@ -41,6 +41,7 @@ def run_evaluate(app: ApplicationContext, args: EvaluateRequest) -> None:
         mm_clips=args.mm_clips,
         mm_repeats=args.mm_repeats,
         bootstrap=args.bootstrap,
+        reps=args.reps,
         batch_size=args.eval_batch_size,
     )
     run_dir = start_run(
@@ -49,7 +50,7 @@ def run_evaluate(app: ApplicationContext, args: EvaluateRequest) -> None:
     logger.info(
         f"device {app.device}  split {args.split.value}  cfg_scale {args.cfg_scale}  "
         f"temp {args.temperature}  top_p {args.top_p}  length {args.length_mode.value}  "
-        f"({request.reps}-rep, our_vab)"
+        f"({request.reps} generation runs, our_vab)"
     )
 
     for backbone in backbones:
@@ -70,10 +71,14 @@ def run_evaluate(app: ApplicationContext, args: EvaluateRequest) -> None:
             run_dir, {"backbone": backbone.value, "ckpt": str(checkpoint), **report.as_dict()}
         )
         top1, top2, top3 = report.r_precision
+        top1_ci, top2_ci, top3_ci = report.r_precision_ci95
         logger.info(
-            f"{backbone.value:12s} clips {report.clips:4d}  FID {report.fid:6.3f}  "
-            f"R@1 {top1:.3f}+/-{report.r_top1_std:.3f}  R@2 {top2:.3f}  R@3 {top3:.3f}  "
-            f"MM {report.matching_distance:.3f}  Div {report.diversity:.3f}  "
+            f"{backbone.value:12s} clips {report.clips:4d}  runs {report.runs}  "
+            f"FID {report.fid:6.3f}+/-{report.fid_ci95:.3f}  "
+            f"R@1 {top1:.3f}+/-{top1_ci:.3f}  R@2 {top2:.3f}+/-{top2_ci:.3f}  "
+            f"R@3 {top3:.3f}+/-{top3_ci:.3f}  "
+            f"MM {report.matching_distance:.3f}+/-{report.matching_distance_ci95:.3f}  "
+            f"Div {report.diversity:.3f}+/-{report.diversity_ci95:.3f}  "
             f"MModality {report.multimodality:.3f}"
         )
         del generator
