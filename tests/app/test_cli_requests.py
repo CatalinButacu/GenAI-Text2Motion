@@ -67,6 +67,7 @@ def test_health_request_defaults_to_the_config_address():
         "config": Path("configs/default.yaml"),
         "host": None,
         "port": 9000,
+        "service_config": Path("configs/service.yml"),
     }
 
 

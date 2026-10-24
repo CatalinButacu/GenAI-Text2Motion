@@ -162,6 +162,11 @@ def from_mapping(cls: type[_T], data: Mapping[str, Any]) -> _T:
     return strict_single.validate_python((dict(data),))[0]
 
 
+def load_service_config(path: str | Path) -> MotionServiceConfig:
+    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return from_mapping(MotionServiceConfig, __with_environment("service", {"service": raw}))
+
+
 def load_dataclass(cls: type[_T], path: str | Path) -> _T:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     return from_mapping(cls, raw)

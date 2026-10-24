@@ -184,12 +184,12 @@ class ApplicationContext:
         )
 
     def with_service_file(self, service_config: str | Path) -> ApplicationContext:
-        from text2motion.app.config import load_dataclass
+        from text2motion.app.config import load_service_config
 
         path = Path(service_config)
         if not path.is_file():
             raise FileNotFoundError(f"service config {path} not found (pass --service_config)")
-        return self.with_service(load_dataclass(MotionServiceConfig, path))
+        return self.with_service(load_service_config(path))
 
 
 logger = logging.getLogger(__name__)

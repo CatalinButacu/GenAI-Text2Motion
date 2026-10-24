@@ -162,6 +162,7 @@ def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
 def run_health(app: ApplicationContext, request: HealthRequest) -> None:
     from text2motion.streaming.protocol import MotionInferenceClient
 
+    app = app.with_service_file(request.service_config)
     host = request.host or app.config.service.connect_host
     port = request.port or app.config.service.port
     client = MotionInferenceClient(host, port, app.config.service.connect_timeout_seconds)

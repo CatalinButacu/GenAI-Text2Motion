@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from text2motion.app.config import ProjectPathsConfig, load_config
+from text2motion.app.cli import parse_request
+from text2motion.app.config import ProjectPathsConfig, load_config, load_service_config
 
 
 def test_default_deployment_paths_are_portable_atomic_bundles():
@@ -31,6 +32,24 @@ def test_deployment_environment_overrides_are_typed(monkeypatch, tmp_path):
     assert config.service.port == 9012
     assert config.service.idle_seconds == 45
     assert config.service.connect_host == "motion.internal"
+
+
+def test_the_service_file_keeps_the_environment_overrides(monkeypatch, tmp_path):
+    service_file = tmp_path / "service.yml"
+    service_file.write_text("port: 8765\nconnect_host: 127.0.0.1\n", encoding="utf-8")
+    monkeypatch.setenv("TEXT2MOTION_SERVICE_PORT", "9012")
+    monkeypatch.setenv("TEXT2MOTION_CONNECT_HOST", "motion.internal")
+
+    service = load_service_config(service_file)
+
+    assert service.port == 9012
+    assert service.connect_host == "motion.internal"
+
+
+def test_health_serve_and_studio_read_the_same_service_file():
+    for command in ("health", "serve", "studio"):
+        request = parse_request(command, ["--service_config", "configs/service.yml"])
+        assert getattr(request, "service_config") == Path("configs/service.yml")
 
 
 def test_legacy_service_host_remains_a_connect_host_fallback(monkeypatch):

@@ -42,8 +42,3 @@ avatar:
   up_axis: z
   models_path: data/smplx_models
 
-service:
-  bind_host: 127.0.0.1
-  connect_host: 127.0.0.1
-  port: 8765
-  idle_seconds: 600

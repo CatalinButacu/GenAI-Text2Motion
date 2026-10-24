@@ -14,6 +14,10 @@ DEFAULT_SERVICE_CONFIG = Path("configs/service.yml")
 class ServiceAddressRequest(DefaultConfigRequest):
     host: str | None = Field(default=None, description="service address; default from the config")
     port: int | None = Field(default=None, description="service TCP port; default from the config")
+    service_config: Path = Field(
+        default=DEFAULT_SERVICE_CONFIG,
+        description="YAML file with the address and runtime settings of the service",
+    )
 
 
 class HealthRequest(ServiceAddressRequest):
@@ -31,10 +35,6 @@ class ModelServiceRequest(ServiceAddressRequest):
     backbone: Backbone = Field(
         default=Backbone.TRANSFORMER,
         description="sequence mixer: mamba has a fixed-size state, transformer has a cache that grows",
-    )
-    service_config: Path = Field(
-        default=DEFAULT_SERVICE_CONFIG,
-        description="YAML file with the address and runtime settings of the service",
     )
 
 
