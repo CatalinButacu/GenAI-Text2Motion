@@ -300,9 +300,15 @@ class GeneratorTrainer:
         return parts
 
     def apply_pending_gradients(self) -> None:
-        if self._accum_count == 0:
+        pending = self._accum_count
+        if pending == 0:
             return
         self._accum_count = 0
+        accum = max(1, self.training_config.grad_accum)
+        if pending < accum:
+            for parameter in self._clip_params:
+                if parameter.grad is not None:
+                    parameter.grad.mul_(accum / pending)
         nn.utils.clip_grad_norm_(
             self._clip_params, self.training_config.grad_clip, error_if_nonfinite=True
         )

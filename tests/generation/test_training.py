@@ -203,6 +203,31 @@ def test_a_resumed_run_continues_like_an_uninterrupted_run(tmp_path):
     assert torch.equal(uninterrupted.weighter.log_vars, resumed.weighter.log_vars)
 
 
+def test_a_partial_accumulation_window_has_the_weight_of_a_full_window(monkeypatch):
+    motion = torch.randn(2, 32, 263, generator=torch.Generator().manual_seed(1))
+    text = torch.randn(2, GEN.d_text, generator=torch.Generator().manual_seed(2))
+    trainers = []
+    for grad_accum in (2, 4):
+        torch.manual_seed(0)
+        config = GeneratorTrainingConfig(
+            cfg_dropout=0.0, pkeep=1.0, grad_accum=grad_accum, grad_clip=1e9
+        )
+        trainer = GeneratorTrainer(
+            MotionTokenGenerator(GEN), FsqTokenizer(TOK), config, downsample=4
+        )
+        monkeypatch.setattr(trainer.optimizer, "step", lambda: None)
+        __train_one_epoch(trainer, motion, text)
+        trainers.append(trainer)
+
+    full_window, partial_window = trainers
+    partial_parameters = dict(partial_window.token_generator.named_parameters())
+    for name, parameter in full_window.token_generator.named_parameters():
+        assert parameter.grad is not None
+        partial_gradient = partial_parameters[name].grad
+        assert partial_gradient is not None
+        assert torch.allclose(parameter.grad, partial_gradient, atol=1e-6), name
+
+
 def test_a_resume_state_with_pending_gradients_fails():
     trainer = __resumable_trainer(grad_accum=2)
     trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
