@@ -107,7 +107,7 @@ class TokenizerTrainer:
     def load_resume_state(self, state: dict, device: str) -> tuple[int, float]:
         self.tokenizer_network.load_state_dict(state["tokenizer"])
         self.optimizer.load_state_dict(state["optimizer"])
-        self.parameter_ema.shadow = {key: value.to(device) for key, value in state["ema"].items()}
+        self.parameter_ema.load_state_dict(state["ema"])
         return state["epoch"] + 1, state["best_fid"]
 
 

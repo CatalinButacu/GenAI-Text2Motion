@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import torch
 
 from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, TokenizerConfig
@@ -139,6 +140,31 @@ def test_ema_tracks_and_restores():
     assert torch.allclose(dict(gen.named_parameters())[name], ema.shadow[name])
     ema.restore(gen)
     assert torch.allclose(dict(gen.named_parameters())[name], param)
+
+
+def test_ema_update_after_resume_moves_the_loaded_shadow():
+    model = torch.nn.Linear(1, 1, bias=False)
+    torch.nn.init.constant_(model.weight, 2.0)
+    ema = ExponentialMovingAverage(model, decay=0.5)
+    ema.load_state_dict({"weight": torch.full((1, 1), 10.0)})
+    ema.update(model)
+    assert ema.shadow["weight"].item() == 6.0
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        {},
+        {"weight": torch.zeros(1, 1), "bias": torch.zeros(1)},
+        {"weight": torch.zeros(2, 1)},
+        {"weight": torch.full((1, 1), float("nan"))},
+    ],
+    ids=["missing_key", "unexpected_key", "wrong_shape", "not_finite"],
+)
+def test_ema_rejects_a_bad_checkpoint_state(state):
+    ema = ExponentialMovingAverage(torch.nn.Linear(1, 1, bias=False), decay=0.5)
+    with pytest.raises((KeyError, ValueError)):
+        ema.load_state_dict(state)
 
 
 def test_decay_groups_exempt_norms_biases_and_the_ssm_memory_params():

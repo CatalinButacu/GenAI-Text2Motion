@@ -24,6 +24,20 @@ class ExponentialMovingAverage:
         for param, shadow in self._tracked:
             shadow.mul_(self.decay).add_(param, alpha=1 - self.decay)
 
+    @torch.no_grad()
+    def load_state_dict(self, state: dict[str, torch.Tensor]) -> None:
+        missing = sorted(self.shadow.keys() - state.keys())
+        unexpected = sorted(state.keys() - self.shadow.keys())
+        if missing or unexpected:
+            raise KeyError(f"EMA state keys differ: missing {missing}, unexpected {unexpected}")
+        for name, shadow in self.shadow.items():
+            value = state[name]
+            if value.shape != shadow.shape:
+                raise ValueError(f"EMA {name}: shape {tuple(value.shape)} != {tuple(shadow.shape)}")
+            if not torch.isfinite(value).all():
+                raise ValueError(f"EMA {name}: the checkpoint value is not finite")
+            shadow.copy_(value)
+
     def copy_to(self, model: nn.Module) -> None:
         self.backup = {
             name: param.detach().clone()

@@ -328,7 +328,7 @@ class GeneratorTrainer:
         if self.text_encoder is not None and state.get("text_encoder") is not None:
             self.text_encoder.load_state_dict(state["text_encoder"])
         self.optimizer.load_state_dict(state["optimizer"])
-        self.parameter_ema.shadow = {key: value.to(device) for key, value in state["ema"].items()}
+        self.parameter_ema.load_state_dict(state["ema"])
         if self.scheduler is not None and state.get("scheduler") is not None:
             self.scheduler.load_state_dict(state["scheduler"])
         return state["epoch"] + 1, state["best_fid"], state.get("stale_evaluations", 0)
