@@ -24,6 +24,9 @@ def __layout(tmp_path, monkeypatch, heldout=frozenset()):
     pose_folder.mkdir(parents=True)
     np.save(pose_folder / "walk_stageii.npy", np.zeros((40, 22, 3), np.float32))
     np.save(pose_folder / "run_stageii.npy", np.zeros((50, 22, 3), np.float32))
+    preparation.write_manifest(
+        regen / "pose_data" / preparation.POSE_MANIFEST, {"fps": 20}, {"complete": True}
+    )
     dataset = tmp_path / "dataset"
     dataset.mkdir()
     for split in (Split.VALIDATION, Split.TEST):
@@ -80,7 +83,7 @@ def test_a_folder_with_features_and_no_manifest_is_refused(tmp_path, monkeypatch
     (out_dir / FEATURES_DIR).mkdir(parents=True)
     np.save(out_dir / FEATURES_DIR / "ACCAD__walk_stageii.npy", np.zeros((3, 263), np.float32))
 
-    with pytest.raises(ValueError, match="legacy corpus"):
+    with pytest.raises(ValueError, match="legacy folder"):
         preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
 
 
@@ -102,6 +105,27 @@ def test_heldout_sources_are_skipped(tmp_path, monkeypatch):
 
     assert summary["skipped_heldout"] == 1
     assert not (out_dir / FEATURES_DIR / "ACCAD__run_stageii.npy").exists()
+
+
+def test_a_corpus_from_another_pose_recipe_is_refused(tmp_path, monkeypatch):
+    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
+    preparation.write_manifest(
+        regen / "pose_data" / preparation.POSE_MANIFEST, {"fps": 30}, {"complete": True}
+    )
+
+    with pytest.raises(ValueError, match="pose_recipe"):
+        preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
+
+
+def test_an_unfinished_pose_extraction_stops_the_corpus_build(tmp_path, monkeypatch):
+    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    preparation.write_manifest(
+        regen / "pose_data" / preparation.POSE_MANIFEST, {"fps": 20}, {"complete": False}
+    )
+
+    with pytest.raises(ValueError, match="did not finish"):
+        preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
 
 
 def test_failures_finish_the_build_then_raise_with_the_names(tmp_path, monkeypatch):

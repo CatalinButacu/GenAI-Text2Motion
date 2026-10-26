@@ -34,6 +34,17 @@ def atomic_torch_save(state: Any, path: str | Path) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def atomic_numpy_save(array: np.ndarray, path: str | Path) -> None:
+    destination = Path(path)
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    try:
+        with temporary.open("wb") as handle:
+            np.save(handle, array)
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def sha256_file(path: str | Path) -> str:
     digest = hashlib.sha256()
     with Path(path).open("rb") as handle:

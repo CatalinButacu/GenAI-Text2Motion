@@ -26,7 +26,7 @@ def run_prepare(app: ApplicationContext, args: PrepareRequest) -> None:
 
     request = app.create_hml3d_preparation_request()
     if not args.corpus:
-        run_hml3d_preparation(request, args.stage)
+        run_hml3d_preparation(request, args.stage, args.adopt_pose_folder)
         return
 
     run_dir = start_run("pretrain_corpus", app.config, app.config.paths.logs_dir, args.model_dump())

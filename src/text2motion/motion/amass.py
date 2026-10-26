@@ -9,7 +9,7 @@ import torch
 from text2motion.motion.contracts import Split
 from text2motion.motion.model import SMPLX_MODEL_TYPE, Gender
 from text2motion.motion.representation import FPS, JOINTS
-from text2motion.motion.storage import SPLIT_FILES
+from text2motion.motion.storage import SPLIT_FILES, sha256_file
 
 _HEAD_TRIM_SECONDS = {
     "Eyes_Japan_Dataset": 3.0,
@@ -143,11 +143,13 @@ class AmassPoseExtractor:
         self._chunk_size = chunk_size
         model_root = resolve_model_root(Path(smplx_dir))
         self._models: dict[str, Any] = {}
+        self._model_files: dict[str, Path] = {}
 
         for gender in Gender:
             model_file = model_root / "smplx" / f"SMPLX_{gender.value.upper()}.npz"
             if not model_file.is_file():
                 raise FileNotFoundError(f"SMPL-X model not found: {model_file}")
+            self._model_files[gender.value] = model_file
             self._models[gender.value] = (
                 smplx.create(
                     model_path=str(model_root),
@@ -162,6 +164,18 @@ class AmassPoseExtractor:
             )
 
         self._expression_count = int(self._models[Gender.NEUTRAL.value].num_expression_coeffs)
+
+    def recipe(self) -> dict[str, object]:
+        return {
+            "fps": self._fps,
+            "joint_count": self._joint_count,
+            "beta_count": self._beta_count,
+            "flat_hand_mean": True,
+            "axes": "y_up",
+            "smplx_sha256": {
+                gender: sha256_file(path) for gender, path in sorted(self._model_files.items())
+            },
+        }
 
     def __model(self, gender: object):
         value = gender.decode() if isinstance(gender, bytes) else str(gender)

@@ -94,6 +94,11 @@ class PrepareRequest(DefaultConfigRequest):
         default=False,
         description="build the unlabeled AMASS pretraining corpus and not the captioned data set",
     )
+    adopt_pose_folder: bool = Field(
+        default=False,
+        description="stage amass: accept an existing pose folder without a manifest after a new "
+        "extraction of a fixed sample matches the files on disk",
+    )
     regen_dir: Path = Field(
         default=CorpusLayout().regen_dir,
         description="folder with the regenerated poses and joints that the corpus is built from",

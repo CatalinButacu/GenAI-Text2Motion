@@ -27,13 +27,23 @@ from text2motion.motion.representation import (
     recover_from_ric,
     target_offsets,
 )
-from text2motion.motion.storage import FEATURES_DIR, SPLIT_FILES, sha256_file
+from text2motion.motion.storage import (
+    FEATURES_DIR,
+    SPLIT_FILES,
+    atomic_numpy_save,
+    sha256_file,
+)
 
 logger = logging.getLogger(__name__)
 
 CORPUS_MANIFEST = "corpus_manifest.json"
 CORPUS_FORMAT = "text2motion.amass_corpus"
 CORPUS_VERSION = 1
+POSE_MANIFEST = "pose_manifest.json"
+POSE_FORMAT = "text2motion.amass_poses"
+POSE_VERSION = 1
+_ADOPT_SAMPLE = 20
+_ADOPT_TOLERANCE = 1e-4
 _REFERENCE_CLIP_ID = "000021"
 _RIGHT_CHAIN = [2, 5, 8, 11, 14, 17, 19, 21]
 _LEFT_CHAIN = [1, 4, 7, 10, 13, 16, 18, 20]
@@ -130,32 +140,93 @@ class Hml3dPreparationLayout:
             d.mkdir(parents=True, exist_ok=True)
 
 
-def extract_amass_to_y_up_joints(
-    request: PreparationRequest, layout: Hml3dPreparationLayout
+def __pose_path(src: Path, amass_root: Path, pose_root: Path) -> Path:
+    return (pose_root / src.relative_to(amass_root)).with_suffix(".npy")
+
+
+def __same_pose(extracted: np.ndarray | None, saved: np.ndarray) -> bool:
+    if extracted is None or extracted.shape != saved.shape:
+        return False
+    return bool(np.allclose(extracted, saved, rtol=0.0, atol=_ADOPT_TOLERANCE))
+
+
+def adopt_pose_folder(
+    extractor: AmassPoseExtractor,
+    amass_root: Path,
+    pose_root: Path,
+    npz_files: list[Path],
+    recipe: dict[str, object],
 ) -> None:
+    manifest_path = pose_root / POSE_MANIFEST
+    if manifest_path.is_file():
+        raise ValueError(f"{manifest_path} exists; adoption is only for a folder without one")
+    pairs = [(src, __pose_path(src, amass_root, pose_root)) for src in npz_files]
+    pairs = [(src, saved) for src, saved in pairs if saved.is_file()]
+    if not pairs:
+        raise FileNotFoundError(f"{pose_root} has no pose files to adopt")
+    rng = np.random.default_rng(0)
+    picks = sorted(rng.choice(len(pairs), min(_ADOPT_SAMPLE, len(pairs)), replace=False))
+    sample = [pairs[index] for index in picks]
+    mismatched = [
+        saved.name
+        for src, saved in sample
+        if not __same_pose(extractor.extract(src), np.load(saved))
+    ]
+    if mismatched:
+        raise ValueError(
+            f"{len(mismatched)} of {len(sample)} sampled poses differ from a new extraction "
+            f"(first: {mismatched[:3]}); re-extract into a new folder"
+        )
+    adopted = [str(saved.relative_to(pose_root)) for _, saved in sample]
+    write_manifest(manifest_path, recipe, {"complete": False, "adopted_sample": adopted})
+
+
+def extract_amass_to_y_up_joints(
+    request: PreparationRequest, layout: Hml3dPreparationLayout, adopt: bool = False
+) -> dict[str, int]:
     if request.amass_dir is None:
         raise ValueError("amass_dir must be set to the AMASS root for stage 'amass'")
     if request.smplx_models is None:
         raise ValueError("smplx_models must be set (SMPL-X bodies) for stage 'amass'")
 
     amass_root = Path(request.amass_dir)
+    pose_root = layout.pose_data
     extractor = AmassPoseExtractor(
         Path(request.smplx_models),
         joint_count=request.joint_count,
         device=request.device,
         fps=request.fps,
     )
+    recipe = {"format": POSE_FORMAT, "version": POSE_VERSION, **extractor.recipe()}
+    npz_files = sorted(
+        Path(r) / f for r, _, fs in os.walk(amass_root) for f in fs if f.endswith(".npz")
+    )
+    if adopt:
+        adopt_pose_folder(extractor, amass_root, pose_root, npz_files, recipe)
+    manifest_path = pose_root / POSE_MANIFEST
+    check_recipe_reuse(manifest_path, recipe, any(pose_root.rglob("*.npy")))
+    previous = {}
+    if manifest_path.is_file():
+        previous = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = {key: value for key, value in previous.items() if key == "adopted_sample"}
+    write_manifest(manifest_path, recipe, {**manifest, "complete": False})
 
-    npz_files = [Path(r) / f for r, _, fs in os.walk(amass_root) for f in fs if f.endswith(".npz")]
+    counts = {"written": 0, "reused": 0, "no_motion": 0}
     for src in tqdm(npz_files, desc="AMASS->pose"):
-        rel = src.relative_to(amass_root)
-        save_path = (layout.pose_data / rel).with_suffix(".npy")
+        save_path = __pose_path(src, amass_root, pose_root)
         if save_path.is_file():
+            counts["reused"] += 1
+            continue
+        joints = extractor.extract(src)
+        if joints is None:
+            counts["no_motion"] += 1
             continue
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        joints = extractor.extract(src)
-        if joints is not None:
-            np.save(save_path, joints)
+        atomic_numpy_save(joints, save_path)
+        counts["written"] += 1
+
+    write_manifest(manifest_path, recipe, {**manifest, **counts, "complete": True})
+    return counts
 
 
 def build_indexed_joint_clips(
@@ -242,14 +313,16 @@ def compute_hml3d_normalization_stats(
 
 
 def run_hml3d_preparation(
-    request: PreparationRequest, stage: PreparationStage | str = PreparationStage.ALL
+    request: PreparationRequest,
+    stage: PreparationStage | str = PreparationStage.ALL,
+    adopt_pose_folder: bool = False,
 ) -> None:
     stage = PreparationStage(stage)
     layout = Hml3dPreparationLayout(Path(request.out_dir))
     layout.mkdirs()
 
     if stage in (PreparationStage.AMASS, PreparationStage.ALL):
-        extract_amass_to_y_up_joints(request, layout)
+        logger.info(extract_amass_to_y_up_joints(request, layout, adopt_pose_folder))
     if stage in (PreparationStage.INDEX, PreparationStage.ALL):
         build_indexed_joint_clips(request, layout)
     if stage in (PreparationStage.FEATURE, PreparationStage.ALL):
@@ -284,13 +357,30 @@ def __reference_joints_path(joints_dir: Path) -> Path:
     return candidates[0]
 
 
+def complete_pose_recipe(pose_root: Path) -> dict[str, object]:
+    manifest_path = pose_root / POSE_MANIFEST
+    if not manifest_path.is_file():
+        raise FileNotFoundError(
+            f"{manifest_path} missing; run stage 'amass' (with --adopt_pose_folder for a legacy folder)"
+        )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("complete") is not True:
+        raise ValueError(f"{manifest_path} says the pose extraction did not finish; run it again")
+    return manifest["recipe"]
+
+
 def corpus_recipe(
-    request: PreparationRequest, index_csv: Path, reference_path: Path, min_frames: int
+    request: PreparationRequest,
+    index_csv: Path,
+    reference_path: Path,
+    pose_recipe: dict[str, object],
+    min_frames: int,
 ) -> dict[str, object]:
     dataset_dir = Path(request.out_dir)
     recipe = {
         "format": CORPUS_FORMAT,
         "version": CORPUS_VERSION,
+        "pose_recipe": pose_recipe,
         "min_frames": min_frames,
         "fps": request.fps,
         "joint_count": request.joint_count,
@@ -304,12 +394,12 @@ def corpus_recipe(
     return json.loads(json.dumps(recipe))
 
 
-def check_corpus_reuse(out_dir: Path, recipe: dict[str, object]) -> None:
-    manifest_path = out_dir / CORPUS_MANIFEST
+def check_recipe_reuse(manifest_path: Path, recipe: dict[str, object], has_outputs: bool) -> None:
+    folder = manifest_path.parent
     if not manifest_path.is_file():
-        if any((out_dir / FEATURES_DIR).glob("*.npy")):
+        if has_outputs:
             raise ValueError(
-                f"{out_dir} has features but no {CORPUS_MANIFEST} (legacy corpus); "
+                f"{folder} has outputs but no {manifest_path.name} (legacy folder); "
                 "build into a new folder"
             )
         return
@@ -317,16 +407,16 @@ def check_corpus_reuse(out_dir: Path, recipe: dict[str, object]) -> None:
     changed = sorted(key for key in set(stored) | set(recipe) if stored.get(key) != recipe.get(key))
     if changed:
         raise ValueError(
-            f"{out_dir} was built with another recipe (different: {changed}); "
+            f"{folder} was built with another recipe (different: {changed}); "
             "build into a new folder"
         )
 
 
-def write_corpus_manifest(
-    out_dir: Path, recipe: dict[str, object], status: dict[str, object]
+def write_manifest(
+    manifest_path: Path, recipe: dict[str, object], status: dict[str, object]
 ) -> None:
     manifest = {"recipe": recipe, **status}
-    (out_dir / CORPUS_MANIFEST).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
 
 def __corpus_features(
@@ -364,18 +454,21 @@ def build_amass_pretraining_corpus(
     reference = np.load(reference_path)[:, :joint_count].reshape(-1, joint_count, 3)
     params = feature_params(target_offsets(reference))
 
-    recipe = corpus_recipe(request, index_csv, reference_path, min_frames)
-    check_corpus_reuse(out_dir, recipe)
+    pose_recipe = complete_pose_recipe(pose_root)
+    recipe = corpus_recipe(request, index_csv, reference_path, pose_recipe, min_frames)
     vec_dir = out_dir / FEATURES_DIR
+    existing = {path.name for path in vec_dir.glob("*.npy")}
+    manifest_path = out_dir / CORPUS_MANIFEST
+    check_recipe_reuse(manifest_path, recipe, bool(existing))
     excluded = heldout_feature_names(index_csv, Path(request.out_dir), pose_root)
-    present = sorted(excluded & {path.name for path in vec_dir.glob("*.npy")})
+    present = sorted(excluded & existing)
     if present:
         raise ValueError(
             f"{len(present)} heldout files are already in {vec_dir} (first: {present[:3]}); "
             "build into a new folder"
         )
     vec_dir.mkdir(parents=True, exist_ok=True)
-    write_corpus_manifest(out_dir, recipe, {"complete": False})
+    write_manifest(manifest_path, recipe, {"complete": False})
 
     sources = sorted(pose_root.rglob("*.npy"))
     if limit:
@@ -401,9 +494,7 @@ def build_amass_pretraining_corpus(
         if features is None:
             counts["skipped_short"] += 1
             continue
-        temporary = save_path.with_name(f".{save_path.stem}.tmp.npy")
-        np.save(temporary, features)
-        temporary.replace(save_path)
+        atomic_numpy_save(features, save_path)
         counts["written"] += 1
         counts["frames"] += features.shape[0]
 
@@ -412,8 +503,8 @@ def build_amass_pretraining_corpus(
         "failed": len(failed),
         "hours": round(counts["frames"] / request.fps / 3600, 2),
     }
-    write_corpus_manifest(
-        out_dir, recipe, {**summary, "complete": not failed, "failed_names": failed}
+    write_manifest(
+        manifest_path, recipe, {**summary, "complete": not failed, "failed_names": failed}
     )
     if failed:
         raise RuntimeError(
