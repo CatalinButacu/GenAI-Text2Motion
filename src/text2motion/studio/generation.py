@@ -141,7 +141,7 @@ class StudioGenerationController:
             self.state.stream_buffers.new_chunks.clear()
         self.state.status = "stopping..."
 
-    def __finish(self, n_frames: int, params: dict) -> None:
+    def __finish(self, n_frames: int, params: dict, fit_died: bool = False) -> None:
         if not self.state.generating:
             return
         duration = n_frames / self.host.playback_fps
@@ -156,6 +156,8 @@ class StudioGenerationController:
                 f"detokenize {stats['detokenize_ms']:.0f}ms, peak gpu {stats['peak_gpu_gb']:.2f}GB",
             )
         suffix = "" if params["fit_body"] else ", skeleton"
+        if fit_died:
+            suffix = ", skeleton -- body fit failed, see the log"
         self.state.status = f"{verb} -- {n_frames} frames (~{duration:.1f}s{suffix})"
         if not params["fit_body"]:
             self.state.stream_buffers.fit_progress = None
@@ -200,12 +202,14 @@ class StudioGenerationController:
         n_frames = 0
         total_frames = params["steps"] * params["downsample"] * params["upsample"]
         fit_queue: queue.Queue | None = None
+        fit_thread: threading.Thread | None = None
         if params["fit_body"]:
             fit_queue = queue.Queue(maxsize=self.state.fit_lookahead_chunks)
             take = self.state.stream_buffers.take
-            threading.Thread(
+            fit_thread = threading.Thread(
                 target=self.fit_motion_chunks, args=(fit_queue, take), daemon=True
-            ).start()
+            )
+            fit_thread.start()
         try:
             logger.info(
                 f"[GEN] request prompt={prompt!r} steps={params['steps']} "
@@ -221,23 +225,40 @@ class StudioGenerationController:
                 should_cancel=lambda: self.state.stream_buffers.cancel,
             )
             for chunk in chunks:
-                n_frames += self.__accept_chunk(chunk, n_frames, total_frames, fit_queue)
+                n_frames += self.__accept_chunk(chunk, n_frames, total_frames, fit_queue, fit_thread)
         except Exception as exc:
             traceback.print_exc()
             log_result("generation", False, f"{type(exc).__name__}: {exc}")
             self.state.status = f"error after {n_frames} frames: {type(exc).__name__}: {exc}"
-            if fit_queue is not None:
+            if fit_queue is not None and fit_thread is not None:
                 discard_pending_items(fit_queue)
-                fit_queue.put(None)
+                self.__close_fitter(fit_queue, fit_thread)
             self.state.generating = False
             return
 
         logger.info(f"[GEN] worker DONE total_frames={n_frames} fit_body={params['fit_body']}")
-        if fit_queue is not None:
+        fit_died = fit_thread is not None and not fit_thread.is_alive()
+        if fit_queue is not None and fit_thread is not None:
             if self.state.stream_buffers.cancel:
                 discard_pending_items(fit_queue)
-            fit_queue.put(None)
-        self.__finish(n_frames, params)
+            self.__close_fitter(fit_queue, fit_thread)
+        self.__finish(n_frames, params, fit_died)
+
+    def __feed_fitter(self, fit_queue: queue.Queue, fit_thread: threading.Thread, chunk) -> None:
+        while not self.state.stream_buffers.cancel and fit_thread.is_alive():
+            try:
+                fit_queue.put(chunk, timeout=0.2)
+                return
+            except queue.Full:
+                continue
+
+    def __close_fitter(self, fit_queue: queue.Queue, fit_thread: threading.Thread) -> None:
+        while fit_thread.is_alive():
+            try:
+                fit_queue.put(None, timeout=0.2)
+                return
+            except queue.Full:
+                continue
 
     def frames_ahead_of_playhead(self, accepted_frames: int) -> int:
         buffers = self.state.stream_buffers
@@ -252,7 +273,14 @@ class StudioGenerationController:
         ):
             time.sleep(0.01)
 
-    def __accept_chunk(self, chunk, n_frames: int, total_frames: int, fit_queue) -> int:
+    def __accept_chunk(
+        self,
+        chunk,
+        n_frames: int,
+        total_frames: int,
+        fit_queue: queue.Queue | None,
+        fit_thread: threading.Thread | None,
+    ) -> int:
         self.wait_for_playback(n_frames)
         if self.state.stream_buffers.cancel:
             return 0
@@ -271,14 +299,10 @@ class StudioGenerationController:
         )
         with self.state.stream_buffers.lock:
             self.state.stream_buffers.new_chunks.append(joints)
-        if fit_queue is not None:
-            while not self.state.stream_buffers.cancel:
-                try:
-                    fit_queue.put(chunk, timeout=0.2)
-                    break
-                except queue.Full:
-                    continue
-            self.state.status = f"streaming... {emitted} frames"
+        if fit_queue is not None and fit_thread is not None:
+            self.__feed_fitter(fit_queue, fit_thread, chunk)
+            if fit_thread.is_alive():
+                self.state.status = f"streaming... {emitted} frames"
         else:
             self.state.status = (
                 f"streaming... {emitted} frames (skeleton only -- tick 'avatar skin' for the body)"

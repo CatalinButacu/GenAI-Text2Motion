@@ -147,6 +147,45 @@ def test_every_streamed_chunk_reaches_the_body_fitter_after_a_normal_finish(upsa
     assert not buffers.fitting
 
 
+def test_a_dead_fit_thread_does_not_block_the_stream():
+    def broken_fit(joints, warm_start, n_frames, factor):
+        raise RuntimeError("fitter crashed")
+
+    chunks = [
+        SimpleNamespace(joints=np.zeros((16, 22, 3), np.float32), yaw=0.0) for _ in range(6)
+    ]
+    client = SimpleNamespace(generate=lambda *args, **kwargs: iter(chunks), last_stats=None)
+    buffers = StudioStreamBuffers()
+    buffers.take = 1
+    state = SimpleNamespace(
+        stream_buffers=buffers,
+        smplx_fit=SmplxFitState(),
+        client=client,
+        fit_lookahead_chunks=1,
+        stream_lead_frames=10_000,
+        upsample=1,
+        generating=True,
+        status="",
+    )
+    host = SimpleNamespace(
+        playback_fps=20.0, run_animations=True, toggle_animation=lambda run: None, scene=FakeScene()
+    )
+    avatar = SimpleNamespace(fit_single_chunk=broken_fit)
+    controller = StudioGenerationController(
+        cast(ViewerHost, host), state, cast(SmplxAvatarController, avatar)
+    )
+    params = {"steps": 24, "downsample": 4, "upsample": 1, "fit_body": True,
+              "temperature": 1.0, "top_p": 0.9, "cfg_scale": 6.0}
+
+    stream = threading.Thread(target=controller.stream_generation, args=("walk", params), daemon=True)
+    stream.start()
+    stream.join(timeout=5)
+
+    assert not stream.is_alive()
+    assert len(buffers.new_chunks) == 6
+    assert "body fit failed" in state.status
+
+
 def test_a_new_take_replaces_the_previous_skeleton_instead_of_appending():
     scene = FakeScene()
     host = SimpleNamespace(
