@@ -40,6 +40,8 @@ CORPUS_MANIFEST = "corpus_manifest.json"
 CORPUS_FORMAT = "text2motion.amass_corpus"
 CORPUS_VERSION = 1
 POSE_MANIFEST = "pose_manifest.json"
+INDEX_MANIFEST = "index_manifest.json"
+FEATURES_MANIFEST = "features_manifest.json"
 POSE_FORMAT = "text2motion.amass_poses"
 POSE_VERSION = 1
 _ADOPT_SAMPLE = 20
@@ -241,7 +243,7 @@ def build_indexed_joint_clips(
     pose_root = pose_root if pose_root is not None else layout.pose_data
 
     written = 0
-    missing = 0
+    missing: list[str] = []
     for i in tqdm(range(index_file.shape[0]), desc="index->joints"):
         source_path = index_file.loc[i]["source_path"]
         new_name = index_file.loc[i]["new_name"]
@@ -250,7 +252,7 @@ def build_indexed_joint_clips(
 
         load_path = resolve_pose_path(source_path, pose_root)
         if load_path is None:
-            missing += 1
+            missing.append(str(new_name))
             continue
         data = np.load(load_path)
 
@@ -262,47 +264,71 @@ def build_indexed_joint_clips(
             data[..., 0] *= -1
 
         data_m = swap_left_right(data)
-        np.save(layout.joints / new_name, data)
-        np.save(layout.joints / ("M" + new_name), data_m)
+        atomic_numpy_save(data, layout.joints / f"{new_name}")
+        atomic_numpy_save(data_m, layout.joints / f"M{new_name}")
         written += 1
 
-    logger.info(
-        f"index->joints: wrote {written} clips, skipped {missing} missing (of {len(index_file)})"
-    )
+    recipe = {"index_sha256": sha256_file(Path(request.index_csv)), "fps": fps}
+    status = {"written": written, "missing": len(missing), "missing_names": missing}
+    write_manifest(layout.out_dir / INDEX_MANIFEST, recipe, {**status, "complete": True})
+    if missing:
+        logger.warning(
+            f"index->joints: {len(missing)} of {len(index_file)} clips have no pose file "
+            f"(names in {INDEX_MANIFEST}); first: {missing[:3]}"
+        )
+    logger.info(f"index->joints: wrote {written} clips")
+
+
+def __hml3d_features(source: np.ndarray, params, joint_count: int):
+    data, _, _, _ = encode_joints(source, params)
+    if not np.isfinite(data).all():
+        raise ValueError("non-finite features")
+    rec = recover_from_ric(torch.from_numpy(data).unsqueeze(0).float(), joint_count)
+    return data, rec.squeeze().numpy()
 
 
 def encode_joint_clips_to_hml3d263(
     request: PreparationRequest, layout: Hml3dPreparationLayout
 ) -> None:
     joint_count = request.joint_count
-    ref_path = layout.joints / f"{_REFERENCE_CLIP_ID}.npy"
-    if not ref_path.is_file():
-        available = sorted(layout.joints.glob("[0-9]*.npy"))
-        if not available:
-            raise FileNotFoundError(f"no joints in {layout.joints}; run stage 'index' first")
-        ref_path = available[0]
-        logger.info(f"reference skeleton {_REFERENCE_CLIP_ID} missing; using {ref_path.name}")
+    ref_path = __reference_joints_path(layout.joints)
     reference = np.load(ref_path)[:, :joint_count]
     reference = reference.reshape(len(reference), -1, 3)
     params = feature_params(target_offsets(reference))
 
     source_list = sorted(p.name for p in layout.joints.glob("*.npy"))
     frame_num = 0
+    failed: list[str] = []
     for source_file in tqdm(source_list, desc="joints->263"):
         source_data = np.load(layout.joints / source_file)[:, :joint_count]
         try:
-            data, _, _, _ = encode_joints(source_data, params)
-            rec = recover_from_ric(torch.from_numpy(data).unsqueeze(0).float(), joint_count)
-            np.save(layout.new_joints / source_file, rec.squeeze().numpy())
-            np.save(layout.new_joint_vecs / source_file, data)
-            frame_num += data.shape[0]
+            data, recovered = __hml3d_features(source_data, params, joint_count)
         except Exception as exc:
-            logger.info(f"FAILED {source_file}: {exc}")
+            failed.append(source_file)
+            logger.warning(f"FAILED {source_file}: {exc}")
+            continue
+        atomic_numpy_save(recovered, layout.new_joints / source_file)
+        atomic_numpy_save(data, layout.new_joint_vecs / source_file)
+        frame_num += data.shape[0]
 
-    logger.info(
-        f"Total clips: {len(source_list)}, Frames: {frame_num}, "
-        f"Duration: {frame_num / request.fps / 60:.4f}m"
-    )
+    recipe = {
+        "reference_joints_sha256": sha256_file(ref_path),
+        "joint_count": joint_count,
+        "fps": request.fps,
+    }
+    status = {
+        "written": len(source_list) - len(failed),
+        "frames": frame_num,
+        "failed_names": failed,
+        "complete": not failed,
+    }
+    write_manifest(layout.out_dir / FEATURES_MANIFEST, recipe, status)
+    logger.info(f"joints->263: {status['written']} clips, {frame_num} frames")
+    if failed:
+        raise RuntimeError(
+            f"{len(failed)} joint clips failed to encode (names in {FEATURES_MANIFEST}); "
+            f"first: {failed[:3]}"
+        )
 
 
 def compute_hml3d_normalization_stats(
