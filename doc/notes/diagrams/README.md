@@ -12,7 +12,7 @@ sub-components of a single module.
 | `tokenizer.dot` | Contribution A: encoder -> Grouped-FSQ -> decoder -> recon result vs RVQ |
 | `generator-twins.dot` | Contribution B: shared front-end -> Transformer vs Mamba internals -> sampling |
 | `evaluation.dot` | split discipline -> Guo evaluator -> each metric -> comparability rules |
-| `demo.dot` | prompt -> stream -> rot6d->SMPL-X (no IK) -> 60 fps skinned render |
+| `demo.dot` | prompt -> stream -> joints -> analytic SMPL-X fit (20 fps) -> SLERP to 120 fps -> skinned render |
 
 ## Preview (VSCode "Graphviz Interactive Preview" extension)
 

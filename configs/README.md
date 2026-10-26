@@ -5,7 +5,7 @@ updated to match. Base configs stay at the root.
 
 ```
 configs/
-  default.yaml              base config (dataclass defaults; experiments inherit + override)
+  default.yaml              base config; each experiment file is complete on its own (no inheritance)
   aws.yaml                  cloud run config (relative paths, portable for the g5 launch)
   generator/               Contribution B
     gen_pilot_fsq8x1024.yaml    34M pilot (the local bs8 twin)

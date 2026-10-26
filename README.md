@@ -62,7 +62,12 @@ Reconstruction FID on 2189 test clips, lower is better. FSQ is better in all six
 
 Full test split, 2189 clips, 20 repetitions, one sampling setting for the two models, 60 epochs,
 one seed. The Mamba is better in each point estimate. The R@1 lead is approximately three standard
-deviations. The FID intervals overlap, so the two models are equal on FID.
+deviations. The FID intervals overlap, so this test set does not separate the two models on FID;
+overlapping intervals do not show that they are equal.
+
+All generation numbers here come from the protocol before the October 2026 corrections (caption
+pairing, repeated generation in each evaluation repetition, data workers that see each epoch,
+held-out exclusion in the pretraining corpus). The matched reruns will replace them.
 
 For context only: T2M-GPT reports FID 0.116 and MoMask reports FID 0.045. MoMask is bidirectional
 and cannot stream. This project does not claim state-of-the-art quality.
