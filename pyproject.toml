@@ -58,6 +58,8 @@ extend-select = ["I"]  # import sorting
 
 [tool.pyright]
 include = ["src", "scripts", "tests"]
+venvPath = "."
+venv = ".venv"
 stubPath = "typings"
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
