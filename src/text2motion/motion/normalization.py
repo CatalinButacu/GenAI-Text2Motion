@@ -11,9 +11,27 @@ import torch
 
 from text2motion.motion.contracts import Split
 from text2motion.motion.representation import normalization_stats
-from text2motion.motion.storage import MEAN_FILE, STATS_PROVENANCE_FILE, STD_FILE
+from text2motion.motion.storage import (
+    MEAN_FILE,
+    STATS_PROVENANCE_FILE,
+    STD_FILE,
+    atomic_numpy_save,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def check_scaler_values(mean: np.ndarray, std: np.ndarray, source: str | Path) -> None:
+    if mean.ndim != 1 or std.ndim != 1:
+        raise ValueError(f"{source}: Mean/Std must be 1-D, got {mean.shape} and {std.shape}")
+    non_finite = int((~np.isfinite(mean)).sum() + (~np.isfinite(std)).sum())
+    if non_finite:
+        raise ValueError(f"{source}: {non_finite} Mean/Std values are not finite")
+    non_positive = int((std <= 0).sum())
+    if non_positive:
+        raise ValueError(
+            f"{source}: {non_positive} Std values are zero or negative; normalization divides by them"
+        )
 
 
 @dataclass(frozen=True)
@@ -37,6 +55,7 @@ class MotionScaler:
             raise ValueError(f"Mean/Std shape mismatch: {mean.shape} vs {std.shape}")
         if dim is not None and mean.shape[-1] != dim:
             raise ValueError(f"Mean/Std must be {dim}-dim, got {mean.shape}")
+        check_scaler_values(mean, std, out_dir)
         return cls(mean=mean, std=std)
 
     def normalize(self, feats):
@@ -96,8 +115,9 @@ def fit_train_stats(
         "overwrote_existing": mean_path.is_file(),
     }
 
-    np.save(mean_path, mean)
-    np.save(out_dir / STD_FILE, std)
+    check_scaler_values(mean, std, vec_dir)
+    atomic_numpy_save(mean, mean_path)
+    atomic_numpy_save(std, out_dir / STD_FILE)
     provenance_path = out_dir / STATS_PROVENANCE_FILE
     provenance_path.write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     logger.info(f"Mean/Std saved from {len(clips)} train clips -> {provenance_path}")
