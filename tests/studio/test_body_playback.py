@@ -15,6 +15,7 @@ from text2motion.studio.scene import (
     StreamSceneUpdater,
     StudioSceneNodes,
     StudioStreamBuffers,
+    live_step_budget,
 )
 
 
@@ -240,6 +241,15 @@ def test_the_window_cut_keeps_display_and_source_frames_aligned():
     assert nodes.motion is not None
     assert len(nodes.motion.joint_positions) == 36
     assert len(buffers.source_joints) == 36 // 6 + 1
+
+
+@pytest.mark.parametrize(
+    ("steps", "cap", "expected"),
+    [(50, 20, 20), (10, 20, 10), (0, 20, 20), (50, 0, 50), (0, 0, 0)],
+    ids=["finite_above_cap", "finite_below_cap", "no_limit_gets_cap", "no_cap", "both_open"],
+)
+def test_the_live_preview_cap_resolves_the_no_limit_value_first(steps, cap, expected):
+    assert live_step_budget(steps, cap) == expected
 
 
 class FakeBody:

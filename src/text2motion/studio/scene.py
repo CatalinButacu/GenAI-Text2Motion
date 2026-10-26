@@ -40,6 +40,14 @@ class StudioModelEntry:
         return f"{self.name} {self.version}"
 
 
+def live_step_budget(steps: int, cap: int) -> int:
+    if cap == 0:
+        return steps
+    if steps == 0:
+        return cap
+    return min(steps, cap)
+
+
 def default_step_budget(trained_steps: int, max_steps: int) -> int:
     return min(trained_steps, max_steps) if max_steps else trained_steps
 

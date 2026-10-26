@@ -11,7 +11,7 @@ import numpy as np
 from text2motion.motion.representation import JOINTS
 from text2motion.studio.avatar import SmplxAvatarController
 from text2motion.studio.contracts import ViewerHost
-from text2motion.studio.scene import StudioModelEntry
+from text2motion.studio.scene import StudioModelEntry, live_step_budget
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class StudioGenerationController:
         self.state.stream_buffers.frames_emitted = 0
         self.state.stream_buffers.fit_progress = None
         if live:
-            steps = min(self.state.steps, self.state.config.live.steps)
+            steps = live_step_budget(self.state.steps, self.state.config.live.steps)
             cfg_scale = 1.0
             fit_body = False
             self.state.status = f'live: "{prompt}"'
