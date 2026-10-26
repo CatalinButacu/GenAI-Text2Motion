@@ -9,6 +9,7 @@ PYTHON = REPO / ".venv" / "Scripts" / "python.exe"
 CHECKED_FOLDERS = ("src", "scripts", "tests")
 RULES = "E4,E7,E9,F,I,B,SIM,RET,C90,PLR0911,PLR0912"
 COMPLEXITY = "lint.mccabe.max-complexity = 15"
+READ_ONLY_FLAG = "--check"
 
 
 def tool(*arguments: str) -> subprocess.CompletedProcess:
@@ -78,15 +79,19 @@ def selected_files(arguments: list[str]) -> list[str]:
 
 
 def main() -> int:
-    files = selected_files(sys.argv[1:])
+    arguments = sys.argv[1:]
+    read_only = READ_ONLY_FLAG in arguments
+    files = selected_files([argument for argument in arguments if argument != READ_ONLY_FLAG])
     if not files:
         print("no Python file to check")
         return 0
-    repaired_by_ruff(files)
+    if not read_only:
+        repaired_by_ruff(files)
     problems = lint_problems(files) + type_problems(files)
     for problem in problems:
         print(problem)
-    print(f"{len(problems)} problem(s) remain after the automatic repair")
+    stage = "with no repair" if read_only else "after the automatic repair"
+    print(f"{len(problems)} problem(s) remain {stage}")
     return 1 if problems else 0
 
 
