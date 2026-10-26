@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -172,6 +173,7 @@ def load_dataclass(cls: type[_T], path: str | Path) -> _T:
     return from_mapping(cls, raw)
 
 
+_LEGACY_ROOT_KEYS = {"hml3d"}
 _LOSS_WEIGHT_KEYS = {
     "w_root": "root",
     "w_ric": "ric",
@@ -247,8 +249,21 @@ def __training_values(raw: dict) -> dict:
     return values
 
 
+def __check_root_keys(raw: dict, source: str | Path) -> None:
+    known = set(ApplicationConfig.__dataclass_fields__) | _LEGACY_ROOT_KEYS
+    unknown = sorted(set(raw) - known)
+    if not unknown:
+        return
+    hints = {key: difflib.get_close_matches(key, sorted(known), n=1) for key in unknown}
+    described = ", ".join(
+        f"{key!r} (did you mean {hint[0]!r}?)" if hint else repr(key) for key, hint in hints.items()
+    )
+    raise ValueError(f"{source}: unknown root keys {described}; known: {sorted(known)}")
+
+
 def load_config(path: str | Path) -> ApplicationConfig:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    __check_root_keys(raw, path)
     __check_representation_block(raw, path)
     values = {key: raw[key] for key in ApplicationConfig.__dataclass_fields__ if key in raw}
     values["paths"] = __with_environment("paths", raw)
