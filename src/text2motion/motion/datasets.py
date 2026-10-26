@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sized
+from multiprocessing import RawValue
 from pathlib import Path
 
 import numpy as np
@@ -35,7 +36,7 @@ class CaptionedMotionDataset(Dataset):
         self._train = split == Split.TRAIN
         self._mirror = data.mirror_augment and self._train
         self._seed = seed
-        self._epoch = 0
+        self._epoch = RawValue("q", 0)
 
         root = Path(root)
         self._vec_dir = root / FEATURES_DIR
@@ -86,7 +87,7 @@ class CaptionedMotionDataset(Dataset):
         ]
 
     def set_epoch(self, epoch: int) -> None:
-        self._epoch = int(epoch)
+        self._epoch.value = int(epoch)
 
     def __len__(self) -> int:
         return len(self._ids)
@@ -107,7 +108,7 @@ class CaptionedMotionDataset(Dataset):
                 f"{clip_id}: non-finite values in feature; drop it from the split list"
             )
 
-        rng = item_rng(self._seed, self._epoch, idx)
+        rng = item_rng(self._seed, self._epoch.value, idx)
         annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
         annotation, feat = self.__select_captioned_segment(annotations, feat, rng)
         feat = self.normalize(self.__crop_to_max_frames(feat, rng))
@@ -177,7 +178,7 @@ class MotionWindowDataset(Dataset):
         self._train = split == Split.TRAIN
         self._mirror = data.mirror_augment and self._train
         self._seed = seed
-        self._epoch = 0
+        self._epoch = RawValue("q", 0)
 
         root = Path(root)
         self._vec_dir = root / FEATURES_DIR
@@ -217,7 +218,7 @@ class MotionWindowDataset(Dataset):
         return ids, clips
 
     def set_epoch(self, epoch: int) -> None:
-        self._epoch = int(epoch)
+        self._epoch.value = int(epoch)
 
     def __len__(self) -> int:
         return len(self._ids)
@@ -237,7 +238,7 @@ class MotionWindowDataset(Dataset):
         feat = self._cache[idx]
         overflow = feat.shape[0] - self._window
         if self._train:
-            start = int(item_rng(self._seed, self._epoch, idx).randint(overflow + 1))
+            start = int(item_rng(self._seed, self._epoch.value, idx).randint(overflow + 1))
         else:
             start = overflow // 2
         window = self.scaler.normalize(feat[start : start + self._window])
