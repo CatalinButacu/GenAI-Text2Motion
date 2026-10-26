@@ -18,6 +18,12 @@ from text2motion.generation.nn_model import (
 
 logger = logging.getLogger(__name__)
 
+MODEL_ONLY_SCOPE = (
+    "model-only architecture benchmark: random weights, token embedding + backbone + argmax "
+    "per step; no trained checkpoint, CLIP text encoder, sampling or guidance, tokenizer "
+    "decoding, transport, body fit or display (see scripts/benchmarks/service_latency.py)"
+)
+
 
 def streaming_state_size_bytes(state) -> int:
     total = 0
@@ -167,6 +173,7 @@ def run_streaming_state_latency_benchmark(
     results: dict[str, list[dict[str, float]]] = {}
     concurrency: dict[str, list[dict[str, float]]] = {}
     horizons = sorted(request.horizons)
+    logger.info(f"scope: {MODEL_ONLY_SCOPE}")
 
     for backbone in Backbone:
         bench_seq_len = max(horizons) + generator.text_prefix_len + request.headroom
@@ -215,7 +222,7 @@ def run_streaming_state_latency_benchmark(
         if device == "cuda":
             torch.cuda.empty_cache()
 
-    payload = {"label": request.label, "results": results}
+    payload = {"label": request.label, "scope": MODEL_ONLY_SCOPE, "results": results}
     if concurrency:
         payload["concurrency"] = concurrency
 

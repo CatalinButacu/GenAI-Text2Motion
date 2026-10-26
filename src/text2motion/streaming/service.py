@@ -164,6 +164,7 @@ class MotionInferenceServer:
                 MotionStreamProtocol.send_array(io, "chunk", joints)
                 MotionStreamProtocol.send_json(io, {"type": "placement", "yaw": carried_yaw})
                 MotionStreamProtocol.send_array(io, "features", features)
+                timing.setdefault("first_chunk", time.perf_counter() - started)
                 interrupting = pending_request(sock, io)
                 timing["send"] += time.perf_counter() - send_started
                 cancelled = interrupting is not None
@@ -189,6 +190,8 @@ class MotionInferenceServer:
                     "prompt": request["prompt"],
                     "backbone": self.pipeline.backbone,
                     "checkpoint": self.pipeline.checkpoint,
+                    "identity": self.pipeline.identity,
+                    "policy": self.policy,
                     "device": self.pipeline.device,
                     "cancelled": cancelled,
                     "requested_steps": int(request["steps"]),
@@ -220,6 +223,7 @@ class MotionInferenceServer:
             "frames": frames,
             "steps": steps,
             "total_ms": elapsed * 1e3,
+            "first_chunk_ms": timing.get("first_chunk", elapsed) * 1e3,
             "text_encode_ms": encode * 1e3,
             "generate_ms": generate * 1e3,
             "detokenize_ms": detokenize * 1e3,

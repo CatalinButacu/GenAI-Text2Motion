@@ -1,5 +1,6 @@
 import socket
 import threading
+from typing import cast
 
 import numpy as np
 
@@ -222,3 +223,16 @@ def test_a_client_that_stops_reading_early_leaves_the_connection_usable():
     received = list(client.generate("walk", steps=0, temperature=1.0, top_p=0.9, cfg_scale=1.0))
     assert len(received) == 50
     client.close()
+
+
+def test_inference_stats_report_the_time_to_the_first_chunk():
+    from text2motion.streaming.service import LoadedInferencePipeline, MotionInferenceServer
+
+    pipeline = cast(LoadedInferencePipeline, _HelloOnlyPipeline())
+    server = MotionInferenceServer(pipeline, policy={})
+    timing = {"generate": 0.4, "send": 0.1, "tokens": 10, "first_chunk": 0.25}
+
+    stats = server.inference_stats(1.0, 0.05, timing, 40, False)
+
+    assert stats["first_chunk_ms"] == 250.0
+    assert stats["ms_per_step"] == 40.0
