@@ -113,6 +113,8 @@ The 60-epoch budget was chosen after an earlier 18-epoch run of the same pair tu
 \section{Results: The Converged Twin Comparison}
 \label{sec:gen_results}
 
+\paragraph{Status of these results.} The numbers in this chapter come from the evaluation protocol that we used before October 2026. Four later corrections change that protocol. Each caption is now paired with its own motion segment. Each of the 20 evaluation repetitions now samples new motions, not only new matching batches. The data-loader workers now receive each new epoch, so a training clip gets a new crop and caption in each epoch; before, a clip kept one crop and one caption for each resumed part of a run. The AMASS pretraining corpus now excludes the held-out recordings and their copies. Matched runs with the corrected protocol will replace these numbers. Until then, the numbers are provisional.
+
 \tabref{tab:twin_results} gives the test results of the two selected checkpoints.
 
 \begin{table}[H]
@@ -139,7 +141,7 @@ MoMask~\cite{guo2024momask} (not streaming) & 0.045 & 0.521 & -- & -- & -- & -- 
 
 In point estimates the state-space generator is ahead on every column. Its FID is lower by $8\%$ ($0.121$ against $0.132$). It is ahead at all three R-precision ranks (R@1 $0.418$ against $0.395$, R@3 $0.693$ against $0.669$) and on multimodal distance ($3.677$ against $3.796$). Its diversity ($9.437$) is closer to that of real motion ($9.5$) than the transformer's ($9.362$), and its multimodality is higher.
 
-\paragraph{How large are these differences relative to evaluation noise?} The evaluation reports two measures of its own uncertainty. For R@1, the standard deviation across the 20 repetitions is $0.007$ for the transformer and $0.008$ for the state-space model, so the difference of $0.022$ is about three standard deviations of a single repetition. For FID, a bootstrap over test clips with 200 resamples gives a $95\%$ interval of $[0.127, 0.230]$ for the transformer and $[0.114, 0.212]$ for the state-space model. These intervals overlap almost entirely. The lead in text--motion matching is therefore resolved by the evaluation, and the lead in FID is not: on FID the two generators are indistinguishable at this test-set size.
+\paragraph{How large are these differences relative to evaluation noise?} The evaluation reports two measures of its own uncertainty. For R@1, the standard deviation across the 20 repetitions is $0.007$ for the transformer and $0.008$ for the state-space model, so the difference of $0.022$ is about three standard deviations of a single repetition. For FID, a bootstrap over test clips with 200 resamples gives a $95\%$ interval of $[0.127, 0.230]$ for the transformer and $[0.114, 0.212]$ for the state-space model. These intervals overlap almost entirely. The lead in text--motion matching is therefore resolved by the evaluation, and the lead in FID is not: at this test-set size the evaluation does not separate the two generators on FID. Overlapping intervals do not show that the two generators are equal; the paired analysis below is the stronger test.
 
 \paragraph{Paired analysis.} The two generators produce one motion for each of the same $2189$ captions, so each caption gives a pair. A paired test uses these pairs and is more sensitive than two separate intervals. \tabref{tab:twin_paired} gives four such tests, computed from one additional generation pass of the two selected checkpoints.
 

@@ -103,6 +103,8 @@ At equal vocabulary, FSQ has higher usage than the residual VQ in all six matche
 \section{Results: Downstream Generation Quality}
 \label{sec:tok_downstream}
 
+\paragraph{Status of these results.} The generation numbers in this section come from the earlier evaluation protocol of \chapref{chap:generator}. The reconstruction numbers of the previous sections do not depend on that protocol. Matched runs with the corrected protocol will replace the generation numbers.
+
 A lower reconstruction FID is useful only if a generator trained on the tokens is also better. We trained the transformer generator of \chapref{chap:generator} on the tokens of the Grouped-FSQ $8 \times 1024$ tokenizer and on those of the residual VQ $8 \times 1024$ tokenizer, with the protocol of \chapref{chap:generator}, and scored both on the full test split.
 
 \begin{table}[H]

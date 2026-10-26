@@ -41,7 +41,7 @@ independent of $L$. Each step costs $O(1)$ and $L$ steps cost $O(L)$.
 \begin{figure}[H]
 \centering
 \includegraphics[width=\singlelongfigure]{\pics/streaming.png}
-\caption{State size (left) and median per-step latency (right) against streaming horizon, single stream, 32-bit floats, 4~GB GPU. The state-space model runs without its compiled scan kernel.}
+\caption{State size (left) and median per-step latency (right) against streaming horizon, single stream, 32-bit floats, 4~GB GPU. The state-space model runs without its compiled scan kernel. The two models have random weights: this is a model-only measurement of the backbone step, without the text encoder, sampling, decoding, transport or display.}
 \label{fig:streaming}
 \end{figure}
 
