@@ -43,6 +43,10 @@ def dataset_name(source_path: str | Path) -> str:
     return _OFFICIAL_NAMES.get(parts[0], parts[0])
 
 
+def head_trim_table() -> dict[str, float]:
+    return dict(sorted(_HEAD_TRIM_SECONDS.items()))
+
+
 def head_trim_frames(source_path: str | Path, fps: int) -> int:
     return int(round(_HEAD_TRIM_SECONDS.get(dataset_name(source_path), 0.0) * fps))
 

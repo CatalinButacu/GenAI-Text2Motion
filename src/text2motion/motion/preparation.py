@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from tqdm import tqdm
 from text2motion.motion.amass import (
     AmassPoseExtractor,
     head_trim_frames,
+    head_trim_table,
     heldout_sources,
     resolve_pose_path,
 )
@@ -29,6 +31,9 @@ from text2motion.motion.storage import FEATURES_DIR, SPLIT_FILES, sha256_file
 
 logger = logging.getLogger(__name__)
 
+CORPUS_MANIFEST = "corpus_manifest.json"
+CORPUS_FORMAT = "text2motion.amass_corpus"
+CORPUS_VERSION = 1
 _REFERENCE_CLIP_ID = "000021"
 _RIGHT_CHAIN = [2, 5, 8, 11, 14, 17, 19, 21]
 _LEFT_CHAIN = [1, 4, 7, 10, 13, 16, 18, 20]
@@ -269,10 +274,74 @@ def heldout_feature_names(index_csv: Path, out_dir: Path, pose_root: Path) -> se
     return names
 
 
-def resolve_heldout(request: PreparationRequest, pose_root: Path) -> set[Path]:
-    if request.index_csv is None:
-        raise ValueError("index_csv must be set (the leakage guard needs the official index)")
-    return heldout_sources(Path(request.index_csv), Path(request.out_dir), pose_root)
+def __reference_joints_path(joints_dir: Path) -> Path:
+    preferred = joints_dir / f"{_REFERENCE_CLIP_ID}.npy"
+    if preferred.is_file():
+        return preferred
+    candidates = sorted(joints_dir.glob("[0-9]*.npy"))
+    if not candidates:
+        raise FileNotFoundError(f"no reference joints in {joints_dir}")
+    return candidates[0]
+
+
+def corpus_recipe(
+    request: PreparationRequest, index_csv: Path, reference_path: Path, min_frames: int
+) -> dict[str, object]:
+    dataset_dir = Path(request.out_dir)
+    recipe = {
+        "format": CORPUS_FORMAT,
+        "version": CORPUS_VERSION,
+        "min_frames": min_frames,
+        "fps": request.fps,
+        "joint_count": request.joint_count,
+        "mirror_x": True,
+        "head_trim_seconds": head_trim_table(),
+        "reference_joints_sha256": sha256_file(reference_path),
+        "index_sha256": sha256_file(index_csv),
+        "val_split_sha256": sha256_file(dataset_dir / SPLIT_FILES[Split.VALIDATION]),
+        "test_split_sha256": sha256_file(dataset_dir / SPLIT_FILES[Split.TEST]),
+    }
+    return json.loads(json.dumps(recipe))
+
+
+def check_corpus_reuse(out_dir: Path, recipe: dict[str, object]) -> None:
+    manifest_path = out_dir / CORPUS_MANIFEST
+    if not manifest_path.is_file():
+        if any((out_dir / FEATURES_DIR).glob("*.npy")):
+            raise ValueError(
+                f"{out_dir} has features but no {CORPUS_MANIFEST} (legacy corpus); "
+                "build into a new folder"
+            )
+        return
+    stored = json.loads(manifest_path.read_text(encoding="utf-8"))["recipe"]
+    changed = sorted(key for key in set(stored) | set(recipe) if stored.get(key) != recipe.get(key))
+    if changed:
+        raise ValueError(
+            f"{out_dir} was built with another recipe (different: {changed}); "
+            "build into a new folder"
+        )
+
+
+def write_corpus_manifest(
+    out_dir: Path, recipe: dict[str, object], status: dict[str, object]
+) -> None:
+    manifest = {"recipe": recipe, **status}
+    (out_dir / CORPUS_MANIFEST).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+
+def __corpus_features(
+    src: Path, pose_root: Path, request: PreparationRequest, params, min_frames: int
+) -> np.ndarray | None:
+    joints = np.load(src)[:, : request.joint_count]
+    trim = head_trim_frames(src.relative_to(pose_root), request.fps)
+    joints = joints[trim:].copy()
+    if joints.shape[0] < min_frames:
+        return None
+    joints[..., 0] *= -1
+    features, _, _, _ = encode_joints(joints, params)
+    if not np.isfinite(features).all():
+        raise ValueError("non-finite features")
+    return features.astype(np.float32)
 
 
 def build_amass_pretraining_corpus(
@@ -283,64 +352,72 @@ def build_amass_pretraining_corpus(
     limit: int = 0,
 ) -> dict[str, float]:
     pose_root = regen_dir / "pose_data"
-    joints_dir = regen_dir / "joints"
     if not pose_root.is_dir():
         raise FileNotFoundError(
             f"{pose_root} missing -- run 'text2motion prepare --stage amass' first"
         )
-
-    ref_path = joints_dir / f"{_REFERENCE_CLIP_ID}.npy"
-    if not ref_path.is_file():
-        candidates = sorted(joints_dir.glob("[0-9]*.npy"))
-        if not candidates:
-            raise FileNotFoundError(f"no reference joints in {joints_dir}")
-        ref_path = candidates[0]
+    if request.index_csv is None:
+        raise ValueError("index_csv must be set (the leakage guard needs the official index)")
+    index_csv = Path(request.index_csv)
+    reference_path = __reference_joints_path(regen_dir / "joints")
     joint_count = request.joint_count
-    reference = np.load(ref_path)[:, :joint_count].reshape(-1, joint_count, 3)
+    reference = np.load(reference_path)[:, :joint_count].reshape(-1, joint_count, 3)
     params = feature_params(target_offsets(reference))
 
-    excluded = resolve_heldout(request, pose_root)
+    recipe = corpus_recipe(request, index_csv, reference_path, min_frames)
+    check_corpus_reuse(out_dir, recipe)
     vec_dir = out_dir / FEATURES_DIR
+    excluded = heldout_feature_names(index_csv, Path(request.out_dir), pose_root)
+    present = sorted(excluded & {path.name for path in vec_dir.glob("*.npy")})
+    if present:
+        raise ValueError(
+            f"{len(present)} heldout files are already in {vec_dir} (first: {present[:3]}); "
+            "build into a new folder"
+        )
     vec_dir.mkdir(parents=True, exist_ok=True)
+    write_corpus_manifest(out_dir, recipe, {"complete": False})
 
     sources = sorted(pose_root.rglob("*.npy"))
     if limit:
         sources = sources[:limit]
-    written = skipped_heldout = skipped_short = failed = total_frames = 0
+    counts = {"written": 0, "reused": 0, "skipped_heldout": 0, "skipped_short": 0, "frames": 0}
+    failed: list[str] = []
     for src in tqdm(sources, desc="pose->263 (all AMASS)"):
-        if src.resolve() in excluded:
-            skipped_heldout += 1
+        name = corpus_feature_name(src, pose_root)
+        if name in excluded:
+            counts["skipped_heldout"] += 1
             continue
-        rel = src.relative_to(pose_root)
-        save_path = vec_dir / corpus_feature_name(src, pose_root)
+        save_path = vec_dir / name
         if save_path.is_file():
-            written += 1
+            counts["reused"] += 1
+            counts["frames"] += int(np.load(save_path, mmap_mode="r").shape[0])
             continue
-        joints = np.load(src)[:, :joint_count]
-        trim = head_trim_frames(rel, request.fps)
-        if trim:
-            joints = joints[trim:]
-        if joints.shape[0] < min_frames:
-            skipped_short += 1
-            continue
-        joints = joints.copy()
-        joints[..., 0] *= -1
         try:
-            features, _, _, _ = encode_joints(joints, params)
-            if not np.isfinite(features).all():
-                raise ValueError("non-finite features")
-            np.save(save_path, features.astype(np.float32))
-            written += 1
-            total_frames += features.shape[0]
+            features = __corpus_features(src, pose_root, request, params, min_frames)
         except Exception as exc:
-            failed += 1
-            logger.info(f"FAILED {rel}: {exc}")
+            failed.append(name)
+            logger.warning(f"FAILED {name}: {exc}")
+            continue
+        if features is None:
+            counts["skipped_short"] += 1
+            continue
+        temporary = save_path.with_name(f".{save_path.stem}.tmp.npy")
+        np.save(temporary, features)
+        temporary.replace(save_path)
+        counts["written"] += 1
+        counts["frames"] += features.shape[0]
 
-    return {
-        "written": written,
-        "skipped_heldout": skipped_heldout,
-        "skipped_short": skipped_short,
-        "failed": failed,
-        "frames": total_frames,
-        "hours": round(total_frames / request.fps / 3600, 2),
+    summary = {
+        **counts,
+        "failed": len(failed),
+        "hours": round(counts["frames"] / request.fps / 3600, 2),
     }
+    write_corpus_manifest(
+        out_dir, recipe, {**summary, "complete": not failed, "failed_names": failed}
+    )
+    if failed:
+        raise RuntimeError(
+            f"{len(failed)} source files failed to convert (names in {CORPUS_MANIFEST}); "
+            f"first: {failed[:3]}"
+        )
+    return summary
