@@ -30,9 +30,9 @@ paths:
   body_model_dir: null
   smplh_dir: null
   dmpl_dir: null
-  hml3d_index_csv: null
 
   hml3d_out_dir: data/HumanML3D_official
+  hml3d_index_csv: data/HumanML3D_official/index.csv
   texts_dir: data/HumanML3D_official/texts
 
 avatar:

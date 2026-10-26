@@ -12,6 +12,7 @@ paths:
   eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
   eval_stats_dir: data/eval_stats
   hml3d_out_dir: data/HumanML3D_official
+  hml3d_index_csv: data/HumanML3D_official/index.csv
   texts_dir: data/HumanML3D_official/texts
   smplx_models: data/smplx_models
   checkpoints_dir: artifacts/checkpoints
