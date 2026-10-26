@@ -1,0 +1,5 @@
+{
+  "script": "scripts/figures/plot_streaming_bench.py",
+  "input": "artifacts/outputs/figures/streaming_bench_long.json",
+  "input_sha256": "4947e4053662f189e122342704b7ab040a5562bdd33a628272b0623fe32f6fdc"
+}

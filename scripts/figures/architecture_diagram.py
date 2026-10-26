@@ -1,3 +1,4 @@
+# python scripts/figures/architecture_diagram.py
 from __future__ import annotations
 
 import ast
@@ -11,8 +12,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 SRC = Path("src/text2motion")
-FIG = Path("paper/figures")
-DIAGRAMS = Path("paper/diagrams")
+FIG = Path("doc/paper/pics")
+DIAGRAMS = Path("doc/notes/diagrams")
 
 WIDTH, HEIGHT = 900, 570
 INK = "#111417"

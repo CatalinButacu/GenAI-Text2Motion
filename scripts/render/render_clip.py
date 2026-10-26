@@ -1,3 +1,4 @@
+# python scripts/render/render_clip.py --prompt "a person walks forward" --out artifacts/outputs/figures/demo_clip.png
 from __future__ import annotations
 
 import argparse
@@ -122,7 +123,7 @@ def main() -> None:
     p.add_argument("--fixed_length", action="store_true")
     p.add_argument("--frames", type=int, default=6)
     p.add_argument("--npy", default="artifacts/outputs/demo_joints.npy")
-    p.add_argument("--out", default="paper/figures/demo_clip.png")
+    p.add_argument("--out", default="artifacts/outputs/figures/demo_clip.png")
     run(p.parse_args())
 
 

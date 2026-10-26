@@ -136,7 +136,8 @@ pdf:
 	Push-Location doc/paper; xelatex -interaction=nonstopmode -output-directory=build thesis.tex | Out-Null; biber --input-directory build --output-directory build thesis | Out-Null; xelatex -interaction=nonstopmode -output-directory=build thesis.tex | Out-Null; xelatex -interaction=nonstopmode -output-directory=build thesis.tex | Select-String 'Output written'; Copy-Item build/thesis.pdf thesis.pdf -Force; Pop-Location
 
 figs:
-	$(PY) scripts/figures/make_figures.py
+	$(PY) scripts/figures/plot_streaming_bench.py
+	$(PY) scripts/figures/architecture_diagram.py
 
 runs:
 	$(PY) scripts/runs/merge_runs.py

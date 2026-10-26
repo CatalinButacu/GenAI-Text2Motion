@@ -1,3 +1,4 @@
+# python scripts/figures/plot_streaming_bench.py --bench artifacts/outputs/figures/streaming_bench_long.json --out doc/paper/pics/streaming.png
 from __future__ import annotations
 
 import argparse
@@ -9,13 +10,26 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from text2motion.motion.storage import sha256_file
+
 COLORS = {"transformer": "tab:red", "mamba": "tab:blue"}
+
+
+def write_source_record(bench: Path, out: Path) -> Path:
+    record = out.with_suffix(".source.json")
+    source = {
+        "script": "scripts/figures/plot_streaming_bench.py",
+        "input": bench.as_posix(),
+        "input_sha256": sha256_file(bench),
+    }
+    record.write_text(json.dumps(source, indent=2) + "\n", encoding="utf-8")
+    return record
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Plot the streaming benchmark figure.")
-    p.add_argument("--bench", default="artifacts/outputs/streaming_bench.json")
-    p.add_argument("--out", default="artifacts/outputs/streaming_bench.png")
+    p.add_argument("--bench", default="artifacts/outputs/figures/streaming_bench_long.json")
+    p.add_argument("--out", default="doc/paper/pics/streaming.png")
     a = p.parse_args()
 
     data = json.loads(Path(a.bench).read_text())["results"]
@@ -56,7 +70,9 @@ def main() -> None:
 
     fig.tight_layout()
     fig.savefig(a.out, dpi=110)
+    record = write_source_record(Path(a.bench), Path(a.out))
     print(f"wrote {a.out}  (KV {tf / 1e6:.1f}MB vs state {mb / 1e6:.2f}MB at horizon {h_max})")
+    print(f"wrote {record}")
 
 
 if __name__ == "__main__":
