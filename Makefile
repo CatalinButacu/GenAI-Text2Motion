@@ -18,7 +18,7 @@ CKPT ?= artifacts/checkpoints/generator/generator_$(B)_bs8_e60.pt
 LEVEL ?= INFO
 
 .DEFAULT_GOAL := help
-.PHONY: help install test lint fix types check clean gpu \
+.PHONY: help install kernel-restore kernel-build test lint fix types check clean gpu \
         prep corpus tok gate pre train twins ext100 dyn rvq resume \
         val eval eval-dyn bench serve studio health \
         pdf figs runs runs-apply lic graph last
@@ -27,6 +27,8 @@ help:
 	@echo "Variables: B=mamba|transformer  E=epochs  NAME=run name  CFG=config  CKPT=checkpoint  LEVEL=DEBUG|INFO"
 	@echo ""
 	@echo "SETUP     install    sync the environment from uv.lock"
+	@echo "          kernel-restore  put back the saved Mamba CUDA kernel (dist/mamba_kernel)"
+	@echo "          kernel-build    rebuild the Mamba CUDA kernel, about 46 min (UNTESTED flags)"
 	@echo "          check      lint and tests (the green gate)"
 	@echo "          test lint fix types clean gpu"
 	@echo "DATA      prep       AMASS and HumanML3D to 263 features"
@@ -56,6 +58,12 @@ help:
 
 install:
 	uv sync --inexact --extra dev --extra prep --extra tracking
+
+kernel-restore:
+	Copy-Item dist/mamba_kernel/selective_scan_cuda.cp312-win_amd64.pyd, dist/mamba_kernel/mamba_ssm, dist/mamba_kernel/mamba_ssm-2.3.2.post1.dist-info .venv/Lib/site-packages -Recurse -Force; uv pip install einops
+
+kernel-build:
+	$$env:CL = '/std:c++17 /Zc:preprocessor /D_USE_MATH_DEFINES'; $$env:NVCC_APPEND_FLAGS = '-Xcompiler /Zc:preprocessor -Xcompiler /D_USE_MATH_DEFINES'; $$env:MAMBA_FORCE_BUILD = 'TRUE'; uv pip install --no-build-isolation --no-deps ./third_party/mamba_ssm-2.3.2.post1-msvc; uv pip install einops
 
 test:
 	$(PY) -m pytest -q -m "not slow and not gpu"

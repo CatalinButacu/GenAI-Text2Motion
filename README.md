@@ -97,11 +97,21 @@ The tokenizer decoder reads 4 latent tokens on each side of a frame. A lookahead
 ### Install
 
 ```bash
-uv sync                    # core, including the aitviewer studio
-uv sync --extra prep       # pyarrow, for the official-release converter
-uv sync --extra tracking   # MLflow, only when mlflow_tracking is on
-uv sync --extra dev        # ruff, pytest, pyright
-pytest                   # shape and parity contracts
+uv sync --inexact                    # core, including the aitviewer studio
+uv sync --inexact --extra prep       # pyarrow, for the official-release converter
+uv sync --inexact --extra tracking   # MLflow, only when mlflow_tracking is on
+uv sync --inexact --extra dev        # ruff, pytest, pyright
+pytest                               # shape and parity contracts
+```
+
+Use `uv sync --inexact` (as `make install` does). A plain `uv sync` removes every package that
+`uv.lock` does not name, and the optional Mamba CUDA kernel (`mamba-ssm`, used when a config sets
+`use_kernel: true`) is not in the lock: it is a 46-minute MSVC build of the patched source in
+`third_party/mamba_ssm-2.3.2.post1-msvc` (see `doc/notes/implementation-difficulties.md`).
+
+```bash
+make kernel-restore   # copy back the saved working build from dist/mamba_kernel (torch 2.12+cu132)
+make kernel-build     # rebuild from source; the MSVC/NVCC flags are a reconstruction, UNTESTED
 ```
 
 `make help` lists a short command for each step of the project (GNU make is necessary).
