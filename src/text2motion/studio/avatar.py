@@ -476,8 +476,15 @@ class SmplxAvatarController:
 
     def __start_retrofit(self) -> None:
         joints = self.state.stream_buffers.accum_joints
-        if joints is None or self.state.generating:
+        source = self.state.stream_buffers.source_joints
+        if joints is None or source is None or self.state.generating:
             return
+        factor = self.state.upsample
+        if len(joints) % factor:
+            raise ValueError(
+                f"{len(joints)} display frames are not a multiple of the upsample factor {factor}"
+            )
+        frames = len(joints) // factor
         self.state.generating = True
         self.state.stream_buffers.cancel = False
         self.state.stream_buffers.current_fit_body = True
@@ -489,20 +496,31 @@ class SmplxAvatarController:
         self.state.status = "fitting SMPL-X to the generated motion..."
         self.state.stream_buffers.reset_fit_track(self.state.smplx_fit)
         threading.Thread(
-            target=self.__fit_existing_motion, args=(joints.copy(),), daemon=True
+            target=self.__fit_existing_motion,
+            args=(source[-frames - 1 :].copy(), frames),
+            daemon=True,
         ).start()
 
-    def __fit_existing_motion(self, joints: np.ndarray) -> None:
+    def __anchor_pose(self, anchor: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        model = self.__body_model(len(anchor), self.state.gender)
+        res = solve_smplx_pose_from_joints(model, anchor, self.state.device)
+        return res.global_orient[-1], res.body_pose[-1], res.transl[-1]
+
+    def __fit_existing_motion(self, source: np.ndarray, frames: int) -> None:
         warm_start = None
-        window = self.schedule.retrofit_window
+        factor = self.state.upsample
+        window = max(1, self.schedule.retrofit_window // factor)
+        anchor, motion = source[:-frames], source[-frames:]
         n_frames = 0
         try:
-            for start in range(0, len(joints), window):
+            if len(anchor):
+                self.state.stream_buffers.fit_anchor = self.__anchor_pose(anchor)
+            for start in range(0, len(motion), window):
                 if self.state.stream_buffers.cancel:
                     break
-                piece = joints[start : start + window]
-                n_frames += len(piece)
-                warm_start = self.fit_single_chunk(piece, warm_start, n_frames, 1)
+                piece = motion[start : start + window]
+                n_frames += len(piece) * factor
+                warm_start = self.fit_single_chunk(piece, warm_start, n_frames, factor)
         finally:
             verb = "stopped" if self.state.stream_buffers.cancel else "done"
             self.state.status = f"body fit {verb} -- {n_frames} frames"

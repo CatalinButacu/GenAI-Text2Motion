@@ -6,6 +6,7 @@ from typing import cast
 import numpy as np
 import pytest
 
+from text2motion.studio import avatar as avatar_module
 from text2motion.studio.avatar import SmplxAvatarController
 from text2motion.studio.contracts import ViewerHost
 from text2motion.studio.generation import StudioGenerationController
@@ -151,9 +152,7 @@ def test_a_dead_fit_thread_does_not_block_the_stream():
     def broken_fit(joints, warm_start, n_frames, factor):
         raise RuntimeError("fitter crashed")
 
-    chunks = [
-        SimpleNamespace(joints=np.zeros((16, 22, 3), np.float32), yaw=0.0) for _ in range(6)
-    ]
+    chunks = [SimpleNamespace(joints=np.zeros((16, 22, 3), np.float32), yaw=0.0) for _ in range(6)]
     client = SimpleNamespace(generate=lambda *args, **kwargs: iter(chunks), last_stats=None)
     buffers = StudioStreamBuffers()
     buffers.take = 1
@@ -174,10 +173,19 @@ def test_a_dead_fit_thread_does_not_block_the_stream():
     controller = StudioGenerationController(
         cast(ViewerHost, host), state, cast(SmplxAvatarController, avatar)
     )
-    params = {"steps": 24, "downsample": 4, "upsample": 1, "fit_body": True,
-              "temperature": 1.0, "top_p": 0.9, "cfg_scale": 6.0}
+    params = {
+        "steps": 24,
+        "downsample": 4,
+        "upsample": 1,
+        "fit_body": True,
+        "temperature": 1.0,
+        "top_p": 0.9,
+        "cfg_scale": 6.0,
+    }
 
-    stream = threading.Thread(target=controller.stream_generation, args=("walk", params), daemon=True)
+    stream = threading.Thread(
+        target=controller.stream_generation, args=("walk", params), daemon=True
+    )
     stream.start()
     stream.join(timeout=5)
 
@@ -195,7 +203,9 @@ def test_a_new_take_replaces_the_previous_skeleton_instead_of_appending():
     scene.n_frames = 0
     buffers = StudioStreamBuffers()
     nodes = StudioSceneNodes(scene)
-    state = SimpleNamespace(stream_buffers=buffers, nodes=nodes, window_frames=600, show_skin=True)
+    state = SimpleNamespace(
+        stream_buffers=buffers, nodes=nodes, window_frames=600, show_skin=True, upsample=1
+    )
     updater = StreamSceneUpdater(cast(ViewerHost, host), state)
     updater.append_chunks([np.zeros((160, 22, 3), np.float32)])
     assert nodes.motion is not None
@@ -208,6 +218,71 @@ def test_a_new_take_replaces_the_previous_skeleton_instead_of_appending():
     assert buffers.accum_joints is not None
     assert len(buffers.accum_joints) == 16
     assert sum(node.name == "Motion (streaming)" for node in scene.nodes) == 1
+
+
+def test_the_window_cut_keeps_display_and_source_frames_aligned():
+    scene = FakeScene()
+    host = SimpleNamespace(scene=scene, toggle_animation=lambda run: None)
+    buffers = StudioStreamBuffers()
+    nodes = StudioSceneNodes(scene)
+    state = SimpleNamespace(
+        stream_buffers=buffers, nodes=nodes, window_frames=32, show_skin=True, upsample=6
+    )
+    updater = StreamSceneUpdater(cast(ViewerHost, host), state)
+    for index in range(3):
+        source = np.full((4, 22, 3), index, np.float32)
+        buffers.add_source_joints(source)
+        updater.append_chunks([np.repeat(source, 6, axis=0)])
+
+    assert buffers.accum_joints is not None and buffers.source_joints is not None
+    assert len(buffers.accum_joints) == 36
+    assert nodes.motion is not None and len(nodes.motion.joint_positions) == 36
+    assert len(buffers.source_joints) == 36 // 6 + 1
+
+
+def test_the_retrofit_fits_source_frames_like_the_live_stream(monkeypatch):
+    calls = []
+    buffers = StudioStreamBuffers()
+    buffers.accum_joints = np.zeros((36, 22, 3), np.float32)
+    buffers.source_joints = np.arange(7, dtype=np.float32)[:, None, None] * np.ones((7, 22, 3))
+    fit_state = SmplxFitState()
+    fit_state.model_cache[(1, "neutral")] = "anchor model"
+    state = SimpleNamespace(
+        stream_buffers=buffers,
+        smplx_fit=fit_state,
+        generating=False,
+        fit_body=True,
+        model_dir="models",
+        upsample=6,
+        gender="neutral",
+        device="cpu",
+        status="",
+        config=SimpleNamespace(schedule=SimpleNamespace(retrofit_window=16)),
+    )
+    host = SimpleNamespace(run_animations=True, toggle_animation=lambda run: None)
+    avatar = SmplxAvatarController(cast(ViewerHost, host), state)
+
+    def fake_solve(model, joints, device):
+        return SimpleNamespace(
+            global_orient=joints[:, 0], body_pose=joints[:, 1], transl=joints[:, 2]
+        )
+
+    def record_fit(joints, warm_start, n_frames, factor):
+        calls.append((joints[:, 0, 0].tolist(), factor, buffers.fit_anchor))
+        return warm_start
+
+    monkeypatch.setattr(avatar, "fit_single_chunk", record_fit)
+    monkeypatch.setattr(avatar_module, "solve_smplx_pose_from_joints", fake_solve)
+    avatar.on_fit_body_toggled()
+    deadline = time.time() + 5
+    while state.generating and time.time() < deadline:
+        time.sleep(0.01)
+
+    fitted = [frame for frames, _, _ in calls for frame in frames]
+    assert fitted == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    assert {factor for _, factor, _ in calls} == {6}
+    assert calls[0][2] is not None and float(calls[0][2][0][0]) == 0.0
+    assert len(fitted) * 6 == len(buffers.accum_joints)
 
 
 def test_the_stream_waits_until_the_playhead_is_within_the_lead():

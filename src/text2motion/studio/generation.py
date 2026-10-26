@@ -103,6 +103,7 @@ class StudioGenerationController:
             self.state.stream_buffers.pending_remesh = None
             self.state.stream_buffers.started = False
             self.state.stream_buffers.accum_joints = None
+            self.state.stream_buffers.source_joints = None
             self.state.smplx_fit.orient = []
             self.state.smplx_fit.pose = []
             self.state.smplx_fit.transl = []
@@ -225,7 +226,9 @@ class StudioGenerationController:
                 should_cancel=lambda: self.state.stream_buffers.cancel,
             )
             for chunk in chunks:
-                n_frames += self.__accept_chunk(chunk, n_frames, total_frames, fit_queue, fit_thread)
+                n_frames += self.__accept_chunk(
+                    chunk, n_frames, total_frames, fit_queue, fit_thread
+                )
         except Exception as exc:
             traceback.print_exc()
             log_result("generation", False, f"{type(exc).__name__}: {exc}")
@@ -287,6 +290,7 @@ class StudioGenerationController:
         buffers = self.state.stream_buffers
         joints = upsample_joints(buffers.interpolation_anchor, chunk.joints, self.state.upsample)
         buffers.interpolation_anchor = chunk.joints[-1]
+        buffers.add_source_joints(chunk.joints)
         assert joints.ndim == 3 and joints.shape[1:] == (JOINTS, 3), f"bad joints {joints.shape}"
         emitted = n_frames + len(joints)
         logger.info(

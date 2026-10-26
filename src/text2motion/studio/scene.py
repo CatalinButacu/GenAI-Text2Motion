@@ -187,6 +187,7 @@ class StudioStreamBuffers:
         self.pending_body_chunks: list[tuple[np.ndarray, np.ndarray]] = []
         self.pending_remesh: tuple[np.ndarray, np.ndarray, bool] | None = None
         self.accum_joints: np.ndarray | None = None
+        self.source_joints: np.ndarray | None = None
         self.body_verts: np.ndarray | None = None
         self.current_fit_body = False
         self.take = 0
@@ -247,8 +248,19 @@ class StudioStreamBuffers:
         self.accum_joints = stacked
         return stacked
 
+    def add_source_joints(self, joints: np.ndarray) -> None:
+        with self.lock:
+            previous = self.source_joints
+            self.source_joints = joints if previous is None else np.concatenate([previous, joints])
+
+    def keep_last_source_frames(self, count: int) -> None:
+        with self.lock:
+            if self.source_joints is not None:
+                self.source_joints = self.source_joints[-count:]
+
     def reset_for_new_take(self) -> None:
         self.accum_joints = None
+        self.source_joints = None
         self.body_verts = None
         self.started = False
         self.cancel = False
@@ -382,6 +394,7 @@ class StreamSceneUpdater:
         body = self.state.nodes.body
         if body is not None:
             excess = min(excess, len(body.vertices) - 1)
+        excess -= excess % self.state.upsample
         if excess <= 0:
             return
         dropped = list(range(excess))
@@ -392,7 +405,9 @@ class StreamSceneUpdater:
         if body is not None:
             body.remove_frames(dropped)
             self.state.stream_buffers.body_verts = body.vertices
-        self.state.stream_buffers.accum_joints = self.state.stream_buffers.accum_joints[-window:]
+        kept = self.state.stream_buffers.accum_joints[excess:]
+        self.state.stream_buffers.accum_joints = kept
+        self.state.stream_buffers.keep_last_source_frames(len(kept) // self.state.upsample + 1)
         self.host.scene.current_frame_id = max(0, self.host.scene.current_frame_id - excess)
 
     def __append_body_chunks(self, chunks: list[tuple[np.ndarray, np.ndarray]]) -> None:
