@@ -224,8 +224,6 @@ def demo_probe(args) -> None:
 
     fit_base = replace(studio.fit, model_dir=args.model_dir)
     model_cache: dict[int, object] = {}
-    if args.fit != "none":
-        print("body fit: offline iterative fitter (the live studio uses the analytic solver)")
 
     def model_for(frames: int):
         if frames not in model_cache:
@@ -233,6 +231,7 @@ def demo_probe(args) -> None:
         return model_cache[frames]
 
     if args.fit != "none":
+        print("body fit: offline iterative fitter (the live studio uses the analytic solver)")
         model_for(args.chunk_tokens * downsample)
 
     timer = StageTimer()
