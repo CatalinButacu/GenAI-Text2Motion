@@ -167,9 +167,12 @@ class SmplxFitState:
         self.transl.clear()
         self.betas = None
 
-    @property
-    def n_frames(self) -> int:
-        return len(self.orient)
+    def drop_first_frames(self, count: int) -> None:
+        if count <= 0 or not self.orient:
+            return
+        self.orient = [np.concatenate(self.orient)[count:]]
+        self.pose = [np.concatenate(self.pose)[count:]]
+        self.transl = [np.concatenate(self.transl)[count:]]
 
     @property
     def is_stale(self) -> bool:
@@ -405,6 +408,8 @@ class StreamSceneUpdater:
         if body is not None:
             body.remove_frames(dropped)
             self.state.stream_buffers.body_verts = body.vertices
+            with self.state.stream_buffers.lock:
+                self.state.smplx_fit.drop_first_frames(excess)
         kept = self.state.stream_buffers.accum_joints[excess:]
         self.state.stream_buffers.accum_joints = kept
         self.state.stream_buffers.keep_last_source_frames(len(kept) // self.state.upsample + 1)

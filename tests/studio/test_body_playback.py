@@ -234,10 +234,52 @@ def test_the_window_cut_keeps_display_and_source_frames_aligned():
         buffers.add_source_joints(source)
         updater.append_chunks([np.repeat(source, 6, axis=0)])
 
-    assert buffers.accum_joints is not None and buffers.source_joints is not None
+    assert buffers.accum_joints is not None
+    assert buffers.source_joints is not None
     assert len(buffers.accum_joints) == 36
-    assert nodes.motion is not None and len(nodes.motion.joint_positions) == 36
+    assert nodes.motion is not None
+    assert len(nodes.motion.joint_positions) == 36
     assert len(buffers.source_joints) == 36 // 6 + 1
+
+
+class FakeBody:
+    def __init__(self, frames: int) -> None:
+        self.vertices = np.zeros((frames, 4, 3), np.float32)
+        self.enabled = True
+
+    def remove_frames(self, dropped: list[int]) -> None:
+        self.vertices = self.vertices[len(dropped) :]
+
+
+def test_the_window_cut_trims_the_fitted_track_with_the_body():
+    scene = FakeScene()
+    host = SimpleNamespace(scene=scene, toggle_animation=lambda run: None)
+    buffers = StudioStreamBuffers()
+    nodes = StudioSceneNodes(scene)
+    fit = SmplxFitState()
+    state = SimpleNamespace(
+        stream_buffers=buffers,
+        nodes=nodes,
+        window_frames=32,
+        show_skin=True,
+        upsample=1,
+        smplx_fit=fit,
+    )
+    updater = StreamSceneUpdater(cast(ViewerHost, host), state)
+    updater.append_chunks([np.zeros((30, 22, 3), np.float32)])
+    nodes.body = FakeBody(60)
+    for chunk in range(6):
+        fit.orient.append(np.full((10, 3), chunk, np.float32))
+        fit.pose.append(np.zeros((10, 63), np.float32))
+        fit.transl.append(np.zeros((10, 3), np.float32))
+
+    updater.append_chunks([np.zeros((30, 22, 3), np.float32)])
+
+    track = np.concatenate(fit.orient)
+    assert len(nodes.body.vertices) == 32
+    assert len(track) == 32
+    assert len(np.concatenate(fit.pose)) == len(np.concatenate(fit.transl)) == 32
+    assert track[0, 0] == 2.0
 
 
 def test_the_retrofit_fits_source_frames_like_the_live_stream(monkeypatch):
@@ -281,7 +323,8 @@ def test_the_retrofit_fits_source_frames_like_the_live_stream(monkeypatch):
     fitted = [frame for frames, _, _ in calls for frame in frames]
     assert fitted == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
     assert {factor for _, factor, _ in calls} == {6}
-    assert calls[0][2] is not None and float(calls[0][2][0][0]) == 0.0
+    assert calls[0][2] is not None
+    assert float(calls[0][2][0][0]) == 0.0
     assert len(fitted) * 6 == len(buffers.accum_joints)
 
 
