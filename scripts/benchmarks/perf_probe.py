@@ -1,3 +1,4 @@
+# python scripts/benchmarks/perf_probe.py --probe demo --model_dir data/smplx
 from __future__ import annotations
 
 import argparse
@@ -186,6 +187,10 @@ class StageTimer:
 
 
 def demo_probe(args) -> None:
+    if args.model_dir is None:
+        raise SystemExit(
+            "the demo probe fits SMPL-X bodies: pass --model_dir or set paths.smplx_models"
+        )
     from text2motion.app.bootstrap import ApplicationBootstrap
     from text2motion.app.config import load_dataclass
     from text2motion.motion.representation import recover_skeleton
