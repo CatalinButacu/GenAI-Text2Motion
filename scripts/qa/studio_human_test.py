@@ -14,7 +14,7 @@ import numpy as np
 from aitviewer.utils.pyqt6_window import Keys as StudioWindowKeys
 from moderngl_window.context.headless.window import Window as HeadlessWindow
 
-from text2motion.app.config import load_dataclass
+from text2motion.app.config import load_dataclass, load_service_config, service_policy
 from text2motion.streaming.protocol import MotionStreamProtocol, motion_service_client
 from text2motion.studio.config import StudioConfig
 from text2motion.studio.viewer import StreamingStudioViewer
@@ -534,6 +534,7 @@ def main() -> None:
         args.port,
         out_dir / "motion_service.log",
         service_config="configs/service.yml",
+        policy=service_policy(load_service_config("configs/service.yml")),
     )
     viewer_args = argparse.Namespace(
         config=args.config,

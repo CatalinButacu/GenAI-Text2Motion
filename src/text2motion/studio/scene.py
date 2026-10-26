@@ -484,14 +484,11 @@ class StudioSession:
         self.config = config
         self.device = device
         self.model_dir = model_dir
-        self.downsample = int(client.hello["downsample"])
-        self.trained_steps = int(client.hello["trained_steps"])
-        self.max_steps = int(client.hello["max_steps"])
+        self.apply_model_limits(client.hello)
 
         self.temperature = float(args.temperature)
         self.top_p = float(args.top_p)
         self.cfg_scale = float(args.cfg_scale)
-        self.default_steps = default_step_budget(self.trained_steps, self.max_steps)
         self.steps = resolve_step_budget(args, self.downsample, self.max_steps)
         self.window_frames = int(config.display.window_frames)
         self.fit_lookahead_chunks = int(config.display.fit_lookahead_chunks)
@@ -534,6 +531,12 @@ class StudioSession:
         self.follow_cam = True
 
         self.styled = False
+
+    def apply_model_limits(self, hello: dict) -> None:
+        self.downsample = int(hello["downsample"])
+        self.trained_steps = int(hello["trained_steps"])
+        self.max_steps = int(hello["max_steps"])
+        self.default_steps = default_step_budget(self.trained_steps, self.max_steps)
 
     def apply_config(self, config: StudioConfig) -> str:
         previous = len(self.models)

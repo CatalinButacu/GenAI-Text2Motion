@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from text2motion.motion.model import StreamedChunk
+from text2motion.motion.storage import sha256_file
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +202,24 @@ def __await_motion_server(
     )
 
 
+def release_identity(config: str, ckpt: str, tokenizer_ckpt: str, backbone: str) -> dict[str, str]:
+    return {
+        "backbone": str(backbone),
+        "config": str(Path(config).resolve()),
+        "config_sha256": sha256_file(config),
+        "ckpt": str(Path(ckpt).resolve()),
+        "ckpt_sha256": sha256_file(ckpt),
+        "tokenizer": str(Path(tokenizer_ckpt).resolve()),
+        "tokenizer_sha256": sha256_file(tokenizer_ckpt),
+    }
+
+
+def changed_identity_fields(served: object, expected: dict[str, str]) -> list[str]:
+    if not isinstance(served, dict):
+        return sorted(expected)
+    return sorted(key for key in expected if served.get(key) != expected[key])
+
+
 def motion_service_client(
     config: str,
     ckpt: str,
@@ -212,6 +231,7 @@ def motion_service_client(
     spawn_wait_seconds: int = 240,
     *,
     service_config: str | Path,
+    policy: dict[str, object],
 ) -> MotionInferenceClient:
     try:
         client = MotionInferenceClient(host, port)
@@ -221,7 +241,21 @@ def motion_service_client(
             config, ckpt, tokenizer_ckpt, backbone, host, port, log_path, service_config
         )
         client = __await_motion_server(host, port, spawn_wait_seconds, log_path)
-    if Path(str(client.hello.get("ckpt", ""))).resolve() != Path(ckpt).resolve():
-        logger.info(f"[service] switching warm service to {ckpt}")
-        client.load(config, ckpt, tokenizer_ckpt, backbone)
+    served_policy = client.hello.get("policy")
+    if served_policy != policy:
+        client.close()
+        raise RuntimeError(
+            f"the warm service on {host}:{port} runs the policy {served_policy}, but "
+            f"{service_config} asks for {policy}; a load cannot change it. "
+            "Stop the warm service, then start again."
+        )
+    expected = release_identity(config, ckpt, tokenizer_ckpt, backbone)
+    changed = changed_identity_fields(client.hello.get("identity"), expected)
+    if not changed:
+        return client
+    logger.info(f"[service] switching warm service to {ckpt} (different: {changed})")
+    client.load(config, ckpt, tokenizer_ckpt, backbone)
+    still_changed = changed_identity_fields(client.hello.get("identity"), expected)
+    if still_changed:
+        raise RuntimeError(f"the service loaded another release (different: {still_changed})")
     return client

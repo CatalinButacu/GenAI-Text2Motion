@@ -60,12 +60,14 @@ class LoadedInferencePipeline:
     trained_steps: int
     max_steps: int
     device: str
+    identity: dict[str, str]
     anchor_every: int = 0
     anchor_context: int = 16
 
     def hello(self) -> dict:
         return {
             "type": "hello",
+            "identity": self.identity,
             "ckpt": self.checkpoint,
             "backbone": self.backbone,
             "downsample": self.downsample,
@@ -91,8 +93,11 @@ class MotionInferenceServer:
         pipeline: LoadedInferencePipeline,
         pipeline_loader: _InferencePipelineLoader | None = None,
         inference_log: str | Path | None = None,
+        *,
+        policy: dict[str, object],
     ) -> None:
         self.pipeline = pipeline
+        self.policy = policy
         self.pipeline_loader = pipeline_loader
         self.inference_log = Path(inference_log) if inference_log else None
         self.deferred_request: dict | None = None
@@ -242,7 +247,9 @@ class MotionInferenceServer:
         if self.pipeline.device == "cuda":
             torch.cuda.empty_cache()
         logger.info(f"[service] loaded {self.pipeline.checkpoint} ({self.pipeline.backbone})")
-        MotionStreamProtocol.send_json(io, {**self.pipeline.hello(), "type": "loaded"})
+        MotionStreamProtocol.send_json(
+            io, {**self.pipeline.hello(), "policy": self.policy, "type": "loaded"}
+        )
 
     def serve_client(self, conn: socket.socket, io) -> bool:
         hello = (
@@ -250,7 +257,7 @@ class MotionInferenceServer:
             if self.pipeline is not None
             else {"type": "hello", "ckpt": "", "backbone": None}
         )
-        MotionStreamProtocol.send_json(io, hello)
+        MotionStreamProtocol.send_json(io, {**hello, "policy": self.policy})
         self.deferred_request = None
         while True:
             request = self.deferred_request or MotionStreamProtocol.recv_json(io)

@@ -6,9 +6,10 @@ from pathlib import Path
 import torch
 
 from text2motion.app.bootstrap import ApplicationContext
-from text2motion.app.config import load_dataclass
+from text2motion.app.config import load_dataclass, service_policy
 from text2motion.generation.contracts import Backbone
 from text2motion.streaming.decoder import StreamingMotionDecoder
+from text2motion.streaming.protocol import release_identity
 from text2motion.streaming.pydant_requests import (
     HealthRequest,
     ModelServiceRequest,
@@ -64,6 +65,9 @@ def load_inference_pipeline(
         trained_steps=app.config.data.max_motion_len // app.config.tokenizer.downsample,
         max_steps=max_steps,
         device=app.device,
+        identity=release_identity(
+            str(args.config), str(args.ckpt), str(args.tokenizer_ckpt), str(args.backbone)
+        ),
         anchor_every=service.anchor_every_tokens,
         anchor_context=service.anchor_context_tokens,
     )
@@ -88,6 +92,7 @@ def run_serve(app: ApplicationContext, args: ServeRequest) -> None:
         load_inference_pipeline(app, args),
         pipeline_loader=load_pipeline,
         inference_log=app.config.paths.inference_log,
+        policy=service_policy(app.config.service),
     ).serve(
         args.host or app.config.service.bind_host,
         args.port or app.config.service.port,
@@ -143,6 +148,7 @@ def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
         app.config.paths.service_log,
         app.config.service.startup_timeout_seconds,
         service_config=args.service_config,
+        policy=service_policy(app.config.service),
     )
     model_dir = str(args.model_dir or studio_config.fit.model_dir)
     model_dir = model_dir if model_dir and Path(model_dir).exists() else ""

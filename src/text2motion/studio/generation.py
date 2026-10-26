@@ -297,8 +297,7 @@ class StudioGenerationController:
                 entry.config, entry.ckpt, entry.tokenizer_ckpt, entry.backbone
             )
             self.state.backbone = entry.backbone
-            self.state.downsample = int(hello["downsample"])
-            self.state.max_steps = int(hello["max_steps"])
+            self.state.apply_model_limits(hello)
             if self.state.max_steps:
                 capped = min(self.state.steps or self.state.max_steps, self.state.max_steps)
                 if capped != self.state.steps:

@@ -168,6 +168,14 @@ def load_service_config(path: str | Path) -> MotionServiceConfig:
     return from_mapping(MotionServiceConfig, __with_environment("service", {"service": raw}))
 
 
+def service_policy(service: MotionServiceConfig) -> dict[str, object]:
+    return {
+        "anchor_every_tokens": service.anchor_every_tokens,
+        "anchor_context_tokens": service.anchor_context_tokens,
+        "cuda_graph_decode": service.cuda_graph_decode,
+    }
+
+
 def load_dataclass(cls: type[_T], path: str | Path) -> _T:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     return from_mapping(cls, raw)

@@ -83,7 +83,7 @@ def __serve_in_thread(pipeline) -> tuple[socket.socket, object, threading.Thread
     from text2motion.streaming.service import MotionInferenceServer
 
     server_side, client_side = socket.socketpair()
-    server = MotionInferenceServer(pipeline)
+    server = MotionInferenceServer(pipeline, policy={"anchor_every_tokens": 0})
     server_io = server_side.makefile("rwb")
     thread = threading.Thread(
         target=server.serve_client, args=(server_side, server_io), daemon=True
@@ -108,6 +108,7 @@ def test_a_client_connecting_after_a_failed_load_gets_an_empty_hello():
     hello = MotionStreamProtocol.recv_json(io)
     assert hello["type"] == "hello"
     assert hello["ckpt"] == ""
+    assert hello["policy"] == {"anchor_every_tokens": 0}
     MotionStreamProtocol.send_json(io, {"cmd": "shutdown"})
     assert MotionStreamProtocol.recv_json(io)["type"] == "bye"
     thread.join(timeout=5)
