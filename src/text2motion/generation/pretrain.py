@@ -28,6 +28,7 @@ from text2motion.motion.storage import (
     is_legacy_resume,
     restore_rng_state,
 )
+from text2motion.tokenization.corpus import PACK_IDENTITY_KEY, read_pack_identity
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ class TokenPack(Dataset):
         self._path = path
         if keys is None:
             with np.load(path) as pack:
-                keys = list(pack.keys())
+                keys = [key for key in pack.files if key != PACK_IDENTITY_KEY]
         self.keys = list(keys)
         if not self.keys:
             raise RuntimeError(f"empty token pack: {path}")
@@ -134,8 +135,9 @@ def collate_tokens(batch: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tenso
 def build_token_loaders(
     request: GeneratorPretrainingRequest, seed: int
 ) -> tuple[DataLoader, DataLoader | None, PretrainingBudget]:
+    read_pack_identity(request.token_pack)
     with np.load(request.token_pack) as pack:
-        all_keys = list(pack.keys())
+        all_keys = [key for key in pack.files if key != PACK_IDENTITY_KEY]
     train_keys, val_keys = split_keys_by_clip(all_keys, request.val_fraction, seed)
     budget = PretrainingBudget.build(len(train_keys), request.batch_size, request.grad_accum)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -31,6 +32,14 @@ def atomic_torch_save(state: Any, path: str | Path) -> None:
         temporary.replace(destination)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def sha256_file(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def capture_rng_state() -> dict[str, Any]:

@@ -102,6 +102,10 @@ class TokenizeRequest(CommandRequest):
         default=_MOTION_FRAMES,
         description="step between windows; a smaller stride gives more, overlapping windows",
     )
+    regen_dir: Path = Field(
+        default=CorpusLayout().regen_dir,
+        description="folder with pose_data; the heldout clips are found and excluded through it",
+    )
 
 
 class TrainTokenizerRequest(CommandRequest):

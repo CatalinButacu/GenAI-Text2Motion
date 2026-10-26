@@ -25,7 +25,7 @@ from text2motion.motion.representation import (
     recover_from_ric,
     target_offsets,
 )
-from text2motion.motion.storage import FEATURES_DIR, SPLIT_FILES
+from text2motion.motion.storage import FEATURES_DIR, SPLIT_FILES, sha256_file
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +253,22 @@ def run_hml3d_preparation(
         compute_hml3d_normalization_stats(layout, request.joint_count)
 
 
+def corpus_feature_name(pose_path: Path, pose_root: Path) -> str:
+    relative = pose_path.resolve().relative_to(pose_root.resolve())
+    return "__".join(relative.with_suffix("").parts) + ".npy"
+
+
+def heldout_feature_names(index_csv: Path, out_dir: Path, pose_root: Path) -> set[str]:
+    heldout = heldout_sources(index_csv, out_dir, pose_root)
+    heldout_sizes = {path.stat().st_size for path in heldout}
+    heldout_hashes = {sha256_file(path) for path in heldout}
+    names = {corpus_feature_name(path, pose_root) for path in heldout}
+    for path in pose_root.rglob("*.npy"):
+        if path.stat().st_size in heldout_sizes and sha256_file(path) in heldout_hashes:
+            names.add(corpus_feature_name(path, pose_root))
+    return names
+
+
 def resolve_heldout(request: PreparationRequest, pose_root: Path) -> set[Path]:
     if request.index_csv is None:
         raise ValueError("index_csv must be set (the leakage guard needs the official index)")
@@ -296,8 +312,7 @@ def build_amass_pretraining_corpus(
             skipped_heldout += 1
             continue
         rel = src.relative_to(pose_root)
-        flat_name = "__".join(rel.with_suffix("").parts) + ".npy"
-        save_path = vec_dir / flat_name
+        save_path = vec_dir / corpus_feature_name(src, pose_root)
         if save_path.is_file():
             written += 1
             continue

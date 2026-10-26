@@ -32,6 +32,7 @@ from text2motion.generation.trainer import (
 )
 from text2motion.motion.contracts import Split
 from text2motion.motion.datasets import dataset_size
+from text2motion.tokenization.corpus import read_pack_identity
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +201,12 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
 def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
     from text2motion.tokenization.contracts import TokenizerKind
 
+    tokenizer_checkpoint = app.config.paths.tokenizer_checkpoint
+    pack_identity = read_pack_identity(args.token_pack)
+    if pack_identity["tokenizer_sha256"] != sha256_file(tokenizer_checkpoint):
+        raise ValueError(
+            f"{args.token_pack} was encoded with another tokenizer than {tokenizer_checkpoint}"
+        )
     if app.config.tokenizer.kind == TokenizerKind.RVQ:
         vocab = app.config.rvq_baseline.codebook_size
     else:

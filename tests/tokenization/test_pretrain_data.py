@@ -1,3 +1,4 @@
+import json
 import pickle
 from typing import cast
 
@@ -11,25 +12,48 @@ from text2motion.generation.nn_model import GeneratorModelSpec
 from text2motion.generation.pretrain import (
     PretrainingBudget,
     TokenPack,
+    build_token_loaders,
     collate_tokens,
     pretrain_generator,
     split_keys_by_clip,
 )
+from text2motion.tokenization.corpus import PACK_FORMAT, PACK_IDENTITY_KEY, PACK_VERSION
 
 
-def make_pack(tmp_path, clips=("clipA", "clipB", "clipC", "clipD"), windows=3):
+def make_pack(tmp_path, clips=("clipA", "clipB", "clipC", "clipD"), windows=3, identity=False):
     path = tmp_path / "pack.npz"
     arrays = {}
     for c_index, clip in enumerate(clips):
         for w in range(windows):
             arrays[f"{clip}__{w}"] = np.full((4 + w, 2), c_index, dtype=np.int64)
+    if identity:
+        record = {"format": PACK_FORMAT, "version": PACK_VERSION}
+        arrays[PACK_IDENTITY_KEY] = np.array(json.dumps(record))
     np.savez(path, **arrays)
     return path
 
 
+def test_pretrain_refuses_a_token_pack_without_an_identity_record(tmp_path):
+    request = GeneratorPretrainingRequest(token_pack=make_pack(tmp_path), epochs=1, batch_size=2)
+
+    with pytest.raises(ValueError, match="without an identity record"):
+        build_token_loaders(request, seed=2026)
+
+
+def test_the_identity_record_is_not_a_training_window(tmp_path):
+    request = GeneratorPretrainingRequest(
+        token_pack=make_pack(tmp_path, identity=True), epochs=1, batch_size=2, val_fraction=0.0
+    )
+
+    loader, _, _ = build_token_loaders(request, seed=2026)
+
+    assert PACK_IDENTITY_KEY not in cast(TokenPack, loader.dataset).keys
+    assert len(cast(TokenPack, loader.dataset)) == 12
+
+
 def test_pretrain_resume_without_the_resume_file_fails(tmp_path):
     request = GeneratorPretrainingRequest(
-        token_pack=make_pack(tmp_path), epochs=1, batch_size=2, resume=True
+        token_pack=make_pack(tmp_path, identity=True), epochs=1, batch_size=2, resume=True
     )
 
     with pytest.raises(FileNotFoundError, match="does not exist"):

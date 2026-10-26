@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from dataclasses import asdict, dataclass
@@ -11,18 +10,10 @@ import torch
 from torch import nn
 
 from text2motion.generation.contracts import DEFAULT_OVERFIT_CRITERIA, Backbone, OverfitCriteria
-from text2motion.motion.storage import atomic_torch_save
+from text2motion.motion.storage import atomic_torch_save, sha256_file
 
 _BUNDLE_FORMAT = "text2motion.generator_bundle"
 _BUNDLE_VERSION = 1
-
-
-def sha256_file(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 @dataclass(frozen=True)
