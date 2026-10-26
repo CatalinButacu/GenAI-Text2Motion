@@ -89,11 +89,10 @@ def test_every_streamed_chunk_reaches_the_body_fitter_after_a_normal_finish(upsa
     counted = []
     fitter_done = threading.Event()
 
-    def fit_chunk(joints, warm_start, n_frames, factor):
+    def fit_chunk(joints, n_frames, factor):
         time.sleep(0.05)
         fitted.append((len(joints), factor))
         counted.append(n_frames)
-        return warm_start
 
     chunks = [
         SimpleNamespace(
@@ -150,7 +149,7 @@ def test_every_streamed_chunk_reaches_the_body_fitter_after_a_normal_finish(upsa
 
 
 def test_a_dead_fit_thread_does_not_block_the_stream():
-    def broken_fit(joints, warm_start, n_frames, factor):
+    def broken_fit(joints, n_frames, factor):
         raise RuntimeError("fitter crashed")
 
     chunks = [SimpleNamespace(joints=np.zeros((16, 22, 3), np.float32), yaw=0.0) for _ in range(6)]
@@ -319,9 +318,8 @@ def test_the_retrofit_fits_source_frames_like_the_live_stream(monkeypatch):
             global_orient=joints[:, 0], body_pose=joints[:, 1], transl=joints[:, 2]
         )
 
-    def record_fit(joints, warm_start, n_frames, factor):
+    def record_fit(joints, n_frames, factor):
         calls.append((joints[:, 0, 0].tolist(), factor, buffers.fit_anchor))
-        return warm_start
 
     monkeypatch.setattr(avatar, "fit_single_chunk", record_fit)
     monkeypatch.setattr(avatar_module, "solve_smplx_pose_from_joints", fake_solve)

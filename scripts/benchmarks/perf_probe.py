@@ -223,8 +223,9 @@ def demo_probe(args) -> None:
     )
 
     fit_base = replace(studio.fit, model_dir=args.model_dir)
-    schedule = studio.schedule
     model_cache: dict[int, object] = {}
+    if args.fit != "none":
+        print("body fit: offline iterative fitter (the live studio uses the analytic solver)")
 
     def model_for(frames: int):
         if frames not in model_cache:
@@ -244,12 +245,8 @@ def demo_probe(args) -> None:
     def run_fit(joints, warm):
         config = replace(
             fit_base,
-            stage1_iters=schedule.first_stage1_iters
-            if warm is None
-            else schedule.continuation_stage1_iters,
-            stage2_iters=schedule.first_stage2_iters
-            if warm is None
-            else schedule.continuation_stage2_iters,
+            stage1_iters=args.first_stage1_iters if warm is None else args.next_stage1_iters,
+            stage2_iters=args.first_stage2_iters if warm is None else args.next_stage2_iters,
         )
         result = fit_smplx_to_joints(
             joints, config, device=device, model=model_for(len(joints)), warm_start=warm
@@ -424,6 +421,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ckpt", default=None)
     parser.add_argument("--studio_config", default="configs/studio.yml")
     parser.add_argument("--model_dir")
+    parser.add_argument("--first_stage1_iters", type=int, default=20)
+    parser.add_argument("--first_stage2_iters", type=int, default=50)
+    parser.add_argument("--next_stage1_iters", type=int, default=0)
+    parser.add_argument("--next_stage2_iters", type=int, default=25)
     parser.add_argument("--prompt", default="a person walks forward and waves")
     parser.add_argument("--cfg_scale", type=float, default=6.0)
     parser.add_argument("--chunk_tokens", type=int, default=4)

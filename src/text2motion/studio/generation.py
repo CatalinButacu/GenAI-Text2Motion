@@ -173,7 +173,6 @@ class StudioGenerationController:
         buffers = self.state.stream_buffers
         buffers.fit_take = take
         buffers.fitting = True
-        warm_start: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
         n_frames = 0
         try:
             while True:
@@ -183,9 +182,7 @@ class StudioGenerationController:
                 if buffers.fit_is_stale():
                     continue
                 n_frames += len(chunk.joints) * self.state.upsample
-                warm_start = self.avatar.fit_single_chunk(
-                    chunk.joints, warm_start, n_frames, self.state.upsample
-                )
+                self.avatar.fit_single_chunk(chunk.joints, n_frames, self.state.upsample)
         except Exception as exc:
             traceback.print_exc()
             log_result("body fit", False, f"{type(exc).__name__}: {exc}")

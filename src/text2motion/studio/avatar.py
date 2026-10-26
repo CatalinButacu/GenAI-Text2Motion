@@ -339,23 +339,15 @@ class SmplxAvatarController:
     def schedule(self):
         return self.state.config.schedule
 
-    def fit_single_chunk(
-        self,
-        joints: np.ndarray,
-        warm_start: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
-        n_frames_so_far: int,
-        factor: int,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    def fit_single_chunk(self, joints: np.ndarray, n_frames_so_far: int, factor: int) -> None:
         try:
-            fitted = self.__fitted_chunk(joints, n_frames_so_far, factor)
+            self.__fitted_chunk(joints, n_frames_so_far, factor)
         except Exception as exc:
             traceback.print_exc()
             self.state.status = (
                 f"streaming... {n_frames_so_far} frames but SMPL-X fit failed for a chunk: "
                 f"{type(exc).__name__}: {exc}"
             )
-            return warm_start
-        return warm_start if fitted is None else fitted
 
     def __body_model(self, frames: int, gender: str):
         model = self.state.smplx_fit.model_cache.get((frames, gender))
@@ -394,16 +386,14 @@ class SmplxAvatarController:
             transl=transl,
         )
 
-    def __fitted_chunk(
-        self, joints: np.ndarray, n_frames_so_far: int, factor: int
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    def __fitted_chunk(self, joints: np.ndarray, n_frames_so_far: int, factor: int) -> None:
         gender = self.state.gender
         frames = joints.shape[0]
         if self.state.device == "cuda":
             torch.cuda.empty_cache()
         model = self.__body_model(frames, gender)
         if self.state.stream_buffers.fit_is_stale():
-            return None
+            return
         res = solve_smplx_pose_from_joints(model, joints, self.state.device)
         self.state.stream_buffers.fit_progress = 1.0
         display = self.__display_rate_result(res, factor, gender)
@@ -415,14 +405,13 @@ class SmplxAvatarController:
             self.state.smplx_fit, display_verts, display.faces, display
         )
         if not appended:
-            return None
+            return
         duration_so_far = n_frames_so_far / self.host.playback_fps
         self.state.status = (
             f"{'streaming' if self.state.generating else 'fitting body'}... "
             f"{n_frames_so_far} frames (~{duration_so_far:.1f}s), "
             f"body fit {res.joint_err_cm:.1f} cm"
         )
-        return (res.global_orient[-1], res.body_pose[-1], res.betas)
 
     def __shaped_vertices(self, model, res, t: int) -> np.ndarray:
         user = self.state.user_betas
@@ -507,7 +496,6 @@ class SmplxAvatarController:
         return res.global_orient[-1], res.body_pose[-1], res.transl[-1]
 
     def __fit_existing_motion(self, source: np.ndarray, frames: int) -> None:
-        warm_start = None
         factor = self.state.upsample
         window = max(1, self.schedule.retrofit_window // factor)
         anchor, motion = source[:-frames], source[-frames:]
@@ -520,7 +508,7 @@ class SmplxAvatarController:
                     break
                 piece = motion[start : start + window]
                 n_frames += len(piece) * factor
-                warm_start = self.fit_single_chunk(piece, warm_start, n_frames, factor)
+                self.fit_single_chunk(piece, n_frames, factor)
         finally:
             verb = "stopped" if self.state.stream_buffers.cancel else "done"
             self.state.status = f"body fit {verb} -- {n_frames} frames"

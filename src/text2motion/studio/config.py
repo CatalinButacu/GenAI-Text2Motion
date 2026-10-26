@@ -28,10 +28,6 @@ class SmplxFitConfig:
 
 @dataclass(frozen=True)
 class SmplxFitSchedule:
-    first_stage1_iters: int = 60
-    first_stage2_iters: int = 150
-    continuation_stage1_iters: int = 0
-    continuation_stage2_iters: int = 25
     retrofit_window: int = 16
 
 

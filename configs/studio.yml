@@ -3,20 +3,8 @@ fit:
   device: cpu
   threads: 4
   num_betas: 10
-  lr: 0.05
-  w_smooth: 0.05
-  w_reg: 0.0005
-  stage1_iters: 150
-  stage2_iters: 300
-  progress_every: 10
-  verbose_every: 100
-  yaw_candidates_deg: [0.0, 90.0, 180.0, 270.0]
 
 schedule:
-  first_stage1_iters: 20
-  first_stage2_iters: 50
-  continuation_stage1_iters: 0
-  continuation_stage2_iters: 25
   retrofit_window: 16
 
 display:
