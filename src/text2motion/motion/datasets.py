@@ -21,6 +21,13 @@ from text2motion.motion.storage import (
 )
 
 
+def check_no_missing_files(kind: str, clip_ids: list[str]) -> None:
+    if clip_ids:
+        raise FileNotFoundError(
+            f"{len(clip_ids)} clips of the split list have no {kind} file; first: {clip_ids[:5]}"
+        )
+
+
 class CaptionedMotionDataset(Dataset):
     def __init__(
         self,
@@ -78,13 +85,14 @@ class CaptionedMotionDataset(Dataset):
     def __select_usable_clip_ids(self, names: list[str]) -> list[str]:
         candidates = [clip_id for name in names for clip_id in self.__clip_id_variants(name)]
         lengths = clip_frame_counts(self._vec_dir, candidates)
-        return [
-            clip_id
-            for name in names
-            for clip_id in self.__clip_id_variants(name)
-            if lengths.get(clip_id, 0) >= self._min_len
-            and (self._text_dir / f"{clip_id}.txt").is_file()
-        ]
+        check_no_missing_files(
+            "feature", [clip_id for clip_id in candidates if clip_id not in lengths]
+        )
+        check_no_missing_files(
+            "caption",
+            [c for c in candidates if not (self._text_dir / f"{c}.txt").is_file()],
+        )
+        return [clip_id for clip_id in candidates if lengths[clip_id] >= self._min_len]
 
     def set_epoch(self, epoch: int) -> None:
         self._epoch.value = int(epoch)
@@ -195,20 +203,19 @@ class MotionWindowDataset(Dataset):
         ids: list[str] = []
         clips: list[np.ndarray] = []
         non_finite: list[str] = []
-        for name in names:
-            variants = [name, f"M{name}"] if self._mirror else [name]
-            for clip_id in variants:
-                vec_path = self._vec_dir / f"{clip_id}.npy"
-                if not vec_path.is_file():
-                    continue
-                feat = np.load(vec_path).astype(np.float32)
-                if feat.shape[0] < self._window:
-                    continue
-                if not np.isfinite(feat).all():
-                    non_finite.append(clip_id)
-                    continue
-                ids.append(clip_id)
-                clips.append(feat)
+        variants = [v for name in names for v in ([name, f"M{name}"] if self._mirror else [name])]
+        check_no_missing_files(
+            "feature", [v for v in variants if not (self._vec_dir / f"{v}.npy").is_file()]
+        )
+        for clip_id in variants:
+            feat = np.load(self._vec_dir / f"{clip_id}.npy").astype(np.float32)
+            if feat.shape[0] < self._window:
+                continue
+            if not np.isfinite(feat).all():
+                non_finite.append(clip_id)
+                continue
+            ids.append(clip_id)
+            clips.append(feat)
         if non_finite:
             suffix = " ..." if len(non_finite) > 20 else ""
             raise ValueError(
