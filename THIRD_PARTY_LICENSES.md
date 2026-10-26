@@ -38,17 +38,22 @@ installed package. It is the statement of the package author, not a legal review
 |---|---|---|---|
 | runtime | aitviewer | 1.14.2 | NOT DECLARED in the package metadata |
 | runtime | jsonargparse | 4.52.0 | MIT |
+| runtime | matplotlib | 3.11.2 | Python Software Foundation License |
 | runtime | numpy | 2.4.6 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
 | runtime | pandas | 3.0.3 | BSD License |
 | runtime | psutil | 7.2.2 | BSD-3-Clause |
 | runtime | pydantic | 2.14.1 | MIT |
 | runtime | pyyaml | 6.0.3 | MIT License |
+| runtime | roma | 1.5.6 | BSD License |
 | runtime | scipy | 1.17.1 | BSD License |
 | runtime | smplx | 0.1.28 | UNKNOWN |
 | runtime | torch | 2.12.0+cu132 | BSD-3-Clause |
 | runtime | tqdm | 4.67.3 | MPL-2.0 AND MIT |
 | runtime | transformers | 5.9.0 | Apache 2.0 License |
-| viewer | aitviewer | 1.14.2 | NOT DECLARED in the package metadata |
+| prep | pyarrow | 26.0.0 | Apache-2.0 |
+| tracking | alembic | 1.20.0 | MIT |
+| tracking | mlflow-skinny | 3.17.0 | Apache Software License |
+| tracking | sqlalchemy | 2.1.4 | MIT |
 | dev | pyright | 1.1.414 | MIT |
 | dev | pytest | 9.0.3 | MIT |
 | dev | rope | 1.14.0 | GNU Lesser General Public License v3 or later (LGPLv3+) |

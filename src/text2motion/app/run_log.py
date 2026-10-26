@@ -39,9 +39,18 @@ def __jsonable(value: Any) -> Any:
 MLFLOW_RUN_ID_FILE = "mlflow_run_id"
 
 
-def __start_mlflow_run(run_dir: Path, logs_dir: Path, manifest: dict) -> None:
-    import mlflow
+def __mlflow_module():
+    try:
+        import mlflow
+    except ImportError as exc:
+        raise ImportError(
+            "mlflow_tracking is on, but MLflow is not installed: run uv sync --extra tracking"
+        ) from exc
+    return mlflow
 
+
+def __start_mlflow_run(run_dir: Path, logs_dir: Path, manifest: dict) -> None:
+    mlflow = __mlflow_module()
     mlflow.set_tracking_uri(f"sqlite:///{(Path(logs_dir) / 'mlflow.db').resolve().as_posix()}")
     mlflow.set_experiment(manifest["name"])
     id_file = run_dir / MLFLOW_RUN_ID_FILE
@@ -52,8 +61,7 @@ def __start_mlflow_run(run_dir: Path, logs_dir: Path, manifest: dict) -> None:
 
 
 def __log_mlflow_metrics(record: dict) -> None:
-    import mlflow
-
+    mlflow = __mlflow_module()
     numbers = {
         key: float(value)
         for key, value in record.items()

@@ -97,9 +97,10 @@ The tokenizer decoder reads 4 latent tokens on each side of a frame. A lookahead
 ### Install
 
 ```bash
-uv sync                  # core
-uv sync --extra viewer   # aitviewer studio
-uv sync --extra dev      # ruff, pytest, pyright
+uv sync                    # core, including the aitviewer studio
+uv sync --extra prep       # pyarrow, for the official-release converter
+uv sync --extra tracking   # MLflow, only when mlflow_tracking is on
+uv sync --extra dev        # ruff, pytest, pyright
 pytest                   # shape and parity contracts
 ```
 

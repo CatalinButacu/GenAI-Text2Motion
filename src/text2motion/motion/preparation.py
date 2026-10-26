@@ -36,6 +36,7 @@ from text2motion.motion.storage import (
 
 logger = logging.getLogger(__name__)
 
+NPY_FILES = "*.npy"
 CORPUS_MANIFEST = "corpus_manifest.json"
 CORPUS_FORMAT = "text2motion.amass_corpus"
 CORPUS_VERSION = 1
@@ -60,8 +61,18 @@ def __parquet_files(src: Path, split: str) -> list[Path]:
     return matches
 
 
+def __parquet_module():
+    try:
+        import pyarrow.parquet as pq
+    except ImportError as exc:
+        raise ImportError(
+            "the official-release converter needs pyarrow: run uv sync --extra prep"
+        ) from exc
+    return pq
+
+
 def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
-    import pyarrow.parquet as pq
+    pq = __parquet_module()
 
     vec_dir = out_dir / FEATURES_DIR
     vec_dir.mkdir(parents=True, exist_ok=True)
@@ -206,7 +217,7 @@ def extract_amass_to_y_up_joints(
     if adopt:
         adopt_pose_folder(extractor, amass_root, pose_root, npz_files, recipe)
     manifest_path = pose_root / POSE_MANIFEST
-    check_recipe_reuse(manifest_path, recipe, any(pose_root.rglob("*.npy")))
+    check_recipe_reuse(manifest_path, recipe, any(pose_root.rglob(NPY_FILES)))
     previous = {}
     if manifest_path.is_file():
         previous = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -296,7 +307,7 @@ def encode_joint_clips_to_hml3d263(
     reference = reference.reshape(len(reference), -1, 3)
     params = feature_params(target_offsets(reference))
 
-    source_list = sorted(p.name for p in layout.joints.glob("*.npy"))
+    source_list = sorted(p.name for p in layout.joints.glob(NPY_FILES))
     frame_num = 0
     failed: list[str] = []
     for source_file in tqdm(source_list, desc="joints->263"):
@@ -367,7 +378,7 @@ def heldout_feature_names(index_csv: Path, out_dir: Path, pose_root: Path) -> se
     heldout_sizes = {path.stat().st_size for path in heldout}
     heldout_hashes = {sha256_file(path) for path in heldout}
     names = {corpus_feature_name(path, pose_root) for path in heldout}
-    for path in pose_root.rglob("*.npy"):
+    for path in pose_root.rglob(NPY_FILES):
         if path.stat().st_size in heldout_sizes and sha256_file(path) in heldout_hashes:
             names.add(corpus_feature_name(path, pose_root))
     return names
@@ -483,7 +494,7 @@ def build_amass_pretraining_corpus(
     pose_recipe = complete_pose_recipe(pose_root)
     recipe = corpus_recipe(request, index_csv, reference_path, pose_recipe, min_frames)
     vec_dir = out_dir / FEATURES_DIR
-    existing = {path.name for path in vec_dir.glob("*.npy")}
+    existing = {path.name for path in vec_dir.glob(NPY_FILES)}
     manifest_path = out_dir / CORPUS_MANIFEST
     check_recipe_reuse(manifest_path, recipe, bool(existing))
     excluded = heldout_feature_names(index_csv, Path(request.out_dir), pose_root)
@@ -496,7 +507,7 @@ def build_amass_pretraining_corpus(
     vec_dir.mkdir(parents=True, exist_ok=True)
     write_manifest(manifest_path, recipe, {"complete": False})
 
-    sources = sorted(pose_root.rglob("*.npy"))
+    sources = sorted(pose_root.rglob(NPY_FILES))
     if limit:
         sources = sources[:limit]
     counts = {"written": 0, "reused": 0, "skipped_heldout": 0, "skipped_short": 0, "frames": 0}

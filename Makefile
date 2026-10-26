@@ -55,7 +55,7 @@ help:
 	@echo "          graph      update the code graph"
 
 install:
-	uv sync --extra dev --extra viewer
+	uv sync --inexact --extra dev --extra prep --extra tracking
 
 test:
 	$(PY) -m pytest -q -m "not slow and not gpu"
