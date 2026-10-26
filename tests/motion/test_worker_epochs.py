@@ -57,6 +57,7 @@ def __loader(dataset, workers: int) -> DataLoader:
         collate_fn=collate_motion_clips,
         persistent_workers=workers > 0,
         multiprocessing_context="spawn" if workers else None,
+        timeout=60 if workers else 0,
     )
 
 
