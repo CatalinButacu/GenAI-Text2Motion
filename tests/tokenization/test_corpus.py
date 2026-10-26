@@ -1,3 +1,4 @@
+import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -12,6 +13,7 @@ from text2motion.tokenization.contracts import TokenPackRequest
 from text2motion.tokenization.corpus import (
     PACK_IDENTITY_KEY,
     build_token_pack,
+    pack_clip_keys,
     read_pack_identity,
     window_starts,
 )
@@ -57,6 +59,31 @@ def test_the_pack_skips_excluded_clips_and_records_its_identity(tmp_path):
     assert identity["tokenizer_sha256"] == "abc"
     assert identity["excluded_present"] == 1
     assert identity["tail"] == "end_aligned"
+
+
+def test_pack_readers_count_only_clip_windows(tmp_path):
+    features = tmp_path / "features"
+    features.mkdir()
+    np.save(features / "kept.npy", np.zeros((40, 263), np.float32))
+    request = TokenPackRequest(
+        features_dir=features, out_path=tmp_path / "pack.npz", segment_frames=16, stride=16
+    )
+    scaler = cast(MotionScaler, SimpleNamespace(normalize=lambda feat: feat))
+    build_token_pack(__fake_tokenizer(), scaler, request, set(), {"tokenizer_sha256": "abc"})
+    spec = importlib.util.spec_from_file_location(
+        "scaling_budget", Path("scripts/benchmarks/scaling_budget.py")
+    )
+    assert spec is not None and spec.loader is not None
+    budget = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(budget)
+
+    with np.load(tmp_path / "pack.npz") as pack:
+        keys = pack_clip_keys(pack)
+    windows, tokens = budget.amass_token_file_total(tmp_path / "pack.npz", 2)
+
+    assert sorted(keys) == ["kept__0", "kept__16", "kept__24"]
+    assert windows == 3
+    assert tokens == 3 * 4 * 2
 
 
 def test_a_pack_without_an_identity_record_is_refused(tmp_path):

@@ -28,7 +28,7 @@ from text2motion.motion.storage import (
     is_legacy_resume,
     restore_rng_state,
 )
-from text2motion.tokenization.corpus import PACK_IDENTITY_KEY, read_pack_identity
+from text2motion.tokenization.corpus import pack_clip_keys, read_pack_identity
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ class TokenPack(Dataset):
         self._path = path
         if keys is None:
             with np.load(path) as pack:
-                keys = [key for key in pack.files if key != PACK_IDENTITY_KEY]
+                keys = pack_clip_keys(pack)
         self.keys = list(keys)
         if not self.keys:
             raise RuntimeError(f"empty token pack: {path}")
@@ -137,7 +137,7 @@ def build_token_loaders(
 ) -> tuple[DataLoader, DataLoader | None, PretrainingBudget]:
     read_pack_identity(request.token_pack)
     with np.load(request.token_pack) as pack:
-        all_keys = [key for key in pack.files if key != PACK_IDENTITY_KEY]
+        all_keys = pack_clip_keys(pack)
     train_keys, val_keys = split_keys_by_clip(all_keys, request.val_fraction, seed)
     budget = PretrainingBudget.build(len(train_keys), request.batch_size, request.grad_accum)
 

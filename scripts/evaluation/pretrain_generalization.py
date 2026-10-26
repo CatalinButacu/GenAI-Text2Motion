@@ -11,12 +11,13 @@ from text2motion.app.bootstrap import required_path, seed_everything
 from text2motion.app.config import load_config
 from text2motion.app.run_log import log_metrics, start_run
 from text2motion.generation.nn_model import MotionTokenGenerator, token_ce_loss
+from text2motion.tokenization.corpus import pack_clip_keys
 from text2motion.tokenization.nn_model import FsqTokenizer
 
 
 def seen_clip_stems(token_pack: str) -> set[str]:
-    pack = np.load(token_pack, allow_pickle=True)
-    return {key.rsplit("__", 1)[0] for key in pack.files}
+    with np.load(token_pack) as pack:
+        return {key.rsplit("__", 1)[0] for key in pack_clip_keys(pack)}
 
 
 def split_clips(features_dir: str, seen: set[str], min_frames: int) -> tuple[list, list]:

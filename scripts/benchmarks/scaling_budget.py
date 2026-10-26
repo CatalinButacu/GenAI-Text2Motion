@@ -1,3 +1,4 @@
+# python scripts/benchmarks/scaling_budget.py --config configs/default.yaml
 from __future__ import annotations
 
 import argparse
@@ -9,6 +10,7 @@ import numpy as np
 from text2motion.app.bootstrap import required_path
 from text2motion.app.config import load_config
 from text2motion.app.run_log import log_metrics, start_run
+from text2motion.tokenization.corpus import pack_clip_keys
 
 
 def base_ids(split_file: Path) -> list[str]:
@@ -44,9 +46,10 @@ def amass_corpus_frames(amass_dir: Path) -> tuple[int, int]:
 
 
 def amass_token_file_total(token_file: Path, num_quantizers: int) -> tuple[int, int]:
-    bundle = np.load(token_file, allow_pickle=True)
-    latent_steps = sum(int(bundle[key].shape[0]) for key in bundle.files)
-    return len(bundle.files), latent_steps * num_quantizers
+    with np.load(token_file) as bundle:
+        keys = pack_clip_keys(bundle)
+        latent_steps = sum(int(bundle[key].shape[0]) for key in keys)
+    return len(keys), latent_steps * num_quantizers
 
 
 def effective_tokens(unique_tokens: int, epochs: int, repeat_half_life: float) -> float:

@@ -36,6 +36,10 @@ def source_digest(paths: list[Path]) -> str:
     return digest.hexdigest()
 
 
+def pack_clip_keys(pack: np.lib.npyio.NpzFile) -> list[str]:
+    return [key for key in pack.files if key != PACK_IDENTITY_KEY]
+
+
 def read_pack_identity(path: str | Path) -> dict[str, object]:
     with np.load(path) as pack:
         if PACK_IDENTITY_KEY not in pack.files:
