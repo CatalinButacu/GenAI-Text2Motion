@@ -1,18 +1,19 @@
+# python scripts/evaluation/pretrain_generalization.py --config configs/generator/gen_pilot_fsq8x1024.yaml --ckpt artifacts/checkpoints/generator/pretrain.pt
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import torch
 
-from text2motion.app.bootstrap import required_path, seed_everything
-from text2motion.app.config import load_config
+from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.app.run_log import log_metrics, start_run
-from text2motion.generation.nn_model import MotionTokenGenerator, token_ce_loss
-from text2motion.tokenization.corpus import pack_clip_keys
-from text2motion.tokenization.nn_model import FsqTokenizer
+from text2motion.generation.contracts import Backbone
+from text2motion.generation.nn_model import token_ce_loss
+from text2motion.motion.storage import sha256_file
+from text2motion.tokenization.corpus import pack_clip_keys, read_pack_identity
+from text2motion.tokenization.nn_model import MotionTokenizerNetwork
 
 
 def seen_clip_stems(token_pack: str) -> set[str]:
@@ -36,10 +37,16 @@ def split_clips(features_dir: str, seen: set[str], min_frames: int) -> tuple[lis
 
 @torch.no_grad()
 def encode_clip(
-    tokenizer: FsqTokenizer, path: Path, frames: int, mean, std, device
+    tokenizer: MotionTokenizerNetwork,
+    path: Path,
+    frames: int,
+    mean,
+    std,
+    device,
+    downsample: int,
 ) -> torch.Tensor:
     feats = np.load(path).astype(np.float32)[:frames]
-    usable = (feats.shape[0] // tokenizer.cfg.downsample) * tokenizer.cfg.downsample
+    usable = (feats.shape[0] // downsample) * downsample
     normalized = (feats[:usable] - mean) / std
     batch = torch.from_numpy(normalized).unsqueeze(0).to(device)
     return tokenizer.encode(batch)[0].cpu()
@@ -67,29 +74,21 @@ def mean_ce(generator, gen_cfg, token_seqs: list[torch.Tensor], device, batch_si
 
 
 def run(args: argparse.Namespace) -> None:
-    seed_everything(2026, False)
-    cfg = load_config(args.config)
-    device = args.device
+    app = ApplicationBootstrap.from_config(args.config, device=args.device, seed=2026)
+    cfg = app.config
+    device = app.device
     rng = np.random.default_rng(2026)
 
-    vocab = 1
-    for level in cfg.tokenizer.fsq_levels:
-        vocab *= level
-
-    tokenizer = FsqTokenizer(cfg.tokenizer)
-    tokenizer.load_state_dict(torch.load(args.tokenizer_ckpt, map_location="cpu"))
-    tokenizer.to(device).eval()
-
-    n_layers = cfg.generator.mamba_n_layers if args.backbone == "mamba" else cfg.generator.n_layers
-    gen_cfg = replace(
-        cfg.generator,
-        backbone=args.backbone,
-        n_layers=n_layers,
-        num_codebooks=cfg.tokenizer.num_quantizers,
-        codebook_size=vocab,
-    )
-    generator = MotionTokenGenerator(gen_cfg).to(device)
-    generator.load_state_dict(torch.load(args.ckpt, map_location=device))
+    pack_tokenizer = read_pack_identity(args.token_pack)["tokenizer_sha256"]
+    if pack_tokenizer != sha256_file(args.tokenizer_ckpt):
+        raise ValueError(
+            f"{args.token_pack} was built with another tokenizer than {args.tokenizer_ckpt}"
+        )
+    tokenizer = app.load_tokenizer(args.tokenizer_ckpt).tokenizer_model
+    spec = app.resolve_generator_spec(Backbone(args.backbone), tokenizer.codebook_size)
+    gen_cfg = spec.config
+    generator = spec.create_model(device)
+    generator.load_state_dict(torch.load(args.ckpt, map_location=device, weights_only=True))
     generator.eval()
     params = sum(p.numel() for p in generator.parameters())
     print(f"{args.ckpt}: {params / 1e6:.2f}M params, prefix {gen_cfg.text_prefix_len}")
@@ -107,14 +106,18 @@ def run(args: argparse.Namespace) -> None:
     trained_idx = rng.choice(len(trained), args.num_clips, replace=False)
     trained_sample = [(trained[i][0], lengths[k]) for k, i in enumerate(trained_idx)]
 
-    out_dir = required_path(cfg.paths.hml3d_out_dir, "hml3d_out_dir")
-    mean = np.load(out_dir / "Mean.npy").astype(np.float32)
-    std = np.load(out_dir / "Std.npy").astype(np.float32)
+    scaler = app.create_motion_repository().load_scaler()
+    mean, std = scaler.mean, scaler.std
 
     run_dir = start_run("pretrain_generalization", cfg, cfg.paths.logs_dir, vars(args))
 
-    held_tokens = [encode_clip(tokenizer, p, n, mean, std, device) for p, n in held_sample]
-    trained_tokens = [encode_clip(tokenizer, p, n, mean, std, device) for p, n in trained_sample]
+    downsample = cfg.tokenizer.downsample
+    held_tokens = [
+        encode_clip(tokenizer, p, n, mean, std, device, downsample) for p, n in held_sample
+    ]
+    trained_tokens = [
+        encode_clip(tokenizer, p, n, mean, std, device, downsample) for p, n in trained_sample
+    ]
 
     held_ce = mean_ce(generator, gen_cfg, held_tokens, device, args.batch_size)
     trained_ce = mean_ce(generator, gen_cfg, trained_tokens, device, args.batch_size)

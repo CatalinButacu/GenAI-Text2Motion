@@ -1,12 +1,10 @@
+# python scripts/render/render_mesh_demo.py --prompt "a person waves" --tag wave --ckpt artifacts/checkpoints/generator/generator_transformer_bs8_e60.pt
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
 from pathlib import Path
 
 import matplotlib
-
-from text2motion.app.bootstrap import required_path
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -14,15 +12,13 @@ import numpy as np
 import torch
 from matplotlib.animation import PillowWriter
 
-from text2motion.app.bootstrap import seed_everything
-from text2motion.app.config import load_config
-from text2motion.generation.nn_model import MotionTokenGenerator
-from text2motion.generation.nn_text import CLIPTextEncoder
+from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.commands.serving import load_inference_pipeline
+from text2motion.generation.contracts import Backbone
 from text2motion.motion.representation import FPS, StreamingSkeletonRecovery
-from text2motion.streaming.decoder import StreamingMotionDecoder
+from text2motion.streaming.pydant_requests import ModelServiceRequest
 from text2motion.studio.avatar import fit_smplx_to_joints
 from text2motion.studio.config import SmplxFitConfig
-from text2motion.tokenization.nn_model import FsqTokenizer
 
 
 def draw(ax, verts, faces, frame):
@@ -47,37 +43,25 @@ def draw(ax, verts, faces, frame):
 
 
 def run(a):
-    cfg = load_config(a.config)
-    seed_everything(cfg.seed, cfg.deterministic)
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    app = ApplicationBootstrap.from_config(a.config)
+    cfg = app.config
+    dev = app.device
     model_dir = Path(a.model_dir) if a.model_dir else cfg.paths.smplx_models
     if model_dir is None:
         raise ValueError("paths.smplx_models or --model_dir must identify the SMPL-X model root")
     steps = a.steps if a.steps is not None else cfg.data.max_motion_len // cfg.tokenizer.downsample
     fps = a.fps or FPS
-    tok = FsqTokenizer(cfg.tokenizer)
-    tok.load_state_dict(torch.load(a.tokenizer_ckpt, map_location="cpu"))
-    tok.to(dev).eval()
-    gc = replace(
-        cfg.generator,
-        backbone="transformer",
-        n_layers=cfg.generator.n_layers,
-        num_codebooks=cfg.tokenizer.num_quantizers,
-        codebook_size=tok.codebook_size,
-        use_kernel=False,
+    request = ModelServiceRequest(
+        config=Path(a.config),
+        ckpt=Path(a.ckpt),
+        tokenizer_ckpt=Path(a.tokenizer_ckpt),
+        backbone=Backbone(a.backbone),
     )
-    gen = MotionTokenGenerator(gc).to(dev).eval()
-    st = torch.load(a.ckpt, map_location="cpu")
-    gen.load_state_dict(st["generator"] if isinstance(st, dict) and "generator" in st else st)
-    te = CLIPTextEncoder(cfg.text_encoder).to(dev).eval()
-    out = required_path(cfg.paths.hml3d_out_dir, "hml3d_out_dir")
-    mean = torch.from_numpy(np.load(out / "Mean.npy").astype("float32")).to(dev)
-    std = torch.from_numpy(np.load(out / "Std.npy").astype("float32")).to(dev)
+    pipeline = load_inference_pipeline(app, request)
 
     with torch.no_grad():
-        emb = te([a.prompt]).to(dev)
-        dec = StreamingMotionDecoder(tok, cfg.tokenizer.downsample, mean, std)
-        it = gen.stream_token_indices(
+        emb = pipeline.generator.text_encoder([a.prompt]).to(pipeline.device)
+        it = pipeline.generator.token_generator.stream_token_indices(
             emb,
             steps,
             temperature=a.temperature,
@@ -87,7 +71,8 @@ def run(a):
         )
         recovery = StreamingSkeletonRecovery()
         joints = np.concatenate(
-            [recovery(c.squeeze(0).cpu().numpy()) for c in dec.stream_tokens(it)], axis=0
+            [recovery(c.squeeze(0).cpu().numpy()) for c in pipeline.decoder.stream_tokens(it)],
+            axis=0,
         )
     print(f"[{a.tag}] generated {joints.shape[0]} frames; fitting SMPL-X...")
     if dev == "cuda":
@@ -134,6 +119,7 @@ def main():
         "--ckpt", default="artifacts/checkpoints/generator/generator_transformer_100m_val163.pt"
     )
     p.add_argument("--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt")
+    p.add_argument("--backbone", default="transformer", choices=["transformer", "mamba"])
     p.add_argument("--model_dir")
     p.add_argument("--prompt", required=True)
     p.add_argument("--tag", required=True)

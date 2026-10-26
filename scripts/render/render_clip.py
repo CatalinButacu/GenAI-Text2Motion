@@ -2,65 +2,46 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
+from pathlib import Path
 
 import matplotlib
 import numpy as np
 import torch
 
-from text2motion.app.bootstrap import required_path
-
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-from text2motion.app.bootstrap import seed_everything
-from text2motion.app.config import load_config
-from text2motion.generation.nn_model import MotionTokenGenerator
-from text2motion.generation.nn_text import CLIPTextEncoder
+from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.commands.serving import load_inference_pipeline
+from text2motion.generation.contracts import Backbone
 from text2motion.motion.representation import DIM, FPS, kinematic_bones, recover_skeleton
-from text2motion.streaming.decoder import StreamingMotionDecoder
-from text2motion.tokenization.nn_model import FsqTokenizer
+from text2motion.streaming.pydant_requests import ModelServiceRequest
 
 
 def run(a: argparse.Namespace) -> None:
-    cfg = load_config(a.config)
-    seed_everything(cfg.seed, cfg.deterministic)
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    app = ApplicationBootstrap.from_config(a.config)
+    cfg = app.config
     steps = a.steps if a.steps is not None else cfg.data.max_motion_len // cfg.tokenizer.downsample
-    tok = FsqTokenizer(cfg.tokenizer)
-    tok.load_state_dict(torch.load(a.tokenizer_ckpt, map_location="cpu"))
-    tok.to(dev).eval()
-    nl = cfg.generator.mamba_n_layers if a.backbone == "mamba" else cfg.generator.n_layers
-    gc = replace(
-        cfg.generator,
-        backbone=a.backbone,
-        n_layers=nl,
-        num_codebooks=cfg.tokenizer.num_quantizers,
-        codebook_size=tok.codebook_size,
-        use_kernel=False,
+    request = ModelServiceRequest(
+        config=Path(a.config),
+        ckpt=Path(a.ckpt),
+        tokenizer_ckpt=Path(a.tokenizer_ckpt),
+        backbone=Backbone(a.backbone),
     )
-    gen = MotionTokenGenerator(gc).to(dev).eval()
-    st = torch.load(a.ckpt, map_location="cpu")
-    gen.load_state_dict(st["generator"] if isinstance(st, dict) and "generator" in st else st)
-    te = CLIPTextEncoder(cfg.text_encoder).to(dev).eval()
-    with torch.no_grad():
-        emb = te([a.prompt]).to(dev)
-    out = required_path(cfg.paths.hml3d_out_dir, "hml3d_out_dir")
-    mean = torch.from_numpy(np.load(out / "Mean.npy").astype("float32")).to(dev)
-    std = torch.from_numpy(np.load(out / "Std.npy").astype("float32")).to(dev)
-    dec = StreamingMotionDecoder(tok, cfg.tokenizer.downsample, mean, std)
-    it = gen.stream_token_indices(
-        emb,
-        steps,
-        temperature=a.temperature,
-        top_p=a.top_p,
-        cfg_scale=a.cfg_scale,
-        stop_at_end=not a.fixed_length,
-    )
+    pipeline = load_inference_pipeline(app, request)
     chunks = []
     with torch.no_grad():
-        for ch in dec.stream_tokens(it):
+        emb = pipeline.generator.text_encoder([a.prompt]).to(pipeline.device)
+        it = pipeline.generator.token_generator.stream_token_indices(
+            emb,
+            steps,
+            temperature=a.temperature,
+            top_p=a.top_p,
+            cfg_scale=a.cfg_scale,
+            stop_at_end=not a.fixed_length,
+        )
+        for ch in pipeline.decoder.stream_tokens(it):
             chunks.append(ch.squeeze(0).cpu().numpy())
     feat = np.concatenate(chunks, 0) if chunks else np.zeros((0, DIM), "float32")
     joints = recover_skeleton(feat)
