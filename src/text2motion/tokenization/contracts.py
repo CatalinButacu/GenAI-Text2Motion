@@ -92,10 +92,12 @@ class TokenizeRequest(CommandRequest):
     )
     segment_frames: int = Field(
         default=_MOTION_FRAMES,
+        gt=0,
         description="window length in frames; clips shorter than one window are not encoded",
     )
     stride: int = Field(
         default=_MOTION_FRAMES,
+        gt=0,
         description="step between windows; a smaller stride gives more, overlapping windows",
     )
     regen_dir: Path = Field(
@@ -111,23 +113,30 @@ class TrainTokenizerRequest(CommandRequest):
     tokenizer: TokenizerKind = Field(
         description="quantizer family: fsq has no learned codebook, rvq is the baseline"
     )
-    epochs: int = Field(default=50, description="passes over the training set")
+    epochs: int = Field(default=50, gt=0, description="passes over the training set")
     window: int = Field(
         default=64,
+        gt=0,
         description="training crop in frames; a longer crop gives more context and uses more memory",
     )
-    batch_size: int = Field(default=128, description="clips per step; limited by GPU memory")
+    batch_size: int = Field(default=128, gt=0, description="clips per step; limited by GPU memory")
     ema_decay: float = Field(
         default=0.99,
+        ge=0.0,
+        le=1.0,
         description="decay of the averaged weights that are evaluated; higher is smoother and slower",
     )
-    eval_every: int = Field(default=5, description="epochs between reconstruction evaluations")
+    eval_every: int = Field(
+        default=5, gt=0, description="epochs between reconstruction evaluations"
+    )
     max_eval_clips: int | None = Field(
         default=None,
+        gt=0,
         description="cap on evaluation clips; a low cap is faster and gives a noisier FID",
     )
     num_workers: int = Field(
         default=0,
+        ge=0,
         description="data loader processes; 0 loads in the training process and needs the least RAM",
     )
     ckpt_name: str | None = Field(

@@ -4,6 +4,7 @@ from typing import cast
 
 import pytest
 import torch
+from pydantic import ValidationError
 
 from text2motion.app.config import TokenizerConfig
 from text2motion.motion.storage import atomic_torch_save
@@ -192,3 +193,25 @@ def test_an_rvq_step_with_nan_motion_leaves_the_codebooks_finite():
 def test_an_epoch_without_a_batch_raises():
     with pytest.raises(ValueError, match="no batch"):
         __resumable_trainer().train_epoch([], "cpu")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("epochs", 0),
+        ("window", 0),
+        ("batch_size", 0),
+        ("eval_every", 0),
+        ("max_eval_clips", 0),
+        ("num_workers", -1),
+        ("ema_decay", 1.5),
+        ("ema_decay", -0.1),
+    ],
+)
+def test_a_train_request_rejects_a_value_outside_its_range(tmp_path, field, value):
+    with pytest.raises(ValidationError, match=field):
+        TrainTokenizerRequest(
+            config=tmp_path / "unused.yaml",
+            tokenizer=TokenizerKind.FINITE_SCALAR,
+            **{field: value},
+        )

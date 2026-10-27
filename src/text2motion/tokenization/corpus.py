@@ -83,6 +83,11 @@ def build_token_pack(
             tokens = tokenizer.encode(clip)
             pack[clip_id] = tokens.indices.cpu().numpy().astype(np.int16)
             token_steps += tokens.token_count
+    if not pack:
+        raise ValueError(
+            f"no clip of {len(kept)} kept clips ({len(feature_paths) - len(kept)} excluded) has "
+            f"{request.segment_frames} frames; the token pack would be empty"
+        )
 
     record = {
         **identity,

@@ -6,6 +6,7 @@ from typing import cast
 import numpy as np
 import pytest
 import torch
+from pydantic import ValidationError
 
 from text2motion.motion import preparation
 from text2motion.motion.normalization import MotionScaler
@@ -81,7 +82,8 @@ def test_pack_readers_count_only_clip_windows(tmp_path):
     spec = importlib.util.spec_from_file_location(
         "scaling_budget", Path("scripts/benchmarks/scaling_budget.py")
     )
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     budget = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(budget)
 
@@ -113,3 +115,30 @@ def test_a_copy_of_a_heldout_capture_under_another_name_is_excluded(tmp_path, mo
     names = preparation.heldout_feature_names(Path("index.csv"), tmp_path, pose_root)
 
     assert names == {"ACCAD__run_stageii.npy", "ACCAD__run_a_stageii.npy"}
+
+
+@pytest.mark.parametrize("case", ["all_excluded", "all_too_short"])
+def test_a_pack_without_any_window_is_not_written(tmp_path, case):
+    features = tmp_path / "features"
+    features.mkdir()
+    frames = 8 if case == "all_too_short" else 40
+    np.save(features / "only.npy", np.zeros((frames, 263), np.float32))
+    request = TokenizeRequest(
+        config=tmp_path / "unused.yaml",
+        features_dir=features,
+        token_pack=tmp_path / "pack.npz",
+        segment_frames=16,
+        stride=16,
+    )
+    scaler = cast(MotionScaler, SimpleNamespace(normalize=lambda feat: feat))
+    excluded = {"only.npy"} if case == "all_excluded" else set()
+
+    with pytest.raises(ValueError, match="would be empty"):
+        build_token_pack(__fake_tokenizer(), scaler, request, excluded, {})
+    assert not (tmp_path / "pack.npz").exists()
+
+
+@pytest.mark.parametrize("field", ["segment_frames", "stride"])
+def test_a_tokenize_request_rejects_a_window_or_stride_below_one(tmp_path, field):
+    with pytest.raises(ValidationError, match=field):
+        TokenizeRequest.model_validate({"config": tmp_path / "unused.yaml", field: 0})
