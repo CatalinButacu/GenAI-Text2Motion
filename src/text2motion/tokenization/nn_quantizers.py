@@ -48,6 +48,10 @@ def reject_dropped_codes(indices: torch.Tensor) -> torch.Tensor:
     return indices
 
 
+def dropped_code_indices(z: torch.Tensor) -> torch.Tensor:
+    return torch.full(z.shape[:-1], DROPPED_CODE, dtype=torch.long, device=z.device)
+
+
 def round_ste(z: torch.Tensor) -> torch.Tensor:
     return z + (torch.round(z) - z).detach()
 
@@ -97,12 +101,10 @@ class FSQ(QuantizerUnit):
         return (digits.float() - self.half_width) / self.half_width
 
 
-class ResidualFSQ(LatentQuantizer):
-    def __init__(self, levels: tuple[int, ...], num_quantizers: int, dropout_p: float) -> None:
-        super().__init__()
-        self.layers = nn.ModuleList([FSQ(levels) for _ in range(num_quantizers)])
-        self.num_quantizers = num_quantizers
-        self.dropout_p = dropout_p
+class ResidualQuantizerStack(LatentQuantizer, ABC):
+    layers: nn.ModuleList
+    num_quantizers: int
+    dropout_p: float
 
     @property
     def quantizer_units(self) -> list[QuantizerUnit]:
@@ -117,6 +119,21 @@ class ResidualFSQ(LatentQuantizer):
 
         return self.num_quantizers
 
+    def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
+        units = self.quantizer_units
+        out = units[0].indices_to_codes(indices[..., 0])
+        for stage, unit in enumerate(units[1:], start=1):
+            out = out + unit.indices_to_codes(indices[..., stage])
+        return out
+
+
+class ResidualFSQ(ResidualQuantizerStack):
+    def __init__(self, levels: tuple[int, ...], num_quantizers: int, dropout_p: float) -> None:
+        super().__init__()
+        self.layers = nn.ModuleList([FSQ(levels) for _ in range(num_quantizers)])
+        self.num_quantizers = num_quantizers
+        self.dropout_p = dropout_p
+
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         residual = z
         quantized = torch.zeros_like(z)
@@ -130,18 +147,9 @@ class ResidualFSQ(LatentQuantizer):
                 quantized = quantized + code
                 indices.append(layer.codes_to_indices(code))
             else:
-                indices.append(
-                    torch.full(z.shape[:-1], DROPPED_CODE, dtype=torch.long, device=z.device)
-                )
+                indices.append(dropped_code_indices(z))
 
         return quantized, torch.stack(indices, dim=-1)
-
-    def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
-        layers = typed_modules(self.layers, FSQ)
-        out = layers[0].indices_to_codes(indices[..., 0])
-        for i, layer in enumerate(layers[1:], start=1):
-            out = out + layer.indices_to_codes(indices[..., i])
-        return out
 
 
 class GroupedFSQ(LatentQuantizer):
@@ -245,7 +253,7 @@ class EmaVectorQuantizer(QuantizerUnit):
         return self.lookup(indices)
 
 
-class ResidualVQ(LatentQuantizer):
+class ResidualVQ(ResidualQuantizerStack):
     def __init__(self, cfg: RvqConfig) -> None:
         super().__init__()
         self.num_quantizers = cfg.num_quantizers
@@ -254,19 +262,6 @@ class ResidualVQ(LatentQuantizer):
             EmaVectorQuantizer(cfg.codebook_size, cfg.code_dim, cfg.ema_decay, cfg.reset_threshold)
             for _ in range(cfg.num_quantizers)
         )
-
-    @property
-    def quantizer_units(self) -> list[QuantizerUnit]:
-        return typed_modules(self.layers, QuantizerUnit)
-
-    def compose_latent_codes(self, codes: list[torch.Tensor]) -> torch.Tensor:
-        return torch.stack(codes, dim=0).sum(0)
-
-    def active_levels(self) -> int:
-        if self.training and self.dropout_p > 0 and torch.rand(()) < self.dropout_p:
-            return int(torch.randint(1, self.num_quantizers + 1, ()).item())
-
-        return self.num_quantizers
 
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         residual = z
@@ -283,18 +278,9 @@ class ResidualVQ(LatentQuantizer):
                 commit = commit + c
                 indices.append(idx)
             else:
-                indices.append(
-                    torch.full(z.shape[:-1], DROPPED_CODE, dtype=torch.long, device=z.device)
-                )
+                indices.append(dropped_code_indices(z))
 
         if self.training:
             quantized = z + (quantized - z).detach()
 
         return quantized, torch.stack(indices, dim=-1), commit
-
-    def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
-        layers = typed_modules(self.layers, EmaVectorQuantizer)
-        out = layers[0].lookup(indices[..., 0])
-        for i, layer in enumerate(layers[1:], start=1):
-            out = out + layer.lookup(indices[..., i])
-        return out
