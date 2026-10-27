@@ -64,7 +64,6 @@ class ApplicationContext:
             tokenizer_network,
             downsample=self.config.tokenizer.downsample,
             device=self.device,
-            scaler=self.create_motion_repository().load_scaler(),
         )
 
     def load_text_encoder(self, state: dict | None = None) -> CLIPTextEncoder:

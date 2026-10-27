@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import assert_never
 
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 from text2motion.motion.model import MotionClip, MotionTokens
-from text2motion.motion.normalization import MotionScaler
 from text2motion.tokenization.contracts import (
     FsqComposition,
     RvqConfig,
@@ -106,21 +106,6 @@ class MotionFeatureDecoder(nn.Module):
         return self.net(x.transpose(1, 2)).transpose(1, 2)
 
 
-def __build_grouped_fsq(cfg: TokenizerConfig) -> tuple[LatentQuantizer, int]:
-    return GroupedFSQ(cfg.fsq_levels, cfg.num_quantizers), cfg.num_quantizers * len(cfg.fsq_levels)
-
-
-def __build_residual_fsq(cfg: TokenizerConfig) -> tuple[LatentQuantizer, int]:
-    quantizer = ResidualFSQ(cfg.fsq_levels, cfg.num_quantizers, cfg.quant_dropout)
-    return quantizer, len(cfg.fsq_levels)
-
-
-_QUANTIZER_FACTORIES = {
-    FsqComposition.GROUPED: __build_grouped_fsq,
-    FsqComposition.RESIDUAL: __build_residual_fsq,
-}
-
-
 class FsqTokenizer(MotionTokenizerNetwork):
     quantizer: LatentQuantizer
 
@@ -130,12 +115,15 @@ class FsqTokenizer(MotionTokenizerNetwork):
         self.encoder = MotionFeatureEncoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
         self.decoder = MotionFeatureDecoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
 
-        build = _QUANTIZER_FACTORIES.get(FsqComposition(cfg.quantizer))
-        if build is None:
-            raise ValueError(
-                f"quantizer must be one of {[q.value for q in FsqComposition]}, got {cfg.quantizer!r}"
-            )
-        self.quantizer, latent_dim = build(cfg)
+        match FsqComposition(cfg.quantizer):
+            case FsqComposition.GROUPED:
+                self.quantizer = GroupedFSQ(cfg.fsq_levels, cfg.num_quantizers)
+                latent_dim = cfg.num_quantizers * len(cfg.fsq_levels)
+            case FsqComposition.RESIDUAL:
+                self.quantizer = ResidualFSQ(cfg.fsq_levels, cfg.num_quantizers, cfg.quant_dropout)
+                latent_dim = len(cfg.fsq_levels)
+            case unknown:
+                assert_never(unknown)
 
         self.pre_q = nn.Linear(cfg.width, latent_dim)
         self.post_q = nn.Linear(latent_dim, cfg.width)
@@ -198,22 +186,16 @@ class RvqBaselineTokenizer(MotionTokenizerNetwork):
         return TokenizerForwardOutput(recon=recon, indices=indices, commit=commit)
 
 
-_TOKENIZER_FACTORIES = {
-    TokenizerKind.FSQ: lambda fsq, rvq: FsqTokenizer(fsq),
-    TokenizerKind.RVQ: lambda fsq, rvq: RvqBaselineTokenizer(rvq),
-}
-
-
 def build_tokenizer_network(
     fsq: TokenizerConfig, rvq: RvqConfig | None = None
 ) -> MotionTokenizerNetwork:
-    kind = TokenizerKind(fsq.kind)
-    build = _TOKENIZER_FACTORIES.get(kind)
-    if build is None:
-        raise ValueError(
-            f"tokenizer kind must be one of {[k.value for k in TokenizerKind]}, got {fsq.kind!r}"
-        )
-    return build(fsq, rvq or RvqConfig())
+    match TokenizerKind(fsq.kind):
+        case TokenizerKind.FSQ:
+            return FsqTokenizer(fsq)
+        case TokenizerKind.RVQ:
+            return RvqBaselineTokenizer(rvq or RvqConfig())
+        case unknown:
+            assert_never(unknown)
 
 
 class MotionTokenizer:
@@ -222,25 +204,10 @@ class MotionTokenizer:
         tokenizer_model: MotionTokenizerNetwork,
         downsample: int,
         device: str | torch.device = "cpu",
-        scaler: MotionScaler | None = None,
     ) -> None:
         self.tokenizer_model = tokenizer_model.to(device).eval()
         self.downsample = downsample
         self.device = device
-        self.scaler = scaler
-
-    @classmethod
-    def from_checkpoint(
-        cls,
-        path: str,
-        fsq: TokenizerConfig,
-        rvq: RvqConfig | None = None,
-        device: str | torch.device = "cpu",
-        scaler: MotionScaler | None = None,
-    ) -> MotionTokenizer:
-        module = build_tokenizer_network(fsq, rvq)
-        module.load_state_dict(torch.load(path, map_location="cpu"))
-        return cls(module, downsample=fsq.downsample, device=device, scaler=scaler)
 
     @property
     def codebook_size(self) -> int:
