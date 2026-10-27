@@ -15,6 +15,8 @@ from text2motion.tokenization.nn_model import TokenizerNetwork
 
 type ReconstructionFidScorer = Callable[[list[np.ndarray], list[np.ndarray]], float]
 
+EVALUATION_BATCH_CLIPS = 64
+
 
 def select_reconstruction_evaluation_clip_ids(
     root: Path,
@@ -50,33 +52,39 @@ def evaluate_tokenizer_reconstruction(
     feature_paths = [root / FEATURES_DIR / f"{clip_id}.npy" for clip_id in ids]
     check_no_missing_files("feature", [str(path) for path in feature_paths if not path.is_file()])
 
-    reference_features: list[np.ndarray] = []
-    reconstructed_features: list[np.ndarray] = []
-    joint_errors: list[float] = []
-    feature_distances: list[float] = []
-
+    clips_by_length: dict[int, list[np.ndarray]] = {}
     for path in feature_paths:
         features = np.load(path).astype(np.float32)
         length = (min(features.shape[0], max_frames) // downsample) * downsample
         if length < 2 * downsample:
             continue
-        features = features[:length]
+        clips_by_length.setdefault(length, []).append(features[:length])
 
-        normalized = torch.from_numpy(scaler.normalize(features))[None].to(device)
-        reconstruction_normalized = module(normalized)[0][0].cpu().numpy()
-        reconstruction = np.asarray(scaler.denormalize(reconstruction_normalized))
+    batches = [
+        clips[start : start + EVALUATION_BATCH_CLIPS]
+        for clips in clips_by_length.values()
+        for start in range(0, len(clips), EVALUATION_BATCH_CLIPS)
+    ]
+    reference_features: list[np.ndarray] = []
+    reconstructed_features: list[np.ndarray] = []
+    joint_errors: list[float] = []
+    feature_distances: list[float] = []
 
-        reference_features.append(features)
-        reconstructed_features.append(reconstruction)
-        feature_error = np.sqrt(((features - reconstruction) ** 2).sum(-1)).mean()
-        feature_distances.append(float(feature_error))
+    for batch in batches:
+        reference = np.stack(batch)
+        normalized = torch.from_numpy(scaler.normalize(reference)).to(device)
+        reconstruction_normalized = module(normalized)[0].cpu().numpy()
+        reconstruction = np.asarray(scaler.denormalize(reconstruction_normalized), np.float32)
 
-        reference_joints = recover_from_ric(torch.from_numpy(features).float(), joint_count)
-        reconstructed_joints = recover_from_ric(
-            torch.from_numpy(reconstruction).float(), joint_count
-        )
-        joint_offsets = reference_joints.numpy() - reconstructed_joints.numpy()
-        joint_errors.append(float(np.sqrt((joint_offsets**2).sum(-1)).mean()))
+        reference_features.extend(reference)
+        reconstructed_features.extend(reconstruction)
+        feature_error = np.sqrt(((reference - reconstruction) ** 2).sum(-1)).mean(-1)
+        feature_distances.extend(feature_error.tolist())
+
+        reference_joints = recover_from_ric(torch.from_numpy(reference), joint_count)
+        reconstructed_joints = recover_from_ric(torch.from_numpy(reconstruction), joint_count)
+        joint_offsets = (reference_joints - reconstructed_joints).numpy()
+        joint_errors.extend(np.sqrt((joint_offsets**2).sum(-1)).mean((-2, -1)).tolist())
 
     metrics = {
         "clips": len(reference_features),
