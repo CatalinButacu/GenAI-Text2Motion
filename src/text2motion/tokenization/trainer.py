@@ -46,7 +46,6 @@ class TokenizerTrainer:
         self.tokenizer_network = tokenizer_network
         self.commit_beta = commit_beta
         self.grad_clip = grad_clip
-        self.codebook_size = int(tokenizer_network.codebook_size)
         self.optimizer = torch.optim.AdamW(
             tokenizer_network.parameters(), lr=lr, weight_decay=weight_decay
         )
@@ -54,10 +53,11 @@ class TokenizerTrainer:
 
     def __code_stats(self, indices: torch.Tensor) -> tuple[float, float]:
         indices = indices.detach().cpu()
+        codebook_size = self.tokenizer_network.codebook_size
         perplexities, usages = [], []
         for codebook in range(indices.shape[-1]):
             counts = torch.bincount(
-                indices[..., codebook].reshape(-1), minlength=self.codebook_size
+                indices[..., codebook].reshape(-1), minlength=codebook_size
             ).float()
             probs = counts[counts > 0] / counts.sum()
             perplexities.append(float(torch.exp(-(probs * probs.log()).sum())))

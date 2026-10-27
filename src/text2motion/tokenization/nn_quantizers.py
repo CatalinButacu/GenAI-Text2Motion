@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TypeVar
 
 import torch
 from torch import nn
@@ -12,10 +11,10 @@ from text2motion.tokenization.contracts import (
     ResidualVectorQuantizationConfig,
 )
 
-_Module = TypeVar("_Module", bound=nn.Module)
 
-
-def typed_modules(modules: nn.ModuleList, kind: type[_Module]) -> list[_Module]:
+def typed_modules[ModuleType: nn.Module](
+    modules: nn.ModuleList, kind: type[ModuleType]
+) -> list[ModuleType]:
     return [module for module in modules if isinstance(module, kind)]
 
 
@@ -103,7 +102,6 @@ class FiniteScalarQuantizer(Quantizer):
 
 class ResidualQuantizerStack(QuantizerStack, ABC):
     layers: nn.ModuleList
-    num_quantizers: int
     dropout_p: float
 
     @property
@@ -114,10 +112,11 @@ class ResidualQuantizerStack(QuantizerStack, ABC):
         return torch.stack(codes, dim=0).sum(0)
 
     def active_stage_count(self) -> int:
+        stage_count = len(self.layers)
         if self.training and self.dropout_p > 0 and torch.rand(()) < self.dropout_p:
-            return int(torch.randint(1, self.num_quantizers + 1, ()).item())
+            return int(torch.randint(1, stage_count + 1, ()).item())
 
-        return self.num_quantizers
+        return stage_count
 
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
         units = self.quantizers
@@ -131,7 +130,6 @@ class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
     def __init__(self, levels: tuple[int, ...], num_quantizers: int, dropout_p: float) -> None:
         super().__init__()
         self.layers = nn.ModuleList([FiniteScalarQuantizer(levels) for _ in range(num_quantizers)])
-        self.num_quantizers = num_quantizers
         self.dropout_p = dropout_p
 
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -156,8 +154,6 @@ class GroupedFiniteScalarQuantizer(QuantizerStack):
     def __init__(self, levels: tuple[int, ...], num_quantizers: int) -> None:
         super().__init__()
         self.groups = nn.ModuleList([FiniteScalarQuantizer(levels) for _ in range(num_quantizers)])
-        self.num_quantizers = num_quantizers
-        self.dim = len(levels)
 
     @property
     def quantizers(self) -> list[Quantizer]:
@@ -169,8 +165,9 @@ class GroupedFiniteScalarQuantizer(QuantizerStack):
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         codes: list[torch.Tensor] = []
         indices: list[torch.Tensor] = []
-        for group_index, group in enumerate(typed_modules(self.groups, FiniteScalarQuantizer)):
-            chunk = z[..., group_index * self.dim : (group_index + 1) * self.dim]
+        groups = typed_modules(self.groups, FiniteScalarQuantizer)
+        chunks = z.split([group.dim for group in groups], dim=-1)
+        for group, chunk in zip(groups, chunks, strict=True):
             code = group.quantize(chunk)
             codes.append(code)
             indices.append(group.codes_to_indices(code))

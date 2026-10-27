@@ -13,15 +13,13 @@ class ExponentialMovingAverage:
             if param.requires_grad
         }
         self.backup: dict[str, torch.Tensor] = {}
-        self._tracked = [
-            (param, self.shadow[name])
-            for name, param in model.named_parameters()
-            if name in self.shadow
-        ]
 
     @torch.no_grad()
     def update(self, model: nn.Module) -> None:
-        for param, shadow in self._tracked:
+        for name, param in model.named_parameters():
+            shadow = self.shadow.get(name)
+            if shadow is None:
+                continue
             shadow.mul_(self.decay).add_(param, alpha=1 - self.decay)
 
     @torch.no_grad()
