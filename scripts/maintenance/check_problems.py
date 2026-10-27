@@ -1,5 +1,7 @@
 # python scripts/maintenance/check_problems.py --all
+import ast
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -7,9 +9,15 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 PYTHON = REPO / ".venv" / "Scripts" / "python.exe"
 CHECKED_FOLDERS = ("src", "scripts", "tests")
-RULES = "E4,E7,E9,F,I,B,SIM,RET,C90,PLR0911,PLR0912"
+RULES = "E4,E7,E9,F,I,B,SIM,RET,C90,PLR0911,PLR0912,PLW0602,PLW0603"
 COMPLEXITY = "lint.mccabe.max-complexity = 15"
 READ_ONLY_FLAG = "--check"
+CONSTANT_NAME = re.compile(r"^_*[A-Z][A-Z0-9_]*$")
+PROTOCOL_NAMES = frozenset({"logger", "pytestmark"})
+MUTABLE_NODES = (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)
+MUTABLE_CALLS = frozenset(
+    {"list", "dict", "set", "bytearray", "defaultdict", "deque", "OrderedDict", "Counter"}
+)
 
 
 def tool(*arguments: str) -> subprocess.CompletedProcess:
@@ -70,6 +78,71 @@ def type_problems(files: list[str]) -> list[str]:
     return problems
 
 
+def python_files(files: list[str]) -> list[Path]:
+    found = []
+    for name in files:
+        path = REPO / name
+        if path.is_dir():
+            found.extend(sorted(path.rglob("*.py")))
+            continue
+        found.append(path)
+    return found
+
+
+def is_mutable_value(value: ast.expr) -> bool:
+    if isinstance(value, MUTABLE_NODES):
+        return True
+    if not isinstance(value, ast.Call) or not isinstance(value.func, ast.Name):
+        return False
+    return value.func.id in MUTABLE_CALLS
+
+
+def module_assignments(tree: ast.Module) -> list[tuple[int, str, ast.expr]]:
+    assignments = []
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)) or node.value is None:
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        names = [target.id for target in targets if isinstance(target, ast.Name)]
+        assignments.extend((node.lineno, name, node.value) for name in names)
+    return assignments
+
+
+def module_name_problem(name: str, value: ast.expr) -> str | None:
+    if name.startswith("__") and name.endswith("__"):
+        return None
+    if name in PROTOCOL_NAMES:
+        return None
+    if not CONSTANT_NAME.match(name):
+        return f"G02 module name {name} is not an UPPER_CASE constant"
+    if not is_mutable_value(value):
+        return None
+    return (
+        f"G01 module constant {name} holds a mutable value; "
+        "use a tuple, frozenset or MappingProxyType"
+    )
+
+
+def module_name_problems(tree: ast.Module) -> list[tuple[int, str]]:
+    problems = []
+    for line, name, value in module_assignments(tree):
+        problem = module_name_problem(name, value)
+        if problem is None:
+            continue
+        problems.append((line, problem))
+    return problems
+
+
+def state_problems(files: list[str]) -> list[str]:
+    problems = []
+    for path in python_files(files):
+        tree = ast.parse(path.read_bytes().decode("utf-8"), filename=str(path))
+        name = path.resolve().relative_to(REPO).as_posix()
+        found = module_name_problems(tree)
+        problems.extend(f"{name}:{line}: {message}" for line, message in sorted(found))
+    return problems
+
+
 def selected_files(arguments: list[str]) -> list[str]:
     if arguments == ["--all"]:
         return [str(folder) for folder in CHECKED_FOLDERS]
@@ -87,7 +160,7 @@ def main() -> int:
         return 0
     if not read_only:
         repaired_by_ruff(files)
-    problems = lint_problems(files) + type_problems(files)
+    problems = lint_problems(files) + type_problems(files) + state_problems(files)
     for problem in problems:
         print(problem)
     stage = "with no repair" if read_only else "after the automatic repair"

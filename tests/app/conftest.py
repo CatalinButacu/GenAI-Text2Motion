@@ -24,3 +24,8 @@ def rename_everywhere() -> ModuleType:
 @pytest.fixture(scope="module")
 def add_class_separators() -> ModuleType:
     return loaded_maintenance_script("add_class_separators")
+
+
+@pytest.fixture(scope="module")
+def check_problems() -> ModuleType:
+    return loaded_maintenance_script("check_problems")
