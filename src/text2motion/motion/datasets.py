@@ -193,6 +193,9 @@ class MotionWindowDataset(Dataset):
         self._ids, self._cache = self.__load_windowable_clips(split_clip_ids(root, split))
         if not self._ids:
             raise RuntimeError(f"no clips >= window {window} for split {split!r}")
+        self._overflows = np.array([clip.shape[0] - window for clip in self._cache], np.int64)
+        self._starts = self._overflows // 2
+        self._starts_epoch = -1
 
     def __load_windowable_clips(self, names: list[str]) -> tuple[list[str], list[np.ndarray]]:
         ids: list[str] = []
@@ -210,7 +213,7 @@ class MotionWindowDataset(Dataset):
                 non_finite.append(clip_id)
                 continue
             ids.append(clip_id)
-            clips.append(feat)
+            clips.append(np.asarray(self.scaler.normalize(feat), np.float32))
         if non_finite:
             suffix = " ..." if len(non_finite) > 20 else ""
             raise ValueError(
@@ -236,14 +239,18 @@ class MotionWindowDataset(Dataset):
     def denormalize(self, feat: torch.Tensor) -> torch.Tensor:
         return self.scaler.denormalize(feat)
 
+    def window_starts(self) -> np.ndarray:
+        epoch = self._epoch.value
+        if not self._train or epoch == self._starts_epoch:
+            return self._starts
+        generator = np.random.default_rng((self._seed, epoch))
+        self._starts = generator.integers(self._overflows + 1)
+        self._starts_epoch = epoch
+        return self._starts
+
     def __getitem__(self, idx: int) -> MotionClip:
-        feat = self._cache[idx]
-        overflow = feat.shape[0] - self._window
-        if self._train:
-            start = int(item_rng(self._seed, self._epoch.value, idx).randint(overflow + 1))
-        else:
-            start = overflow // 2
-        window = self.scaler.normalize(feat[start : start + self._window])
+        start = int(self.window_starts()[idx])
+        window = self._cache[idx][start : start + self._window]
         return MotionClip(
             features=torch.from_numpy(window),
             frame_count=window.shape[0],

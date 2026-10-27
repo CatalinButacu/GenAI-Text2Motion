@@ -74,3 +74,26 @@ def test_persistent_spawn_workers_see_each_new_epoch(tmp_path, kind):
     assert first != second
     assert resumed == second
     assert single == second
+
+
+@pytest.mark.parametrize("split", ["train", "val"])
+def test_each_window_is_a_normalized_slice_of_its_clip(tmp_path, split):
+    root = __dataset_root(tmp_path)
+    (root / "val.txt").write_text(
+        (root / "train.txt").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    np.save(root / "Mean.npy", np.full(263, 0.5, np.float32))
+    np.save(root / "Std.npy", np.full(263, 2.0, np.float32))
+    data = MotionDataConfig(mirror_augment=False)
+    dataset = MotionWindowDataset(root, data, split, 32, seed=1)
+    dataset.set_epoch(3)
+    for index in range(CLIPS):
+        raw = np.load(root / "new_joint_vecs" / f"{index:06d}.npy")
+        windows = [(raw[start : start + 32] - 0.5) / 2.0 for start in range(raw.shape[0] - 31)]
+        features = dataset[index].features.numpy()
+        matches = [
+            start for start, window in enumerate(windows) if np.array_equal(window, features)
+        ]
+        assert matches, index
+        if split == "val":
+            assert matches == [(raw.shape[0] - 32) // 2]
