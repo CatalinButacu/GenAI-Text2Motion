@@ -156,7 +156,7 @@ def test_stream_forwards_guidance_and_end_stopping():
         def stream_token_indices(self, text_emb, steps, **kwargs):
             seen.update(kwargs)
             for _ in range(steps):
-                yield torch.zeros(1, 8, dtype=torch.long)
+                yield torch.zeros(1, TOK.num_quantizers, dtype=torch.long)
 
     tok = FiniteScalarQuantizationTokenizer(TOK)
     decoder = StreamingMotionDecoder(

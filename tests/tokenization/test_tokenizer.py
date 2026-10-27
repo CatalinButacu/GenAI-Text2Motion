@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from text2motion.app.config import TokenizerConfig
@@ -5,7 +6,11 @@ from text2motion.tokenization.nn_model import (
     FiniteScalarQuantizationTokenizer,
     feature_velocity_reconstruction_loss,
 )
-from text2motion.tokenization.nn_quantizers import FiniteScalarQuantizer
+from text2motion.tokenization.nn_quantizers import (
+    FiniteScalarQuantizer,
+    GroupedFiniteScalarQuantizer,
+    typed_modules,
+)
 
 CFG = TokenizerConfig(
     in_dim=263, width=128, downsample=4, num_quantizers=4, fsq_levels=(8, 5, 5, 5)
@@ -53,3 +58,22 @@ def test_single_batch_overfit():
         opt.step()
 
     assert loss.item() < 0.5 * loss0  # must at least halve -- proves the path learns
+
+
+def test_grouped_quantizer_matches_one_call_for_each_group():
+    torch.manual_seed(0)
+    quantizer = GroupedFiniteScalarQuantizer((8, 8, 4, 4), num_quantizers=3)
+    latent = torch.randn(2, 5, 12) * 3
+    codes, indices, _ = quantizer(latent)
+    groups = typed_modules(quantizer.groups, FiniteScalarQuantizer)
+    for group_index, (group, chunk) in enumerate(zip(groups, latent.split(4, dim=-1), strict=True)):
+        group_codes = group.quantize(chunk)
+        assert torch.equal(codes[..., 4 * group_index : 4 * group_index + 4], group_codes)
+        assert torch.equal(indices[..., group_index], group.codes_to_indices(group_codes))
+    assert torch.equal(quantizer.indices_to_codes(indices), codes)
+
+
+def test_indices_with_another_codebook_count_raise():
+    quantizer = GroupedFiniteScalarQuantizer((8, 8, 4, 4), num_quantizers=3)
+    with pytest.raises(ValueError, match="4 codebooks"):
+        quantizer.indices_to_codes(torch.zeros(2, 5, 4, dtype=torch.long))

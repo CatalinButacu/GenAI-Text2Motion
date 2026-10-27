@@ -42,6 +42,15 @@ class QuantizerStack(nn.Module, ABC):
     @abstractmethod
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor: ...
 
+    def checked_indices(self, indices: torch.Tensor) -> torch.Tensor:
+        expected = len(self.quantizers)
+        if indices.shape[-1] != expected:
+            raise ValueError(
+                f"the indices have {indices.shape[-1]} codebooks, but this quantizer stack has "
+                f"{expected}; the tokens come from another tokenizer configuration"
+            )
+        return indices
+
 
 def reject_dropped_codes(indices: torch.Tensor) -> torch.Tensor:
     if bool((indices < 0).any()):
@@ -133,6 +142,7 @@ class ResidualQuantizerStack(QuantizerStack, ABC):
         return stage_count
 
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
+        indices = self.checked_indices(indices)
         quantizers = self.quantizers
         code_vectors = quantizers[0].indices_to_codes(indices[..., 0])
         for stage, quantizer in enumerate(quantizers[1:], start=1):
@@ -184,23 +194,19 @@ class GroupedFiniteScalarQuantizer(QuantizerStack):
     def combine_code_vectors(self, codes: list[torch.Tensor]) -> torch.Tensor:
         return torch.cat(codes, dim=-1)
 
+    def shared_quantizer(self) -> FiniteScalarQuantizer:
+        return typed_modules(self.groups, FiniteScalarQuantizer)[0]
+
     def forward(self, latent: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        codes: list[torch.Tensor] = []
-        indices: list[torch.Tensor] = []
-        groups = typed_modules(self.groups, FiniteScalarQuantizer)
-        chunks = latent.split([group.dimension_count for group in groups], dim=-1)
-        for group, chunk in zip(groups, chunks, strict=True):
-            code = group.quantize(chunk)
-            codes.append(code)
-            indices.append(group.codes_to_indices(code))
-        return torch.cat(codes, dim=-1), torch.stack(indices, dim=-1), latent.new_zeros(())
+        quantizer = self.shared_quantizer()
+        grouped = latent.unflatten(-1, (len(self.groups), quantizer.dimension_count))
+        codes = quantizer.quantize(grouped)
+        indices = quantizer.codes_to_indices(codes)
+        return codes.flatten(-2), indices, latent.new_zeros(())
 
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
-        groups = typed_modules(self.groups, FiniteScalarQuantizer)
-        return torch.cat(
-            [group.indices_to_codes(indices[..., index]) for index, group in enumerate(groups)],
-            dim=-1,
-        )
+        checked = self.checked_indices(indices)
+        return self.shared_quantizer().indices_to_codes(checked).flatten(-2)
 
 
 ############################################################
