@@ -20,6 +20,10 @@ from text2motion.generation.nn_backbones import (
     instantiate_backbone,
 )
 
+############################################################
+#       MotionTokenGenerator
+############################################################
+
 
 class MotionTokenGenerator(nn.Module):
     def __init__(self, cfg: GeneratorConfig) -> None:
@@ -206,6 +210,11 @@ class MotionTokenGenerator(nn.Module):
             since_anchor = 0
 
 
+############################################################
+#       EagerDecodeStep
+############################################################
+
+
 class EagerDecodeStep:
     def __init__(self, model: MotionTokenGenerator, state: list) -> None:
         self.model = model
@@ -215,6 +224,11 @@ class EagerDecodeStep:
         embedded = self.model.embed_motion_tokens(feed)
         h, self.state = self.model.backbone.step(embedded, self.state)
         return self.model.predict_token_logits(h)
+
+
+############################################################
+#       CapturedDecodeStep
+############################################################
 
 
 class CapturedDecodeStep:
@@ -299,6 +313,11 @@ def token_ce_loss(
         torch.arange(targets.size(1), device=logits.device)[None, :] < token_lengths[:, None]
     ).float()[..., None]
     return (per_token * valid).sum() / valid.sum().clamp(min=1.0) / targets.size(-1)
+
+
+############################################################
+#       GeneratorModelSpec
+############################################################
 
 
 @dataclass(frozen=True)

@@ -27,15 +27,29 @@ from text2motion.tokenization.contracts import (
     TokenizerKind,
 )
 
+############################################################
+#       ComputeDevice
+############################################################
+
 
 class ComputeDevice(StrEnum):
     CPU = "cpu"
     CUDA = "cuda"
 
 
+############################################################
+#       Float32Precision
+############################################################
+
+
 class Float32Precision(StrEnum):
     HIGHEST = "highest"
     TF32 = "tf32"
+
+
+############################################################
+#       SmplxAvatarConfig
+############################################################
 
 
 @dataclass(frozen=True)
@@ -70,6 +84,11 @@ class SmplxAvatarConfig:
             out[name] = slice(start, start + dim)
             start += dim
         return out
+
+
+############################################################
+#       ProjectPathsConfig
+############################################################
 
 
 @dataclass(frozen=True)
@@ -126,6 +145,11 @@ class ProjectPathsConfig:
         return self.outputs_dir / "streaming_bench.json"
 
 
+############################################################
+#       MotionServiceConfig
+############################################################
+
+
 @dataclass(frozen=True)
 class MotionServiceConfig:
     bind_host: str = "127.0.0.1"
@@ -137,6 +161,11 @@ class MotionServiceConfig:
     cuda_graph_decode: bool = False
     anchor_every_tokens: int = 0
     anchor_context_tokens: int = 16
+
+
+############################################################
+#       ApplicationConfig
+############################################################
 
 
 @dataclass(frozen=True)

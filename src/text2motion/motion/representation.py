@@ -34,9 +34,19 @@ DYNAMICS_TERMS = ("foot_skate", "accel")
 FOOT_CONTACT_JOINTS = (7, 10, 8, 11)
 
 
+############################################################
+#       RepresentationTrack
+############################################################
+
+
 class RepresentationTrack(StrEnum):
     HML3D_263 = "hml3d263"
     SMPLX_168 = "smplx168"
+
+
+############################################################
+#       MotionSource
+############################################################
 
 
 class MotionSource(StrEnum):
@@ -85,6 +95,11 @@ _RIGHT_FEET = [8, 11]
 _LEFT_FEET = [7, 10]
 _FACE_JOINTS = [2, 1, 17, 16]
 _FOOT_VELOCITY_THRESHOLD = 0.002
+
+
+############################################################
+#       FeatureParams
+############################################################
 
 
 @dataclass(frozen=True)
@@ -327,6 +342,11 @@ def recover_skeleton(feat263: np.ndarray | torch.Tensor) -> np.ndarray:
         else torch.as_tensor(feat263, dtype=torch.float32)
     )
     return recover_from_ric(data.float(), JOINTS).cpu().numpy()
+
+
+############################################################
+#       StreamingSkeletonRecovery
+############################################################
 
 
 class StreamingSkeletonRecovery:

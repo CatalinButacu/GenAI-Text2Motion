@@ -20,6 +20,10 @@ from text2motion.generation.contracts import (
 )
 from text2motion.generation.contracts import BackboneChoice as BackboneChoice
 
+############################################################
+#       RMSNorm
+############################################################
+
 
 class RMSNorm(nn.Module):
     def __init__(self, d: int, eps: float = 1e-5) -> None:
@@ -42,6 +46,11 @@ def parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         a = a * a_prev
         shift *= 2
     return x
+
+
+############################################################
+#       MambaMixer
+############################################################
 
 
 class MambaMixer(nn.Module):
@@ -140,6 +149,11 @@ class MambaMixer(nn.Module):
         return self.out_proj(y * F.silu(z))
 
 
+############################################################
+#       MambaBlock
+############################################################
+
+
 class MambaBlock(nn.Module):
     def __init__(self, cfg: GeneratorConfig) -> None:
         super().__init__()
@@ -160,6 +174,11 @@ class MambaBlock(nn.Module):
         return x + self.drop(self.mixer(self.norm(x)))
 
 
+############################################################
+#       SequenceBackbone
+############################################################
+
+
 class SequenceBackbone(nn.Module, ABC):
     @property
     @abstractmethod
@@ -170,6 +189,11 @@ class SequenceBackbone(nn.Module, ABC):
 
     @abstractmethod
     def step(self, x_t: torch.Tensor, state: list) -> tuple[torch.Tensor, list]: ...
+
+
+############################################################
+#       MambaBackbone
+############################################################
 
 
 class MambaBackbone(SequenceBackbone):
@@ -203,6 +227,11 @@ class MambaBackbone(SequenceBackbone):
                 seq = block(seq)
 
         return self.norm_f(seq)
+
+
+############################################################
+#       TransformerBlock
+############################################################
 
 
 class TransformerBlock(nn.Module):
@@ -255,6 +284,11 @@ class TransformerBlock(nn.Module):
         x_t = x_t + self.proj(a)
         x_t = x_t + self.mlp(self.norm2(x_t))
         return x_t, (k, v)
+
+
+############################################################
+#       TransformerBackbone
+############################################################
 
 
 class TransformerBackbone(SequenceBackbone):

@@ -31,6 +31,11 @@ def append_skeleton_sequence_frames(node, joints: np.ndarray) -> None:
     node.lines.add_frames(joints[:, node.skeleton].reshape(len(joints), -1, 3))
 
 
+############################################################
+#       SmplxFitResult
+############################################################
+
+
 @dataclass
 class SmplxFitResult:
     vertices: np.ndarray
@@ -328,6 +333,11 @@ def solve_smplx_pose_from_joints(
         betas=np.zeros(model.num_betas, dtype=np.float32),
         joint_err_cm=err_cm,
     )
+
+
+############################################################
+#       SmplxAvatarController
+############################################################
 
 
 class SmplxAvatarController:

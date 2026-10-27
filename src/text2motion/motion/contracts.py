@@ -9,11 +9,20 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 
 from text2motion.motion.representation import FPS, JOINTS, MotionSource, RepresentationTrack
 
+############################################################
+#       Split
+############################################################
+
 
 class Split(StrEnum):
     TRAIN = "train"
     VALIDATION = "val"
     TEST = "test"
+
+
+############################################################
+#       PreparationStage
+############################################################
 
 
 class PreparationStage(StrEnum):
@@ -22,6 +31,11 @@ class PreparationStage(StrEnum):
     FEATURE = "feature"
     STATS = "stats"
     ALL = "all"
+
+
+############################################################
+#       MotionDataConfig
+############################################################
 
 
 @dataclass(frozen=True)
@@ -33,12 +47,22 @@ class MotionDataConfig:
     min_motion_len: int = 40
 
 
+############################################################
+#       TextAnnotation
+############################################################
+
+
 @dataclass(frozen=True)
 class TextAnnotation:
     caption: str
     tokens: list[str]
     start_time: float
     end_time: float
+
+
+############################################################
+#       PreparationRequest
+############################################################
 
 
 @dataclass(frozen=True)
@@ -50,6 +74,11 @@ class PreparationRequest:
     device: str = "cpu"
     fps: int = FPS
     joint_count: int = JOINTS
+
+
+############################################################
+#       CorpusLayout
+############################################################
 
 
 @dataclass(frozen=True)
@@ -64,6 +93,11 @@ class CorpusLayout:
 
 DEFAULT_CONFIG = Path("configs/default.yaml")
 CONFIG_HELP = "YAML file with model, data and path settings; it selects the experiment"
+
+
+############################################################
+#       CommandRequest
+############################################################
 
 
 class CommandRequest(BaseModel):
@@ -81,8 +115,18 @@ class CommandRequest(BaseModel):
         return value
 
 
+############################################################
+#       DefaultConfigRequest
+############################################################
+
+
 class DefaultConfigRequest(CommandRequest):
     config: Path = Field(default=DEFAULT_CONFIG, description=CONFIG_HELP)
+
+
+############################################################
+#       PrepareRequest
+############################################################
 
 
 class PrepareRequest(DefaultConfigRequest):

@@ -51,6 +51,11 @@ _CheckpointSink = Callable[[int, float], None]
 GENERATOR_RESUME_FORMAT = "text2motion.generator_resume"
 
 
+############################################################
+#       ParameterPartition
+############################################################
+
+
 @dataclass(frozen=True)
 class ParameterPartition:
     decay: tuple[nn.Parameter, ...]
@@ -135,6 +140,11 @@ def adamw_groups(
     if not use_decay_groups:
         return [{"params": parameters, "lr": lr}]
     return partition_parameters(module, only=only).optimizer_groups(lr)
+
+
+############################################################
+#       GeneratorTrainer
+############################################################
 
 
 class GeneratorTrainer:

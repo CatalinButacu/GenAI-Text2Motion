@@ -9,10 +9,19 @@ from pydantic import Field
 from text2motion.motion.contracts import CommandRequest, CorpusLayout
 from text2motion.motion.representation import DYNAMICS_TERMS, FK_TERMS, GEO_TERMS
 
+############################################################
+#       Backbone
+############################################################
+
 
 class Backbone(StrEnum):
     TRANSFORMER = "transformer"
     MAMBA = "mamba"
+
+
+############################################################
+#       BackboneChoice
+############################################################
 
 
 class BackboneChoice(StrEnum):
@@ -21,14 +30,29 @@ class BackboneChoice(StrEnum):
     BOTH = "both"
 
 
+############################################################
+#       MixedPrecisionMode
+############################################################
+
+
 class MixedPrecisionMode(StrEnum):
     OFF = "off"
     BF16 = "bf16"
 
 
+############################################################
+#       LossWeighting
+############################################################
+
+
 class LossWeighting(StrEnum):
     FIXED = "fixed"
     UNCERTAINTY = "uncertainty"
+
+
+############################################################
+#       OverfitCriteria
+############################################################
 
 
 @dataclass(frozen=True)
@@ -46,6 +70,11 @@ class OverfitCriteria:
 
 
 DEFAULT_OVERFIT_CRITERIA = OverfitCriteria()
+
+
+############################################################
+#       GeneratorConfig
+############################################################
 
 
 @dataclass(frozen=True)
@@ -69,6 +98,11 @@ class GeneratorConfig:
     n_heads: int = 8
 
 
+############################################################
+#       TextEncoderConfig
+############################################################
+
+
 @dataclass(frozen=True)
 class TextEncoderConfig:
     model_id: str = "openai/clip-vit-base-patch32"
@@ -77,6 +111,11 @@ class TextEncoderConfig:
     unfreeze_last_n: int = 1
     unfreeze_projection: bool = True
     prefix_len: int = 1
+
+
+############################################################
+#       LossWeights
+############################################################
 
 
 @dataclass(frozen=True)
@@ -111,6 +150,11 @@ class LossWeights:
         return self.fk_enabled or self.dynamics_enabled
 
 
+############################################################
+#       GeneratorTrainingConfig
+############################################################
+
+
 @dataclass(frozen=True)
 class GeneratorTrainingConfig:
     lr: float = 2e-4
@@ -129,6 +173,11 @@ class GeneratorTrainingConfig:
     loss_weights: LossWeights = field(default_factory=LossWeights)
 
 
+############################################################
+#       SamplingConfig
+############################################################
+
+
 @dataclass(frozen=True)
 class SamplingConfig:
     temperature: float = 1.0
@@ -137,9 +186,19 @@ class SamplingConfig:
     stop_at_end: bool = False
 
 
+############################################################
+#       StudioSamplingConfig
+############################################################
+
+
 @dataclass(frozen=True)
 class StudioSamplingConfig(SamplingConfig):
     cfg_scale: float = 6.0
+
+
+############################################################
+#       OverfitGateRequest
+############################################################
 
 
 @dataclass(frozen=True)
@@ -149,12 +208,22 @@ class OverfitGateRequest:
     lr: float = 3e-3
 
 
+############################################################
+#       TextToMotionGenerationRequest
+############################################################
+
+
 @dataclass(frozen=True)
 class TextToMotionGenerationRequest:
     prompt: str
     token_steps: int
     sampling: SamplingConfig = SamplingConfig()
     chunk_tokens: int = 1
+
+
+############################################################
+#       GeneratorTrainingRequest
+############################################################
 
 
 @dataclass(frozen=True)
@@ -176,6 +245,11 @@ class GeneratorTrainingRequest:
     extend_schedule: bool = False
 
 
+############################################################
+#       GeneratorPretrainingRequest
+############################################################
+
+
 @dataclass(frozen=True)
 class GeneratorPretrainingRequest:
     token_pack: Path
@@ -188,6 +262,11 @@ class GeneratorPretrainingRequest:
     resume: bool = False
     accept_legacy_resume: bool = False
     extend_schedule: bool = False
+
+
+############################################################
+#       SanityOverfitRequest
+############################################################
 
 
 class SanityOverfitRequest(CommandRequest):
@@ -212,6 +291,11 @@ class SanityOverfitRequest(CommandRequest):
         default=OverfitGateRequest().lr,
         description="learning rate for the gate only; high on purpose, to memorise fast",
     )
+
+
+############################################################
+#       TrainGeneratorRequest
+############################################################
 
 
 class TrainGeneratorRequest(CommandRequest):
@@ -296,6 +380,11 @@ class TrainGeneratorRequest(CommandRequest):
         default=False,
         description="with --resume: accept a new --epochs; the learning rate follows the new cosine",
     )
+
+
+############################################################
+#       PretrainRequest
+############################################################
 
 
 class PretrainRequest(CommandRequest):

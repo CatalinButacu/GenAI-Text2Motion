@@ -34,6 +34,11 @@ def required_path(value: Path | None, key: str) -> Path:
     return value
 
 
+############################################################
+#       ApplicationContext
+############################################################
+
+
 @dataclass
 class ApplicationContext:
     config: ApplicationConfig
@@ -192,6 +197,11 @@ class ApplicationContext:
 
 
 logger = logging.getLogger(__name__)
+
+
+############################################################
+#       ApplicationBootstrap
+############################################################
 
 
 class ApplicationBootstrap:

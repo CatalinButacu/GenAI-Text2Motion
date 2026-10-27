@@ -11,6 +11,11 @@ from text2motion.motion.representation import FPS
 DEFAULT_SERVICE_CONFIG = Path("configs/service.yml")
 
 
+############################################################
+#       ServiceAddressRequest
+############################################################
+
+
 class ServiceAddressRequest(DefaultConfigRequest):
     host: str | None = Field(default=None, description="service address; default from the config")
     port: int | None = Field(default=None, description="service TCP port; default from the config")
@@ -20,8 +25,18 @@ class ServiceAddressRequest(DefaultConfigRequest):
     )
 
 
+############################################################
+#       HealthRequest
+############################################################
+
+
 class HealthRequest(ServiceAddressRequest):
     pass
+
+
+############################################################
+#       ModelServiceRequest
+############################################################
 
 
 class ModelServiceRequest(ServiceAddressRequest):
@@ -38,11 +53,21 @@ class ModelServiceRequest(ServiceAddressRequest):
     )
 
 
+############################################################
+#       ServeRequest
+############################################################
+
+
 class ServeRequest(ModelServiceRequest):
     idle_seconds: int | None = Field(
         default=None,
         description="the service stops after this many seconds without a request",
     )
+
+
+############################################################
+#       StudioRequest
+############################################################
 
 
 class StudioRequest(ModelServiceRequest):

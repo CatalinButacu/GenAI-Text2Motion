@@ -9,10 +9,20 @@ import torch
 SMPLX_MODEL_TYPE = "smplx"
 
 
+############################################################
+#       Gender
+############################################################
+
+
 class Gender(StrEnum):
     NEUTRAL = "neutral"
     MALE = "male"
     FEMALE = "female"
+
+
+############################################################
+#       MotionClip
+############################################################
 
 
 @dataclass(frozen=True)
@@ -21,6 +31,11 @@ class MotionClip:
     frame_count: int
     caption: str | None = None
     clip_id: str | None = None
+
+
+############################################################
+#       MotionBatch
+############################################################
 
 
 @dataclass(frozen=True)
@@ -40,6 +55,11 @@ class MotionBatch:
         )
 
 
+############################################################
+#       MotionTokens
+############################################################
+
+
 @dataclass(frozen=True)
 class MotionTokens:
     indices: torch.Tensor
@@ -50,6 +70,11 @@ class MotionTokens:
         return int(self.indices.shape[0])
 
 
+############################################################
+#       MotionChunk
+############################################################
+
+
 @dataclass(frozen=True)
 class MotionChunk:
     motion: MotionClip
@@ -57,11 +82,21 @@ class MotionChunk:
     is_final: bool
 
 
+############################################################
+#       StreamedChunk
+############################################################
+
+
 @dataclass(frozen=True)
 class StreamedChunk:
     joints: np.ndarray
     features: np.ndarray
     yaw: float
+
+
+############################################################
+#       GeneratedMotion
+############################################################
 
 
 @dataclass(frozen=True)

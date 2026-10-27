@@ -9,6 +9,11 @@ _Color = tuple[float, float, float, float]
 _Pair = tuple[float, float]
 
 
+############################################################
+#       SmplxFitConfig
+############################################################
+
+
 @dataclass(frozen=True)
 class SmplxFitConfig:
     model_dir: str
@@ -26,9 +31,19 @@ class SmplxFitConfig:
     yaw_candidates_deg: tuple[float, ...] = (0.0, 90.0, 180.0, 270.0)
 
 
+############################################################
+#       SmplxFitSchedule
+############################################################
+
+
 @dataclass(frozen=True)
 class SmplxFitSchedule:
     retrofit_window: int = 16
+
+
+############################################################
+#       StreamDisplayConfig
+############################################################
 
 
 @dataclass(frozen=True)
@@ -39,16 +54,31 @@ class StreamDisplayConfig:
     upsample: int = 6
 
 
+############################################################
+#       LiveGenerationConfig
+############################################################
+
+
 @dataclass(frozen=True)
 class LiveGenerationConfig:
     steps: int = 20
     debounce_seconds: float = 0.35
 
 
+############################################################
+#       SceneAppearanceConfig
+############################################################
+
+
 @dataclass(frozen=True)
 class SceneAppearanceConfig:
     skin_color: _Color = (0.86, 0.72, 0.61, 1.0)
     sky_color: _Color = (240 / 255, 182 / 255, 182 / 255, 1.0)
+
+
+############################################################
+#       PanelLayoutConfig
+############################################################
 
 
 @dataclass(frozen=True)
@@ -58,6 +88,11 @@ class PanelLayoutConfig:
     prompt_height: float = 0.11
     editor_height: float = 0.52
     playback_height: float = 0.30
+
+
+############################################################
+#       StudioThemeConfig
+############################################################
 
 
 @dataclass(frozen=True)
@@ -95,6 +130,11 @@ class StudioThemeConfig:
             "plot_histogram": (0.42, 0.66, 1.0, 1.0),
         }
     )
+
+
+############################################################
+#       StudioConfig
+############################################################
 
 
 @dataclass(frozen=True)

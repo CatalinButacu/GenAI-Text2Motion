@@ -16,6 +16,11 @@ _BUNDLE_FORMAT = "text2motion.generator_bundle"
 _BUNDLE_VERSION = 1
 
 
+############################################################
+#       GeneratorBundle
+############################################################
+
+
 @dataclass(frozen=True)
 class GeneratorBundle:
     backbone: Backbone
@@ -120,6 +125,11 @@ def load_generator_checkpoint(
 
 _GATE_FORMAT = "text2motion.real_batch_overfit_gate"
 _GATE_VERSION = 1
+
+
+############################################################
+#       OverfitGate
+############################################################
 
 
 @dataclass(frozen=True)

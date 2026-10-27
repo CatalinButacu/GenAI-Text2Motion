@@ -128,6 +128,11 @@ _VIP_WORDS = {
 }
 
 
+############################################################
+#       GuoWordPosVectorizer
+############################################################
+
+
 class GuoWordPosVectorizer:
     def __init__(self, meta_root, prefix):
         vectors = np.load(pjoin(meta_root, "%s_data.npy" % prefix))
@@ -193,6 +198,11 @@ def bigru_final_state(
     return torch.cat([h_n[0], h_n[1]], dim=-1)
 
 
+############################################################
+#       GuoMovementEncoder
+############################################################
+
+
 class GuoMovementEncoder(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -223,6 +233,11 @@ class GuoMovementEncoder(nn.Module):
         return self.out_net(out)
 
 
+############################################################
+#       GuoMotionEncoder
+############################################################
+
+
 class GuoMotionEncoder(nn.Module):
     hidden: torch.Tensor
 
@@ -245,6 +260,11 @@ class GuoMotionEncoder(nn.Module):
         return self.output_net(final)
 
 
+############################################################
+#       GuoMotionEmbeddingEncoder
+############################################################
+
+
 class GuoMotionEmbeddingEncoder(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -264,6 +284,11 @@ class GuoMotionEmbeddingEncoder(nn.Module):
             seg_lengths = (lengths // _MOVEMENT_KERNEL).clamp(min=1, max=seg.size(1))
 
         return self.encoder(seg, seg_lengths)
+
+
+############################################################
+#       GuoTextEmbeddingEncoder
+############################################################
 
 
 class GuoTextEmbeddingEncoder(nn.Module):
@@ -344,6 +369,11 @@ def create_guo_text_input_builder(word_vectorizer: Any, max_tokens: int = 20) ->
         return word_embeddings, pos_onehots
 
     return build_text
+
+
+############################################################
+#       GuoEvaluationResources
+############################################################
 
 
 @dataclass(frozen=True)

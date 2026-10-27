@@ -37,6 +37,11 @@ _MetricSink = Callable[[dict[str, object]], None]
 PRETRAIN_RESUME_FORMAT = "text2motion.pretrain_resume"
 
 
+############################################################
+#       PretrainingBudget
+############################################################
+
+
 @dataclass(frozen=True)
 class PretrainingBudget:
     available_examples: int
@@ -94,6 +99,11 @@ def split_keys_by_clip(keys: list[str], val_fraction: float, seed: int) -> tuple
     train_keys = [key for key in keys if key.rsplit("__", 1)[0] not in val_stems]
     val_keys = [key for key in keys if key.rsplit("__", 1)[0] in val_stems]
     return train_keys, val_keys
+
+
+############################################################
+#       TokenPack
+############################################################
 
 
 class TokenPack(Dataset):

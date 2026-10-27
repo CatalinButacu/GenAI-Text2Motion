@@ -16,9 +16,19 @@ GUO_MIN_FRAMES = 40
 GUO_MAX_FRAMES = 200
 
 
+############################################################
+#       GenerationLengthPolicy
+############################################################
+
+
 class GenerationLengthPolicy(StrEnum):
     FIXED = "fixed"
     END_TOKEN = "end"
+
+
+############################################################
+#       GenerationEvaluationProtocol
+############################################################
 
 
 @dataclass(frozen=True)
@@ -31,6 +41,11 @@ class GenerationEvaluationProtocol:
     bootstrap: int = 200
     reps: int = 20
     batch_size: int = 32
+
+
+############################################################
+#       GenerationEvaluationReport
+############################################################
 
 
 @dataclass(frozen=True)
@@ -60,6 +75,11 @@ class GenerationEvaluationReport:
         return record
 
 
+############################################################
+#       EvaluationSample
+############################################################
+
+
 @dataclass(frozen=True)
 class EvaluationSample:
     sample_id: str
@@ -67,6 +87,11 @@ class EvaluationSample:
     token_len: int
     captions: list[str]
     caption_tokens: list[list[str]]
+
+
+############################################################
+#       GenerationEvaluationSet
+############################################################
 
 
 @dataclass(frozen=True)
@@ -80,6 +105,11 @@ class GenerationEvaluationSet:
     dropped: dict[str, int]
 
 
+############################################################
+#       StreamingBenchmarkProtocol
+############################################################
+
+
 @dataclass(frozen=True)
 class StreamingBenchmarkProtocol:
     horizons: tuple[int, ...] = (64, 128, 256, 512, 1024)
@@ -89,6 +119,11 @@ class StreamingBenchmarkProtocol:
     out_path: Path = Path("artifacts/outputs/streaming_bench.json")
     label: str = "streaming_bench"
     headroom: int = 8
+
+
+############################################################
+#       BenchmarkRequest
+############################################################
 
 
 class BenchmarkRequest(DefaultConfigRequest):
@@ -113,6 +148,11 @@ class BenchmarkRequest(DefaultConfigRequest):
         default=StreamingBenchmarkProtocol().streams_horizon,
         description="stream length used in the parallel-stream test",
     )
+
+
+############################################################
+#       EvaluateRequest
+############################################################
 
 
 class EvaluateRequest(DefaultConfigRequest):

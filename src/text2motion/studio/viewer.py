@@ -67,6 +67,11 @@ _STYLE_FIELDS = (
 )
 
 
+############################################################
+#       GuiPanels
+############################################################
+
+
 class GuiPanels:
     def __init__(
         self,
@@ -457,6 +462,11 @@ class GuiPanels:
             self.__progress_bars()
         self.__dim_text(self.state.status)
         imgui.end()
+
+
+############################################################
+#       StreamingStudioViewer
+############################################################
 
 
 class StreamingStudioViewer(Viewer):

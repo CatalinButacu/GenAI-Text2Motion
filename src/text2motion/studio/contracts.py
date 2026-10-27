@@ -7,6 +7,10 @@ import numpy as np
 
 from text2motion.motion.model import StreamedChunk
 
+############################################################
+#       ViewerHost
+############################################################
+
 
 @runtime_checkable
 class ViewerHost(Protocol):
@@ -24,6 +28,11 @@ class ViewerHost(Protocol):
     def reload_settings(self) -> None: ...
 
     def center_view_on_node(self, node: Any) -> None: ...
+
+
+############################################################
+#       StudioLaunchArguments
+############################################################
 
 
 class StudioLaunchArguments(Protocol):
@@ -56,6 +65,11 @@ class StudioLaunchArguments(Protocol):
 
     @property
     def cfg_scale(self) -> float: ...
+
+
+############################################################
+#       MotionInferenceClientPort
+############################################################
 
 
 @runtime_checkable

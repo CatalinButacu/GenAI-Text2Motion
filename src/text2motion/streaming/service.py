@@ -50,6 +50,11 @@ def format_stats(stats: dict) -> str:
     )
 
 
+############################################################
+#       LoadedInferencePipeline
+############################################################
+
+
 @dataclass(frozen=True)
 class LoadedInferencePipeline:
     generator: TextToMotionGenerator
@@ -85,6 +90,11 @@ def pending_request(sock: socket.socket, io) -> dict | None:
     if not readable:
         return None
     return MotionStreamProtocol.recv_json(io)
+
+
+############################################################
+#       MotionInferenceServer
+############################################################
 
 
 class MotionInferenceServer:

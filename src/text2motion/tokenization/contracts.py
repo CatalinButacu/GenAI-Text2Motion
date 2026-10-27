@@ -15,14 +15,29 @@ DROPPED_CODE = -1
 _MOTION_FRAMES = MotionDataConfig().max_motion_len
 
 
+############################################################
+#       FiniteScalarStackLayout
+############################################################
+
+
 class FiniteScalarStackLayout(StrEnum):
     GROUPED = "grouped"
     RESIDUAL = "residual"
 
 
+############################################################
+#       TokenizerKind
+############################################################
+
+
 class TokenizerKind(StrEnum):
     FINITE_SCALAR = "fsq"
     RESIDUAL_VECTOR = "rvq"
+
+
+############################################################
+#       TokenizerConfig
+############################################################
 
 
 @dataclass(frozen=True)
@@ -36,6 +51,11 @@ class TokenizerConfig:
     quantizer: FiniteScalarStackLayout = FiniteScalarStackLayout.GROUPED
     quant_dropout: float = 0.2
     n_resblocks: int = 3
+
+
+############################################################
+#       ResidualVectorQuantizationConfig
+############################################################
 
 
 @dataclass(frozen=True)
@@ -53,10 +73,20 @@ class ResidualVectorQuantizationConfig:
     reset_threshold: float = 1.0
 
 
+############################################################
+#       TokenizerReconstruction
+############################################################
+
+
 class TokenizerReconstruction(NamedTuple):
     reconstruction: torch.Tensor
     token_indices: torch.Tensor
     commitment_loss: torch.Tensor
+
+
+############################################################
+#       TokenizeRequest
+############################################################
 
 
 class TokenizeRequest(CommandRequest):
@@ -84,6 +114,11 @@ class TokenizeRequest(CommandRequest):
         default=CorpusLayout().regen_dir,
         description="folder with pose_data; the heldout clips are found and excluded through it",
     )
+
+
+############################################################
+#       TrainTokenizerRequest
+############################################################
 
 
 class TrainTokenizerRequest(CommandRequest):

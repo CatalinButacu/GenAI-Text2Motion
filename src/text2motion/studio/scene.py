@@ -22,6 +22,11 @@ from text2motion.studio.contracts import (
 logger = logging.getLogger(__name__)
 
 
+############################################################
+#       StudioModelEntry
+############################################################
+
+
 @dataclass(frozen=True)
 class StudioModelEntry:
     name: str
@@ -104,6 +109,11 @@ def load_model_registry(
     return entries, 0
 
 
+############################################################
+#       StudioSceneNodes
+############################################################
+
+
 class StudioSceneNodes:
     def __init__(self, scene) -> None:
         self.scene = scene
@@ -156,6 +166,11 @@ class StudioSceneNodes:
         return self.body is not None or self.motion is not None
 
 
+############################################################
+#       SmplxFitState
+############################################################
+
+
 class SmplxFitState:
     def __init__(self) -> None:
         self.model_cache: dict[tuple[int, str], object] = {}
@@ -189,6 +204,11 @@ class SmplxFitState:
     def bump(self) -> int:
         self.version += 1
         return self.version
+
+
+############################################################
+#       StudioStreamBuffers
+############################################################
 
 
 class StudioStreamBuffers:
@@ -286,6 +306,11 @@ class StudioStreamBuffers:
         return self.cancel or self.fit_take != self.take
 
 
+############################################################
+#       LiveGenerationDebouncer
+############################################################
+
+
 class LiveGenerationDebouncer:
     def __init__(self) -> None:
         self.enabled = False
@@ -301,6 +326,11 @@ class LiveGenerationDebouncer:
 
     def debounce_elapsed(self, now: float, debounce_s: float) -> bool:
         return self.prev_prompt != "" and (now - self.dirty_at) >= debounce_s
+
+
+############################################################
+#       StreamSceneUpdater
+############################################################
 
 
 class StreamSceneUpdater:
@@ -496,6 +526,11 @@ class StreamSceneUpdater:
             camera.target = camera.target + delta
 
         self.state.nodes.follow_center = center
+
+
+############################################################
+#       StudioSession
+############################################################
 
 
 class StudioSession:

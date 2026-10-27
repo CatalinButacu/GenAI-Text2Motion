@@ -18,11 +18,21 @@ def typed_modules[ModuleType: nn.Module](
     return [module for module in modules if isinstance(module, kind)]
 
 
+############################################################
+#       Quantizer
+############################################################
+
+
 class Quantizer(nn.Module, ABC):
     codebook_size: int
 
     @abstractmethod
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor: ...
+
+
+############################################################
+#       QuantizerStack
+############################################################
 
 
 class QuantizerStack(nn.Module, ABC):
@@ -53,6 +63,11 @@ def dropped_code_indices(latent: torch.Tensor) -> torch.Tensor:
 
 def round_straight_through(latent: torch.Tensor) -> torch.Tensor:
     return latent + (torch.round(latent) - latent).detach()
+
+
+############################################################
+#       FiniteScalarQuantizer
+############################################################
 
 
 class FiniteScalarQuantizer(Quantizer):
@@ -101,6 +116,11 @@ class FiniteScalarQuantizer(Quantizer):
         return (digits.float() - self.half_width) / self.half_width
 
 
+############################################################
+#       ResidualQuantizerStack
+############################################################
+
+
 class ResidualQuantizerStack(QuantizerStack, ABC):
     layers: nn.ModuleList
     dropout_probability: float
@@ -128,6 +148,11 @@ class ResidualQuantizerStack(QuantizerStack, ABC):
         return code_vectors
 
 
+############################################################
+#       ResidualFiniteScalarQuantizer
+############################################################
+
+
 class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
     def __init__(
         self, levels: tuple[int, ...], num_quantizers: int, dropout_probability: float
@@ -152,6 +177,11 @@ class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
                 indices.append(dropped_code_indices(latent))
 
         return quantized, torch.stack(indices, dim=-1), latent.new_zeros(())
+
+
+############################################################
+#       GroupedFiniteScalarQuantizer
+############################################################
 
 
 class GroupedFiniteScalarQuantizer(QuantizerStack):
@@ -183,6 +213,11 @@ class GroupedFiniteScalarQuantizer(QuantizerStack):
             [group.indices_to_codes(indices[..., index]) for index, group in enumerate(groups)],
             dim=-1,
         )
+
+
+############################################################
+#       VectorQuantizer
+############################################################
 
 
 class VectorQuantizer(Quantizer):
@@ -252,6 +287,11 @@ class VectorQuantizer(Quantizer):
 
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
         return F.embedding(indices, self.embed)
+
+
+############################################################
+#       ResidualVectorQuantizer
+############################################################
 
 
 class ResidualVectorQuantizer(ResidualQuantizerStack):

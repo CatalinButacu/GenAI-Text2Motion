@@ -18,6 +18,11 @@ from text2motion.motion.storage import sha256_file
 logger = logging.getLogger(__name__)
 
 
+############################################################
+#       MotionStreamProtocol
+############################################################
+
+
 class MotionStreamProtocol:
     @staticmethod
     def send_json(io, obj: dict) -> None:
@@ -45,6 +50,11 @@ class MotionStreamProtocol:
         if not data or len(data) != count * 4:
             raise ConnectionError("short read")
         return np.frombuffer(data, dtype=np.float32).reshape(msg["shape"]).copy()
+
+
+############################################################
+#       MotionInferenceClient
+############################################################
 
 
 class MotionInferenceClient:
