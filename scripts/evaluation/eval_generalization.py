@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from types import MappingProxyType
 
 import torch
 
@@ -9,23 +10,25 @@ from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.motion.contracts import Split
 from text2motion.tokenization.metrics import evaluate_tokenizer_reconstruction
 
-_CHECKPOINT_CONFIGS = {
-    "rvq_l4_512": "configs/tokenizer/rvq_l4_512.yaml",
-    "rvq_l6_512": "configs/tokenizer/rvq_l6_512.yaml",
-    "rvq_l8_512": "configs/tokenizer/rvq_l8_512.yaml",
-    "rvq_l4_1024": "configs/tokenizer/rvq_l4_1024.yaml",
-    "rvq_l6_1024": "configs/tokenizer/rvq_l6_1024.yaml",
-    "rvq_l8_1024": "configs/tokenizer/rvq_l8_1024.yaml",
-    "fsq_g4_v512": "configs/tokenizer/fsq_g4_v512.yaml",
-    "fsq_g6_v512": "configs/tokenizer/tokenizer_isovocab.yaml",
-    "fsq_g8_v512": "configs/tokenizer/fsq_g8_v512.yaml",
-    "fsq_g4_v1024": "configs/tokenizer/fsq_g4_v1024.yaml",
-    "fsq_g6_v1024": "configs/tokenizer/fsq_g6_v1024.yaml",
-    "fsq_g8_v1024": "configs/tokenizer/fsq_g8_v1024.yaml",
-    "fsq_g4_v1000": "configs/tokenizer/tok_g4_v1000.yaml",
-    "fsq_g6_v1000": "configs/tokenizer/tok_g6_v1000.yaml",
-    "fsq_g8_v1000": "configs/tokenizer/tok_g8_v1000.yaml",
-}
+_CHECKPOINT_CONFIGS = MappingProxyType(
+    {
+        "rvq_l4_512": "configs/tokenizer/rvq_l4_512.yaml",
+        "rvq_l6_512": "configs/tokenizer/rvq_l6_512.yaml",
+        "rvq_l8_512": "configs/tokenizer/rvq_l8_512.yaml",
+        "rvq_l4_1024": "configs/tokenizer/rvq_l4_1024.yaml",
+        "rvq_l6_1024": "configs/tokenizer/rvq_l6_1024.yaml",
+        "rvq_l8_1024": "configs/tokenizer/rvq_l8_1024.yaml",
+        "fsq_g4_v512": "configs/tokenizer/fsq_g4_v512.yaml",
+        "fsq_g6_v512": "configs/tokenizer/tokenizer_isovocab.yaml",
+        "fsq_g8_v512": "configs/tokenizer/fsq_g8_v512.yaml",
+        "fsq_g4_v1024": "configs/tokenizer/fsq_g4_v1024.yaml",
+        "fsq_g6_v1024": "configs/tokenizer/fsq_g6_v1024.yaml",
+        "fsq_g8_v1024": "configs/tokenizer/fsq_g8_v1024.yaml",
+        "fsq_g4_v1000": "configs/tokenizer/tok_g4_v1000.yaml",
+        "fsq_g6_v1000": "configs/tokenizer/tok_g6_v1000.yaml",
+        "fsq_g8_v1000": "configs/tokenizer/tok_g8_v1000.yaml",
+    }
+)
 _SPLITS = (Split.TRAIN, Split.VALIDATION, Split.TEST)
 
 

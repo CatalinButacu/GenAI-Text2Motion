@@ -6,6 +6,7 @@ import sys
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 
 import imgui
 import numpy as np
@@ -592,13 +593,15 @@ def model_controls(driver: HumanDriver, pointer: Pointer) -> None:
     driver.check("Reload settings button reloads", "reload" in state.load_status, state.load_status)
 
 
-PANELS = {
-    "environment": environment_controls,
-    "sampling": sampling_controls,
-    "prompt_playback": prompt_playback,
-    "avatar": avatar_controls,
-    "model": model_controls,
-}
+PANELS = MappingProxyType(
+    {
+        "environment": environment_controls,
+        "sampling": sampling_controls,
+        "prompt_playback": prompt_playback,
+        "avatar": avatar_controls,
+        "model": model_controls,
+    }
+)
 
 
 def main() -> int:

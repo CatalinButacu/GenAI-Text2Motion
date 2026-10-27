@@ -12,14 +12,14 @@ from text2motion.generation.contracts import Backbone
 from text2motion.motion.representation import FPS, StreamingSkeletonRecovery, recover_skeleton
 from text2motion.streaming.decoder import StreamingMotionDecoder
 
-PROMPTS = [
+PROMPTS = (
     "a person runs forward",
     "a person walks in a circle",
     "a person jumps up and down",
     "a person dances energetically",
     "a person waves with the right hand",
-]
-FEET = [7, 8, 10, 11]
+)
+FEET = (7, 8, 10, 11)
 TELEPORT_METERS_PER_FRAME = 0.25
 
 

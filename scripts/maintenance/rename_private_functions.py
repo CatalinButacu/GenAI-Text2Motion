@@ -9,14 +9,17 @@ import tokenize
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 
 SOURCE_FOLDERS = ("src", "scripts", "tests")
-FunctionNode = (ast.FunctionDef, ast.AsyncFunctionDef)
-CHOSEN_PUBLIC_NAMES = {
-    "_fit_chunk": "fit_single_chunk",
-    "_model_root": "resolve_model_root",
-    "_tensor": "to_float_tensor",
-}
+FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
+CHOSEN_PUBLIC_NAMES = MappingProxyType(
+    {
+        "_fit_chunk": "fit_single_chunk",
+        "_model_root": "resolve_model_root",
+        "_tensor": "to_float_tensor",
+    }
+)
 
 
 @dataclass
@@ -44,7 +47,7 @@ def collect_definitions(trees: dict[Path, ast.Module]) -> dict[str, NameUsage]:
             for item in node.body
         }
         for node in ast.walk(tree):
-            if not isinstance(node, FunctionNode) or not is_single_private(node.name):
+            if not isinstance(node, FUNCTION_NODES) or not is_single_private(node.name):
                 continue
             owner = class_bodies.get(id(node))
             if owner is None:
@@ -126,7 +129,7 @@ def find_hazards(trees: dict[Path, ast.Module], usages: dict[str, NameUsage]) ->
                 node.lineno,
                 node.end_lineno or node.lineno,
                 node.name,
-                {item.name for item in node.body if isinstance(item, FunctionNode)},
+                {item.name for item in node.body if isinstance(item, FUNCTION_NODES)},
             )
             for node in ast.walk(tree)
             if isinstance(node, ast.ClassDef)
@@ -143,7 +146,7 @@ def all_identifiers(trees: dict[Path, ast.Module]) -> set[str]:
                 identifiers.add(node.id)
             if isinstance(node, ast.Attribute):
                 identifiers.add(node.attr)
-            if isinstance(node, (*FunctionNode, ast.ClassDef)):
+            if isinstance(node, (*FUNCTION_NODES, ast.ClassDef)):
                 identifiers.add(node.name)
             if isinstance(node, ast.arg):
                 identifiers.add(node.arg)

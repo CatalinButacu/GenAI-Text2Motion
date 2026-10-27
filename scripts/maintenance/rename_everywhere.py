@@ -5,38 +5,44 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-SKIPPED_FOLDERS = {
-    ".git",
-    ".venv",
-    "third_party",
-    "artifacts",
-    "data",
-    "graphify-out",
-    "build",
-    "__pycache__",
-    "text2motion.egg-info",
-}
-KEPT_FILES = {
-    ".claude/docs/STATUS.md",
-    ".claude/docs/replay.log",
-    "doc/notes/research-log.md",
-    "tests/app/test_rename_everywhere.py",
-}
-TEXT_SUFFIXES = {
-    ".py",
-    ".md",
-    ".json",
-    ".tex",
-    ".yaml",
-    ".yml",
-    ".toml",
-    ".ps1",
-    ".sh",
-    ".dot",
-    ".txt",
-    ".bib",
-    "",
-}
+SKIPPED_FOLDERS = frozenset(
+    {
+        ".git",
+        ".venv",
+        "third_party",
+        "artifacts",
+        "data",
+        "graphify-out",
+        "build",
+        "__pycache__",
+        "text2motion.egg-info",
+    }
+)
+KEPT_FILES = frozenset(
+    {
+        ".claude/docs/STATUS.md",
+        ".claude/docs/replay.log",
+        "doc/notes/research-log.md",
+        "tests/app/test_rename_everywhere.py",
+    }
+)
+TEXT_SUFFIXES = frozenset(
+    {
+        ".py",
+        ".md",
+        ".json",
+        ".tex",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ps1",
+        ".sh",
+        ".dot",
+        ".txt",
+        ".bib",
+        "",
+    }
+)
 IMPORTED_MODULE = re.compile(r"^\s*(?:from|import) (text2motion(?:\.\w+)+)", re.M)
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import ast
 from collections import defaultdict
 from pathlib import Path
+from types import MappingProxyType
 
 import matplotlib
 
@@ -22,45 +23,49 @@ ACCENT = "#35617f"
 SURFACE = "#ffffff"
 SUNK = "#eef1f4"
 ACCENT_SOFT = "#e3edf3"
-FONT = ["Segoe UI", "DejaVu Sans", "sans-serif"]
+FONT = ("Segoe UI", "DejaVu Sans", "sans-serif")
 
-LAYERS = ["motion", "tokenization", "generation", "evaluation", "streaming", "studio", "app"]
+LAYERS = ("motion", "tokenization", "generation", "evaluation", "streaming", "studio", "app")
 
-NODES = {
-    "app": (365, 30, 170, 54, "composition root / CLI", ACCENT_SOFT, ACCENT),
-    "evaluation": (90, 150, 170, 54, "FID / R-precision", SURFACE, INK),
-    "streaming": (365, 150, 170, 54, "decoder / service", SURFACE, INK),
-    "studio": (640, 150, 170, 54, "aitviewer", SURFACE, INK),
-    "generation": (228, 280, 170, 54, "mamba / transformer", SURFACE, INK),
-    "tokenization": (228, 390, 170, 54, "FSQ / RVQ", SURFACE, INK),
-    "motion": (
-        60,
-        490,
-        784,
-        54,
-        "263 representation / kinematics / dataset / preparation",
-        SUNK,
-        INK,
-    ),
-}
+NODES = MappingProxyType(
+    {
+        "app": (365, 30, 170, 54, "composition root / CLI", ACCENT_SOFT, ACCENT),
+        "evaluation": (90, 150, 170, 54, "FID / R-precision", SURFACE, INK),
+        "streaming": (365, 150, 170, 54, "decoder / service", SURFACE, INK),
+        "studio": (640, 150, 170, 54, "aitviewer", SURFACE, INK),
+        "generation": (228, 280, 170, 54, "mamba / transformer", SURFACE, INK),
+        "tokenization": (228, 390, 170, 54, "FSQ / RVQ", SURFACE, INK),
+        "motion": (
+            60,
+            490,
+            784,
+            54,
+            "263 representation / kinematics / dataset / preparation",
+            SUNK,
+            INK,
+        ),
+    }
+)
 
-ROUTES = {
-    ("evaluation", "generation"): [(175, 204), (250, 280)],
-    ("evaluation", "motion"): [(140, 204), (140, 490)],
-    ("streaming", "generation"): [(420, 204), (383, 280)],
-    ("streaming", "tokenization"): [(450, 204), (450, 417), (402, 417)],
-    ("streaming", "motion"): [(490, 204), (490, 490)],
-    ("studio", "motion"): [(725, 204), (725, 490)],
-    ("generation", "tokenization"): [(313, 334), (313, 386)],
-    ("generation", "motion"): [(228, 307), (190, 307), (190, 490)],
-    ("tokenization", "motion"): [(313, 444), (313, 490)],
-    ("app", "evaluation"): [(405, 84), (205, 150)],
-    ("app", "streaming"): [(450, 84), (450, 146)],
-    ("app", "studio"): [(495, 84), (695, 150)],
-    ("app", "generation"): [(380, 84), (330, 276)],
-    ("app", "tokenization"): [(365, 57), (52, 57), (52, 413), (224, 413)],
-    ("app", "motion"): [(535, 57), (866, 57), (866, 513), (844, 513)],
-}
+ROUTES = MappingProxyType(
+    {
+        ("evaluation", "generation"): ((175, 204), (250, 280)),
+        ("evaluation", "motion"): ((140, 204), (140, 490)),
+        ("streaming", "generation"): ((420, 204), (383, 280)),
+        ("streaming", "tokenization"): ((450, 204), (450, 417), (402, 417)),
+        ("streaming", "motion"): ((490, 204), (490, 490)),
+        ("studio", "motion"): ((725, 204), (725, 490)),
+        ("generation", "tokenization"): ((313, 334), (313, 386)),
+        ("generation", "motion"): ((228, 307), (190, 307), (190, 490)),
+        ("tokenization", "motion"): ((313, 444), (313, 490)),
+        ("app", "evaluation"): ((405, 84), (205, 150)),
+        ("app", "streaming"): ((450, 84), (450, 146)),
+        ("app", "studio"): ((495, 84), (695, 150)),
+        ("app", "generation"): ((380, 84), (330, 276)),
+        ("app", "tokenization"): ((365, 57), (52, 57), (52, 413), (224, 413)),
+        ("app", "motion"): ((535, 57), (866, 57), (866, 513), (844, 513)),
+    }
+)
 
 
 def package_edges() -> set[tuple[str, str]]:

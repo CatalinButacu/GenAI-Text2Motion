@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from types import MappingProxyType
 
 import matplotlib
 
@@ -12,7 +13,7 @@ import matplotlib.pyplot as plt
 
 from text2motion.motion.storage import sha256_file
 
-COLORS = {"transformer": "tab:red", "mamba": "tab:blue"}
+COLORS = MappingProxyType({"transformer": "tab:red", "mamba": "tab:blue"})
 
 
 def write_source_record(bench: Path, out: Path) -> Path:

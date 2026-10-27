@@ -8,6 +8,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
+from types import MappingProxyType
 
 import imgui
 import numpy as np
@@ -493,15 +494,17 @@ def scenario_long_forever_stream(driver: HumanDriver) -> None:
     )
 
 
-SCENARIOS = {
-    "type_generate_watch": scenario_type_generate_watch,
-    "double_enter": scenario_double_enter,
-    "forever_then_stop": scenario_forever_then_stop,
-    "keyboard": scenario_keyboard,
-    "live_typing": scenario_live_typing,
-    "switch_models": scenario_switch_models,
-    "long_forever_stream": scenario_long_forever_stream,
-}
+SCENARIOS = MappingProxyType(
+    {
+        "type_generate_watch": scenario_type_generate_watch,
+        "double_enter": scenario_double_enter,
+        "forever_then_stop": scenario_forever_then_stop,
+        "keyboard": scenario_keyboard,
+        "live_typing": scenario_live_typing,
+        "switch_models": scenario_switch_models,
+        "long_forever_stream": scenario_long_forever_stream,
+    }
+)
 
 
 def main() -> None:
