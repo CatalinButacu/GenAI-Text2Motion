@@ -24,6 +24,16 @@ RESUME_VERSION = 2
 SPLIT_FILES = MappingProxyType({split: f"{split.value}.txt" for split in Split})
 
 
+def split_clip_ids(root: Path, split: Split | str) -> list[str]:
+    split_path = Path(root) / SPLIT_FILES[Split(split)]
+    if not split_path.is_file():
+        raise FileNotFoundError(
+            f"split file not found: {split_path} (copy the official {split} list there)"
+        )
+    listed = [name.strip() for name in split_path.read_text(encoding="utf-8").splitlines()]
+    return list(dict.fromkeys(name.removeprefix("M") for name in listed if name))
+
+
 def atomic_torch_save(state: Any, path: str | Path) -> None:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)

@@ -7,9 +7,10 @@ import numpy as np
 import torch
 
 from text2motion.motion.contracts import Split
+from text2motion.motion.datasets import check_no_missing_files
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import JOINTS, recover_from_ric
-from text2motion.motion.storage import FEATURES_DIR
+from text2motion.motion.storage import FEATURES_DIR, split_clip_ids
 from text2motion.tokenization.nn_model import TokenizerNetwork
 
 type ReconstructionFidScorer = Callable[[list[np.ndarray], list[np.ndarray]], float]
@@ -21,8 +22,7 @@ def select_reconstruction_evaluation_clip_ids(
     max_clips: int | None = None,
     shuffle_seed: int | None = None,
 ) -> list[str]:
-    listed = [n.strip() for n in (root / f"{split}.txt").read_text().splitlines() if n.strip()]
-    ids = list(dict.fromkeys(i[1:] if i.startswith("M") else i for i in listed))
+    ids = split_clip_ids(root, split)
     if shuffle_seed is not None:
         np.random.default_rng(shuffle_seed).shuffle(ids)
     return ids[:max_clips]
@@ -38,7 +38,8 @@ def evaluate_tokenizer_reconstruction(
     joint_count: int = JOINTS,
     device: str = "cpu",
     max_clips: int | None = None,
-    split: Split | str = Split.TEST,
+    *,
+    split: Split | str,
     shuffle_seed: int | None = None,
     reconstruction_fid_scorer: ReconstructionFidScorer | None = None,
 ) -> dict[str, float]:
@@ -46,16 +47,15 @@ def evaluate_tokenizer_reconstruction(
     ids = select_reconstruction_evaluation_clip_ids(
         root, split, max_clips=max_clips, shuffle_seed=shuffle_seed
     )
+    feature_paths = [root / FEATURES_DIR / f"{clip_id}.npy" for clip_id in ids]
+    check_no_missing_files("feature", [str(path) for path in feature_paths if not path.is_file()])
 
     reference_features: list[np.ndarray] = []
     reconstructed_features: list[np.ndarray] = []
     joint_errors: list[float] = []
     feature_distances: list[float] = []
 
-    for clip_id in ids:
-        path = root / FEATURES_DIR / f"{clip_id}.npy"
-        if not path.is_file():
-            continue
+    for path in feature_paths:
         features = np.load(path).astype(np.float32)
         length = (min(features.shape[0], max_frames) // downsample) * downsample
         if length < 2 * downsample:

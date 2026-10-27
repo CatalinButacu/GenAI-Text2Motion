@@ -14,10 +14,10 @@ from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import (
     FEATURES_DIR,
-    SPLIT_FILES,
     TEXTS_DIR,
     clip_frame_counts,
     item_rng,
+    split_clip_ids,
 )
 
 
@@ -53,14 +53,7 @@ class CaptionedMotionDataset(Dataset):
         self._text_dir = Path(texts_dir) if texts_dir is not None else root / TEXTS_DIR
         self.scaler = MotionScaler.load(root, dim=DIM)
 
-        split_path = root / SPLIT_FILES[split]
-        if not split_path.is_file():
-            raise FileNotFoundError(
-                f"split file not found: {split_path} (copy the official {split} list there)"
-            )
-        listed = [n.strip() for n in split_path.read_text().splitlines() if n.strip()]
-        base_names = list(dict.fromkeys(n[1:] if n.startswith("M") else n for n in listed))
-        self._ids = self.__select_usable_clip_ids(base_names)
+        self._ids = self.__select_usable_clip_ids(split_clip_ids(root, split))
         if not self._ids:
             raise RuntimeError(f"no usable clips for split {split!r} under {self._vec_dir}")
         uncaptioned = self.__clips_without_usable_caption()
@@ -197,11 +190,7 @@ class MotionWindowDataset(Dataset):
         root = Path(root)
         self._vec_dir = root / FEATURES_DIR
         self.scaler = MotionScaler.load(root, dim=DIM)
-        listed = [
-            n.strip() for n in (root / SPLIT_FILES[split]).read_text().splitlines() if n.strip()
-        ]
-        base_names = list(dict.fromkeys(n[1:] if n.startswith("M") else n for n in listed))
-        self._ids, self._cache = self.__load_windowable_clips(base_names)
+        self._ids, self._cache = self.__load_windowable_clips(split_clip_ids(root, split))
         if not self._ids:
             raise RuntimeError(f"no clips >= window {window} for split {split!r}")
 

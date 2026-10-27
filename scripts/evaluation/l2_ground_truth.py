@@ -1,3 +1,4 @@
+# python scripts/evaluation/l2_ground_truth.py
 from pathlib import Path
 
 import numpy as np
@@ -20,7 +21,9 @@ from text2motion.evaluation.nn_matcher import (
     load_frozen_guo_embedding_encoders,
     load_guo_motion_normalization_stats,
 )
+from text2motion.motion.contracts import Split
 from text2motion.motion.datasets import parse_text_file
+from text2motion.motion.storage import split_clip_ids
 
 _MIN_FRAMES = 20
 
@@ -41,9 +44,7 @@ def main() -> None:
         config.paths.eval_matcher, device=device
     )
 
-    raw_ids = (root / "test.txt").read_text(encoding="utf-8").splitlines()
-    clip_ids = [name.strip() for name in raw_ids if name.strip()]
-    clip_ids = list(dict.fromkeys(name[1:] if name.startswith("M") else name for name in clip_ids))
+    clip_ids = split_clip_ids(root, Split.TEST)
 
     features: list[np.ndarray] = []
     caption_tokens: list[list[list[str]]] = []

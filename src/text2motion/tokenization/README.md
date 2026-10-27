@@ -24,7 +24,7 @@ You do not usually call `train_step` yourself. `train_tokenizer(trainer, loader,
 
 ## Evaluate
 
-To measure a network, call `evaluate_tokenizer_reconstruction(network, root, scaler, max_frames, downsample, device, max_clips, split, reconstruction_fid_scorer)`. It encodes and decodes the clips of one split from the dataset folder `root` and compares the result with the original clips. Only the HumanML3D folder has splits, so `root` is the HumanML3D folder, and AMASS clips are not measured with this function. It returns `clips`, `mpjpe_mm` (the mean joint position error in millimetres) and `feature_l2`. When you give it a `reconstruction_fid_scorer`, it also returns `recon_fid`. A lower value is better for all three measures. Use the test split only once, after training, on the best checkpoint.
+To measure a network, call `evaluate_tokenizer_reconstruction(network, root, scaler, max_frames, downsample, device, max_clips, split, reconstruction_fid_scorer)`. It encodes and decodes the clips of one split from the dataset folder `root` and compares the result with the original clips. Only the HumanML3D folder has splits, so `root` is the HumanML3D folder, and AMASS clips are not measured with this function. It returns `clips`, `mpjpe_mm` (the mean joint position error in millimetres) and `feature_l2`. When you give it a `reconstruction_fid_scorer`, it also returns `recon_fid`. A lower value is better for all three measures. Give `split` by keyword; it has no default, so the test split is never used by accident. Use the test split only once, after training, on the best checkpoint. A listed clip without a feature file raises a `FileNotFoundError`.
 
 ## Freeze and use
 

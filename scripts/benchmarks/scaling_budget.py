@@ -10,21 +10,15 @@ import numpy as np
 from text2motion.app.bootstrap import required_path
 from text2motion.app.config import load_config
 from text2motion.app.run_log import log_metrics, start_run
+from text2motion.motion.storage import split_clip_ids
 from text2motion.tokenization.corpus import pack_clip_keys
-
-
-def base_ids(split_file: Path) -> list[str]:
-    raw = [line.strip() for line in split_file.read_text(encoding="utf-8").splitlines()]
-    present = [name for name in raw if name]
-    stripped = [name[1:] if name.startswith("M") else name for name in present]
-    return sorted(set(stripped))
 
 
 def split_frame_counts(out_dir: Path, split: str, max_motion_len: int) -> tuple[int, int, int]:
     clip_count = 0
     frames_total = 0
     frames_windowed = 0
-    for clip_id in base_ids(out_dir / f"{split}.txt"):
+    for clip_id in split_clip_ids(out_dir, split):
         feature_file = out_dir / "new_joint_vecs" / f"{clip_id}.npy"
         if not feature_file.exists():
             continue

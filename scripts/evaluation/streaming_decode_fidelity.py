@@ -1,3 +1,4 @@
+# python scripts/evaluation/streaming_decode_fidelity.py --config configs/tokenizer/fsq_g8_v1024.yaml --ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt
 from __future__ import annotations
 
 import argparse
@@ -11,7 +12,7 @@ from text2motion.app.run_log import log_metrics, start_run
 from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM, FPS
-from text2motion.motion.storage import FEATURES_DIR, SPLIT_FILES
+from text2motion.motion.storage import FEATURES_DIR, split_clip_ids
 from text2motion.streaming.decoder import StreamingMotionDecoder, measure_decoder_context
 from text2motion.tokenization.nn_model import build_tokenizer_network
 
@@ -32,15 +33,9 @@ def load_clips(
     root: Path, split: Split, max_clips: int, window: int
 ) -> tuple[np.ndarray, MotionScaler]:
     scaler = MotionScaler.load(root, dim=DIM)
-    ids = [
-        line.strip()
-        for line in (root / SPLIT_FILES[split]).read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
     clips = []
-    for clip_id in ids:
-        base = clip_id[1:] if clip_id.startswith("M") else clip_id
-        path = root / FEATURES_DIR / f"{base}.npy"
+    for clip_id in split_clip_ids(root, split):
+        path = root / FEATURES_DIR / f"{clip_id}.npy"
         if not path.is_file():
             continue
         feats = np.load(path)
