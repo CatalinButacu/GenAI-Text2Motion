@@ -101,7 +101,6 @@ class TextToMotionGenerator:
                 prompt=caption,
                 tokens=MotionTokens(
                     indices=indices[row, : lengths[row]],
-                    token_count=lengths[row],
                     frame_count=int(decoded[row].shape[0]),
                 ),
                 motion=MotionClip(

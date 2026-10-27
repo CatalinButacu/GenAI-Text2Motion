@@ -226,7 +226,6 @@ class FrozenMotionTokenizer:
         indices = self.network.encode(features)[0]
         return MotionTokens(
             indices=indices,
-            token_count=int(indices.shape[0]),
             frame_count=usable,
         )
 

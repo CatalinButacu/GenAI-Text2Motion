@@ -43,8 +43,11 @@ class MotionBatch:
 @dataclass(frozen=True)
 class MotionTokens:
     indices: torch.Tensor
-    token_count: int
     frame_count: int
+
+    @property
+    def token_count(self) -> int:
+        return int(self.indices.shape[0])
 
 
 @dataclass(frozen=True)
