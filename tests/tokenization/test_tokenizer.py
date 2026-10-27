@@ -2,7 +2,7 @@ import torch
 
 from text2motion.app.config import TokenizerConfig
 from text2motion.tokenization.nn_model import FsqTokenizer, feature_velocity_reconstruction_loss
-from text2motion.tokenization.nn_quantizers import FSQ
+from text2motion.tokenization.nn_quantizers import FiniteScalarQuantizer
 
 CFG = TokenizerConfig(
     in_dim=263, width=128, downsample=4, num_quantizers=4, fsq_levels=(8, 5, 5, 5)
@@ -10,7 +10,7 @@ CFG = TokenizerConfig(
 
 
 def test_fsq_index_code_roundtrip():
-    fsq = FSQ(CFG.fsq_levels)
+    fsq = FiniteScalarQuantizer(CFG.fsq_levels)
     z = torch.randn(2, 16, len(CFG.fsq_levels))
     codes = fsq.quantize(z)
     idx = fsq.codes_to_indices(codes)

@@ -56,7 +56,7 @@ def round_straight_through(z: torch.Tensor) -> torch.Tensor:
     return z + (torch.round(z) - z).detach()
 
 
-class FSQ(Quantizer):
+class FiniteScalarQuantizer(Quantizer):
     levels: torch.Tensor
     half_l_bound: torch.Tensor
     half_width: torch.Tensor
@@ -130,7 +130,7 @@ class ResidualQuantizerStack(QuantizerStack, ABC):
 class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
     def __init__(self, levels: tuple[int, ...], num_quantizers: int, dropout_p: float) -> None:
         super().__init__()
-        self.layers = nn.ModuleList([FSQ(levels) for _ in range(num_quantizers)])
+        self.layers = nn.ModuleList([FiniteScalarQuantizer(levels) for _ in range(num_quantizers)])
         self.num_quantizers = num_quantizers
         self.dropout_p = dropout_p
 
@@ -140,7 +140,7 @@ class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
         indices: list[torch.Tensor] = []
         n_active = self.active_stage_count()
 
-        for i, layer in enumerate(typed_modules(self.layers, FSQ)):
+        for i, layer in enumerate(typed_modules(self.layers, FiniteScalarQuantizer)):
             if i < n_active:
                 code = layer.quantize(residual)
                 residual = residual - code
@@ -155,7 +155,7 @@ class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
 class GroupedFiniteScalarQuantizer(QuantizerStack):
     def __init__(self, levels: tuple[int, ...], num_quantizers: int) -> None:
         super().__init__()
-        self.groups = nn.ModuleList([FSQ(levels) for _ in range(num_quantizers)])
+        self.groups = nn.ModuleList([FiniteScalarQuantizer(levels) for _ in range(num_quantizers)])
         self.num_quantizers = num_quantizers
         self.dim = len(levels)
 
@@ -169,7 +169,7 @@ class GroupedFiniteScalarQuantizer(QuantizerStack):
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         codes: list[torch.Tensor] = []
         indices: list[torch.Tensor] = []
-        for group_index, group in enumerate(typed_modules(self.groups, FSQ)):
+        for group_index, group in enumerate(typed_modules(self.groups, FiniteScalarQuantizer)):
             chunk = z[..., group_index * self.dim : (group_index + 1) * self.dim]
             code = group.quantize(chunk)
             codes.append(code)
@@ -180,7 +180,7 @@ class GroupedFiniteScalarQuantizer(QuantizerStack):
         return torch.cat(
             [
                 group.indices_to_codes(indices[..., i])
-                for i, group in enumerate(typed_modules(self.groups, FSQ))
+                for i, group in enumerate(typed_modules(self.groups, FiniteScalarQuantizer))
             ],
             dim=-1,
         )
