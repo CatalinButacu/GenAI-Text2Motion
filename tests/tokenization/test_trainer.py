@@ -7,8 +7,16 @@ import torch
 
 from text2motion.app.config import TokenizerConfig
 from text2motion.motion.storage import atomic_torch_save
-from text2motion.tokenization.contracts import TokenizerKind, TrainTokenizerRequest
-from text2motion.tokenization.nn_model import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.contracts import (
+    DROPPED_CODE,
+    ResidualVectorQuantizationConfig,
+    TokenizerKind,
+    TrainTokenizerRequest,
+)
+from text2motion.tokenization.nn_model import (
+    FiniteScalarQuantizationTokenizer,
+    build_tokenizer_network,
+)
 from text2motion.tokenization.trainer import TokenizerTrainer, train_tokenizer
 
 CFG = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
@@ -112,3 +120,34 @@ def test_resume_without_the_resume_file_fails(tmp_path):
             checkpoint_path=tmp_path / "tokenizer.pt",
             resume_path=tmp_path / "tokenizer_last.pt",
         )
+
+
+def test_code_statistics_match_a_count_per_codebook():
+    trainer = __resumable_trainer()
+    indices = torch.tensor([[[0, 1], [0, 2], [3, 2], [0, 2]]])
+    perplexity, usage = trainer.code_statistics(indices)
+    probabilities = torch.tensor([0.75, 0.25])
+    expected = torch.exp(-(probabilities * probabilities.log()).sum())
+    torch.testing.assert_close(perplexity, expected)
+    torch.testing.assert_close(usage, torch.tensor(2 / trainer.tokenizer_network.codebook_size))
+
+
+def test_code_statistics_skip_a_dropped_codebook():
+    trainer = __resumable_trainer()
+    indices = torch.tensor([[[0, DROPPED_CODE], [1, DROPPED_CODE]]])
+    perplexity, usage = trainer.code_statistics(indices)
+    torch.testing.assert_close(perplexity, torch.tensor(2.0))
+    torch.testing.assert_close(usage, torch.tensor(2 / trainer.tokenizer_network.codebook_size))
+
+
+def test_a_residual_vector_step_with_dropped_stages_gives_finite_values():
+    torch.manual_seed(0)
+    network = build_tokenizer_network(
+        TokenizerConfig(kind=TokenizerKind.RESIDUAL_VECTOR),
+        ResidualVectorQuantizationConfig(quant_dropout=1.0),
+    )
+    trainer = TokenizerTrainer(network, lr=1e-4, weight_decay=0.0, ema_decay=0.9)
+    _, indices, _ = network(torch.randn(2, 16, 263))
+    assert bool((indices == DROPPED_CODE).any())
+    parts = trainer.train_step(torch.randn(2, 16, 263))
+    assert all(torch.isfinite(value) for value in parts.values())

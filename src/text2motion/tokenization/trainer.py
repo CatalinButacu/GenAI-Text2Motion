@@ -51,20 +51,26 @@ class TokenizerTrainer:
         )
         self.parameter_ema = ExponentialMovingAverage(tokenizer_network, ema_decay)
 
-    def __code_stats(self, indices: torch.Tensor) -> tuple[float, float]:
-        indices = indices.detach().cpu()
+    def code_statistics(self, indices: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         codebook_size = self.tokenizer_network.codebook_size
-        perplexities, usages = [], []
-        for codebook in range(indices.shape[-1]):
-            counts = torch.bincount(
-                indices[..., codebook].reshape(-1), minlength=codebook_size
-            ).float()
-            probs = counts[counts > 0] / counts.sum()
-            perplexities.append(float(torch.exp(-(probs * probs.log()).sum())))
-            usages.append(float((counts > 0).float().mean()))
-        return sum(perplexities) / len(perplexities), sum(usages) / len(usages)
+        flat = indices.detach().reshape(-1, indices.shape[-1])
+        codebook_count = flat.shape[1]
+        dropped_bin = codebook_count * codebook_size
+        offsets = torch.arange(codebook_count, device=flat.device) * codebook_size
+        bins = torch.where(flat >= 0, flat + offsets, dropped_bin)
+        counts = torch.bincount(bins.reshape(-1), minlength=dropped_bin + 1)[:dropped_bin]
+        counts = counts.view(codebook_count, codebook_size).float()
+        totals = counts.sum(1)
+        active = (totals > 0).float()
+        probabilities = counts / totals.clamp(min=1).unsqueeze(1)
+        entropy = -torch.special.xlogy(probabilities, probabilities).sum(1)
+        used_fraction = (counts > 0).float().mean(1)
+        active_count = active.sum()
+        perplexity = (entropy.exp() * active).sum() / active_count
+        usage_fraction = (used_fraction * active).sum() / active_count
+        return perplexity, usage_fraction
 
-    def train_step(self, motion: torch.Tensor) -> dict[str, float]:
+    def train_step(self, motion: torch.Tensor) -> dict[str, torch.Tensor]:
         reconstruction, indices, commitment_loss = self.tokenizer_network(motion)
 
         reconstruction_loss = feature_velocity_reconstruction_loss(reconstruction, motion)
@@ -78,26 +84,26 @@ class TokenizerTrainer:
         self.optimizer.step()
         self.parameter_ema.update(self.tokenizer_network)
 
-        perplexity, usage_fraction = self.__code_stats(indices)
+        perplexity, usage_fraction = self.code_statistics(indices)
         return {
-            "recon": reconstruction_loss.item(),
-            "total": total.item(),
+            "recon": reconstruction_loss.detach(),
+            "total": total.detach(),
             "perplexity": perplexity,
             "usage_frac": usage_fraction,
-            "commit": commitment_loss.item(),
+            "commit": commitment_loss.detach(),
         }
 
     def train_epoch(self, loader, device: str) -> dict[str, float]:
         self.tokenizer_network.train()
-        totals: dict[str, float] = {}
+        totals: dict[str, torch.Tensor] = {}
         steps = 0
         for batch in loader:
             motion = batch.features if isinstance(batch, MotionBatch) else batch
-            parts = self.train_step(motion.to(device))
+            parts = self.train_step(motion.to(device, non_blocking=True))
             for key, value in parts.items():
-                totals[key] = totals.get(key, 0.0) + value
+                totals[key] = totals[key] + value if key in totals else value
             steps += 1
-        return {key: value / steps for key, value in totals.items()}
+        return {key: value.item() / steps for key, value in totals.items()}
 
     @contextmanager
     def ema_weights(self):
