@@ -1,7 +1,7 @@
-# python scripts/maintenance/rename_everywhere.py OLD_NAME NEW_NAME
+# python scripts/maintenance/rename_everywhere.py OLD_NAME NEW_NAME [--only FILE ...]
+import argparse
 import os
 import re
-import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -63,11 +63,22 @@ def text_files(root: Path) -> list[Path]:
     return found
 
 
-def rename_in_text(root: Path, old: str, new: str) -> tuple[list[str], list[str]]:
+def limited_files(root: Path, only: list[str]) -> list[Path]:
+    paths = [root / name for name in only]
+    missing = [name for name, path in zip(only, paths, strict=True) if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(f"--only names files that do not exist: {missing}")
+    return paths
+
+
+def rename_in_text(
+    root: Path, old: str, new: str, only: list[str] | None = None
+) -> tuple[list[str], list[str]]:
     patterns = replacements(old, new)
     changed = []
     kept = []
-    for path in text_files(root):
+    candidates = text_files(root) if only is None else limited_files(root, only)
+    for path in candidates:
         try:
             original = path.read_bytes().decode("utf-8")
         except UnicodeDecodeError:
@@ -98,11 +109,24 @@ def missing_modules(root: Path) -> list[str]:
     return missing
 
 
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Rename a symbol or a file in code and documents.")
+    parser.add_argument("old")
+    parser.add_argument("new")
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        help="change only these files, for a name that also has an unrelated meaning elsewhere",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
-    old, new = sys.argv[1], sys.argv[2]
+    args = parse_arguments()
+    old, new = args.old, args.new
     if old.endswith(".py") and (REPO / old).is_file():
         (REPO / old).rename(REPO / new)
-    changed, kept = rename_in_text(REPO, old, new)
+    changed, kept = rename_in_text(REPO, old, new, args.only)
     print(f"{old} -> {new}: {len(changed)} files updated")
     for name in changed:
         print(f"  {name}")

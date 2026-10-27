@@ -43,6 +43,28 @@ def test_a_symbol_rename_matches_whole_words_only(tmp_path):
     assert code.read_text(encoding="utf-8") == "read_it()\nreload_it()\n"
 
 
+def test_a_limited_rename_changes_only_the_named_files(tmp_path):
+    named = tmp_path / "quantizers.py"
+    other = tmp_path / "contracts.py"
+    named.write_text("class FSQ:\n    pass\n", encoding="utf-8")
+    other.write_text("FSQ = 'fsq'\n", encoding="utf-8")
+    changed, _ = rename_everywhere.rename_in_text(
+        tmp_path, "FSQ", "FiniteScalarQuantizer", ["quantizers.py"]
+    )
+    assert changed == ["quantizers.py"]
+    assert named.read_text(encoding="utf-8") == "class FiniteScalarQuantizer:\n    pass\n"
+    assert other.read_text(encoding="utf-8") == "FSQ = 'fsq'\n"
+
+
+def test_a_limited_rename_refuses_a_missing_file(tmp_path):
+    try:
+        rename_everywhere.rename_in_text(tmp_path, "FSQ", "FiniteScalarQuantizer", ["absent.py"])
+    except FileNotFoundError as error:
+        assert "absent.py" in str(error)
+        return
+    raise AssertionError("expected FileNotFoundError for a missing --only file")
+
+
 def test_an_import_of_a_removed_module_is_reported(tmp_path):
     code = tmp_path / "src" / "text2motion" / "app" / "cli.py"
     code.parent.mkdir(parents=True)
