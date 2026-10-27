@@ -51,8 +51,6 @@ def discard_pending_items(pending: queue.Queue) -> None:
 ############################################################
 #       StudioGenerationController
 ############################################################
-
-
 class StudioGenerationController:
     def __init__(self, host: ViewerHost, state, avatar: SmplxAvatarController) -> None:
         self.host = host

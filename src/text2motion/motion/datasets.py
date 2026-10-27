@@ -31,8 +31,6 @@ def check_no_missing_files(kind: str, clip_ids: list[str]) -> None:
 ############################################################
 #       CaptionedMotionDataset
 ############################################################
-
-
 class CaptionedMotionDataset(Dataset):
     def __init__(
         self,
@@ -180,8 +178,6 @@ class CaptionedMotionDataset(Dataset):
 ############################################################
 #       MotionWindowDataset
 ############################################################
-
-
 class MotionWindowDataset(Dataset):
     def __init__(
         self,
@@ -314,8 +310,6 @@ def parse_text_file(path: Path) -> list[TextAnnotation]:
 ############################################################
 #       MotionDataModule
 ############################################################
-
-
 class MotionDataModule:
     def __init__(
         self,

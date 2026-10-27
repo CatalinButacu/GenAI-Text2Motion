@@ -20,11 +20,10 @@ from text2motion.generation.contracts import (
 )
 from text2motion.generation.contracts import BackboneChoice as BackboneChoice
 
+
 ############################################################
 #       RMSNorm
 ############################################################
-
-
 class RMSNorm(nn.Module):
     def __init__(self, d: int, eps: float = 1e-5) -> None:
         super().__init__()
@@ -51,8 +50,6 @@ def parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
 ############################################################
 #       MambaMixer
 ############################################################
-
-
 class MambaMixer(nn.Module):
     def __init__(
         self,
@@ -152,8 +149,6 @@ class MambaMixer(nn.Module):
 ############################################################
 #       MambaBlock
 ############################################################
-
-
 class MambaBlock(nn.Module):
     def __init__(self, cfg: GeneratorConfig) -> None:
         super().__init__()
@@ -177,8 +172,6 @@ class MambaBlock(nn.Module):
 ############################################################
 #       SequenceBackbone
 ############################################################
-
-
 class SequenceBackbone(nn.Module, ABC):
     @property
     @abstractmethod
@@ -194,8 +187,6 @@ class SequenceBackbone(nn.Module, ABC):
 ############################################################
 #       MambaBackbone
 ############################################################
-
-
 class MambaBackbone(SequenceBackbone):
     def __init__(self, cfg: GeneratorConfig) -> None:
         super().__init__()
@@ -232,8 +223,6 @@ class MambaBackbone(SequenceBackbone):
 ############################################################
 #       TransformerBlock
 ############################################################
-
-
 class TransformerBlock(nn.Module):
     def __init__(self, cfg: GeneratorConfig) -> None:
         super().__init__()
@@ -289,8 +278,6 @@ class TransformerBlock(nn.Module):
 ############################################################
 #       TransformerBackbone
 ############################################################
-
-
 class TransformerBackbone(SequenceBackbone):
     def __init__(self, cfg: GeneratorConfig) -> None:
         super().__init__()

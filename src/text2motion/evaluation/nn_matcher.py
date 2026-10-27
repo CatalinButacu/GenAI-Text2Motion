@@ -131,8 +131,6 @@ _VIP_WORDS = {
 ############################################################
 #       GuoWordPosVectorizer
 ############################################################
-
-
 class GuoWordPosVectorizer:
     def __init__(self, meta_root, prefix):
         vectors = np.load(pjoin(meta_root, "%s_data.npy" % prefix))
@@ -201,8 +199,6 @@ def bigru_final_state(
 ############################################################
 #       GuoMovementEncoder
 ############################################################
-
-
 class GuoMovementEncoder(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -236,8 +232,6 @@ class GuoMovementEncoder(nn.Module):
 ############################################################
 #       GuoMotionEncoder
 ############################################################
-
-
 class GuoMotionEncoder(nn.Module):
     hidden: torch.Tensor
 
@@ -263,8 +257,6 @@ class GuoMotionEncoder(nn.Module):
 ############################################################
 #       GuoMotionEmbeddingEncoder
 ############################################################
-
-
 class GuoMotionEmbeddingEncoder(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -289,8 +281,6 @@ class GuoMotionEmbeddingEncoder(nn.Module):
 ############################################################
 #       GuoTextEmbeddingEncoder
 ############################################################
-
-
 class GuoTextEmbeddingEncoder(nn.Module):
     hidden: torch.Tensor
 
@@ -374,8 +364,6 @@ def create_guo_text_input_builder(word_vectorizer: Any, max_tokens: int = 20) ->
 ############################################################
 #       GuoEvaluationResources
 ############################################################
-
-
 @dataclass(frozen=True)
 class GuoEvaluationResources:
     device: str

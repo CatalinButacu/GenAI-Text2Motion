@@ -27,11 +27,10 @@ from text2motion.tokenization.contracts import (
     TokenizerKind,
 )
 
+
 ############################################################
 #       ComputeDevice
 ############################################################
-
-
 class ComputeDevice(StrEnum):
     CPU = "cpu"
     CUDA = "cuda"
@@ -40,8 +39,6 @@ class ComputeDevice(StrEnum):
 ############################################################
 #       Float32Precision
 ############################################################
-
-
 class Float32Precision(StrEnum):
     HIGHEST = "highest"
     TF32 = "tf32"
@@ -50,8 +47,6 @@ class Float32Precision(StrEnum):
 ############################################################
 #       SmplxAvatarConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class SmplxAvatarConfig:
     model_type: str = "smplx"
@@ -89,8 +84,6 @@ class SmplxAvatarConfig:
 ############################################################
 #       ProjectPathsConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class ProjectPathsConfig:
     donor_root: Path | None = None
@@ -148,8 +141,6 @@ class ProjectPathsConfig:
 ############################################################
 #       MotionServiceConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class MotionServiceConfig:
     bind_host: str = "127.0.0.1"
@@ -166,8 +157,6 @@ class MotionServiceConfig:
 ############################################################
 #       ApplicationConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class ApplicationConfig:
     seed: int = 2026

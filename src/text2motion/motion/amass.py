@@ -127,8 +127,6 @@ def resolve_model_root(smplx_dir: Path) -> Path:
 ############################################################
 #       AmassPoseExtractor
 ############################################################
-
-
 class AmassPoseExtractor:
     def __init__(
         self,

@@ -18,8 +18,6 @@ _MOTION_FRAMES = MotionDataConfig().max_motion_len
 ############################################################
 #       FiniteScalarStackLayout
 ############################################################
-
-
 class FiniteScalarStackLayout(StrEnum):
     GROUPED = "grouped"
     RESIDUAL = "residual"
@@ -28,8 +26,6 @@ class FiniteScalarStackLayout(StrEnum):
 ############################################################
 #       TokenizerKind
 ############################################################
-
-
 class TokenizerKind(StrEnum):
     FINITE_SCALAR = "fsq"
     RESIDUAL_VECTOR = "rvq"
@@ -38,8 +34,6 @@ class TokenizerKind(StrEnum):
 ############################################################
 #       TokenizerConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class TokenizerConfig:
     kind: TokenizerKind = TokenizerKind.FINITE_SCALAR
@@ -56,8 +50,6 @@ class TokenizerConfig:
 ############################################################
 #       ResidualVectorQuantizationConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class ResidualVectorQuantizationConfig:
     in_dim: int = DIM
@@ -76,8 +68,6 @@ class ResidualVectorQuantizationConfig:
 ############################################################
 #       TokenizerReconstruction
 ############################################################
-
-
 class TokenizerReconstruction(NamedTuple):
     reconstruction: torch.Tensor
     token_indices: torch.Tensor
@@ -87,8 +77,6 @@ class TokenizerReconstruction(NamedTuple):
 ############################################################
 #       TokenizeRequest
 ############################################################
-
-
 class TokenizeRequest(CommandRequest):
     features_dir: Path = Field(
         default=CorpusLayout().amass_features_dir,
@@ -119,8 +107,6 @@ class TokenizeRequest(CommandRequest):
 ############################################################
 #       TrainTokenizerRequest
 ############################################################
-
-
 class TrainTokenizerRequest(CommandRequest):
     tokenizer: TokenizerKind = Field(
         description="quantizer family: fsq has no learned codebook, rvq is the baseline"

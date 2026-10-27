@@ -22,11 +22,10 @@ from text2motion.tokenization.nn_quantizers import (
     reject_dropped_codes,
 )
 
+
 ############################################################
 #       TokenizerNetwork
 ############################################################
-
-
 class TokenizerNetwork(nn.Module):
     encoder: nn.Module
     decoder: nn.Module
@@ -73,8 +72,6 @@ def downsample_stage_count(downsample: int) -> int:
 ############################################################
 #       TemporalResidualBlock
 ############################################################
-
-
 class TemporalResidualBlock(nn.Module):
     def __init__(self, channels: int) -> None:
         super().__init__()
@@ -91,8 +88,6 @@ class TemporalResidualBlock(nn.Module):
 ############################################################
 #       FrameSequenceConvolution
 ############################################################
-
-
 class FrameSequenceConvolution(nn.Module):
     net: nn.Sequential
 
@@ -103,8 +98,6 @@ class FrameSequenceConvolution(nn.Module):
 ############################################################
 #       MotionFeatureEncoder
 ############################################################
-
-
 class MotionFeatureEncoder(FrameSequenceConvolution):
     def __init__(
         self, feature_count: int, width: int, downsample: int, residual_block_count: int
@@ -125,8 +118,6 @@ class MotionFeatureEncoder(FrameSequenceConvolution):
 ############################################################
 #       MotionFeatureDecoder
 ############################################################
-
-
 class MotionFeatureDecoder(FrameSequenceConvolution):
     def __init__(
         self, feature_count: int, width: int, downsample: int, residual_block_count: int
@@ -148,8 +139,6 @@ class MotionFeatureDecoder(FrameSequenceConvolution):
 ############################################################
 #       FiniteScalarQuantizationTokenizer
 ############################################################
-
-
 class FiniteScalarQuantizationTokenizer(TokenizerNetwork):
     quantizer: QuantizerStack
 
@@ -193,8 +182,6 @@ def feature_velocity_reconstruction_loss(
 ############################################################
 #       ResidualVectorQuantizationTokenizer
 ############################################################
-
-
 class ResidualVectorQuantizationTokenizer(TokenizerNetwork):
     def __init__(self, config: ResidualVectorQuantizationConfig) -> None:
         super().__init__()
@@ -230,8 +217,6 @@ def build_tokenizer_network(
 ############################################################
 #       FrozenMotionTokenizer
 ############################################################
-
-
 class FrozenMotionTokenizer:
     def __init__(
         self,

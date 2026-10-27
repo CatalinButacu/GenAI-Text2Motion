@@ -14,8 +14,6 @@ DEFAULT_SERVICE_CONFIG = Path("configs/service.yml")
 ############################################################
 #       ServiceAddressRequest
 ############################################################
-
-
 class ServiceAddressRequest(DefaultConfigRequest):
     host: str | None = Field(default=None, description="service address; default from the config")
     port: int | None = Field(default=None, description="service TCP port; default from the config")
@@ -28,8 +26,6 @@ class ServiceAddressRequest(DefaultConfigRequest):
 ############################################################
 #       HealthRequest
 ############################################################
-
-
 class HealthRequest(ServiceAddressRequest):
     pass
 
@@ -37,8 +33,6 @@ class HealthRequest(ServiceAddressRequest):
 ############################################################
 #       ModelServiceRequest
 ############################################################
-
-
 class ModelServiceRequest(ServiceAddressRequest):
     ckpt: Path | None = Field(
         default=None, description="generator checkpoint; default from the config"
@@ -56,8 +50,6 @@ class ModelServiceRequest(ServiceAddressRequest):
 ############################################################
 #       ServeRequest
 ############################################################
-
-
 class ServeRequest(ModelServiceRequest):
     idle_seconds: int | None = Field(
         default=None,
@@ -68,8 +60,6 @@ class ServeRequest(ModelServiceRequest):
 ############################################################
 #       StudioRequest
 ############################################################
-
-
 class StudioRequest(ModelServiceRequest):
     model_dir: Path | None = Field(
         default=None,

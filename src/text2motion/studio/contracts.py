@@ -7,11 +7,10 @@ import numpy as np
 
 from text2motion.motion.model import StreamedChunk
 
+
 ############################################################
 #       ViewerHost
 ############################################################
-
-
 @runtime_checkable
 class ViewerHost(Protocol):
     scene: Any
@@ -33,8 +32,6 @@ class ViewerHost(Protocol):
 ############################################################
 #       StudioLaunchArguments
 ############################################################
-
-
 class StudioLaunchArguments(Protocol):
     @property
     def config(self) -> object: ...
@@ -70,8 +67,6 @@ class StudioLaunchArguments(Protocol):
 ############################################################
 #       MotionInferenceClientPort
 ############################################################
-
-
 @runtime_checkable
 class MotionInferenceClientPort(Protocol):
     hello: dict[str, Any]

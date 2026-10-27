@@ -6,11 +6,11 @@ REPO = Path(__file__).resolve().parents[2]
 SOURCE = REPO / "src" / "text2motion"
 RULE = "#" * 60
 LABEL_PREFIX = "#" + " " * 7
-SEPARATOR_LINE_COUNT = 5
+SEPARATOR_LINE_COUNT = 3
 
 
 def separator(class_name: str) -> list[str]:
-    return [RULE, f"{LABEL_PREFIX}{class_name}", RULE, "", ""]
+    return [RULE, f"{LABEL_PREFIX}{class_name}", RULE]
 
 
 def class_start_lines(tree: ast.Module) -> list[tuple[int, str]]:
@@ -23,11 +23,16 @@ def class_start_lines(tree: ast.Module) -> list[tuple[int, str]]:
     return starts
 
 
-def has_separator(lines: list[str], index: int) -> bool:
-    if index < SEPARATOR_LINE_COUNT:
-        return False
-    above = lines[index - SEPARATOR_LINE_COUNT : index]
-    return above[0] == RULE and above[2] == RULE
+def existing_separator_start(lines: list[str], index: int) -> int | None:
+    start = index
+    while start > 0 and not lines[start - 1].strip():
+        start -= 1
+    if start < SEPARATOR_LINE_COUNT:
+        return None
+    above = lines[start - SEPARATOR_LINE_COUNT : start]
+    if above[0] != RULE or above[2] != RULE:
+        return None
+    return start - SEPARATOR_LINE_COUNT
 
 
 def separated_text(text: str) -> str:
@@ -38,10 +43,11 @@ def separated_text(text: str) -> str:
     lines = text.split(ending)
     for first_line, class_name in reversed(starts):
         index = first_line - 1
-        if has_separator(lines, index):
-            lines[index - SEPARATOR_LINE_COUNT : index] = separator(class_name)
+        separator_start = existing_separator_start(lines, index)
+        if separator_start is None:
+            lines[index:index] = separator(class_name)
             continue
-        lines[index:index] = separator(class_name)
+        lines[separator_start:index] = separator(class_name)
     return ending.join(lines)
 
 

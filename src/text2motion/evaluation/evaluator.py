@@ -50,8 +50,6 @@ def chosen_caption_index(sample: EvaluationSample, run: int) -> int:
 ############################################################
 #       HumanMl3dGenerationEvaluator
 ############################################################
-
-
 class HumanMl3dGenerationEvaluator:
     def __init__(self, resources: GuoEvaluationResources) -> None:
         self.resources = resources

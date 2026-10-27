@@ -9,11 +9,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 
 from text2motion.motion.representation import FPS, JOINTS, MotionSource, RepresentationTrack
 
+
 ############################################################
 #       Split
 ############################################################
-
-
 class Split(StrEnum):
     TRAIN = "train"
     VALIDATION = "val"
@@ -23,8 +22,6 @@ class Split(StrEnum):
 ############################################################
 #       PreparationStage
 ############################################################
-
-
 class PreparationStage(StrEnum):
     AMASS = "amass"
     INDEX = "index"
@@ -36,8 +33,6 @@ class PreparationStage(StrEnum):
 ############################################################
 #       MotionDataConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class MotionDataConfig:
     track: RepresentationTrack = RepresentationTrack.HML3D_263
@@ -50,8 +45,6 @@ class MotionDataConfig:
 ############################################################
 #       TextAnnotation
 ############################################################
-
-
 @dataclass(frozen=True)
 class TextAnnotation:
     caption: str
@@ -63,8 +56,6 @@ class TextAnnotation:
 ############################################################
 #       PreparationRequest
 ############################################################
-
-
 @dataclass(frozen=True)
 class PreparationRequest:
     out_dir: Path
@@ -79,8 +70,6 @@ class PreparationRequest:
 ############################################################
 #       CorpusLayout
 ############################################################
-
-
 @dataclass(frozen=True)
 class CorpusLayout:
     official_dir: Path = Path("data/HumanML3D_official")
@@ -98,8 +87,6 @@ CONFIG_HELP = "YAML file with model, data and path settings; it selects the expe
 ############################################################
 #       CommandRequest
 ############################################################
-
-
 class CommandRequest(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
     config: Path = Field(description=CONFIG_HELP)
@@ -118,8 +105,6 @@ class CommandRequest(BaseModel):
 ############################################################
 #       DefaultConfigRequest
 ############################################################
-
-
 class DefaultConfigRequest(CommandRequest):
     config: Path = Field(default=DEFAULT_CONFIG, description=CONFIG_HELP)
 
@@ -127,8 +112,6 @@ class DefaultConfigRequest(CommandRequest):
 ############################################################
 #       PrepareRequest
 ############################################################
-
-
 class PrepareRequest(DefaultConfigRequest):
     stage: PreparationStage = Field(
         default=PreparationStage.ALL,

@@ -58,8 +58,6 @@ COMMAND_ENUMS = (
 ############################################################
 #       Command
 ############################################################
-
-
 @dataclass(frozen=True)
 class Command:
     request_model: type[CommandRequest]

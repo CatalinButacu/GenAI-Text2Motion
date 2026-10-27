@@ -21,8 +21,6 @@ def typed_modules[ModuleType: nn.Module](
 ############################################################
 #       Quantizer
 ############################################################
-
-
 class Quantizer(nn.Module, ABC):
     codebook_size: int
 
@@ -33,8 +31,6 @@ class Quantizer(nn.Module, ABC):
 ############################################################
 #       QuantizerStack
 ############################################################
-
-
 class QuantizerStack(nn.Module, ABC):
     @property
     @abstractmethod
@@ -68,8 +64,6 @@ def round_straight_through(latent: torch.Tensor) -> torch.Tensor:
 ############################################################
 #       FiniteScalarQuantizer
 ############################################################
-
-
 class FiniteScalarQuantizer(Quantizer):
     levels: torch.Tensor
     half_l_bound: torch.Tensor
@@ -119,8 +113,6 @@ class FiniteScalarQuantizer(Quantizer):
 ############################################################
 #       ResidualQuantizerStack
 ############################################################
-
-
 class ResidualQuantizerStack(QuantizerStack, ABC):
     layers: nn.ModuleList
     dropout_probability: float
@@ -151,8 +143,6 @@ class ResidualQuantizerStack(QuantizerStack, ABC):
 ############################################################
 #       ResidualFiniteScalarQuantizer
 ############################################################
-
-
 class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
     def __init__(
         self, levels: tuple[int, ...], num_quantizers: int, dropout_probability: float
@@ -182,8 +172,6 @@ class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
 ############################################################
 #       GroupedFiniteScalarQuantizer
 ############################################################
-
-
 class GroupedFiniteScalarQuantizer(QuantizerStack):
     def __init__(self, levels: tuple[int, ...], num_quantizers: int) -> None:
         super().__init__()
@@ -218,8 +206,6 @@ class GroupedFiniteScalarQuantizer(QuantizerStack):
 ############################################################
 #       VectorQuantizer
 ############################################################
-
-
 class VectorQuantizer(Quantizer):
     embed: torch.Tensor
     cluster_size: torch.Tensor
@@ -292,8 +278,6 @@ class VectorQuantizer(Quantizer):
 ############################################################
 #       ResidualVectorQuantizer
 ############################################################
-
-
 class ResidualVectorQuantizer(ResidualQuantizerStack):
     def __init__(self, config: ResidualVectorQuantizationConfig) -> None:
         super().__init__()

@@ -37,8 +37,6 @@ FOOT_CONTACT_JOINTS = (7, 10, 8, 11)
 ############################################################
 #       RepresentationTrack
 ############################################################
-
-
 class RepresentationTrack(StrEnum):
     HML3D_263 = "hml3d263"
     SMPLX_168 = "smplx168"
@@ -47,8 +45,6 @@ class RepresentationTrack(StrEnum):
 ############################################################
 #       MotionSource
 ############################################################
-
-
 class MotionSource(StrEnum):
     HUMANML3D = "humanml3d"
     AMASS = "amass"
@@ -100,8 +96,6 @@ _FOOT_VELOCITY_THRESHOLD = 0.002
 ############################################################
 #       FeatureParams
 ############################################################
-
-
 @dataclass(frozen=True)
 class FeatureParams:
     raw_offsets: np.ndarray
@@ -347,8 +341,6 @@ def recover_skeleton(feat263: np.ndarray | torch.Tensor) -> np.ndarray:
 ############################################################
 #       StreamingSkeletonRecovery
 ############################################################
-
-
 class StreamingSkeletonRecovery:
     def __init__(self) -> None:
         self.reset()

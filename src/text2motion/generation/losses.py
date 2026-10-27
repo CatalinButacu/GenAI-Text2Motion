@@ -119,8 +119,6 @@ def __dynamics_terms(
 ############################################################
 #       UncertaintyWeighter
 ############################################################
-
-
 class UncertaintyWeighter(nn.Module):
     def __init__(self, term_names: tuple[str, ...]) -> None:
         super().__init__()

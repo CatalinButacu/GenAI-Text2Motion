@@ -12,8 +12,6 @@ SMPLX_MODEL_TYPE = "smplx"
 ############################################################
 #       Gender
 ############################################################
-
-
 class Gender(StrEnum):
     NEUTRAL = "neutral"
     MALE = "male"
@@ -23,8 +21,6 @@ class Gender(StrEnum):
 ############################################################
 #       MotionClip
 ############################################################
-
-
 @dataclass(frozen=True)
 class MotionClip:
     features: torch.Tensor
@@ -36,8 +32,6 @@ class MotionClip:
 ############################################################
 #       MotionBatch
 ############################################################
-
-
 @dataclass(frozen=True)
 class MotionBatch:
     features: torch.Tensor
@@ -58,8 +52,6 @@ class MotionBatch:
 ############################################################
 #       MotionTokens
 ############################################################
-
-
 @dataclass(frozen=True)
 class MotionTokens:
     indices: torch.Tensor
@@ -73,8 +65,6 @@ class MotionTokens:
 ############################################################
 #       MotionChunk
 ############################################################
-
-
 @dataclass(frozen=True)
 class MotionChunk:
     motion: MotionClip
@@ -85,8 +75,6 @@ class MotionChunk:
 ############################################################
 #       StreamedChunk
 ############################################################
-
-
 @dataclass(frozen=True)
 class StreamedChunk:
     joints: np.ndarray
@@ -97,8 +85,6 @@ class StreamedChunk:
 ############################################################
 #       GeneratedMotion
 ############################################################
-
-
 @dataclass(frozen=True)
 class GeneratedMotion:
     prompt: str

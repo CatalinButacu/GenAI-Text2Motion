@@ -3,11 +3,10 @@ from __future__ import annotations
 import torch
 from torch import nn
 
+
 ############################################################
 #       ExponentialMovingAverage
 ############################################################
-
-
 class ExponentialMovingAverage:
     def __init__(self, model: nn.Module, decay: float) -> None:
         self.decay = decay

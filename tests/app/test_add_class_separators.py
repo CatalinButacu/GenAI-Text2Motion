@@ -11,8 +11,8 @@ SPEC.loader.exec_module(add_class_separators)
 RULE = "#" * 60
 TWO_CLASSES = "import os\n\n\nclass Alpha:\n    pass\n\n\n@decorate\nclass Beta:\n    pass\n"
 SEPARATED = (
-    f"import os\n\n\n{RULE}\n#       Alpha\n{RULE}\n\n\nclass Alpha:\n    pass\n\n\n"
-    f"{RULE}\n#       Beta\n{RULE}\n\n\n@decorate\nclass Beta:\n    pass\n"
+    f"import os\n\n\n{RULE}\n#       Alpha\n{RULE}\nclass Alpha:\n    pass\n\n\n"
+    f"{RULE}\n#       Beta\n{RULE}\n@decorate\nclass Beta:\n    pass\n"
 )
 
 
@@ -29,9 +29,15 @@ def test_a_stale_label_takes_the_current_class_name():
     assert add_class_separators.separated_text(stale) == SEPARATED
 
 
+def test_blank_lines_between_an_old_separator_and_its_class_go_away():
+    spaced = SEPARATED.replace(f"{RULE}\nclass Alpha", f"{RULE}\n\n\nclass Alpha")
+    spaced = spaced.replace(f"{RULE}\n@decorate", f"{RULE}\n\n@decorate")
+    assert add_class_separators.separated_text(spaced) == SEPARATED
+
+
 def test_a_file_with_one_class_gets_a_separator():
     single = "class Alpha:\n    pass\n"
-    expected = f"{RULE}\n#       Alpha\n{RULE}\n\n\nclass Alpha:\n    pass\n"
+    expected = f"{RULE}\n#       Alpha\n{RULE}\nclass Alpha:\n    pass\n"
     assert add_class_separators.separated_text(single) == expected
 
 

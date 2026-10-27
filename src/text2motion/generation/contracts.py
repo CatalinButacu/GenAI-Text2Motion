@@ -9,11 +9,10 @@ from pydantic import Field
 from text2motion.motion.contracts import CommandRequest, CorpusLayout
 from text2motion.motion.representation import DYNAMICS_TERMS, FK_TERMS, GEO_TERMS
 
+
 ############################################################
 #       Backbone
 ############################################################
-
-
 class Backbone(StrEnum):
     TRANSFORMER = "transformer"
     MAMBA = "mamba"
@@ -22,8 +21,6 @@ class Backbone(StrEnum):
 ############################################################
 #       BackboneChoice
 ############################################################
-
-
 class BackboneChoice(StrEnum):
     TRANSFORMER = "transformer"
     MAMBA = "mamba"
@@ -33,8 +30,6 @@ class BackboneChoice(StrEnum):
 ############################################################
 #       MixedPrecisionMode
 ############################################################
-
-
 class MixedPrecisionMode(StrEnum):
     OFF = "off"
     BF16 = "bf16"
@@ -43,8 +38,6 @@ class MixedPrecisionMode(StrEnum):
 ############################################################
 #       LossWeighting
 ############################################################
-
-
 class LossWeighting(StrEnum):
     FIXED = "fixed"
     UNCERTAINTY = "uncertainty"
@@ -53,8 +46,6 @@ class LossWeighting(StrEnum):
 ############################################################
 #       OverfitCriteria
 ############################################################
-
-
 @dataclass(frozen=True)
 class OverfitCriteria:
     min_token_accuracy: float = 0.99
@@ -75,8 +66,6 @@ DEFAULT_OVERFIT_CRITERIA = OverfitCriteria()
 ############################################################
 #       GeneratorConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class GeneratorConfig:
     backbone: Backbone = Backbone.MAMBA
@@ -101,8 +90,6 @@ class GeneratorConfig:
 ############################################################
 #       TextEncoderConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class TextEncoderConfig:
     model_id: str = "openai/clip-vit-base-patch32"
@@ -116,8 +103,6 @@ class TextEncoderConfig:
 ############################################################
 #       LossWeights
 ############################################################
-
-
 @dataclass(frozen=True)
 class LossWeights:
     root: float = 0.3
@@ -153,8 +138,6 @@ class LossWeights:
 ############################################################
 #       GeneratorTrainingConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class GeneratorTrainingConfig:
     lr: float = 2e-4
@@ -176,8 +159,6 @@ class GeneratorTrainingConfig:
 ############################################################
 #       SamplingConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class SamplingConfig:
     temperature: float = 1.0
@@ -189,8 +170,6 @@ class SamplingConfig:
 ############################################################
 #       StudioSamplingConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class StudioSamplingConfig(SamplingConfig):
     cfg_scale: float = 6.0
@@ -199,8 +178,6 @@ class StudioSamplingConfig(SamplingConfig):
 ############################################################
 #       OverfitGateRequest
 ############################################################
-
-
 @dataclass(frozen=True)
 class OverfitGateRequest:
     batch_size: int = 4
@@ -211,8 +188,6 @@ class OverfitGateRequest:
 ############################################################
 #       TextToMotionGenerationRequest
 ############################################################
-
-
 @dataclass(frozen=True)
 class TextToMotionGenerationRequest:
     prompt: str
@@ -224,8 +199,6 @@ class TextToMotionGenerationRequest:
 ############################################################
 #       GeneratorTrainingRequest
 ############################################################
-
-
 @dataclass(frozen=True)
 class GeneratorTrainingRequest:
     epochs: int = 60
@@ -248,8 +221,6 @@ class GeneratorTrainingRequest:
 ############################################################
 #       GeneratorPretrainingRequest
 ############################################################
-
-
 @dataclass(frozen=True)
 class GeneratorPretrainingRequest:
     token_pack: Path
@@ -267,8 +238,6 @@ class GeneratorPretrainingRequest:
 ############################################################
 #       SanityOverfitRequest
 ############################################################
-
-
 class SanityOverfitRequest(CommandRequest):
     backbone: Backbone = Field(
         description="sequence mixer: mamba has a fixed-size state, transformer has a cache that grows"
@@ -296,8 +265,6 @@ class SanityOverfitRequest(CommandRequest):
 ############################################################
 #       TrainGeneratorRequest
 ############################################################
-
-
 class TrainGeneratorRequest(CommandRequest):
     backbone: Backbone = Field(
         description="sequence mixer: mamba has a fixed-size state, transformer has a cache that grows"
@@ -385,8 +352,6 @@ class TrainGeneratorRequest(CommandRequest):
 ############################################################
 #       PretrainRequest
 ############################################################
-
-
 class PretrainRequest(CommandRequest):
     backbone: Backbone = Field(
         description="sequence mixer: mamba has a fixed-size state, transformer has a cache that grows"

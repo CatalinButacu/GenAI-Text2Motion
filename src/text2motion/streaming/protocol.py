@@ -21,8 +21,6 @@ logger = logging.getLogger(__name__)
 ############################################################
 #       MotionStreamProtocol
 ############################################################
-
-
 class MotionStreamProtocol:
     @staticmethod
     def send_json(io, obj: dict) -> None:
@@ -55,8 +53,6 @@ class MotionStreamProtocol:
 ############################################################
 #       MotionInferenceClient
 ############################################################
-
-
 class MotionInferenceClient:
     def __init__(self, host: str, port: int, timeout_seconds: float = 5.0):
         self.sock = socket.create_connection((host, port), timeout=timeout_seconds)

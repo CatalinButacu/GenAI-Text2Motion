@@ -25,8 +25,6 @@ logger = logging.getLogger(__name__)
 ############################################################
 #       StudioModelEntry
 ############################################################
-
-
 @dataclass(frozen=True)
 class StudioModelEntry:
     name: str
@@ -112,8 +110,6 @@ def load_model_registry(
 ############################################################
 #       StudioSceneNodes
 ############################################################
-
-
 class StudioSceneNodes:
     def __init__(self, scene) -> None:
         self.scene = scene
@@ -169,8 +165,6 @@ class StudioSceneNodes:
 ############################################################
 #       SmplxFitState
 ############################################################
-
-
 class SmplxFitState:
     def __init__(self) -> None:
         self.model_cache: dict[tuple[int, str], object] = {}
@@ -209,8 +203,6 @@ class SmplxFitState:
 ############################################################
 #       StudioStreamBuffers
 ############################################################
-
-
 class StudioStreamBuffers:
     def __init__(self) -> None:
         self.lock = threading.Lock()
@@ -309,8 +301,6 @@ class StudioStreamBuffers:
 ############################################################
 #       LiveGenerationDebouncer
 ############################################################
-
-
 class LiveGenerationDebouncer:
     def __init__(self) -> None:
         self.enabled = False
@@ -331,8 +321,6 @@ class LiveGenerationDebouncer:
 ############################################################
 #       StreamSceneUpdater
 ############################################################
-
-
 class StreamSceneUpdater:
     def __init__(self, host: ViewerHost, state) -> None:
         self.host = host
@@ -531,8 +519,6 @@ class StreamSceneUpdater:
 ############################################################
 #       StudioSession
 ############################################################
-
-
 class StudioSession:
     def __init__(
         self,

@@ -19,8 +19,6 @@ GUO_MAX_FRAMES = 200
 ############################################################
 #       GenerationLengthPolicy
 ############################################################
-
-
 class GenerationLengthPolicy(StrEnum):
     FIXED = "fixed"
     END_TOKEN = "end"
@@ -29,8 +27,6 @@ class GenerationLengthPolicy(StrEnum):
 ############################################################
 #       GenerationEvaluationProtocol
 ############################################################
-
-
 @dataclass(frozen=True)
 class GenerationEvaluationProtocol:
     split: Split = Split.TEST
@@ -46,8 +42,6 @@ class GenerationEvaluationProtocol:
 ############################################################
 #       GenerationEvaluationReport
 ############################################################
-
-
 @dataclass(frozen=True)
 class GenerationEvaluationReport:
     clips: int
@@ -78,8 +72,6 @@ class GenerationEvaluationReport:
 ############################################################
 #       EvaluationSample
 ############################################################
-
-
 @dataclass(frozen=True)
 class EvaluationSample:
     sample_id: str
@@ -92,8 +84,6 @@ class EvaluationSample:
 ############################################################
 #       GenerationEvaluationSet
 ############################################################
-
-
 @dataclass(frozen=True)
 class GenerationEvaluationSet:
     sample_ids: list[str]
@@ -108,8 +98,6 @@ class GenerationEvaluationSet:
 ############################################################
 #       StreamingBenchmarkProtocol
 ############################################################
-
-
 @dataclass(frozen=True)
 class StreamingBenchmarkProtocol:
     horizons: tuple[int, ...] = (64, 128, 256, 512, 1024)
@@ -124,8 +112,6 @@ class StreamingBenchmarkProtocol:
 ############################################################
 #       BenchmarkRequest
 ############################################################
-
-
 class BenchmarkRequest(DefaultConfigRequest):
     device: str | None = Field(default=None, description="cuda or cpu; default from the config")
     horizons: tuple[int, ...] = Field(
@@ -153,8 +139,6 @@ class BenchmarkRequest(DefaultConfigRequest):
 ############################################################
 #       EvaluateRequest
 ############################################################
-
-
 class EvaluateRequest(DefaultConfigRequest):
     backbone: BackboneChoice = Field(
         default=BackboneChoice.BOTH,

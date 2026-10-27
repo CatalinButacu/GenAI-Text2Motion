@@ -14,11 +14,10 @@ from text2motion.motion.model import (
 )
 from text2motion.tokenization.nn_model import FrozenMotionTokenizer
 
+
 ############################################################
 #       TextToMotionGenerator
 ############################################################
-
-
 class TextToMotionGenerator:
     def __init__(
         self,

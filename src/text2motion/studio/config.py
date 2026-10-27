@@ -12,8 +12,6 @@ _Pair = tuple[float, float]
 ############################################################
 #       SmplxFitConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class SmplxFitConfig:
     model_dir: str
@@ -34,8 +32,6 @@ class SmplxFitConfig:
 ############################################################
 #       SmplxFitSchedule
 ############################################################
-
-
 @dataclass(frozen=True)
 class SmplxFitSchedule:
     retrofit_window: int = 16
@@ -44,8 +40,6 @@ class SmplxFitSchedule:
 ############################################################
 #       StreamDisplayConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class StreamDisplayConfig:
     window_frames: int = 1200
@@ -57,8 +51,6 @@ class StreamDisplayConfig:
 ############################################################
 #       LiveGenerationConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class LiveGenerationConfig:
     steps: int = 20
@@ -68,8 +60,6 @@ class LiveGenerationConfig:
 ############################################################
 #       SceneAppearanceConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class SceneAppearanceConfig:
     skin_color: _Color = (0.86, 0.72, 0.61, 1.0)
@@ -79,8 +69,6 @@ class SceneAppearanceConfig:
 ############################################################
 #       PanelLayoutConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class PanelLayoutConfig:
     left_width: float = 0.20
@@ -93,8 +81,6 @@ class PanelLayoutConfig:
 ############################################################
 #       StudioThemeConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class StudioThemeConfig:
     window_rounding: float = 8.0
@@ -135,8 +121,6 @@ class StudioThemeConfig:
 ############################################################
 #       StudioConfig
 ############################################################
-
-
 @dataclass(frozen=True)
 class StudioConfig:
     fit: SmplxFitConfig = field(default_factory=lambda: SmplxFitConfig(model_dir=""))

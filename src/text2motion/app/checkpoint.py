@@ -19,8 +19,6 @@ _BUNDLE_VERSION = 1
 ############################################################
 #       GeneratorBundle
 ############################################################
-
-
 @dataclass(frozen=True)
 class GeneratorBundle:
     backbone: Backbone
@@ -130,8 +128,6 @@ _GATE_VERSION = 1
 ############################################################
 #       OverfitGate
 ############################################################
-
-
 @dataclass(frozen=True)
 class OverfitGate:
     config_sha256: str

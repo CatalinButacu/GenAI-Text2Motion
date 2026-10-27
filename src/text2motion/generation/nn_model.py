@@ -20,11 +20,10 @@ from text2motion.generation.nn_backbones import (
     instantiate_backbone,
 )
 
+
 ############################################################
 #       MotionTokenGenerator
 ############################################################
-
-
 class MotionTokenGenerator(nn.Module):
     def __init__(self, cfg: GeneratorConfig) -> None:
         super().__init__()
@@ -213,8 +212,6 @@ class MotionTokenGenerator(nn.Module):
 ############################################################
 #       EagerDecodeStep
 ############################################################
-
-
 class EagerDecodeStep:
     def __init__(self, model: MotionTokenGenerator, state: list) -> None:
         self.model = model
@@ -229,8 +226,6 @@ class EagerDecodeStep:
 ############################################################
 #       CapturedDecodeStep
 ############################################################
-
-
 class CapturedDecodeStep:
     warmup_steps = 3
 
@@ -318,8 +313,6 @@ def token_ce_loss(
 ############################################################
 #       GeneratorModelSpec
 ############################################################
-
-
 @dataclass(frozen=True)
 class GeneratorModelSpec:
     config: GeneratorConfig

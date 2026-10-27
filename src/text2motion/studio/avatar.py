@@ -34,8 +34,6 @@ def append_skeleton_sequence_frames(node, joints: np.ndarray) -> None:
 ############################################################
 #       SmplxFitResult
 ############################################################
-
-
 @dataclass
 class SmplxFitResult:
     vertices: np.ndarray
@@ -338,8 +336,6 @@ def solve_smplx_pose_from_joints(
 ############################################################
 #       SmplxAvatarController
 ############################################################
-
-
 class SmplxAvatarController:
     def __init__(self, host: ViewerHost, state) -> None:
         self.host = host

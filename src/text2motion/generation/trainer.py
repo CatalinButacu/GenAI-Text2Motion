@@ -54,8 +54,6 @@ GENERATOR_RESUME_FORMAT = "text2motion.generator_resume"
 ############################################################
 #       ParameterPartition
 ############################################################
-
-
 @dataclass(frozen=True)
 class ParameterPartition:
     decay: tuple[nn.Parameter, ...]
@@ -145,8 +143,6 @@ def adamw_groups(
 ############################################################
 #       GeneratorTrainer
 ############################################################
-
-
 class GeneratorTrainer:
     def __init__(
         self,

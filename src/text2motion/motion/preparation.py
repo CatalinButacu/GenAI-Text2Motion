@@ -131,8 +131,6 @@ def swap_left_right(data: np.ndarray) -> np.ndarray:
 ############################################################
 #       Hml3dPreparationLayout
 ############################################################
-
-
 @dataclass(frozen=True)
 class Hml3dPreparationLayout:
     out_dir: Path

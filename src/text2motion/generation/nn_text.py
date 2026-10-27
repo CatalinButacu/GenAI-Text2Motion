@@ -5,11 +5,10 @@ from torch import nn
 
 from text2motion.generation.contracts import TextEncoderConfig
 
+
 ############################################################
 #       CLIPTextEncoder
 ############################################################
-
-
 class CLIPTextEncoder(nn.Module):
     def __init__(self, cfg: TextEncoderConfig) -> None:
         super().__init__()

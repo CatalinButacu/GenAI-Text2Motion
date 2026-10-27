@@ -40,8 +40,6 @@ PRETRAIN_RESUME_FORMAT = "text2motion.pretrain_resume"
 ############################################################
 #       PretrainingBudget
 ############################################################
-
-
 @dataclass(frozen=True)
 class PretrainingBudget:
     available_examples: int
@@ -104,8 +102,6 @@ def split_keys_by_clip(keys: list[str], val_fraction: float, seed: int) -> tuple
 ############################################################
 #       TokenPack
 ############################################################
-
-
 class TokenPack(Dataset):
     def __init__(self, path: str, keys: list[str] | None = None) -> None:
         self._path = path
