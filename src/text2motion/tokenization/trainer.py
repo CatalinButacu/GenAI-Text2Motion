@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import logging
 import math
-from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 
 import torch
 from torch import nn
 
-from text2motion.motion.contracts import Split
+from text2motion.motion.contracts import Evaluator, MetricSink, Split
 from text2motion.motion.model import MotionBatch
 from text2motion.motion.storage import (
     RESUME_VERSION,
@@ -27,8 +26,6 @@ from text2motion.tokenization.nn_model import (
 
 logger = logging.getLogger(__name__)
 
-_MetricSink = Callable[[dict[str, object]], None]
-_Evaluator = Callable[[Split], dict[str, float]]
 
 TOKENIZER_RESUME_FORMAT = "text2motion.tokenizer_resume"
 
@@ -139,10 +136,10 @@ def train_tokenizer(
     loader,
     request: TrainTokenizerRequest,
     device: str,
-    evaluate: _Evaluator,
+    evaluate: Evaluator,
     checkpoint_path: Path,
     resume_path: Path,
-    on_metrics: _MetricSink = lambda metrics: None,
+    on_metrics: MetricSink = lambda metrics: None,
     run_dir: Path | None = None,
 ) -> float:
     best_fid = float("inf")

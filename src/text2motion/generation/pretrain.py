@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from text2motion.generation.trainer import (
     check_schedule_horizon,
     warmup_cosine_factor,
 )
+from text2motion.motion.contracts import MetricSink
 from text2motion.motion.datasets import dataset_size
 from text2motion.motion.storage import (
     RESUME_VERSION,
@@ -32,7 +32,6 @@ from text2motion.tokenization.corpus import pack_clip_keys, read_pack_identity
 
 logger = logging.getLogger(__name__)
 
-_MetricSink = Callable[[dict[str, object]], None]
 
 PRETRAIN_RESUME_FORMAT = "text2motion.pretrain_resume"
 
@@ -204,7 +203,7 @@ def pretrain_generator(
     train: GeneratorTrainingConfig,
     device: str,
     out_path: Path,
-    on_metrics: _MetricSink = lambda metrics: None,
+    on_metrics: MetricSink = lambda metrics: None,
     seed: int = 2026,
     run_dir: Path | None = None,
 ) -> None:

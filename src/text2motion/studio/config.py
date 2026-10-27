@@ -5,8 +5,8 @@ from pathlib import Path
 
 from text2motion.motion.model import Gender
 
-_Color = tuple[float, float, float, float]
-_Pair = tuple[float, float]
+type Color = tuple[float, float, float, float]
+type Pair = tuple[float, float]
 
 
 ############################################################
@@ -62,8 +62,8 @@ class LiveGenerationConfig:
 ############################################################
 @dataclass(frozen=True)
 class SceneAppearanceConfig:
-    skin_color: _Color = (0.86, 0.72, 0.61, 1.0)
-    sky_color: _Color = (240 / 255, 182 / 255, 182 / 255, 1.0)
+    skin_color: Color = (0.86, 0.72, 0.61, 1.0)
+    sky_color: Color = (240 / 255, 182 / 255, 182 / 255, 1.0)
 
 
 ############################################################
@@ -90,11 +90,11 @@ class StudioThemeConfig:
     popup_rounding: float = 6.0
     scrollbar_rounding: float = 6.0
     window_border_size: float = 0.0
-    window_padding: _Pair = (12.0, 10.0)
-    frame_padding: _Pair = (8.0, 4.0)
-    item_spacing: _Pair = (8.0, 6.0)
-    section_label_color: _Color = (0.55, 0.75, 1.0, 1.0)
-    colors: dict[str, _Color] = field(
+    window_padding: Pair = (12.0, 10.0)
+    frame_padding: Pair = (8.0, 4.0)
+    item_spacing: Pair = (8.0, 6.0)
+    section_label_color: Color = (0.55, 0.75, 1.0, 1.0)
+    colors: dict[str, Color] = field(
         default_factory=lambda: {
             "window_background": (0.09, 0.10, 0.13, 0.94),
             "title_background": (0.07, 0.08, 0.11, 1.0),

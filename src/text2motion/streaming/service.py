@@ -80,7 +80,7 @@ class LoadedInferencePipeline:
         }
 
 
-_InferencePipelineLoader = Callable[[dict], LoadedInferencePipeline]
+type InferencePipelineLoader = Callable[[dict], LoadedInferencePipeline]
 
 
 def pending_request(sock: socket.socket, io) -> dict | None:
@@ -97,7 +97,7 @@ class MotionInferenceServer:
     def __init__(
         self,
         pipeline: LoadedInferencePipeline,
-        pipeline_loader: _InferencePipelineLoader | None = None,
+        pipeline_loader: InferencePipelineLoader | None = None,
         inference_log: str | Path | None = None,
         *,
         policy: dict[str, object],

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
@@ -17,6 +18,10 @@ class Split(StrEnum):
     TRAIN = "train"
     VALIDATION = "val"
     TEST = "test"
+
+
+type MetricSink = Callable[[dict[str, object]], None]
+type Evaluator = Callable[[Split], dict[str, float]]
 
 
 ############################################################

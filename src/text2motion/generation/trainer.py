@@ -26,7 +26,7 @@ from text2motion.generation.losses import (
 )
 from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.generation.nn_text import CLIPTextEncoder
-from text2motion.motion.contracts import Split
+from text2motion.motion.contracts import Evaluator, MetricSink, Split
 from text2motion.motion.kinematics import Skeleton
 from text2motion.motion.representation import KINEMATIC_CHAINS, RAW_OFFSETS
 from text2motion.motion.storage import (
@@ -44,9 +44,7 @@ logger = logging.getLogger(__name__)
 _NO_DECAY_SUFFIXES = ("a_log", "d_skip")
 _NORM_TYPES = (nn.LayerNorm, nn.GroupNorm, nn.BatchNorm1d)
 
-_MetricSink = Callable[[dict[str, object]], None]
-_Evaluator = Callable[[Split], dict[str, float]]
-_CheckpointSink = Callable[[int, float], None]
+type CheckpointSink = Callable[[int, float], None]
 
 GENERATOR_RESUME_FORMAT = "text2motion.generator_resume"
 
@@ -405,11 +403,11 @@ def train_generator(
     loader,
     request: GeneratorTrainingRequest,
     device: str,
-    evaluate: _Evaluator,
-    save_best: _CheckpointSink,
+    evaluate: Evaluator,
+    save_best: CheckpointSink,
     resume_path: Path,
     run_dir: Path | None = None,
-    on_metrics: _MetricSink = lambda metrics: None,
+    on_metrics: MetricSink = lambda metrics: None,
 ) -> float:
     best_fid = float("inf")
     start_epoch = 0

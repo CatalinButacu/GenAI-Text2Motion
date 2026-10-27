@@ -12,7 +12,7 @@ from text2motion.motion.representation import JOINTS, recover_from_ric
 from text2motion.motion.storage import FEATURES_DIR
 from text2motion.tokenization.nn_model import TokenizerNetwork
 
-_ReconstructionFidScorer = Callable[[list[np.ndarray], list[np.ndarray]], float]
+type ReconstructionFidScorer = Callable[[list[np.ndarray], list[np.ndarray]], float]
 
 
 def select_reconstruction_evaluation_clip_ids(
@@ -40,7 +40,7 @@ def evaluate_tokenizer_reconstruction(
     max_clips: int | None = None,
     split: Split | str = Split.TEST,
     shuffle_seed: int | None = None,
-    reconstruction_fid_scorer: _ReconstructionFidScorer | None = None,
+    reconstruction_fid_scorer: ReconstructionFidScorer | None = None,
 ) -> dict[str, float]:
     module.eval()
     ids = select_reconstruction_evaluation_clip_ids(
