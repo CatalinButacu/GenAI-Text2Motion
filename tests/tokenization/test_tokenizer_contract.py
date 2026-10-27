@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 import torch
 
@@ -9,7 +11,13 @@ from text2motion.tokenization.nn_model import (
     TokenizerNetwork,
     downsample_stage_count,
 )
-from text2motion.tokenization.nn_quantizers import QuantizerStack
+from text2motion.tokenization.nn_quantizers import (
+    FiniteScalarQuantizer,
+    GroupedFiniteScalarQuantizer,
+    QuantizerStack,
+    ResidualFiniteScalarQuantizer,
+    ResidualVectorQuantizer,
+)
 
 FSQ_CFG = TokenizerConfig(
     in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(8, 8, 4, 4), n_resblocks=1
@@ -105,3 +113,32 @@ def test_resample_stages_rejects_non_power_of_two():
     assert downsample_stage_count(8) == 3
     with pytest.raises(ValueError, match="power of two"):
         downsample_stage_count(3)
+
+
+@pytest.mark.parametrize("levels", [(2, 4), (1, 4), ()], ids=["level_two", "level_one", "empty"])
+def test_fsq_levels_below_three_or_empty_raise(levels):
+    with pytest.raises(ValueError, match="FSQ levels"):
+        FiniteScalarQuantizer(levels)
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: GroupedFiniteScalarQuantizer((8, 4), 0),
+        lambda: ResidualFiniteScalarQuantizer((8, 4), 0, 0.0),
+        lambda: ResidualVectorQuantizer(replace(RVQ_CFG, num_quantizers=0)),
+    ],
+    ids=["grouped_fsq", "residual_fsq", "rvq"],
+)
+def test_a_stack_without_quantizers_raises(build):
+    with pytest.raises(ValueError, match="at least 1 quantizer"):
+        build()
+
+
+@pytest.mark.parametrize("tok", both_tokenizers())
+@pytest.mark.parametrize("bad_index", ["dropped", "too_large"])
+def test_decode_of_an_index_outside_the_codebook_raises(tok, bad_index):
+    indices = torch.zeros(1, 4, 2, dtype=torch.long)
+    indices[0, 1, 1] = DROPPED_CODE if bad_index == "dropped" else tok.codebook_size
+    with pytest.raises(ValueError, match="outside 0"):
+        tok.eval().decode(indices)

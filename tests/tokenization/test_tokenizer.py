@@ -2,8 +2,10 @@ import pytest
 import torch
 
 from text2motion.app.config import TokenizerConfig
+from text2motion.motion.model import MotionClip, MotionTokens
 from text2motion.tokenization.nn_model import (
     FiniteScalarQuantizationTokenizer,
+    FrozenMotionTokenizer,
     feature_velocity_reconstruction_loss,
 )
 from text2motion.tokenization.nn_quantizers import (
@@ -77,3 +79,40 @@ def test_indices_with_another_codebook_count_raise():
     quantizer = GroupedFiniteScalarQuantizer((8, 8, 4, 4), num_quantizers=3)
     with pytest.raises(ValueError, match="4 codebooks"):
         quantizer.indices_to_codes(torch.zeros(2, 5, 4, dtype=torch.long))
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+def test_encode_of_non_finite_motion_raises(bad_value):
+    tok = FiniteScalarQuantizationTokenizer(CFG).eval()
+    motion = torch.randn(1, 16, 263)
+    motion[0, 5, 7] = bad_value
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        tok.encode(motion)
+
+
+@pytest.mark.parametrize("frames", [0, 3, 62])
+@pytest.mark.parametrize("call", ["encode", "forward"])
+def test_a_frame_count_that_is_not_a_multiple_of_downsample_raises(frames, call):
+    tok = FiniteScalarQuantizationTokenizer(CFG).eval()
+    with pytest.raises(ValueError, match=f"has {frames} frames"):
+        getattr(tok, call)(torch.randn(1, frames, 263))
+
+
+def test_the_frozen_tokenizer_cuts_a_clip_to_whole_token_steps():
+    frozen = FrozenMotionTokenizer(FiniteScalarQuantizationTokenizer(CFG), CFG.downsample)
+    tokens = frozen.encode(MotionClip(features=torch.randn(62, 263), frame_count=62))
+    assert tokens.frame_count == 60
+    assert tokens.indices.shape == (15, CFG.num_quantizers)
+
+
+def test_the_frozen_tokenizer_rejects_a_clip_shorter_than_one_token_step():
+    frozen = FrozenMotionTokenizer(FiniteScalarQuantizationTokenizer(CFG), CFG.downsample)
+    with pytest.raises(ValueError, match="fewer than one token"):
+        frozen.encode(MotionClip(features=torch.randn(3, 263), frame_count=3))
+
+
+def test_the_frozen_tokenizer_rejects_one_dimensional_indices():
+    frozen = FrozenMotionTokenizer(FiniteScalarQuantizationTokenizer(CFG), CFG.downsample)
+    tokens = MotionTokens(indices=torch.zeros(CFG.num_quantizers, dtype=torch.long), frame_count=4)
+    with pytest.raises(ValueError, match="token indices must have shape"):
+        frozen.decode(tokens)

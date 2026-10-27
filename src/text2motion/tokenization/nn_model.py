@@ -31,6 +31,16 @@ class TokenizerNetwork(nn.Module):
     decoder: nn.Module
     pre_q: nn.Module
     post_q: nn.Module
+    downsample: int
+
+    def checked_frame_count(self, motion: torch.Tensor) -> torch.Tensor:
+        frames = motion.shape[1]
+        if frames < self.downsample or frames % self.downsample:
+            raise ValueError(
+                f"the motion has {frames} frames; the tokenizer needs a positive multiple of "
+                f"downsample {self.downsample}, so cut the clip before encode"
+            )
+        return motion
 
     def quantizer_stack(self) -> QuantizerStack:
         quantizer = self.quantizer
@@ -43,21 +53,32 @@ class TokenizerNetwork(nn.Module):
         return self.quantizer_stack().quantizers[0].codebook_size
 
     def encode(self, motion: torch.Tensor) -> torch.Tensor:
-        _, indices, _ = self.quantizer_stack()(self.pre_q(self.encoder(motion)))
-        return reject_dropped_codes(indices)
+        checked = self.checked_frame_count(motion)
+        _, indices, _ = self.quantizer_stack()(self.pre_q(self.encoder(checked)))
+        invalid = torch.isfinite(checked).logical_not().any() | (indices < 0).any()
+        if bool(invalid):
+            reject_non_finite_motion(checked)
+            reject_dropped_codes(indices)
+        return indices
 
     def decode(self, indices: torch.Tensor) -> torch.Tensor:
         code_vectors = self.quantizer_stack().indices_to_codes(indices)
         return self.decoder(self.post_q(code_vectors))
 
     def forward(self, motion: torch.Tensor) -> TokenizerReconstruction:
-        latent = self.pre_q(self.encoder(motion))
+        latent = self.pre_q(self.encoder(self.checked_frame_count(motion)))
         quantized, indices, commitment_loss = self.quantizer_stack()(latent)
         return TokenizerReconstruction(
             reconstruction=self.decoder(self.post_q(quantized)),
             token_indices=indices,
             commitment_loss=commitment_loss,
         )
+
+
+def reject_non_finite_motion(motion: torch.Tensor) -> torch.Tensor:
+    if not bool(torch.isfinite(motion).all()):
+        raise ValueError("the motion holds NaN or Inf values; fix the clip before encode")
+    return motion
 
 
 def downsample_stage_count(downsample: int) -> int:
@@ -144,6 +165,7 @@ class FiniteScalarQuantizationTokenizer(TokenizerNetwork):
 
     def __init__(self, config: TokenizerConfig) -> None:
         super().__init__()
+        self.downsample = config.downsample
         self.encoder = MotionFeatureEncoder(
             config.in_dim, config.width, config.downsample, config.n_resblocks
         )
@@ -185,6 +207,7 @@ def feature_velocity_reconstruction_loss(
 class ResidualVectorQuantizationTokenizer(TokenizerNetwork):
     def __init__(self, config: ResidualVectorQuantizationConfig) -> None:
         super().__init__()
+        self.downsample = config.downsample
         self.encoder = MotionFeatureEncoder(
             config.in_dim, config.width, config.downsample, config.n_resblocks
         )
@@ -257,6 +280,11 @@ class FrozenMotionTokenizer:
     @torch.no_grad()
     def decode(self, tokens: MotionTokens) -> MotionClip:
         indices = tokens.indices
+        if indices.dim() not in (2, 3):
+            raise ValueError(
+                f"token indices must have shape [steps, codebooks] or [batch, steps, codebooks], "
+                f"got {tuple(indices.shape)}"
+            )
         if indices.dim() == 2:
             indices = indices.unsqueeze(0)
         features = self.network.decode(indices.to(self.device))[0]

@@ -79,7 +79,7 @@ def test_tokenizer_step_with_a_nan_loss_raises_before_the_update():
     motion = torch.randn(2, 32, 263)
     motion[0, 0, 0] = float("nan")
 
-    with pytest.raises(RuntimeError, match="non-finite"):
+    with pytest.raises(ValueError, match="NaN or Inf"):
         trainer.train_step(motion)
 
     for name, value in tokenizer.state_dict().items():
@@ -151,3 +151,44 @@ def test_a_residual_vector_step_with_dropped_stages_gives_finite_values():
     assert bool((indices == DROPPED_CODE).any())
     parts = trainer.train_step(torch.randn(2, 16, 263))
     assert all(torch.isfinite(value) for value in parts.values())
+
+
+def test_a_non_finite_gradient_raises_before_the_update():
+    trainer = __resumable_trainer()
+    first = next(trainer.tokenizer_network.parameters())
+    first.register_hook(lambda gradient: gradient * float("inf"))
+    before = {name: value.clone() for name, value in trainer.tokenizer_network.state_dict().items()}
+    shadow = {name: value.clone() for name, value in trainer.parameter_ema.shadow.items()}
+
+    with pytest.raises(RuntimeError, match="non-finite"):
+        trainer.train_step(torch.randn(2, 32, 263))
+
+    for name, value in trainer.tokenizer_network.state_dict().items():
+        assert torch.equal(value, before[name]), name
+    for name, value in trainer.parameter_ema.shadow.items():
+        assert torch.equal(value, shadow[name]), name
+
+
+def test_an_rvq_step_with_nan_motion_leaves_the_codebooks_finite():
+    torch.manual_seed(0)
+    network = build_tokenizer_network(
+        TokenizerConfig(kind=TokenizerKind.RESIDUAL_VECTOR),
+        ResidualVectorQuantizationConfig(width=32, code_dim=8, codebook_size=16, quant_dropout=0.0),
+    )
+    trainer = TokenizerTrainer(network, lr=1e-3, weight_decay=0.0, ema_decay=0.9)
+    codebooks = {
+        name: value.clone() for name, value in network.state_dict().items() if "embed" in name
+    }
+    motion = torch.randn(2, 16, 263)
+    motion[1, 4, 9] = float("nan")
+
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        trainer.train_step(motion)
+
+    for name, value in codebooks.items():
+        assert torch.equal(network.state_dict()[name], value), name
+
+
+def test_an_epoch_without_a_batch_raises():
+    with pytest.raises(ValueError, match="no batch"):
+        __resumable_trainer().train_epoch([], "cpu")

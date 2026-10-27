@@ -40,6 +40,10 @@ class ExponentialMovingAverage:
             shadow.copy_(value)
 
     def copy_to(self, model: nn.Module) -> None:
+        if self.backup:
+            raise RuntimeError(
+                "copy_to was called again before restore; the trained weights would be lost"
+            )
         self.backup = {
             name: param.detach().clone()
             for name, param in model.named_parameters()
@@ -50,6 +54,10 @@ class ExponentialMovingAverage:
                 param.data.copy_(self.shadow[name])
 
     def restore(self, model: nn.Module) -> None:
+        if not self.backup:
+            raise RuntimeError(
+                "restore was called without copy_to; there are no weights to restore"
+            )
         for name, param in model.named_parameters():
             if name in self.backup:
                 param.data.copy_(self.backup[name])

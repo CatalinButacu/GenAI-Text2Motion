@@ -62,3 +62,34 @@ def test_a_listed_clip_without_a_feature_file_raises(tmp_path):
         evaluate_tokenizer_reconstruction(
             IdentityTokenizer(), tmp_path, scaler, max_frames=30, split=Split.VALIDATION
         )
+
+
+@pytest.mark.parametrize(
+    ("clips", "listed", "settings"),
+    [
+        ({"000001": 6}, "000001\n", {}),
+        ({}, "\n", {}),
+        ({"000001": 40}, "000001\n", {"max_clips": 0}),
+        ({"000001": 40}, "000001\n", {"max_frames": 4}),
+    ],
+    ids=["every_clip_too_short", "empty_list", "max_clips_zero", "max_frames_too_small"],
+)
+def test_an_evaluation_without_a_usable_clip_raises(tmp_path, clips, listed, settings):
+    scaler = __dataset(tmp_path, clips, listed)
+    arguments = {"max_frames": 30, **settings}
+    with pytest.raises(ValueError, match="usable frames"):
+        evaluate_tokenizer_reconstruction(
+            IdentityTokenizer(), tmp_path, scaler, split=Split.VALIDATION, **arguments
+        )
+
+
+def test_a_clip_with_nan_features_raises_with_its_name(tmp_path):
+    scaler = __dataset(tmp_path, {"000001": 40, "000002": 40}, "000001\n000002\n")
+    path = tmp_path / FEATURES_DIR / "000002.npy"
+    features = np.load(path)
+    features[3, 10] = np.nan
+    np.save(path, features)
+    with pytest.raises(ValueError, match="000002"):
+        evaluate_tokenizer_reconstruction(
+            IdentityTokenizer(), tmp_path, scaler, max_frames=30, split=Split.VALIDATION
+        )

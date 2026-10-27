@@ -22,6 +22,7 @@ from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_model import (
     TokenizerNetwork,
     feature_velocity_reconstruction_loss,
+    reject_non_finite_motion,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,7 +72,8 @@ class TokenizerTrainer:
         return perplexity, usage_fraction
 
     def train_step(self, motion: torch.Tensor) -> dict[str, torch.Tensor]:
-        reconstruction, indices, commitment_loss = self.tokenizer_network(motion)
+        checked = reject_non_finite_motion(motion)
+        reconstruction, indices, commitment_loss = self.tokenizer_network(checked)
 
         reconstruction_loss = feature_velocity_reconstruction_loss(reconstruction, motion)
         total = reconstruction_loss + self.commitment_beta * commitment_loss
@@ -85,6 +87,7 @@ class TokenizerTrainer:
         self.parameter_ema.update(self.tokenizer_network)
 
         perplexity, usage_fraction = self.code_statistics(indices)
+
         return {
             "recon": reconstruction_loss.detach(),
             "total": total.detach(),
@@ -103,6 +106,8 @@ class TokenizerTrainer:
             for key, value in parts.items():
                 totals[key] = totals[key] + value if key in totals else value
             steps += 1
+        if steps == 0:
+            raise ValueError("the loader gave no batch; check the split and the window length")
         return {key: value.item() / steps for key, value in totals.items()}
 
     @contextmanager
@@ -130,9 +135,11 @@ class TokenizerTrainer:
         self.tokenizer_network.load_state_dict(state["tokenizer"])
         self.optimizer.load_state_dict(state["optimizer"])
         self.parameter_ema.load_state_dict(state["ema"])
+
         if legacy:
             logger.warning("old resume file: the RNG state is not in it; it starts fresh")
             return state["epoch"] + 1, state["best_fid"]
+
         restore_rng_state(state["rng"])
         return state["epoch"] + 1, state["best_fid"]
 

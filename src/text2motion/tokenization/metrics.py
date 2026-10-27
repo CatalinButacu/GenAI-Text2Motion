@@ -53,12 +53,23 @@ def evaluate_tokenizer_reconstruction(
     check_no_missing_files("feature", [str(path) for path in feature_paths if not path.is_file()])
 
     clips_by_length: dict[int, list[np.ndarray]] = {}
+    non_finite: list[str] = []
     for path in feature_paths:
         features = np.load(path).astype(np.float32)
+        if not np.isfinite(features).all():
+            non_finite.append(path.stem)
+            continue
         length = (min(features.shape[0], max_frames) // downsample) * downsample
         if length < 2 * downsample:
             continue
         clips_by_length.setdefault(length, []).append(features[:length])
+    if non_finite:
+        raise ValueError(f"{len(non_finite)} clips hold NaN or Inf values: {non_finite[:20]}")
+    if not clips_by_length:
+        raise ValueError(
+            f"no clip of split {split} has {2 * downsample} usable frames "
+            f"(clips listed: {len(ids)}, max_frames: {max_frames}); the metrics would be NaN"
+        )
 
     batches = [
         clips[start : start + EVALUATION_BATCH_CLIPS]

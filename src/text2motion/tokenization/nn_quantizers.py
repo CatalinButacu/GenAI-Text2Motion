@@ -43,13 +43,26 @@ class QuantizerStack(nn.Module, ABC):
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor: ...
 
     def checked_indices(self, indices: torch.Tensor) -> torch.Tensor:
-        expected = len(self.quantizers)
+        quantizers = self.quantizers
+        expected = len(quantizers)
         if indices.shape[-1] != expected:
             raise ValueError(
                 f"the indices have {indices.shape[-1]} codebooks, but this quantizer stack has "
                 f"{expected}; the tokens come from another tokenizer configuration"
             )
+        codebook_size = quantizers[0].codebook_size
+        if bool(((indices < 0) | (indices >= codebook_size)).any()):
+            raise ValueError(
+                f"the indices hold values outside 0..{codebook_size - 1}; a dropped code "
+                f"({DROPPED_CODE}) or a token of another tokenizer cannot be decoded"
+            )
         return indices
+
+
+def check_stage_count(stage_count: int) -> int:
+    if stage_count < 1:
+        raise ValueError(f"a quantizer stack needs at least 1 quantizer, got {stage_count}")
+    return stage_count
 
 
 def reject_dropped_codes(indices: torch.Tensor) -> torch.Tensor:
@@ -84,6 +97,11 @@ class FiniteScalarQuantizer(Quantizer):
 
     def __init__(self, levels: tuple[int, ...], boundary_margin: float = 1e-3) -> None:
         super().__init__()
+        if not levels or min(levels) < 3:
+            raise ValueError(
+                f"FSQ levels must be a non-empty list of values of at least 3, got {levels}; "
+                "a level of 1 or 2 gives NaN codes with this boundary formula"
+            )
         level_values = torch.tensor(levels, dtype=torch.float32)
         self.register_buffer("levels", level_values)
         self.register_buffer("half_l_bound", (level_values - 1) * 0.5)
@@ -158,7 +176,8 @@ class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
         self, levels: tuple[int, ...], num_quantizers: int, dropout_probability: float
     ) -> None:
         super().__init__()
-        self.layers = nn.ModuleList([FiniteScalarQuantizer(levels) for _ in range(num_quantizers)])
+        stage_count = check_stage_count(num_quantizers)
+        self.layers = nn.ModuleList([FiniteScalarQuantizer(levels) for _ in range(stage_count)])
         self.dropout_probability = dropout_probability
 
     def forward(self, latent: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -185,7 +204,8 @@ class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
 class GroupedFiniteScalarQuantizer(QuantizerStack):
     def __init__(self, levels: tuple[int, ...], num_quantizers: int) -> None:
         super().__init__()
-        self.groups = nn.ModuleList([FiniteScalarQuantizer(levels) for _ in range(num_quantizers)])
+        group_count = check_stage_count(num_quantizers)
+        self.groups = nn.ModuleList([FiniteScalarQuantizer(levels) for _ in range(group_count)])
 
     @property
     def quantizers(self) -> list[Quantizer]:
@@ -292,7 +312,7 @@ class ResidualVectorQuantizer(ResidualQuantizerStack):
             VectorQuantizer(
                 config.codebook_size, config.code_dim, config.ema_decay, config.reset_threshold
             )
-            for _ in range(config.num_quantizers)
+            for _ in range(check_stage_count(config.num_quantizers))
         )
 
     def forward(self, latent: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

@@ -54,3 +54,34 @@ def test_a_decay_outside_zero_to_one_raises():
     model, _ = __small_model()
     with pytest.raises(ValueError, match="decay"):
         ExponentialMovingAverage(model, decay=1.5)
+
+
+def test_a_second_copy_to_before_restore_raises():
+    model, _ = __small_model()
+    ema = ExponentialMovingAverage(model, decay=0.9)
+    ema.copy_to(model)
+    with pytest.raises(RuntimeError, match="before restore"):
+        ema.copy_to(model)
+
+
+def test_restore_without_copy_to_raises():
+    model, _ = __small_model()
+    with pytest.raises(RuntimeError, match="without copy_to"):
+        ExponentialMovingAverage(model, decay=0.9).restore(model)
+
+
+@pytest.mark.parametrize("problem", ["missing", "unexpected", "shape", "not_finite"])
+def test_loading_a_bad_ema_state_raises(problem):
+    model, _ = __small_model()
+    ema = ExponentialMovingAverage(model, decay=0.9)
+    state = {name: value.clone() for name, value in ema.shadow.items()}
+    if problem == "missing":
+        state.pop("0.weight")
+    if problem == "unexpected":
+        state["extra"] = torch.zeros(1)
+    if problem == "shape":
+        state["0.weight"] = torch.zeros(1)
+    if problem == "not_finite":
+        state["0.weight"][0, 0] = float("nan")
+    with pytest.raises((KeyError, ValueError)):
+        ema.load_state_dict(state)
