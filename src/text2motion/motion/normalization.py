@@ -34,6 +34,11 @@ def check_scaler_values(mean: np.ndarray, std: np.ndarray, source: str | Path) -
         )
 
 
+############################################################
+#       MotionScaler
+############################################################
+
+
 @dataclass(frozen=True)
 class MotionScaler:
     mean: np.ndarray

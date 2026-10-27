@@ -33,6 +33,11 @@ _Evaluator = Callable[[Split], dict[str, float]]
 TOKENIZER_RESUME_FORMAT = "text2motion.tokenizer_resume"
 
 
+############################################################
+#       TokenizerTrainer
+############################################################
+
+
 class TokenizerTrainer:
     def __init__(
         self,

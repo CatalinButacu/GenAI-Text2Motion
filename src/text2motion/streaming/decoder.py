@@ -64,6 +64,11 @@ def __put_drop_oldest(out_queue: "queue_mod.Queue", item: object) -> None:
         out_queue.put_nowait(item)
 
 
+############################################################
+#       StreamingMotionDecoder
+############################################################
+
+
 class StreamingMotionDecoder:
     def __init__(
         self,

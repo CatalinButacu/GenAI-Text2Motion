@@ -116,6 +116,11 @@ def __dynamics_terms(
     return {"foot_skate": foot_skate, "accel": accel}
 
 
+############################################################
+#       UncertaintyWeighter
+############################################################
+
+
 class UncertaintyWeighter(nn.Module):
     def __init__(self, term_names: tuple[str, ...]) -> None:
         super().__init__()

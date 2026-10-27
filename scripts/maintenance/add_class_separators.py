@@ -32,7 +32,7 @@ def has_separator(lines: list[str], index: int) -> bool:
 
 def separated_text(text: str) -> str:
     starts = class_start_lines(ast.parse(text))
-    if len(starts) < 2:
+    if not starts:
         return text
     ending = "\r\n" if "\r\n" in text else "\n"
     lines = text.split(ending)

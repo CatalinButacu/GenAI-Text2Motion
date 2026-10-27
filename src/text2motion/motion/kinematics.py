@@ -141,6 +141,11 @@ def qbetween_np(v0: np.ndarray, v1: np.ndarray) -> np.ndarray:
     return qbetween(first, second).numpy()
 
 
+############################################################
+#       Skeleton
+############################################################
+
+
 class Skeleton:
     def __init__(self, offset: torch.Tensor, kinematic_tree: list[list[int]], device: str) -> None:
         self.device = device

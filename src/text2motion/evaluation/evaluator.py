@@ -47,6 +47,11 @@ def chosen_caption_index(sample: EvaluationSample, run: int) -> int:
     return int(np.random.default_rng(seed).integers(len(sample.captions)))
 
 
+############################################################
+#       HumanMl3dGenerationEvaluator
+############################################################
+
+
 class HumanMl3dGenerationEvaluator:
     def __init__(self, resources: GuoEvaluationResources) -> None:
         self.resources = resources

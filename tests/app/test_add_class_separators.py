@@ -29,9 +29,15 @@ def test_a_stale_label_takes_the_current_class_name():
     assert add_class_separators.separated_text(stale) == SEPARATED
 
 
-def test_a_file_with_one_class_stays_unchanged():
+def test_a_file_with_one_class_gets_a_separator():
     single = "class Alpha:\n    pass\n"
-    assert add_class_separators.separated_text(single) == single
+    expected = f"{RULE}\n#       Alpha\n{RULE}\n\n\nclass Alpha:\n    pass\n"
+    assert add_class_separators.separated_text(single) == expected
+
+
+def test_a_file_without_classes_stays_unchanged():
+    functions = "def alpha():\n    pass\n"
+    assert add_class_separators.separated_text(functions) == functions
 
 
 def test_windows_line_endings_stay():
