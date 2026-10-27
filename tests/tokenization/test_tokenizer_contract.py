@@ -9,7 +9,7 @@ from text2motion.tokenization.nn_model import (
     RvqBaselineTokenizer,
     resample_stages,
 )
-from text2motion.tokenization.nn_quantizers import LatentQuantizer
+from text2motion.tokenization.nn_quantizers import QuantizerStack
 
 FSQ_CFG = TokenizerConfig(
     in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(8, 8, 4, 4), n_resblocks=1
@@ -32,7 +32,7 @@ def both_tokenizers():
 @pytest.mark.parametrize("tok", both_tokenizers())
 def test_both_families_satisfy_one_contract(tok):
     assert isinstance(tok, MotionTokenizerNetwork)
-    assert isinstance(tok.quantizer, LatentQuantizer)
+    assert isinstance(tok.quantizer, QuantizerStack)
 
     x = torch.randn(2, 32, 263)
     out = tok.eval()(x)
@@ -46,10 +46,10 @@ def test_both_families_satisfy_one_contract(tok):
 @pytest.mark.parametrize("tok", both_tokenizers())
 def test_quantizer_exposes_units_and_combine(tok):
     quant = tok.quantizer
-    assert len(quant.quantizer_units) == 2
-    unit = quant.quantizer_units[0]
+    assert len(quant.quantizers) == 2
+    unit = quant.quantizers[0]
     codes = [torch.randn(2, 8, unit.dim if hasattr(unit, "dim") else 8)]
-    assert quant.compose_latent_codes(codes * 2).ndim == 3
+    assert quant.combine_code_vectors(codes * 2).ndim == 3
 
 
 def test_dropped_levels_use_a_sentinel_not_code_zero():

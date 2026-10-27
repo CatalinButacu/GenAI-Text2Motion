@@ -101,7 +101,7 @@ randomly truncates levels in training for robustness. Decode = sum the selected 
 ### FSQ mechanics (ours)
 **Round each latent dimension onto a small fixed grid** (levels e.g. (8,5,5,5)); the tuple of rounded
 dims *is* the integer code; implicit vocab per group = product of levels (8x5x5x5 = 1000). Gradient
-flows through the rounding via a straight-through estimator (`round_ste`). **No codebook is learned**,
+flows through the rounding via a straight-through estimator (`round_straight_through`). **No codebook is learned**,
 so none of RVQ's machinery (EMA / reset / commitment) exists -- nothing to collapse.
 
 > **The structural contrast.** RVQ's 6 codes are **sequential refinement levels** (each fixes the

@@ -19,20 +19,20 @@ def typed_modules(modules: nn.ModuleList, kind: type[_Module]) -> list[_Module]:
     return [module for module in modules if isinstance(module, kind)]
 
 
-class QuantizerUnit(nn.Module, ABC):
+class Quantizer(nn.Module, ABC):
     codebook_size: int
 
     @abstractmethod
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor: ...
 
 
-class LatentQuantizer(nn.Module, ABC):
+class QuantizerStack(nn.Module, ABC):
     @property
     @abstractmethod
-    def quantizer_units(self) -> list[QuantizerUnit]: ...
+    def quantizers(self) -> list[Quantizer]: ...
 
     @abstractmethod
-    def compose_latent_codes(self, codes: list[torch.Tensor]) -> torch.Tensor: ...
+    def combine_code_vectors(self, codes: list[torch.Tensor]) -> torch.Tensor: ...
 
     @abstractmethod
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor: ...
@@ -52,11 +52,11 @@ def dropped_code_indices(z: torch.Tensor) -> torch.Tensor:
     return torch.full(z.shape[:-1], DROPPED_CODE, dtype=torch.long, device=z.device)
 
 
-def round_ste(z: torch.Tensor) -> torch.Tensor:
+def round_straight_through(z: torch.Tensor) -> torch.Tensor:
     return z + (torch.round(z) - z).detach()
 
 
-class FSQ(QuantizerUnit):
+class FSQ(Quantizer):
     levels: torch.Tensor
     half_l_bound: torch.Tensor
     half_width: torch.Tensor
@@ -87,7 +87,7 @@ class FSQ(QuantizerUnit):
         return torch.tanh(z + self.bound_shift) * self.bound_scale - self.bound_offset
 
     def quantize(self, z: torch.Tensor) -> torch.Tensor:
-        quantized = round_ste(self.bound(z))
+        quantized = round_straight_through(self.bound(z))
         return quantized / self.half_width
 
     def codes_to_indices(self, codes: torch.Tensor) -> torch.Tensor:
@@ -101,33 +101,33 @@ class FSQ(QuantizerUnit):
         return (digits.float() - self.half_width) / self.half_width
 
 
-class ResidualQuantizerStack(LatentQuantizer, ABC):
+class ResidualQuantizerStack(QuantizerStack, ABC):
     layers: nn.ModuleList
     num_quantizers: int
     dropout_p: float
 
     @property
-    def quantizer_units(self) -> list[QuantizerUnit]:
-        return typed_modules(self.layers, QuantizerUnit)
+    def quantizers(self) -> list[Quantizer]:
+        return typed_modules(self.layers, Quantizer)
 
-    def compose_latent_codes(self, codes: list[torch.Tensor]) -> torch.Tensor:
+    def combine_code_vectors(self, codes: list[torch.Tensor]) -> torch.Tensor:
         return torch.stack(codes, dim=0).sum(0)
 
-    def active_levels(self) -> int:
+    def active_stage_count(self) -> int:
         if self.training and self.dropout_p > 0 and torch.rand(()) < self.dropout_p:
             return int(torch.randint(1, self.num_quantizers + 1, ()).item())
 
         return self.num_quantizers
 
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
-        units = self.quantizer_units
+        units = self.quantizers
         out = units[0].indices_to_codes(indices[..., 0])
         for stage, unit in enumerate(units[1:], start=1):
             out = out + unit.indices_to_codes(indices[..., stage])
         return out
 
 
-class ResidualFSQ(ResidualQuantizerStack):
+class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
     def __init__(self, levels: tuple[int, ...], num_quantizers: int, dropout_p: float) -> None:
         super().__init__()
         self.layers = nn.ModuleList([FSQ(levels) for _ in range(num_quantizers)])
@@ -138,7 +138,7 @@ class ResidualFSQ(ResidualQuantizerStack):
         residual = z
         quantized = torch.zeros_like(z)
         indices: list[torch.Tensor] = []
-        n_active = self.active_levels()
+        n_active = self.active_stage_count()
 
         for i, layer in enumerate(typed_modules(self.layers, FSQ)):
             if i < n_active:
@@ -152,7 +152,7 @@ class ResidualFSQ(ResidualQuantizerStack):
         return quantized, torch.stack(indices, dim=-1)
 
 
-class GroupedFSQ(LatentQuantizer):
+class GroupedFiniteScalarQuantizer(QuantizerStack):
     def __init__(self, levels: tuple[int, ...], num_quantizers: int) -> None:
         super().__init__()
         self.groups = nn.ModuleList([FSQ(levels) for _ in range(num_quantizers)])
@@ -160,10 +160,10 @@ class GroupedFSQ(LatentQuantizer):
         self.dim = len(levels)
 
     @property
-    def quantizer_units(self) -> list[QuantizerUnit]:
-        return typed_modules(self.groups, QuantizerUnit)
+    def quantizers(self) -> list[Quantizer]:
+        return typed_modules(self.groups, Quantizer)
 
-    def compose_latent_codes(self, codes: list[torch.Tensor]) -> torch.Tensor:
+    def combine_code_vectors(self, codes: list[torch.Tensor]) -> torch.Tensor:
         return torch.cat(codes, dim=-1)
 
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -186,7 +186,7 @@ class GroupedFSQ(LatentQuantizer):
         )
 
 
-class EmaVectorQuantizer(QuantizerUnit):
+class VectorQuantizer(Quantizer):
     embed: torch.Tensor
     cluster_size: torch.Tensor
     embed_avg: torch.Tensor
@@ -246,20 +246,17 @@ class EmaVectorQuantizer(QuantizerUnit):
         commit = F.mse_loss(z, quant.detach())
         return quant, indices.view(z.shape[:-1]), commit
 
-    def lookup(self, indices: torch.Tensor) -> torch.Tensor:
+    def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
         return F.embedding(indices, self.embed)
 
-    def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
-        return self.lookup(indices)
 
-
-class ResidualVQ(ResidualQuantizerStack):
+class ResidualVectorQuantizer(ResidualQuantizerStack):
     def __init__(self, cfg: RvqConfig) -> None:
         super().__init__()
         self.num_quantizers = cfg.num_quantizers
         self.dropout_p = cfg.quant_dropout
         self.layers = nn.ModuleList(
-            EmaVectorQuantizer(cfg.codebook_size, cfg.code_dim, cfg.ema_decay, cfg.reset_threshold)
+            VectorQuantizer(cfg.codebook_size, cfg.code_dim, cfg.ema_decay, cfg.reset_threshold)
             for _ in range(cfg.num_quantizers)
         )
 
@@ -268,9 +265,9 @@ class ResidualVQ(ResidualQuantizerStack):
         quantized = torch.zeros_like(z)
         commit = z.new_zeros(())
         indices: list[torch.Tensor] = []
-        n_active = self.active_levels()
+        n_active = self.active_stage_count()
 
-        for i, layer in enumerate(typed_modules(self.layers, EmaVectorQuantizer)):
+        for i, layer in enumerate(typed_modules(self.layers, VectorQuantizer)):
             if i < n_active:
                 code, idx, c = layer(residual)
                 residual = residual - code

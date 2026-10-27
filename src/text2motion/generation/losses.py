@@ -20,7 +20,7 @@ def __codebook_tables(
     tokenizer: MotionTokenizerNetwork, device: torch.device
 ) -> list[torch.Tensor]:
     tables = []
-    for unit in tokenizer.latent_quantizer().quantizer_units:
+    for unit in tokenizer.latent_quantizer().quantizers:
         all_idx = torch.arange(unit.codebook_size, device=device)
         tables.append(unit.indices_to_codes(all_idx))
     return tables
@@ -34,7 +34,7 @@ def soft_decode(logits: torch.Tensor, tokenizer: MotionTokenizerNetwork) -> torc
         real = logits[..., token_index, : codebook.size(0)]
         expected_codes.append(real.softmax(-1) @ codebook)
 
-    soft_codes = tokenizer.latent_quantizer().compose_latent_codes(expected_codes)
+    soft_codes = tokenizer.latent_quantizer().combine_code_vectors(expected_codes)
     return tokenizer.decoder(tokenizer.post_q(soft_codes))
 
 

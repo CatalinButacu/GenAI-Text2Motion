@@ -5,7 +5,7 @@ from text2motion.tokenization.nn_model import (
     RvqBaselineTokenizer,
     feature_velocity_reconstruction_loss,
 )
-from text2motion.tokenization.nn_quantizers import EmaVectorQuantizer, typed_modules
+from text2motion.tokenization.nn_quantizers import VectorQuantizer, typed_modules
 
 CFG = RvqConfig(
     in_dim=263,
@@ -65,7 +65,7 @@ def test_codebook_updates_and_no_collapse():
     opt = torch.optim.AdamW(tok.parameters(), lr=3e-3)
     x = torch.randn(4, 64, 263)
 
-    embed_before = typed_modules(tok.rvq.layers, EmaVectorQuantizer)[0].embed.clone()
+    embed_before = typed_modules(tok.rvq.layers, VectorQuantizer)[0].embed.clone()
     for _ in range(50):
         recon, _, commit = tok(x)
         (feature_velocity_reconstruction_loss(recon, x) + CFG.commitment_beta * commit).backward()
@@ -73,7 +73,7 @@ def test_codebook_updates_and_no_collapse():
         opt.zero_grad()
 
     assert not torch.allclose(
-        embed_before, typed_modules(tok.rvq.layers, EmaVectorQuantizer)[0].embed
+        embed_before, typed_modules(tok.rvq.layers, VectorQuantizer)[0].embed
     )
     idx0 = tok.eval().encode(x)[..., 0]
     assert idx0.unique().numel() > 1

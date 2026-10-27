@@ -16,10 +16,10 @@ from text2motion.tokenization.contracts import (
     TokenizerKind,
 )
 from text2motion.tokenization.nn_quantizers import (
-    GroupedFSQ,
-    LatentQuantizer,
-    ResidualFSQ,
-    ResidualVQ,
+    GroupedFiniteScalarQuantizer,
+    QuantizerStack,
+    ResidualFiniteScalarQuantizer,
+    ResidualVectorQuantizer,
     reject_dropped_codes,
 )
 
@@ -30,9 +30,9 @@ class MotionTokenizerNetwork(nn.Module, ABC):
     pre_q: nn.Module
     post_q: nn.Module
 
-    def latent_quantizer(self) -> LatentQuantizer:
+    def latent_quantizer(self) -> QuantizerStack:
         quantizer = self.quantizer
-        if not isinstance(quantizer, LatentQuantizer):
+        if not isinstance(quantizer, QuantizerStack):
             raise TypeError("the tokenizer network has no latent quantizer")
         return quantizer
 
@@ -106,7 +106,7 @@ class MotionFeatureDecoder(nn.Module):
 
 
 class FsqTokenizer(MotionTokenizerNetwork):
-    quantizer: LatentQuantizer
+    quantizer: QuantizerStack
 
     def __init__(self, cfg: TokenizerConfig) -> None:
         super().__init__()
@@ -116,10 +116,10 @@ class FsqTokenizer(MotionTokenizerNetwork):
 
         match FsqComposition(cfg.quantizer):
             case FsqComposition.GROUPED:
-                self.quantizer = GroupedFSQ(cfg.fsq_levels, cfg.num_quantizers)
+                self.quantizer = GroupedFiniteScalarQuantizer(cfg.fsq_levels, cfg.num_quantizers)
                 latent_dim = cfg.num_quantizers * len(cfg.fsq_levels)
             case FsqComposition.RESIDUAL:
-                self.quantizer = ResidualFSQ(cfg.fsq_levels, cfg.num_quantizers, cfg.quant_dropout)
+                self.quantizer = ResidualFiniteScalarQuantizer(cfg.fsq_levels, cfg.num_quantizers, cfg.quant_dropout)
                 latent_dim = len(cfg.fsq_levels)
             case unknown:
                 assert_never(unknown)
@@ -129,7 +129,7 @@ class FsqTokenizer(MotionTokenizerNetwork):
 
     @property
     def codebook_size(self) -> int:
-        return self.quantizer.quantizer_units[0].codebook_size
+        return self.quantizer.quantizers[0].codebook_size
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         _, indices = self.quantizer(self.pre_q(self.encoder(x)))
@@ -159,14 +159,14 @@ class RvqBaselineTokenizer(MotionTokenizerNetwork):
         self.decoder = MotionFeatureDecoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
         self.pre_q = nn.Linear(cfg.width, cfg.code_dim)
         self.post_q = nn.Linear(cfg.code_dim, cfg.width)
-        self.rvq = ResidualVQ(cfg)
+        self.rvq = ResidualVectorQuantizer(cfg)
 
     @property
     def codebook_size(self) -> int:
         return self.cfg.codebook_size
 
     @property
-    def quantizer(self) -> ResidualVQ:
+    def quantizer(self) -> ResidualVectorQuantizer:
         return self.rvq
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
@@ -214,7 +214,7 @@ class MotionTokenizer:
 
     @property
     def num_codebooks(self) -> int:
-        return len(self.tokenizer_model.latent_quantizer().quantizer_units)
+        return len(self.tokenizer_model.latent_quantizer().quantizers)
 
     def aligned_frame_count(self, frame_count: int) -> int:
         return (frame_count // self.downsample) * self.downsample

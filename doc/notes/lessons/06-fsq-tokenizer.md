@@ -120,7 +120,7 @@ flowchart TB
   E --> L["latent (B, 49, 512)"]
   L --> PQ["pre_q: Linear, matrix W1 (512 x 24)"]
   PQ --> Z["FSQ latent (B, 49, 24) = 6 groups x 4 dims"]
-  Z --> Q["GroupedFSQ: bound+round each 4-D group (no matrix, fixed lattice)"]
+  Z --> Q["GroupedFiniteScalarQuantizer: bound+round each 4-D group (no matrix, fixed lattice)"]
   Q --> IDX["indices (B, 49, 6), each in 0..999  -- the discrete bottleneck"]
   Q --> QZ["quantized (B, 49, 24)"]
   QZ --> PO["post_q: Linear, matrix W2 (24 x 512)"]

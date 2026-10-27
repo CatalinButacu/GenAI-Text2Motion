@@ -10,7 +10,7 @@
 ```mermaid
 flowchart TB
   D["disk (T,263)"] --> N["normalize -> (T,263)"] --> B["batch -> (B,T,263)"]
-  B --> ENC["frozen encode: conv x4 -> (B,T',512) -> pre_q -> (B,T',24) -> GroupedFSQ"]
+  B --> ENC["frozen encode: conv x4 -> (B,T',512) -> pre_q -> (B,T',24) -> GroupedFiniteScalarQuantizer"]
   ENC --> TGT["targets (B,T',6) in 0..999, +END -> (B,L,6)"]
   TGT --> PK["pkeep 0.8 corrupt inputs -> (B,L,6)"]
   CAP["captions -> CLIP -> (B,16,512), drop_text 0.1"] --> CC
@@ -60,8 +60,8 @@ Stack + zero-pad to batch max -> motion **(B, T, 263)**, lengths **(B,)**, capti
    (B, 512, T/4); transpose -> **(B, T', 512)**. *Transformation: 4 frames of 263 numbers become 1
    latent of 512 -- temporal compression + feature mixing.*
 2. **pre_q** linear: (B, T', 512) -> **(B, T', 24)**. *Project to the FSQ latent (6 groups x 4-D).*
-3. **GroupedFSQ**: split into 6 groups of 4-D; per group: `bound` (squash to the grid range) ->
-   `round_ste` (snap to nearest (8,5,5,5) lattice point) -> `codes_to_indices`. Output
+3. **GroupedFiniteScalarQuantizer**: split into 6 groups of 4-D; per group: `bound` (squash to the grid range) ->
+   `round_straight_through` (snap to nearest (8,5,5,5) lattice point) -> `codes_to_indices`. Output
    **target_tokens (B, T', 6)** integers in 0..999. *Transformation: continuous 24-D -> 6 discrete
    integers per step. THE discretization.* (no grad to the tokenizer -- it's frozen.)
 

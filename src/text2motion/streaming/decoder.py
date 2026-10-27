@@ -19,7 +19,7 @@ _END = None
 def measure_decoder_context(
     tokenizer: MotionTokenizerNetwork, downsample: int, probe_len: int = 32, trials: int = 4
 ) -> tuple[int, int]:
-    num_quantizers = len(tokenizer.latent_quantizer().quantizer_units)
+    num_quantizers = len(tokenizer.latent_quantizer().quantizers)
     codebook_size = tokenizer.codebook_size
     device = next(tokenizer.parameters()).device
     centre = probe_len // 2

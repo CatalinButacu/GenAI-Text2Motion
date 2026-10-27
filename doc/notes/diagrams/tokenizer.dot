@@ -23,10 +23,10 @@ digraph tokenizer {
     }
 
     subgraph cluster_fsq {
-        label="GroupedFSQ - the contribution (6 groups, no learned codebook)";
+        label="GroupedFiniteScalarQuantizer - the contribution (6 groups, no learned codebook)";
         style=filled; color="#ede7f6"; fontname="Segoe UI Semibold"; node [fillcolor="#9575cd"];
         bound [label="bound: squash each dim to its level range"];
-        round [label="round to nearest lattice point (round_ste)"];
+        round [label="round to nearest lattice point (round_straight_through)"];
         ste   [label="straight-through gradient (identity backward)"];
         idx   [label="codes_to_indices: 6 ids in 0..999 per step"];
         bound -> round -> ste -> idx;
