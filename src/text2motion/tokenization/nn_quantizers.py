@@ -9,7 +9,7 @@ from torch.nn import functional as F
 
 from text2motion.tokenization.contracts import (
     DROPPED_CODE,
-    RvqConfig,
+    ResidualVectorQuantizationConfig,
 )
 
 _Module = TypeVar("_Module", bound=nn.Module)
@@ -251,7 +251,7 @@ class VectorQuantizer(Quantizer):
 
 
 class ResidualVectorQuantizer(ResidualQuantizerStack):
-    def __init__(self, cfg: RvqConfig) -> None:
+    def __init__(self, cfg: ResidualVectorQuantizationConfig) -> None:
         super().__init__()
         self.num_quantizers = cfg.num_quantizers
         self.dropout_p = cfg.quant_dropout

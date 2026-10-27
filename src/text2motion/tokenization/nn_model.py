@@ -10,10 +10,10 @@ from torch.nn import functional as F
 from text2motion.motion.model import MotionClip, MotionTokens
 from text2motion.tokenization.contracts import (
     FsqComposition,
-    RvqConfig,
+    ResidualVectorQuantizationConfig,
     TokenizerConfig,
-    TokenizerForwardOutput,
     TokenizerKind,
+    TokenizerReconstruction,
 )
 from text2motion.tokenization.nn_quantizers import (
     GroupedFiniteScalarQuantizer,
@@ -47,7 +47,7 @@ class TokenizerNetwork(nn.Module, ABC):
     def decode(self, indices: torch.Tensor) -> torch.Tensor: ...
 
     @abstractmethod
-    def forward(self, x: torch.Tensor) -> TokenizerForwardOutput: ...
+    def forward(self, x: torch.Tensor) -> TokenizerReconstruction: ...
 
 
 def downsample_stage_count(downsample: int) -> int:
@@ -140,10 +140,12 @@ class FiniteScalarQuantizationTokenizer(TokenizerNetwork):
     def decode(self, indices: torch.Tensor) -> torch.Tensor:
         return self.decoder(self.post_q(self.quantizer.indices_to_codes(indices)))
 
-    def forward(self, x: torch.Tensor) -> TokenizerForwardOutput:
+    def forward(self, x: torch.Tensor) -> TokenizerReconstruction:
         quantized, indices = self.quantizer(self.pre_q(self.encoder(x)))
         recon = self.decoder(self.post_q(quantized))
-        return TokenizerForwardOutput(recon=recon, indices=indices, commit=x.new_zeros(()))
+        return TokenizerReconstruction(
+            reconstruction=recon, token_indices=indices, commitment_loss=x.new_zeros(())
+        )
 
 
 def feature_velocity_reconstruction_loss(recon: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -154,7 +156,7 @@ def feature_velocity_reconstruction_loss(recon: torch.Tensor, target: torch.Tens
 
 
 class ResidualVectorQuantizationTokenizer(TokenizerNetwork):
-    def __init__(self, cfg: RvqConfig) -> None:
+    def __init__(self, cfg: ResidualVectorQuantizationConfig) -> None:
         super().__init__()
         self.cfg = cfg
         self.encoder = MotionFeatureEncoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
@@ -180,19 +182,23 @@ class ResidualVectorQuantizationTokenizer(TokenizerNetwork):
         codes = self.rvq.indices_to_codes(indices)
         return self.decoder(self.post_q(codes))
 
-    def forward(self, x: torch.Tensor) -> TokenizerForwardOutput:
+    def forward(self, x: torch.Tensor) -> TokenizerReconstruction:
         z = self.pre_q(self.encoder(x))
         quantized, indices, commit = self.rvq(z)
         recon = self.decoder(self.post_q(quantized))
-        return TokenizerForwardOutput(recon=recon, indices=indices, commit=commit)
+        return TokenizerReconstruction(
+            reconstruction=recon, token_indices=indices, commitment_loss=commit
+        )
 
 
-def build_tokenizer_network(fsq: TokenizerConfig, rvq: RvqConfig | None = None) -> TokenizerNetwork:
+def build_tokenizer_network(
+    fsq: TokenizerConfig, rvq: ResidualVectorQuantizationConfig | None = None
+) -> TokenizerNetwork:
     match TokenizerKind(fsq.kind):
         case TokenizerKind.FSQ:
             return FiniteScalarQuantizationTokenizer(fsq)
         case TokenizerKind.RVQ:
-            return ResidualVectorQuantizationTokenizer(rvq or RvqConfig())
+            return ResidualVectorQuantizationTokenizer(rvq or ResidualVectorQuantizationConfig())
         case unknown:
             assert_never(unknown)
 

@@ -1,6 +1,6 @@
 from text2motion.tokenization.contracts import (
     FsqComposition,
-    RvqConfig,
+    ResidualVectorQuantizationConfig,
     TokenizerConfig,
     TokenizerKind,
 )
@@ -13,7 +13,7 @@ from text2motion.tokenization.nn_model import (
 __all__ = [
     "FrozenMotionTokenizer",
     "FsqComposition",
-    "RvqConfig",
+    "ResidualVectorQuantizationConfig",
     "TokenizerConfig",
     "TokenizerKind",
     "TokenizerNetwork",

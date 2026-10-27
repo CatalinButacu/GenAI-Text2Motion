@@ -39,7 +39,7 @@ class TokenizerConfig:
 
 
 @dataclass(frozen=True)
-class RvqConfig:
+class ResidualVectorQuantizationConfig:
     in_dim: int = DIM
     width: int = 512
     downsample: int = 4
@@ -53,10 +53,10 @@ class RvqConfig:
     reset_threshold: float = 1.0
 
 
-class TokenizerForwardOutput(NamedTuple):
-    recon: torch.Tensor
-    indices: torch.Tensor
-    commit: torch.Tensor
+class TokenizerReconstruction(NamedTuple):
+    reconstruction: torch.Tensor
+    token_indices: torch.Tensor
+    commitment_loss: torch.Tensor
 
 
 @dataclass(frozen=True)

@@ -1,13 +1,13 @@
 import torch
 
-from text2motion.app.config import RvqConfig
+from text2motion.app.config import ResidualVectorQuantizationConfig
 from text2motion.tokenization.nn_model import (
     ResidualVectorQuantizationTokenizer,
     feature_velocity_reconstruction_loss,
 )
 from text2motion.tokenization.nn_quantizers import VectorQuantizer, typed_modules
 
-CFG = RvqConfig(
+CFG = ResidualVectorQuantizationConfig(
     in_dim=263,
     width=32,
     downsample=4,

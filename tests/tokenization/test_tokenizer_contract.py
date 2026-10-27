@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from text2motion.app.config import RvqConfig, TokenizerConfig
+from text2motion.app.config import ResidualVectorQuantizationConfig, TokenizerConfig
 from text2motion.tokenization.contracts import DROPPED_CODE, FsqComposition
 from text2motion.tokenization.nn_model import (
     FiniteScalarQuantizationTokenizer,
@@ -14,7 +14,7 @@ from text2motion.tokenization.nn_quantizers import QuantizerStack
 FSQ_CFG = TokenizerConfig(
     in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(8, 8, 4, 4), n_resblocks=1
 )
-RVQ_CFG = RvqConfig(
+RVQ_CFG = ResidualVectorQuantizationConfig(
     in_dim=263,
     width=64,
     downsample=4,
@@ -40,9 +40,9 @@ def test_both_families_satisfy_one_contract(tok):
     x = torch.randn(2, 32, 263)
     out = tok.eval()(x)
 
-    assert out.recon.shape == x.shape
-    assert out.indices.dtype == torch.long
-    assert out.commit.ndim == 0
+    assert out.reconstruction.shape == x.shape
+    assert out.token_indices.dtype == torch.long
+    assert out.commitment_loss.ndim == 0
     assert len(out) == 3
 
 
@@ -71,7 +71,7 @@ def test_dropped_levels_use_a_sentinel_not_code_zero():
 
     saw_dropped = False
     for _ in range(20):
-        indices = tok(torch.randn(2, 32, 263)).indices
+        indices = tok(torch.randn(2, 32, 263)).token_indices
         if bool((indices == DROPPED_CODE).any()):
             saw_dropped = True
             break

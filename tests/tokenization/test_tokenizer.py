@@ -41,12 +41,12 @@ def test_single_batch_overfit():
     opt = torch.optim.Adam(tok.parameters(), lr=1e-3)
     x = torch.randn(2, 32, 263)
 
-    recon0 = tok(x).recon
+    recon0 = tok(x).reconstruction
     loss = feature_velocity_reconstruction_loss(recon0, x)
     loss0 = loss.item()
 
     for _ in range(200):
-        recon = tok(x).recon
+        recon = tok(x).reconstruction
         loss = feature_velocity_reconstruction_loss(recon, x)
         opt.zero_grad()
         loss.backward()

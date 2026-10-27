@@ -21,7 +21,11 @@ from text2motion.generation.contracts import (
 from text2motion.motion.contracts import MotionDataConfig
 from text2motion.motion.model import Gender
 from text2motion.motion.representation import DIM, FPS, JOINTS
-from text2motion.tokenization.contracts import RvqConfig, TokenizerConfig, TokenizerKind
+from text2motion.tokenization.contracts import (
+    ResidualVectorQuantizationConfig,
+    TokenizerConfig,
+    TokenizerKind,
+)
 
 
 class ComputeDevice(StrEnum):
@@ -147,7 +151,9 @@ class ApplicationConfig:
     service: MotionServiceConfig = field(default_factory=MotionServiceConfig)
     data: MotionDataConfig = field(default_factory=MotionDataConfig)
     tokenizer: TokenizerConfig = field(default_factory=TokenizerConfig)
-    rvq_baseline: RvqConfig = field(default_factory=RvqConfig)
+    rvq_baseline: ResidualVectorQuantizationConfig = field(
+        default_factory=ResidualVectorQuantizationConfig
+    )
     text_encoder: TextEncoderConfig = field(default_factory=TextEncoderConfig)
     generator: GeneratorConfig = field(default_factory=GeneratorConfig)
     train: GeneratorTrainingConfig = field(default_factory=GeneratorTrainingConfig)

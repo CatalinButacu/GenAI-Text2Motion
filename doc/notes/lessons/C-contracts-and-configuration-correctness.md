@@ -38,7 +38,7 @@ prevent bugs by existing; they prevent bugs when the boundary is *verified*, not
 | Stage | File | Declares |
 |---|---|---|
 | motion | `motion/contracts.py` | `Split`, `PreparationStage`, `MotionDataConfig`, `TextAnnotation`, `PreparationRequest` |
-| tokenization | `tokenization/contracts.py` | `TokenizerKind`, `FsqComposition`, `TokenizerConfig`, `RvqConfig`, `TokenizerTrainingRequest`, `TokenPackRequest` |
+| tokenization | `tokenization/contracts.py` | `TokenizerKind`, `FsqComposition`, `TokenizerConfig`, `ResidualVectorQuantizationConfig`, `TokenizerTrainingRequest`, `TokenPackRequest` |
 | generation | `generation/contracts.py` | `Backbone`, `GeneratorConfig`, `TextEncoderConfig`, `LossWeights`, `GeneratorTrainingConfig`, `SamplingConfig`, `GeneratorTrainingRequest`, `GeneratorPretrainingRequest` |
 | evaluation | `evaluation/contracts.py` | `GenerationEvaluationProtocol`, `GenerationEvaluationReport`, `GenerationEvaluationSet`, `StreamingBenchmarkProtocol` |
 | studio | `studio/contracts.py` | `ViewerHost`, `MotionInferenceClientPort` (structural `Protocol`s, not dataclasses -- ISP at the GUI/network boundary) |
@@ -56,7 +56,7 @@ $$
 V = \prod_{i} \texttt{fsq\_levels}_i,
 $$
 unconditionally -- correct for FSQ, and silently wrong for RVQ, where the codebook size is a single
-declared integer (`RvqConfig.codebook_size`), not a level product. For an RVQ config, `fsq_levels`
+declared integer (`ResidualVectorQuantizationConfig.codebook_size`), not a level product. For an RVQ config, `fsq_levels`
 still resolves to its dataclass default `(8, 5, 5, 5)`, so $V$ silently came out to $1000$ regardless
 of the real codebook size ($1024$ in every RVQ config this project uses). The generator trained
 against a vocabulary $24$ tokens too small; the first out-of-range RVQ token index crashed CUDA with a
@@ -105,7 +105,7 @@ per run rather than once per epoch.
 
 ## C.6 Case study 4 -- one quantity, two dataclasses, no cross-check
 
-`TokenizerConfig.num_quantizers` and `RvqConfig.num_quantizers` describe the same architectural fact
+`TokenizerConfig.num_quantizers` and `ResidualVectorQuantizationConfig.num_quantizers` describe the same architectural fact
 (how many residual quantizer stages an RVQ tokenizer has) but are two independent fields, set
 independently in YAML (`tokenizer: {num_quantizers: 8}` and `rvq_baseline: {num_quantizers: 8}`).
 `app/bootstrap.py:76` and `app/commands/evaluation.py:92` resolve the **generator's** `num_codebooks`

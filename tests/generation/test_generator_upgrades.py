@@ -226,11 +226,15 @@ def test_config_rejects_rvq_num_quantizers_mismatch():
     import pytest
 
     from text2motion.app.config import ApplicationConfig, validate_config
-    from text2motion.tokenization.contracts import RvqConfig, TokenizerConfig, TokenizerKind
+    from text2motion.tokenization.contracts import (
+        ResidualVectorQuantizationConfig,
+        TokenizerConfig,
+        TokenizerKind,
+    )
 
     good = ApplicationConfig(
         tokenizer=TokenizerConfig(kind=TokenizerKind.RVQ, num_quantizers=8),
-        rvq_baseline=RvqConfig(num_quantizers=8),
+        rvq_baseline=ResidualVectorQuantizationConfig(num_quantizers=8),
     )
     validate_config(good)
 
@@ -242,6 +246,6 @@ def test_config_rejects_rvq_num_quantizers_mismatch():
 
     fsq = ApplicationConfig(
         tokenizer=TokenizerConfig(kind=TokenizerKind.FSQ, num_quantizers=8),
-        rvq_baseline=RvqConfig(num_quantizers=6),
+        rvq_baseline=ResidualVectorQuantizationConfig(num_quantizers=6),
     )
     validate_config(fsq)
