@@ -5,6 +5,7 @@ import threading
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 
 import numpy as np
 import roma
@@ -246,7 +247,7 @@ def fit_smplx_to_joints(
     )
 
 
-SHORT_BONE_PARENT_PULL = {12: 1.0}
+SHORT_BONE_PARENT_PULL = MappingProxyType({12: 1.0})
 
 
 def bone_directions(

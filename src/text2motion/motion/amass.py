@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import numpy as np
@@ -11,27 +12,31 @@ from text2motion.motion.model import SMPLX_MODEL_TYPE, Gender
 from text2motion.motion.representation import FPS, JOINTS
 from text2motion.motion.storage import SPLIT_FILES, sha256_file
 
-_HEAD_TRIM_SECONDS = {
-    "Eyes_Japan_Dataset": 3.0,
-    "MPI_HDM05": 3.0,
-    "TotalCapture": 1.0,
-    "MPI_Limits": 1.0,
-    "Transitions_mocap": 0.5,
-}
+_HEAD_TRIM_SECONDS = MappingProxyType(
+    {
+        "Eyes_Japan_Dataset": 3.0,
+        "MPI_HDM05": 3.0,
+        "TotalCapture": 1.0,
+        "MPI_Limits": 1.0,
+        "Transitions_mocap": 0.5,
+    }
+)
 
-_FOLDER_NAMES = {
-    "MPI_HDM05": "HDM05",
-    "BioMotionLab_NTroje": "BMLrub",
-    "MPI_Limits": "PosePrior",
-    "MPI_mosh": "MoSh",
-    "DFaust_67": "DFaust",
-    "SSM_synced": "SSM",
-    "TCD_handMocap": "TCDHands",
-    "Transitions_mocap": "Transitions",
-    "Eyes_Japan_Dataset": "EyesJapanDataset",
-}
+_FOLDER_NAMES = MappingProxyType(
+    {
+        "MPI_HDM05": "HDM05",
+        "BioMotionLab_NTroje": "BMLrub",
+        "MPI_Limits": "PosePrior",
+        "MPI_mosh": "MoSh",
+        "DFaust_67": "DFaust",
+        "SSM_synced": "SSM",
+        "TCD_handMocap": "TCDHands",
+        "Transitions_mocap": "Transitions",
+        "Eyes_Japan_Dataset": "EyesJapanDataset",
+    }
+)
 
-_OFFICIAL_NAMES = {folder: official for official, folder in _FOLDER_NAMES.items()}
+_OFFICIAL_NAMES = MappingProxyType({folder: official for official, folder in _FOLDER_NAMES.items()})
 _MODEL_BETAS = 16
 _CHUNK_SIZE = 256
 

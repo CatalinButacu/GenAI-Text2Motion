@@ -7,6 +7,7 @@ import types
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from pathlib import Path
+from types import MappingProxyType
 from typing import cast
 
 import torch
@@ -323,10 +324,9 @@ class TransformerBackbone(SequenceBackbone):
         return self.norm_f(seq)
 
 
-_BACKBONE_FACTORIES = {
-    Backbone.MAMBA: MambaBackbone,
-    Backbone.TRANSFORMER: TransformerBackbone,
-}
+_BACKBONE_FACTORIES = MappingProxyType(
+    {Backbone.MAMBA: MambaBackbone, Backbone.TRANSFORMER: TransformerBackbone}
+)
 
 
 def instantiate_backbone(cfg: GeneratorConfig) -> SequenceBackbone:

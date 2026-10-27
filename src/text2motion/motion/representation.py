@@ -1,6 +1,7 @@
 import math
 from dataclasses import dataclass
 from enum import StrEnum
+from types import MappingProxyType
 
 import numpy as np
 import torch
@@ -21,13 +22,15 @@ DIM = 263
 JOINTS = 22
 FPS = 20
 
-SLICES = {
-    "root": slice(0, 4),
-    "ric": slice(4, 67),
-    "rot6d": slice(67, 193),
-    "vel": slice(193, 259),
-    "foot": slice(259, 263),
-}
+SLICES = MappingProxyType(
+    {
+        "root": slice(0, 4),
+        "ric": slice(4, 67),
+        "rot6d": slice(67, 193),
+        "vel": slice(193, 259),
+        "foot": slice(259, 263),
+    }
+)
 GEO_TERMS = tuple(SLICES)
 FK_TERMS = ("fk_self", "fk_gt")
 DYNAMICS_TERMS = ("foot_skate", "accel")
@@ -78,18 +81,18 @@ RAW_OFFSETS = np.array(
     ]
 )
 
-KINEMATIC_CHAINS = [
-    [0, 2, 5, 8, 11],
-    [0, 1, 4, 7, 10],
-    [0, 3, 6, 9, 12, 15],
-    [9, 14, 17, 19, 21],
-    [9, 13, 16, 18, 20],
-]
+KINEMATIC_CHAINS = (
+    (0, 2, 5, 8, 11),
+    (0, 1, 4, 7, 10),
+    (0, 3, 6, 9, 12, 15),
+    (9, 14, 17, 19, 21),
+    (9, 13, 16, 18, 20),
+)
 
 _LEG_JOINTS = (5, 8)
-_RIGHT_FEET = [8, 11]
-_LEFT_FEET = [7, 10]
-_FACE_JOINTS = [2, 1, 17, 16]
+_RIGHT_FEET = (8, 11)
+_LEFT_FEET = (7, 10)
+_FACE_JOINTS = (2, 1, 17, 16)
 _FOOT_VELOCITY_THRESHOLD = 0.002
 
 
@@ -99,11 +102,11 @@ _FOOT_VELOCITY_THRESHOLD = 0.002
 @dataclass(frozen=True)
 class FeatureParams:
     raw_offsets: np.ndarray
-    chains: list[list[int]]
+    chains: tuple[tuple[int, ...], ...]
     target_offsets: torch.Tensor
-    face_joints: list[int]
-    left_feet: list[int]
-    right_feet: list[int]
+    face_joints: tuple[int, ...]
+    left_feet: tuple[int, ...]
+    right_feet: tuple[int, ...]
     leg_joints: tuple[int, int]
     joint_count: int
     foot_velocity_threshold: float

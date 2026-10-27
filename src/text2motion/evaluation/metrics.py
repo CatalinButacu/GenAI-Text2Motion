@@ -185,7 +185,7 @@ def compute_guo_text_embeddings(text_embedder, text_inputs, device, batch_size=3
     return np.concatenate(out)
 
 
-FEET = [7, 8, 10, 11]
+FEET = (7, 8, 10, 11)
 ACCELERATION_LIMIT_M_PER_FRAME2 = 0.08
 TELEPORT_M_PER_FRAME = 0.25
 

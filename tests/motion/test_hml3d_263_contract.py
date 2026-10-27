@@ -53,17 +53,17 @@ def test_263_layout_and_recovery() -> None:
 
 def test_param_constants_exact() -> None:
     params = feature_params(target_offsets(__synthetic_motion()))
-    assert params.face_joints == [2, 1, 17, 16]
-    assert params.left_feet == [7, 10]
-    assert params.right_feet == [8, 11]
+    assert params.face_joints == (2, 1, 17, 16)
+    assert params.left_feet == (7, 10)
+    assert params.right_feet == (8, 11)
     assert params.leg_joints == (5, 8)
     assert param_util.JOINTS == 22
     assert params.foot_velocity_threshold == 0.002
     assert param_util.RAW_OFFSETS.shape == (22, 3)
-    assert param_util.KINEMATIC_CHAINS == [
-        [0, 2, 5, 8, 11],
-        [0, 1, 4, 7, 10],
-        [0, 3, 6, 9, 12, 15],
-        [9, 14, 17, 19, 21],
-        [9, 13, 16, 18, 20],
-    ]
+    assert param_util.KINEMATIC_CHAINS == (
+        (0, 2, 5, 8, 11),
+        (0, 1, 4, 7, 10),
+        (0, 3, 6, 9, 12, 15),
+        (9, 14, 17, 19, 21),
+        (9, 13, 16, 18, 20),
+    )

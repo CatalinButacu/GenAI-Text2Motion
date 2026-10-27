@@ -36,12 +36,12 @@ class TokenizerKind(StrEnum):
 ############################################################
 @dataclass(frozen=True)
 class TokenizerConfig:
-    kind: TokenizerKind = TokenizerKind.FINITE_SCALAR
     in_dim: int = DIM
     width: int = 512
     downsample: int = 4
     num_quantizers: int = 6
     fsq_levels: tuple[int, ...] = (8, 5, 5, 5)
+    kind: TokenizerKind = TokenizerKind.FINITE_SCALAR
     quantizer: FiniteScalarStackLayout = FiniteScalarStackLayout.GROUPED
     quant_dropout: float = 0.2
     n_resblocks: int = 3

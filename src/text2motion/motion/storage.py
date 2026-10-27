@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import numpy as np
@@ -20,7 +21,7 @@ CLIP_LENGTHS_FILE = "clip_lengths.json"
 RESUME_VERSION = 2
 
 
-SPLIT_FILES = {split: f"{split.value}.txt" for split in Split}
+SPLIT_FILES = MappingProxyType({split: f"{split.value}.txt" for split in Split})
 
 
 def atomic_torch_save(state: Any, path: str | Path) -> None:

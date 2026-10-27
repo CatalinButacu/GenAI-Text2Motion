@@ -145,7 +145,9 @@ def qbetween_np(v0: np.ndarray, v1: np.ndarray) -> np.ndarray:
 #       Skeleton
 ############################################################
 class Skeleton:
-    def __init__(self, offset: torch.Tensor, kinematic_tree: list[list[int]], device: str) -> None:
+    def __init__(
+        self, offset: torch.Tensor, kinematic_tree: tuple[tuple[int, ...], ...], device: str
+    ) -> None:
         self.device = device
         self._raw_offset_np = offset.numpy()
         self._raw_offset = offset.clone().detach().to(device).float()
@@ -166,7 +168,7 @@ class Skeleton:
     def set_offset(self, offsets: torch.Tensor) -> None:
         self._offset = offsets.clone().detach().to(self.device).float()
 
-    def kinematic_tree(self) -> list[list[int]]:
+    def kinematic_tree(self) -> tuple[tuple[int, ...], ...]:
         return self._kinematic_tree
 
     def parents(self) -> list[int]:
@@ -196,7 +198,7 @@ class Skeleton:
     def inverse_kinematics_np(
         self,
         joints: np.ndarray,
-        face_joint_idx: list[int],
+        face_joint_idx: tuple[int, ...],
         smooth_forward: bool = False,
     ) -> np.ndarray:
         assert len(face_joint_idx) == 4

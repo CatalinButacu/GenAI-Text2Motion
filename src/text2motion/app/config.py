@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from types import GenericAlias
+from types import GenericAlias, MappingProxyType
 from typing import Any, TypeVar, cast
 
 import yaml
@@ -205,39 +205,47 @@ def load_dataclass(cls: type[_T], path: str | Path) -> _T:
     return from_mapping(cls, raw)
 
 
-_LEGACY_ROOT_KEYS = {"hml3d"}
-_LOSS_WEIGHT_KEYS = {
-    "w_root": "root",
-    "w_ric": "ric",
-    "w_rot6d": "rot6d",
-    "w_vel": "vel",
-    "w_foot": "foot",
-    "w_fk_self": "fk_self",
-    "w_fk_gt": "fk_gt",
-    "w_foot_skate": "foot_skate",
-    "w_accel": "accel",
-}
-_ENVIRONMENT_OVERRIDES = {
-    "paths": {
-        "donor_root": ("TEXT2MOTION_DONOR_ROOT",),
-        "hml3d_out_dir": ("TEXT2MOTION_DATASET_DIR",),
-        "eval_matcher": ("TEXT2MOTION_EVAL_MATCHER",),
-        "eval_stats_dir": ("TEXT2MOTION_EVAL_STATS_DIR",),
-        "texts_dir": ("TEXT2MOTION_TEXTS_DIR",),
-        "smplx_models": ("TEXT2MOTION_SMPLX_MODELS",),
-        "checkpoints_dir": ("TEXT2MOTION_CHECKPOINTS_DIR",),
-        "outputs_dir": ("TEXT2MOTION_OUTPUTS_DIR",),
-        "logs_dir": ("TEXT2MOTION_LOGS_DIR",),
-        "cache_dir": ("TEXT2MOTION_CACHE_DIR",),
-        "tokenizer_checkpoint_path": ("TEXT2MOTION_TOKENIZER_CHECKPOINT",),
-    },
-    "service": {
-        "bind_host": ("TEXT2MOTION_BIND_HOST",),
-        "connect_host": ("TEXT2MOTION_CONNECT_HOST", "TEXT2MOTION_SERVICE_HOST"),
-        "port": ("TEXT2MOTION_SERVICE_PORT",),
-        "idle_seconds": ("TEXT2MOTION_IDLE_SECONDS",),
-    },
-}
+_LEGACY_ROOT_KEYS = frozenset({"hml3d"})
+_LOSS_WEIGHT_KEYS = MappingProxyType(
+    {
+        "w_root": "root",
+        "w_ric": "ric",
+        "w_rot6d": "rot6d",
+        "w_vel": "vel",
+        "w_foot": "foot",
+        "w_fk_self": "fk_self",
+        "w_fk_gt": "fk_gt",
+        "w_foot_skate": "foot_skate",
+        "w_accel": "accel",
+    }
+)
+_ENVIRONMENT_OVERRIDES = MappingProxyType(
+    {
+        "paths": MappingProxyType(
+            {
+                "donor_root": ("TEXT2MOTION_DONOR_ROOT",),
+                "hml3d_out_dir": ("TEXT2MOTION_DATASET_DIR",),
+                "eval_matcher": ("TEXT2MOTION_EVAL_MATCHER",),
+                "eval_stats_dir": ("TEXT2MOTION_EVAL_STATS_DIR",),
+                "texts_dir": ("TEXT2MOTION_TEXTS_DIR",),
+                "smplx_models": ("TEXT2MOTION_SMPLX_MODELS",),
+                "checkpoints_dir": ("TEXT2MOTION_CHECKPOINTS_DIR",),
+                "outputs_dir": ("TEXT2MOTION_OUTPUTS_DIR",),
+                "logs_dir": ("TEXT2MOTION_LOGS_DIR",),
+                "cache_dir": ("TEXT2MOTION_CACHE_DIR",),
+                "tokenizer_checkpoint_path": ("TEXT2MOTION_TOKENIZER_CHECKPOINT",),
+            }
+        ),
+        "service": MappingProxyType(
+            {
+                "bind_host": ("TEXT2MOTION_BIND_HOST",),
+                "connect_host": ("TEXT2MOTION_CONNECT_HOST", "TEXT2MOTION_SERVICE_HOST"),
+                "port": ("TEXT2MOTION_SERVICE_PORT",),
+                "idle_seconds": ("TEXT2MOTION_IDLE_SECONDS",),
+            }
+        ),
+    }
+)
 
 
 def __with_environment(section: str, raw: dict) -> dict:

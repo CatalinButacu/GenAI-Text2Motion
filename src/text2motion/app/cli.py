@@ -6,6 +6,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from types import MappingProxyType
 from typing import Any
 
 from jsonargparse import ArgumentParser as RequestParser
@@ -65,25 +66,31 @@ class Command:
     summary: str
 
 
-COMMANDS = {
-    "prepare": Command(PrepareRequest, run_prepare, "AMASS -> HumanML3D-263 data preparation"),
-    "tokenize": Command(TokenizeRequest, run_tokenize, "encode a feature corpus into tokens"),
-    "train-tokenizer": Command(
-        TrainTokenizerRequest, run_train_tokenizer, "train the motion tokenizer"
-    ),
-    "sanity-overfit": Command(
-        SanityOverfitRequest, run_sanity_overfit, "mandatory real-batch overfit gate"
-    ),
-    "train-generator": Command(
-        TrainGeneratorRequest, run_train_generator, "train the text-to-motion generator"
-    ),
-    "pretrain": Command(PretrainRequest, run_pretrain, "unconditional token-corpus pretraining"),
-    "evaluate": Command(EvaluateRequest, run_evaluate, "citable generation eval (20-rep protocol)"),
-    "benchmark": Command(BenchmarkRequest, run_bench, "streaming latency/state-size benchmark"),
-    "serve": Command(ServeRequest, run_serve, "local streaming generation service"),
-    "studio": Command(StudioRequest, run_studio, "interactive aitviewer studio"),
-    "health": Command(HealthRequest, run_health, "check the streaming service readiness"),
-}
+COMMANDS = MappingProxyType(
+    {
+        "prepare": Command(PrepareRequest, run_prepare, "AMASS -> HumanML3D-263 data preparation"),
+        "tokenize": Command(TokenizeRequest, run_tokenize, "encode a feature corpus into tokens"),
+        "train-tokenizer": Command(
+            TrainTokenizerRequest, run_train_tokenizer, "train the motion tokenizer"
+        ),
+        "sanity-overfit": Command(
+            SanityOverfitRequest, run_sanity_overfit, "mandatory real-batch overfit gate"
+        ),
+        "train-generator": Command(
+            TrainGeneratorRequest, run_train_generator, "train the text-to-motion generator"
+        ),
+        "pretrain": Command(
+            PretrainRequest, run_pretrain, "unconditional token-corpus pretraining"
+        ),
+        "evaluate": Command(
+            EvaluateRequest, run_evaluate, "citable generation eval (20-rep protocol)"
+        ),
+        "benchmark": Command(BenchmarkRequest, run_bench, "streaming latency/state-size benchmark"),
+        "serve": Command(ServeRequest, run_serve, "local streaming generation service"),
+        "studio": Command(StudioRequest, run_studio, "interactive aitviewer studio"),
+        "health": Command(HealthRequest, run_health, "check the streaming service readiness"),
+    }
+)
 
 
 def register_value_enum(enum_class: type[Enum]) -> None:
