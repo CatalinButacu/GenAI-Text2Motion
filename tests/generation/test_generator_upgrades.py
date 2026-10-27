@@ -233,7 +233,7 @@ def test_config_rejects_rvq_num_quantizers_mismatch():
     )
 
     good = ApplicationConfig(
-        tokenizer=TokenizerConfig(kind=TokenizerKind.RVQ, num_quantizers=8),
+        tokenizer=TokenizerConfig(kind=TokenizerKind.RESIDUAL_VECTOR, num_quantizers=8),
         rvq_baseline=ResidualVectorQuantizationConfig(num_quantizers=8),
     )
     validate_config(good)
@@ -245,7 +245,7 @@ def test_config_rejects_rvq_num_quantizers_mismatch():
         validate_config(bad)
 
     fsq = ApplicationConfig(
-        tokenizer=TokenizerConfig(kind=TokenizerKind.FSQ, num_quantizers=8),
+        tokenizer=TokenizerConfig(kind=TokenizerKind.FINITE_SCALAR, num_quantizers=8),
         rvq_baseline=ResidualVectorQuantizationConfig(num_quantizers=6),
     )
     validate_config(fsq)

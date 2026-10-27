@@ -61,19 +61,19 @@ def build_token_pack(
     excluded: set[str],
     identity: dict[str, object],
 ) -> dict[str, float]:
-    features = sorted(Path(request.features_dir).glob("*.npy"))
-    if not features:
+    feature_paths = sorted(Path(request.features_dir).glob("*.npy"))
+    if not feature_paths:
         raise FileNotFoundError(
             f"no features under {request.features_dir} -- build the pretraining corpus first"
         )
-    kept = [path for path in features if path.name not in excluded]
+    kept = [path for path in feature_paths if path.name not in excluded]
 
     pack: dict[str, np.ndarray] = {}
     token_steps = 0
     for path in tqdm(kept, desc="encode"):
-        feat = scaler.normalize(np.load(path).astype(np.float32))
-        for start in window_starts(feat.shape[0], request.segment_frames, request.stride):
-            window = feat[start : start + request.segment_frames]
+        normalized = scaler.normalize(np.load(path).astype(np.float32))
+        for start in window_starts(normalized.shape[0], request.segment_frames, request.stride):
+            window = normalized[start : start + request.segment_frames]
             clip_id = f"{path.stem}__{start}"
             clip = MotionClip(
                 features=torch.from_numpy(window),
@@ -90,7 +90,7 @@ def build_token_pack(
         "version": PACK_VERSION,
         "source_features": len(kept),
         "source_sha256": source_digest(kept),
-        "excluded_present": len(features) - len(kept),
+        "excluded_present": len(feature_paths) - len(kept),
         "excluded_names": len(excluded),
         "segment_frames": request.segment_frames,
         "stride": request.stride,
@@ -109,7 +109,7 @@ def build_token_pack(
 
     return {
         "sequences": len(kept),
-        "excluded": len(features) - len(kept),
+        "excluded": len(feature_paths) - len(kept),
         "segments": len(pack) - 1,
         "token_steps": token_steps,
         "pack_mb": round(out_path.stat().st_size / 1e6, 1),

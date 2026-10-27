@@ -15,25 +15,25 @@ DROPPED_CODE = -1
 _MOTION_FRAMES = MotionDataConfig().max_motion_len
 
 
-class FsqComposition(StrEnum):
+class FiniteScalarStackLayout(StrEnum):
     GROUPED = "grouped"
     RESIDUAL = "residual"
 
 
 class TokenizerKind(StrEnum):
-    FSQ = "fsq"
-    RVQ = "rvq"
+    FINITE_SCALAR = "fsq"
+    RESIDUAL_VECTOR = "rvq"
 
 
 @dataclass(frozen=True)
 class TokenizerConfig:
-    kind: TokenizerKind = TokenizerKind.FSQ
+    kind: TokenizerKind = TokenizerKind.FINITE_SCALAR
     in_dim: int = DIM
     width: int = 512
     downsample: int = 4
     num_quantizers: int = 6
     fsq_levels: tuple[int, ...] = (8, 5, 5, 5)
-    quantizer: FsqComposition = FsqComposition.GROUPED
+    quantizer: FiniteScalarStackLayout = FiniteScalarStackLayout.GROUPED
     quant_dropout: float = 0.2
     n_resblocks: int = 3
 

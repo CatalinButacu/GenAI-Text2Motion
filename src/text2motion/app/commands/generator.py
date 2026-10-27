@@ -207,7 +207,7 @@ def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
         raise ValueError(
             f"{args.token_pack} was encoded with another tokenizer than {tokenizer_checkpoint}"
         )
-    if app.config.tokenizer.kind == TokenizerKind.RVQ:
+    if app.config.tokenizer.kind == TokenizerKind.RESIDUAL_VECTOR:
         vocab = app.config.rvq_baseline.codebook_size
     else:
         vocab = 1

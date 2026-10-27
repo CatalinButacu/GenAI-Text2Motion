@@ -40,11 +40,11 @@ class TokenizerTrainer:
         lr: float,
         weight_decay: float,
         ema_decay: float,
-        commit_beta: float = 0.0,
+        commitment_beta: float = 0.0,
         grad_clip: float = 1.0,
     ) -> None:
         self.tokenizer_network = tokenizer_network
-        self.commit_beta = commit_beta
+        self.commitment_beta = commitment_beta
         self.grad_clip = grad_clip
         self.optimizer = torch.optim.AdamW(
             tokenizer_network.parameters(), lr=lr, weight_decay=weight_decay
@@ -65,10 +65,10 @@ class TokenizerTrainer:
         return sum(perplexities) / len(perplexities), sum(usages) / len(usages)
 
     def train_step(self, motion: torch.Tensor) -> dict[str, float]:
-        recon, indices, commit = self.tokenizer_network(motion)
+        reconstruction, indices, commitment_loss = self.tokenizer_network(motion)
 
-        recon_loss = feature_velocity_reconstruction_loss(recon, motion)
-        total = recon_loss + self.commit_beta * commit
+        reconstruction_loss = feature_velocity_reconstruction_loss(reconstruction, motion)
+        total = reconstruction_loss + self.commitment_beta * commitment_loss
 
         self.optimizer.zero_grad()
         total.backward()
@@ -78,13 +78,13 @@ class TokenizerTrainer:
         self.optimizer.step()
         self.parameter_ema.update(self.tokenizer_network)
 
-        perplexity, usage_frac = self.__code_stats(indices)
+        perplexity, usage_fraction = self.__code_stats(indices)
         return {
-            "recon": recon_loss.item(),
+            "recon": reconstruction_loss.item(),
             "total": total.item(),
             "perplexity": perplexity,
-            "usage_frac": usage_frac,
-            "commit": commit.item(),
+            "usage_frac": usage_fraction,
+            "commit": commitment_loss.item(),
         }
 
     def train_epoch(self, loader, device: str) -> dict[str, float]:

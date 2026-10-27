@@ -308,7 +308,7 @@ def validate_config(config: ApplicationConfig, source: str | Path = "<config>") 
         )
 
     if (
-        config.tokenizer.kind == TokenizerKind.RVQ
+        config.tokenizer.kind == TokenizerKind.RESIDUAL_VECTOR
         and config.tokenizer.num_quantizers != config.rvq_baseline.num_quantizers
     ):
         raise ValueError(

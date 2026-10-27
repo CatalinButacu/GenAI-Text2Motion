@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from text2motion.app.config import ResidualVectorQuantizationConfig, TokenizerConfig
-from text2motion.tokenization.contracts import DROPPED_CODE, FsqComposition
+from text2motion.tokenization.contracts import DROPPED_CODE, FiniteScalarStackLayout
 from text2motion.tokenization.nn_model import (
     FiniteScalarQuantizationTokenizer,
     ResidualVectorQuantizationTokenizer,
@@ -51,7 +51,8 @@ def test_quantizer_exposes_units_and_combine(tok):
     quant = tok.quantizer
     assert len(quant.quantizers) == 2
     unit = quant.quantizers[0]
-    codes = [torch.randn(2, 8, unit.dim if hasattr(unit, "dim") else 8)]
+    width = unit.dimension_count if hasattr(unit, "dimension_count") else 8
+    codes = [torch.randn(2, 8, width)]
     assert quant.combine_code_vectors(codes * 2).ndim == 3
 
 
@@ -63,7 +64,7 @@ def test_dropped_levels_use_a_sentinel_not_code_zero():
         num_quantizers=4,
         fsq_levels=(8, 8, 4, 4),
         n_resblocks=1,
-        quantizer=FsqComposition.RESIDUAL,
+        quantizer=FiniteScalarStackLayout.RESIDUAL,
         quant_dropout=1.0,
     )
     tok = FiniteScalarQuantizationTokenizer(cfg).train()
@@ -91,7 +92,7 @@ def test_eval_mode_never_drops_levels():
             num_quantizers=4,
             fsq_levels=(8, 8, 4, 4),
             n_resblocks=1,
-            quantizer=FsqComposition.RESIDUAL,
+            quantizer=FiniteScalarStackLayout.RESIDUAL,
             quant_dropout=1.0,
         )
     ).eval()

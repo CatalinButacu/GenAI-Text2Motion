@@ -63,7 +63,7 @@ def run(args: argparse.Namespace) -> None:
                 max_clips=args.clips,
                 split=sp,
                 shuffle_seed=2026,
-                recon_fid=evaluator.calculate_reconstruction_fid,
+                reconstruction_fid_scorer=evaluator.calculate_reconstruction_fid,
             )["recon_fid"]
             for sp in _SPLITS
         }

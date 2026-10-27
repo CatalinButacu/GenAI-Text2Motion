@@ -8,7 +8,7 @@ from torch.nn import functional as F
 
 from text2motion.motion.model import MotionClip, MotionTokens
 from text2motion.tokenization.contracts import (
-    FsqComposition,
+    FiniteScalarStackLayout,
     ResidualVectorQuantizationConfig,
     TokenizerConfig,
     TokenizerKind,
@@ -39,16 +39,16 @@ class TokenizerNetwork(nn.Module):
     def codebook_size(self) -> int:
         return self.quantizer_stack().quantizers[0].codebook_size
 
-    def encode(self, x: torch.Tensor) -> torch.Tensor:
-        _, indices, _ = self.quantizer_stack()(self.pre_q(self.encoder(x)))
+    def encode(self, motion: torch.Tensor) -> torch.Tensor:
+        _, indices, _ = self.quantizer_stack()(self.pre_q(self.encoder(motion)))
         return reject_dropped_codes(indices)
 
     def decode(self, indices: torch.Tensor) -> torch.Tensor:
         code_vectors = self.quantizer_stack().indices_to_codes(indices)
         return self.decoder(self.post_q(code_vectors))
 
-    def forward(self, x: torch.Tensor) -> TokenizerReconstruction:
-        latent = self.pre_q(self.encoder(x))
+    def forward(self, motion: torch.Tensor) -> TokenizerReconstruction:
+        latent = self.pre_q(self.encoder(motion))
         quantized, indices, commitment_loss = self.quantizer_stack()(latent)
         return TokenizerReconstruction(
             reconstruction=self.decoder(self.post_q(quantized)),
@@ -67,24 +67,30 @@ def downsample_stage_count(downsample: int) -> int:
 
 
 class TemporalResidualBlock(nn.Module):
-    def __init__(self, ch: int) -> None:
+    def __init__(self, channels: int) -> None:
         super().__init__()
-        self.net = nn.Sequential(nn.Conv1d(ch, ch, 3, padding=1), nn.ReLU(), nn.Conv1d(ch, ch, 1))
+        self.net = nn.Sequential(
+            nn.Conv1d(channels, channels, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv1d(channels, channels, 1),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x + self.net(x)
 
 
 class MotionFeatureEncoder(nn.Module):
-    def __init__(self, in_dim: int, width: int, downsample: int, n_resblocks: int) -> None:
+    def __init__(
+        self, feature_count: int, width: int, downsample: int, residual_block_count: int
+    ) -> None:
         super().__init__()
-        n_down = downsample_stage_count(downsample)
-        layers: list[nn.Module] = [nn.Conv1d(in_dim, width, 3, padding=1), nn.ReLU()]
+        downsample_stages = downsample_stage_count(downsample)
+        layers: list[nn.Module] = [nn.Conv1d(feature_count, width, 3, padding=1), nn.ReLU()]
 
-        for _ in range(n_down):
+        for _ in range(downsample_stages):
             layers += [nn.Conv1d(width, width, 4, stride=2, padding=1), nn.ReLU()]
 
-        for _ in range(n_resblocks):
+        for _ in range(residual_block_count):
             layers.append(TemporalResidualBlock(width))
 
         self.net = nn.Sequential(*layers)
@@ -94,18 +100,20 @@ class MotionFeatureEncoder(nn.Module):
 
 
 class MotionFeatureDecoder(nn.Module):
-    def __init__(self, in_dim: int, width: int, downsample: int, n_resblocks: int) -> None:
+    def __init__(
+        self, feature_count: int, width: int, downsample: int, residual_block_count: int
+    ) -> None:
         super().__init__()
-        n_up = downsample_stage_count(downsample)
+        upsample_stages = downsample_stage_count(downsample)
         layers: list[nn.Module] = []
 
-        for _ in range(n_resblocks):
+        for _ in range(residual_block_count):
             layers.append(TemporalResidualBlock(width))
 
-        for _ in range(n_up):
+        for _ in range(upsample_stages):
             layers += [nn.ConvTranspose1d(width, width, 4, stride=2, padding=1), nn.ReLU()]
 
-        layers.append(nn.Conv1d(width, in_dim, 3, padding=1))
+        layers.append(nn.Conv1d(width, feature_count, 3, padding=1))
         self.net = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -115,42 +123,55 @@ class MotionFeatureDecoder(nn.Module):
 class FiniteScalarQuantizationTokenizer(TokenizerNetwork):
     quantizer: QuantizerStack
 
-    def __init__(self, cfg: TokenizerConfig) -> None:
+    def __init__(self, config: TokenizerConfig) -> None:
         super().__init__()
-        self.encoder = MotionFeatureEncoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
-        self.decoder = MotionFeatureDecoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
+        self.encoder = MotionFeatureEncoder(
+            config.in_dim, config.width, config.downsample, config.n_resblocks
+        )
+        self.decoder = MotionFeatureDecoder(
+            config.in_dim, config.width, config.downsample, config.n_resblocks
+        )
 
-        match FsqComposition(cfg.quantizer):
-            case FsqComposition.GROUPED:
-                self.quantizer = GroupedFiniteScalarQuantizer(cfg.fsq_levels, cfg.num_quantizers)
-                latent_dim = cfg.num_quantizers * len(cfg.fsq_levels)
-            case FsqComposition.RESIDUAL:
+        levels = config.fsq_levels
+        match FiniteScalarStackLayout(config.quantizer):
+            case FiniteScalarStackLayout.GROUPED:
+                self.quantizer = GroupedFiniteScalarQuantizer(levels, config.num_quantizers)
+                latent_width = config.num_quantizers * len(levels)
+            case FiniteScalarStackLayout.RESIDUAL:
                 self.quantizer = ResidualFiniteScalarQuantizer(
-                    cfg.fsq_levels, cfg.num_quantizers, cfg.quant_dropout
+                    levels, config.num_quantizers, config.quant_dropout
                 )
-                latent_dim = len(cfg.fsq_levels)
+                latent_width = len(levels)
             case unknown:
                 assert_never(unknown)
 
-        self.pre_q = nn.Linear(cfg.width, latent_dim)
-        self.post_q = nn.Linear(latent_dim, cfg.width)
+        self.pre_q = nn.Linear(config.width, latent_width)
+        self.post_q = nn.Linear(latent_width, config.width)
 
 
-def feature_velocity_reconstruction_loss(recon: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    feat = F.l1_loss(recon, target)
-    vel = F.l1_loss(recon[:, 1:] - recon[:, :-1], target[:, 1:] - target[:, :-1])
+def feature_velocity_reconstruction_loss(
+    reconstruction: torch.Tensor, target: torch.Tensor
+) -> torch.Tensor:
+    feature_loss = F.l1_loss(reconstruction, target)
+    reconstruction_velocity = reconstruction[:, 1:] - reconstruction[:, :-1]
+    target_velocity = target[:, 1:] - target[:, :-1]
+    velocity_loss = F.l1_loss(reconstruction_velocity, target_velocity)
 
-    return feat + vel
+    return feature_loss + velocity_loss
 
 
 class ResidualVectorQuantizationTokenizer(TokenizerNetwork):
-    def __init__(self, cfg: ResidualVectorQuantizationConfig) -> None:
+    def __init__(self, config: ResidualVectorQuantizationConfig) -> None:
         super().__init__()
-        self.encoder = MotionFeatureEncoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
-        self.decoder = MotionFeatureDecoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
-        self.pre_q = nn.Linear(cfg.width, cfg.code_dim)
-        self.post_q = nn.Linear(cfg.code_dim, cfg.width)
-        self.rvq = ResidualVectorQuantizer(cfg)
+        self.encoder = MotionFeatureEncoder(
+            config.in_dim, config.width, config.downsample, config.n_resblocks
+        )
+        self.decoder = MotionFeatureDecoder(
+            config.in_dim, config.width, config.downsample, config.n_resblocks
+        )
+        self.pre_q = nn.Linear(config.width, config.code_dim)
+        self.post_q = nn.Linear(config.code_dim, config.width)
+        self.rvq = ResidualVectorQuantizer(config)
 
     @property
     def quantizer(self) -> ResidualVectorQuantizer:
@@ -158,13 +179,15 @@ class ResidualVectorQuantizationTokenizer(TokenizerNetwork):
 
 
 def build_tokenizer_network(
-    fsq: TokenizerConfig, rvq: ResidualVectorQuantizationConfig | None = None
+    finite_scalar_config: TokenizerConfig,
+    residual_vector_config: ResidualVectorQuantizationConfig | None = None,
 ) -> TokenizerNetwork:
-    match TokenizerKind(fsq.kind):
-        case TokenizerKind.FSQ:
-            return FiniteScalarQuantizationTokenizer(fsq)
-        case TokenizerKind.RVQ:
-            return ResidualVectorQuantizationTokenizer(rvq or ResidualVectorQuantizationConfig())
+    match TokenizerKind(finite_scalar_config.kind):
+        case TokenizerKind.FINITE_SCALAR:
+            return FiniteScalarQuantizationTokenizer(finite_scalar_config)
+        case TokenizerKind.RESIDUAL_VECTOR:
+            residual_config = residual_vector_config or ResidualVectorQuantizationConfig()
+            return ResidualVectorQuantizationTokenizer(residual_config)
         case unknown:
             assert_never(unknown)
 

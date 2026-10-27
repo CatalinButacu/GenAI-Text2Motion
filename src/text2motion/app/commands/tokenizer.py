@@ -29,13 +29,17 @@ def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) ->
     app.config = config
 
     module = app.create_tokenizer_network().to(app.device)
-    commitment = config.rvq_baseline.commitment_beta if args.tokenizer is TokenizerKind.RVQ else 0.0
+    commitment = (
+        config.rvq_baseline.commitment_beta
+        if args.tokenizer is TokenizerKind.RESIDUAL_VECTOR
+        else 0.0
+    )
     trainer = TokenizerTrainer(
         module,
         lr=config.train.lr,
         weight_decay=config.train.weight_decay,
         ema_decay=args.ema_decay,
-        commit_beta=commitment,
+        commitment_beta=commitment,
     )
     repository = app.create_motion_repository()
     loader = repository.window_batch_loader(
@@ -54,7 +58,7 @@ def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) ->
             device=app.device,
             max_clips=args.max_eval_clips,
             split=split,
-            recon_fid=evaluator.calculate_reconstruction_fid,
+            reconstruction_fid_scorer=evaluator.calculate_reconstruction_fid,
         )
 
     name = args.ckpt_name or f"tokenizer_{args.tokenizer.value}.pt"

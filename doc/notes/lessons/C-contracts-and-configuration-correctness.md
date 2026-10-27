@@ -38,7 +38,7 @@ prevent bugs by existing; they prevent bugs when the boundary is *verified*, not
 | Stage | File | Declares |
 |---|---|---|
 | motion | `motion/contracts.py` | `Split`, `PreparationStage`, `MotionDataConfig`, `TextAnnotation`, `PreparationRequest` |
-| tokenization | `tokenization/contracts.py` | `TokenizerKind`, `FsqComposition`, `TokenizerConfig`, `ResidualVectorQuantizationConfig`, `TokenizerTrainingRequest`, `TokenPackRequest` |
+| tokenization | `tokenization/contracts.py` | `TokenizerKind`, `FiniteScalarStackLayout`, `TokenizerConfig`, `ResidualVectorQuantizationConfig`, `TokenizerTrainingRequest`, `TokenPackRequest` |
 | generation | `generation/contracts.py` | `Backbone`, `GeneratorConfig`, `TextEncoderConfig`, `LossWeights`, `GeneratorTrainingConfig`, `SamplingConfig`, `GeneratorTrainingRequest`, `GeneratorPretrainingRequest` |
 | evaluation | `evaluation/contracts.py` | `GenerationEvaluationProtocol`, `GenerationEvaluationReport`, `GenerationEvaluationSet`, `StreamingBenchmarkProtocol` |
 | studio | `studio/contracts.py` | `ViewerHost`, `MotionInferenceClientPort` (structural `Protocol`s, not dataclasses -- ISP at the GUI/network boundary) |
