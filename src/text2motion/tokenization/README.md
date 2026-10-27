@@ -9,35 +9,14 @@ because the AMASS folder has no statistics of its own. A token step covers `down
 these token indices, so the work in this package comes first: you configure a tokenizer, train
 it, measure it, freeze it, and then encode the corpus with it.
 
-## Which data goes where
-
-Only HumanML3D trains the tokenizer. The training loader reads the train split of
-`hml3d_out_dir`, and each evaluation reads its validation split. AMASS has no split files, so no
-training or evaluation reads it. AMASS goes through the tokenizer only after training, when
-`build_token_pack` encodes it for generator pretraining. Because both datasets use the same mean
-and standard deviation, one motion gives the same codes from either dataset. The YAML field
-`data.sources` does not change this, because no code reads it.
-
-The reasons for this choice:
-
-- The tokenizer defines the vocabulary of the generator. A tokenizer trained on other data gives
-  other codes, and both twin generators must then train again.
-- The reconstruction FID that you can compare with published results exists only for HumanML3D.
-  AMASS has no comparable score.
-- HumanML3D comes from AMASS, so AMASS adds mostly motion of the same type to the tokenizer.
-  The generator gets the AMASS variety in its pretraining.
-
-A tokenizer pretrained on AMASS and then fine-tuned on HumanML3D is the planned experiment E7
-(lesson 18). Nobody has run it. The reconstruction error of the current tokenizer on AMASS clips
-is not measured.
-
 ## Configure
 
 You start with a `TokenizerConfig`. It describes the main tokenizer, a finite scalar quantizer
 (FSQ) that needs no learned codebook. The YAML section `tokenizer:` fills it. Its `kind` is a
 `TokenizerKind`: `FINITE_SCALAR` (`fsq` on the command line) or `RESIDUAL_VECTOR` (`rvq`). When
 you select `rvq`, the baseline with learned codebooks, its settings come from a second config,
-`ResidualVectorQuantizationConfig`, which the YAML section `rvq_baseline:` fills.
+`ResidualVectorQuantizationConfig`, which the YAML section `rvq_baseline:` fills. The YAML field
+`data.sources` does not select the training data, because no code reads it.
 
 ## Build
 
@@ -62,6 +41,13 @@ batch of `[batch, window, 263]` features, does one AdamW step and returns a dict
 `recon`, `commit`, `total`, `perplexity` and `usage_frac`. The trainer also keeps an exponential
 moving average (EMA) of the weights. The evaluations and the saved checkpoint use these averaged
 weights, not the raw ones.
+
+Only HumanML3D trains the tokenizer: the loader reads the HumanML3D train split, and AMASS has no
+split files. AMASS goes through the tokenizer only after training, in `build_token_pack`. AMASS
+stays out of training because a new tokenizer gives new codes, and both twin generators must then
+train again. Also, the reconstruction FID that you can compare with published results exists only
+for HumanML3D. A tokenizer pretrained on AMASS is the planned experiment E7 (lesson 18), and
+nobody has run it.
 
 You do not usually call `train_step` yourself. `train_tokenizer(trainer, loader, request, device,
 evaluate, checkpoint_path, resume_path)` runs the full loop for the epochs in a
