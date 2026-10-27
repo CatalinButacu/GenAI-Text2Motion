@@ -13,7 +13,7 @@ from text2motion.generation.contracts import Backbone
 from text2motion.generation.nn_model import token_ce_loss
 from text2motion.motion.storage import sha256_file
 from text2motion.tokenization.corpus import pack_clip_keys, read_pack_identity
-from text2motion.tokenization.nn_model import MotionTokenizerNetwork
+from text2motion.tokenization.nn_model import TokenizerNetwork
 
 
 def seen_clip_stems(token_pack: str) -> set[str]:
@@ -37,7 +37,7 @@ def split_clips(features_dir: str, seen: set[str], min_frames: int) -> tuple[lis
 
 @torch.no_grad()
 def encode_clip(
-    tokenizer: MotionTokenizerNetwork,
+    tokenizer: TokenizerNetwork,
     path: Path,
     frames: int,
     mean,
@@ -84,7 +84,7 @@ def run(args: argparse.Namespace) -> None:
         raise ValueError(
             f"{args.token_pack} was built with another tokenizer than {args.tokenizer_ckpt}"
         )
-    tokenizer = app.load_tokenizer(args.tokenizer_ckpt).tokenizer_model
+    tokenizer = app.load_tokenizer(args.tokenizer_ckpt).network
     spec = app.resolve_generator_spec(Backbone(args.backbone), tokenizer.codebook_size)
     gen_cfg = spec.config
     generator = spec.create_model(device)

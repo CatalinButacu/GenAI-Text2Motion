@@ -13,7 +13,7 @@ from text2motion.motion.model import MotionClip
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.storage import sha256_file
 from text2motion.tokenization.contracts import TokenPackRequest
-from text2motion.tokenization.nn_model import MotionTokenizer
+from text2motion.tokenization.nn_model import FrozenMotionTokenizer
 
 PACK_IDENTITY_KEY = "__identity__"
 PACK_FORMAT = "text2motion.token_pack"
@@ -55,7 +55,7 @@ def read_pack_identity(path: str | Path) -> dict[str, object]:
 
 @torch.no_grad()
 def build_token_pack(
-    tokenizer: MotionTokenizer,
+    tokenizer: FrozenMotionTokenizer,
     scaler: MotionScaler,
     request: TokenPackRequest,
     excluded: set[str],

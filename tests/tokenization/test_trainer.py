@@ -8,7 +8,7 @@ import torch
 from text2motion.app.config import TokenizerConfig
 from text2motion.motion.storage import atomic_torch_save
 from text2motion.tokenization.contracts import TokenizerTrainingRequest
-from text2motion.tokenization.nn_model import FsqTokenizer
+from text2motion.tokenization.nn_model import FiniteScalarQuantizationTokenizer
 from text2motion.tokenization.trainer import TokenizerTrainer, train_tokenizer
 
 CFG = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
@@ -28,7 +28,9 @@ class _FakeTrainer:
 
 def __resumable_trainer() -> TokenizerTrainer:
     torch.manual_seed(0)
-    return TokenizerTrainer(FsqTokenizer(CFG), lr=1e-3, weight_decay=0.0, ema_decay=0.9)
+    return TokenizerTrainer(
+        FiniteScalarQuantizationTokenizer(CFG), lr=1e-3, weight_decay=0.0, ema_decay=0.9
+    )
 
 
 def test_a_resumed_tokenizer_run_continues_like_an_uninterrupted_run(tmp_path):
@@ -53,7 +55,7 @@ def test_a_resumed_tokenizer_run_continues_like_an_uninterrupted_run(tmp_path):
 
 
 def test_tokenizer_step_with_a_nan_loss_raises_before_the_update():
-    tokenizer = FsqTokenizer(CFG)
+    tokenizer = FiniteScalarQuantizationTokenizer(CFG)
     trainer = TokenizerTrainer(tokenizer, lr=1e-3, weight_decay=0.0, ema_decay=0.9)
     before = {name: value.clone() for name, value in tokenizer.state_dict().items()}
     motion = torch.randn(2, 32, 263)

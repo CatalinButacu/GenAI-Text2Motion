@@ -25,7 +25,7 @@ from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.contracts import PreparationRequest
 from text2motion.motion.datasets import MotionDataModule
-from text2motion.tokenization.nn_model import MotionTokenizer, build_tokenizer_network
+from text2motion.tokenization.nn_model import FrozenMotionTokenizer, build_tokenizer_network
 
 
 def required_path(value: Path | None, key: str) -> Path:
@@ -54,13 +54,13 @@ class ApplicationContext:
     def create_tokenizer_network(self):
         return build_tokenizer_network(self.config.tokenizer, self.config.rvq_baseline)
 
-    def load_tokenizer(self, checkpoint: str | Path | None = None) -> MotionTokenizer:
+    def load_tokenizer(self, checkpoint: str | Path | None = None) -> FrozenMotionTokenizer:
         checkpoint = checkpoint or self.config.paths.tokenizer_checkpoint
         tokenizer_network = self.create_tokenizer_network()
         tokenizer_network.load_state_dict(
             torch.load(checkpoint, map_location="cpu", weights_only=True)
         )
-        return MotionTokenizer(
+        return FrozenMotionTokenizer(
             tokenizer_network,
             downsample=self.config.tokenizer.downsample,
             device=self.device,
@@ -90,7 +90,7 @@ class ApplicationContext:
         self,
         backbone: Backbone | str,
         checkpoint: str | Path,
-        tokenizer: MotionTokenizer,
+        tokenizer: FrozenMotionTokenizer,
         tokenizer_checkpoint: str | Path | None = None,
         text_encoder_checkpoint: str | Path | None = None,
         **overrides,

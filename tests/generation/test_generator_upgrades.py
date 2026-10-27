@@ -12,7 +12,10 @@ from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.generation.trainer import GeneratorTrainer
-from text2motion.tokenization.nn_model import FsqTokenizer, MotionTokenizer
+from text2motion.tokenization.nn_model import (
+    FiniteScalarQuantizationTokenizer,
+    FrozenMotionTokenizer,
+)
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 BASE = GeneratorConfig(
@@ -71,7 +74,7 @@ def test_end_token_targets_and_masked_stream():
     gen = MotionTokenGenerator(cfg).eval()
     assert gen.end_id == cfg.codebook_size
 
-    tok = FsqTokenizer(TOK)
+    tok = FiniteScalarQuantizationTokenizer(TOK)
     trainer = GeneratorTrainer(
         gen, tok, GeneratorTrainingConfig(cfg_dropout=0.0, pkeep=1.0), downsample=4
     )
@@ -136,11 +139,11 @@ def test_each_row_stops_at_its_own_end_and_the_decoder_never_sees_end():
         cfg=SimpleNamespace(num_codebooks=2),
         stream_token_indices=lambda *args, **kwargs: iter(torch.tensor(step) for step in script),
     )
-    tokenizer = SimpleNamespace(downsample=4, tokenizer_model=SimpleNamespace(decode=decode))
+    tokenizer = SimpleNamespace(downsample=4, network=SimpleNamespace(decode=decode))
     pipeline = TextToMotionGenerator(
         cast(MotionTokenGenerator, token_generator),
         cast(CLIPTextEncoder, lambda captions: torch.zeros(len(captions), 32)),
-        cast(MotionTokenizer, tokenizer),
+        cast(FrozenMotionTokenizer, tokenizer),
     )
 
     motions = pipeline.generate_batch(["a", "b"], 4, SamplingConfig(stop_at_end=True))

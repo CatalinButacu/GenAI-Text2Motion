@@ -4,10 +4,10 @@ import torch
 from text2motion.app.config import RvqConfig, TokenizerConfig
 from text2motion.tokenization.contracts import DROPPED_CODE, FsqComposition
 from text2motion.tokenization.nn_model import (
-    FsqTokenizer,
-    MotionTokenizerNetwork,
-    RvqBaselineTokenizer,
-    resample_stages,
+    FiniteScalarQuantizationTokenizer,
+    ResidualVectorQuantizationTokenizer,
+    TokenizerNetwork,
+    downsample_stage_count,
 )
 from text2motion.tokenization.nn_quantizers import QuantizerStack
 
@@ -26,12 +26,15 @@ RVQ_CFG = RvqConfig(
 
 
 def both_tokenizers():
-    return [FsqTokenizer(FSQ_CFG), RvqBaselineTokenizer(RVQ_CFG)]
+    return [
+        FiniteScalarQuantizationTokenizer(FSQ_CFG),
+        ResidualVectorQuantizationTokenizer(RVQ_CFG),
+    ]
 
 
 @pytest.mark.parametrize("tok", both_tokenizers())
 def test_both_families_satisfy_one_contract(tok):
-    assert isinstance(tok, MotionTokenizerNetwork)
+    assert isinstance(tok, TokenizerNetwork)
     assert isinstance(tok.quantizer, QuantizerStack)
 
     x = torch.randn(2, 32, 263)
@@ -63,7 +66,7 @@ def test_dropped_levels_use_a_sentinel_not_code_zero():
         quantizer=FsqComposition.RESIDUAL,
         quant_dropout=1.0,
     )
-    tok = FsqTokenizer(cfg).train()
+    tok = FiniteScalarQuantizationTokenizer(cfg).train()
     torch.manual_seed(0)
 
     saw_dropped = False
@@ -80,7 +83,7 @@ def test_dropped_levels_use_a_sentinel_not_code_zero():
 
 
 def test_eval_mode_never_drops_levels():
-    tok = FsqTokenizer(
+    tok = FiniteScalarQuantizationTokenizer(
         TokenizerConfig(
             in_dim=263,
             width=64,
@@ -97,7 +100,7 @@ def test_eval_mode_never_drops_levels():
 
 
 def test_resample_stages_rejects_non_power_of_two():
-    assert resample_stages(4) == 2
-    assert resample_stages(8) == 3
+    assert downsample_stage_count(4) == 2
+    assert downsample_stage_count(8) == 3
     with pytest.raises(ValueError, match="power of two"):
-        resample_stages(3)
+        downsample_stage_count(3)

@@ -13,20 +13,18 @@ from text2motion.motion.representation import (
     recover_from_ric,
     recover_from_rot,
 )
-from text2motion.tokenization.nn_model import MotionTokenizerNetwork
+from text2motion.tokenization.nn_model import TokenizerNetwork
 
 
-def __codebook_tables(
-    tokenizer: MotionTokenizerNetwork, device: torch.device
-) -> list[torch.Tensor]:
+def __codebook_tables(tokenizer: TokenizerNetwork, device: torch.device) -> list[torch.Tensor]:
     tables = []
-    for unit in tokenizer.latent_quantizer().quantizers:
+    for unit in tokenizer.quantizer_stack().quantizers:
         all_idx = torch.arange(unit.codebook_size, device=device)
         tables.append(unit.indices_to_codes(all_idx))
     return tables
 
 
-def soft_decode(logits: torch.Tensor, tokenizer: MotionTokenizerNetwork) -> torch.Tensor:
+def soft_decode(logits: torch.Tensor, tokenizer: TokenizerNetwork) -> torch.Tensor:
     tables = __codebook_tables(tokenizer, logits.device)
 
     expected_codes: list[torch.Tensor] = []
@@ -34,7 +32,7 @@ def soft_decode(logits: torch.Tensor, tokenizer: MotionTokenizerNetwork) -> torc
         real = logits[..., token_index, : codebook.size(0)]
         expected_codes.append(real.softmax(-1) @ codebook)
 
-    soft_codes = tokenizer.latent_quantizer().combine_code_vectors(expected_codes)
+    soft_codes = tokenizer.quantizer_stack().combine_code_vectors(expected_codes)
     return tokenizer.decoder(tokenizer.post_q(soft_codes))
 
 
@@ -136,7 +134,7 @@ def generator_loss(
     logits: torch.Tensor,
     target_tokens: torch.Tensor,
     gt_motion: torch.Tensor,
-    tokenizer: MotionTokenizerNetwork,
+    tokenizer: TokenizerNetwork,
     weights: LossWeights,
     downsample: int,
     lengths: torch.Tensor | None = None,

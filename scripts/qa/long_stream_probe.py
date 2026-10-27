@@ -137,7 +137,7 @@ def main() -> None:
             )
             milliseconds_per_token = (time.perf_counter() - started) * 1000 / tokens_total
             indices = torch.stack(steps, dim=1)
-            decoded = tokenizer.tokenizer_model.decode(indices).cpu().numpy()
+            decoded = tokenizer.network.decode(indices).cpu().numpy()
             rows: list[dict[str, float]] = []
             for segment in range(args.segments):
                 window = slice(segment * segment_frames, (segment + 1) * segment_frames)

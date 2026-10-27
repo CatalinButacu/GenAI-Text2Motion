@@ -24,13 +24,13 @@ from text2motion.tokenization.nn_quantizers import (
 )
 
 
-class MotionTokenizerNetwork(nn.Module, ABC):
+class TokenizerNetwork(nn.Module, ABC):
     encoder: nn.Module
     decoder: nn.Module
     pre_q: nn.Module
     post_q: nn.Module
 
-    def latent_quantizer(self) -> QuantizerStack:
+    def quantizer_stack(self) -> QuantizerStack:
         quantizer = self.quantizer
         if not isinstance(quantizer, QuantizerStack):
             raise TypeError("the tokenizer network has no latent quantizer")
@@ -50,7 +50,7 @@ class MotionTokenizerNetwork(nn.Module, ABC):
     def forward(self, x: torch.Tensor) -> TokenizerForwardOutput: ...
 
 
-def resample_stages(downsample: int) -> int:
+def downsample_stage_count(downsample: int) -> int:
     if downsample < 1 or downsample & (downsample - 1):
         raise ValueError(
             f"tokenizer downsample must be a power of two, got {downsample}; the encoder builds "
@@ -71,7 +71,7 @@ class TemporalResidualBlock(nn.Module):
 class MotionFeatureEncoder(nn.Module):
     def __init__(self, in_dim: int, width: int, downsample: int, n_resblocks: int) -> None:
         super().__init__()
-        n_down = resample_stages(downsample)
+        n_down = downsample_stage_count(downsample)
         layers: list[nn.Module] = [nn.Conv1d(in_dim, width, 3, padding=1), nn.ReLU()]
 
         for _ in range(n_down):
@@ -89,7 +89,7 @@ class MotionFeatureEncoder(nn.Module):
 class MotionFeatureDecoder(nn.Module):
     def __init__(self, in_dim: int, width: int, downsample: int, n_resblocks: int) -> None:
         super().__init__()
-        n_up = resample_stages(downsample)
+        n_up = downsample_stage_count(downsample)
         layers: list[nn.Module] = []
 
         for _ in range(n_resblocks):
@@ -105,7 +105,7 @@ class MotionFeatureDecoder(nn.Module):
         return self.net(x.transpose(1, 2)).transpose(1, 2)
 
 
-class FsqTokenizer(MotionTokenizerNetwork):
+class FiniteScalarQuantizationTokenizer(TokenizerNetwork):
     quantizer: QuantizerStack
 
     def __init__(self, cfg: TokenizerConfig) -> None:
@@ -119,7 +119,9 @@ class FsqTokenizer(MotionTokenizerNetwork):
                 self.quantizer = GroupedFiniteScalarQuantizer(cfg.fsq_levels, cfg.num_quantizers)
                 latent_dim = cfg.num_quantizers * len(cfg.fsq_levels)
             case FsqComposition.RESIDUAL:
-                self.quantizer = ResidualFiniteScalarQuantizer(cfg.fsq_levels, cfg.num_quantizers, cfg.quant_dropout)
+                self.quantizer = ResidualFiniteScalarQuantizer(
+                    cfg.fsq_levels, cfg.num_quantizers, cfg.quant_dropout
+                )
                 latent_dim = len(cfg.fsq_levels)
             case unknown:
                 assert_never(unknown)
@@ -151,7 +153,7 @@ def feature_velocity_reconstruction_loss(recon: torch.Tensor, target: torch.Tens
     return feat + vel
 
 
-class RvqBaselineTokenizer(MotionTokenizerNetwork):
+class ResidualVectorQuantizationTokenizer(TokenizerNetwork):
     def __init__(self, cfg: RvqConfig) -> None:
         super().__init__()
         self.cfg = cfg
@@ -185,36 +187,34 @@ class RvqBaselineTokenizer(MotionTokenizerNetwork):
         return TokenizerForwardOutput(recon=recon, indices=indices, commit=commit)
 
 
-def build_tokenizer_network(
-    fsq: TokenizerConfig, rvq: RvqConfig | None = None
-) -> MotionTokenizerNetwork:
+def build_tokenizer_network(fsq: TokenizerConfig, rvq: RvqConfig | None = None) -> TokenizerNetwork:
     match TokenizerKind(fsq.kind):
         case TokenizerKind.FSQ:
-            return FsqTokenizer(fsq)
+            return FiniteScalarQuantizationTokenizer(fsq)
         case TokenizerKind.RVQ:
-            return RvqBaselineTokenizer(rvq or RvqConfig())
+            return ResidualVectorQuantizationTokenizer(rvq or RvqConfig())
         case unknown:
             assert_never(unknown)
 
 
-class MotionTokenizer:
+class FrozenMotionTokenizer:
     def __init__(
         self,
-        tokenizer_model: MotionTokenizerNetwork,
+        network: TokenizerNetwork,
         downsample: int,
         device: str | torch.device = "cpu",
     ) -> None:
-        self.tokenizer_model = tokenizer_model.to(device).eval()
+        self.network = network.to(device).eval()
         self.downsample = downsample
         self.device = device
 
     @property
     def codebook_size(self) -> int:
-        return int(self.tokenizer_model.codebook_size)
+        return int(self.network.codebook_size)
 
     @property
     def num_codebooks(self) -> int:
-        return len(self.tokenizer_model.latent_quantizer().quantizers)
+        return len(self.network.quantizer_stack().quantizers)
 
     def aligned_frame_count(self, frame_count: int) -> int:
         return (frame_count // self.downsample) * self.downsample
@@ -228,7 +228,7 @@ class MotionTokenizer:
                 f"{self.downsample}"
             )
         features = motion.features[:usable].unsqueeze(0).to(self.device)
-        indices = self.tokenizer_model.encode(features)[0]
+        indices = self.network.encode(features)[0]
         return MotionTokens(
             indices=indices,
             token_count=int(indices.shape[0]),
@@ -240,5 +240,5 @@ class MotionTokenizer:
         indices = tokens.indices
         if indices.dim() == 2:
             indices = indices.unsqueeze(0)
-        features = self.tokenizer_model.decode(indices.to(self.device))[0]
+        features = self.network.decode(indices.to(self.device))[0]
         return MotionClip(features=features, frame_count=int(features.shape[0]))

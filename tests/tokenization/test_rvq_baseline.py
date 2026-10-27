@@ -2,7 +2,7 @@ import torch
 
 from text2motion.app.config import RvqConfig
 from text2motion.tokenization.nn_model import (
-    RvqBaselineTokenizer,
+    ResidualVectorQuantizationTokenizer,
     feature_velocity_reconstruction_loss,
 )
 from text2motion.tokenization.nn_quantizers import VectorQuantizer, typed_modules
@@ -20,7 +20,7 @@ CFG = RvqConfig(
 
 
 def test_encode_decode_shapes_and_contract():
-    tok = RvqBaselineTokenizer(CFG).eval()
+    tok = ResidualVectorQuantizationTokenizer(CFG).eval()
     x = torch.randn(2, 32, 263)
 
     indices = tok.encode(x)
@@ -39,7 +39,7 @@ def test_encode_decode_shapes_and_contract():
 
 def test_overfit_one_batch():
     torch.manual_seed(0)
-    tok = RvqBaselineTokenizer(CFG).train()
+    tok = ResidualVectorQuantizationTokenizer(CFG).train()
     opt = torch.optim.AdamW(tok.parameters(), lr=3e-3)
     x = torch.randn(2, 32, 263)
 
@@ -61,7 +61,7 @@ def test_overfit_one_batch():
 
 def test_codebook_updates_and_no_collapse():
     torch.manual_seed(0)
-    tok = RvqBaselineTokenizer(CFG).train()
+    tok = ResidualVectorQuantizationTokenizer(CFG).train()
     opt = torch.optim.AdamW(tok.parameters(), lr=3e-3)
     x = torch.randn(4, 64, 263)
 
@@ -72,8 +72,6 @@ def test_codebook_updates_and_no_collapse():
         opt.step()
         opt.zero_grad()
 
-    assert not torch.allclose(
-        embed_before, typed_modules(tok.rvq.layers, VectorQuantizer)[0].embed
-    )
+    assert not torch.allclose(embed_before, typed_modules(tok.rvq.layers, VectorQuantizer)[0].embed)
     idx0 = tok.eval().encode(x)[..., 0]
     assert idx0.unique().numel() > 1

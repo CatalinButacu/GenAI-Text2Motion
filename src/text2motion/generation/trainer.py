@@ -37,7 +37,7 @@ from text2motion.motion.storage import (
     restore_rng_state,
 )
 from text2motion.tokenization.ema import ExponentialMovingAverage
-from text2motion.tokenization.nn_model import MotionTokenizerNetwork
+from text2motion.tokenization.nn_model import TokenizerNetwork
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,7 @@ class GeneratorTrainer:
     def __init__(
         self,
         token_generator: MotionTokenGenerator,
-        tokenizer_network: MotionTokenizerNetwork,
+        tokenizer_network: TokenizerNetwork,
         training_config: GeneratorTrainingConfig,
         downsample: int,
         text_encoder: CLIPTextEncoder | None = None,
@@ -494,7 +494,7 @@ def train_generator(
 @torch.no_grad()
 def teacher_forced_accuracy(
     generator: MotionTokenGenerator,
-    tokenizer: MotionTokenizerNetwork,
+    tokenizer: TokenizerNetwork,
     downsample: int,
     motion: torch.Tensor,
     text_embedding: torch.Tensor,

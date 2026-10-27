@@ -11,7 +11,7 @@ from text2motion.generation.contracts import Backbone
 from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.generation.trainer import GeneratorTrainer
-from text2motion.tokenization.nn_model import FsqTokenizer
+from text2motion.tokenization.nn_model import FiniteScalarQuantizationTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorConfig(
@@ -56,7 +56,7 @@ def test_encode_shape_and_partial_unfreeze():
 @pytest.mark.slow
 def test_trainer_includes_encoder_and_grad_flows():
     enc = __encoder(unfreeze_last_n=1)
-    tok = FsqTokenizer(TOK)
+    tok = FiniteScalarQuantizationTokenizer(TOK)
     gen = MotionTokenGenerator(GEN)
     trainer = GeneratorTrainer(
         gen, tok, GeneratorTrainingConfig(cfg_dropout=0.0), downsample=4, text_encoder=enc

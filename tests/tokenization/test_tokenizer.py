@@ -1,7 +1,10 @@
 import torch
 
 from text2motion.app.config import TokenizerConfig
-from text2motion.tokenization.nn_model import FsqTokenizer, feature_velocity_reconstruction_loss
+from text2motion.tokenization.nn_model import (
+    FiniteScalarQuantizationTokenizer,
+    feature_velocity_reconstruction_loss,
+)
 from text2motion.tokenization.nn_quantizers import FiniteScalarQuantizer
 
 CFG = TokenizerConfig(
@@ -20,7 +23,7 @@ def test_fsq_index_code_roundtrip():
 
 
 def test_tokenizer_shapes_and_index_range():
-    tok = FsqTokenizer(CFG).eval()
+    tok = FiniteScalarQuantizationTokenizer(CFG).eval()
     x = torch.randn(3, 64, 263)
     recon, idx, commit = tok(x)
 
@@ -34,7 +37,7 @@ def test_tokenizer_shapes_and_index_range():
 
 def test_single_batch_overfit():
     torch.manual_seed(0)
-    tok = FsqTokenizer(CFG).train()
+    tok = FiniteScalarQuantizationTokenizer(CFG).train()
     opt = torch.optim.Adam(tok.parameters(), lr=1e-3)
     x = torch.randn(2, 32, 263)
 

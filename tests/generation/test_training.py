@@ -13,7 +13,7 @@ from text2motion.generation.trainer import (
 )
 from text2motion.motion.storage import RESUME_VERSION, atomic_torch_save, is_legacy_resume
 from text2motion.tokenization.ema import ExponentialMovingAverage
-from text2motion.tokenization.nn_model import FsqTokenizer
+from text2motion.tokenization.nn_model import FiniteScalarQuantizationTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorConfig(
@@ -32,7 +32,7 @@ GEN = GeneratorConfig(
 
 
 def test_soft_decode_shape_and_grad():
-    tok = FsqTokenizer(TOK).eval().requires_grad_(False)
+    tok = FiniteScalarQuantizationTokenizer(TOK).eval().requires_grad_(False)
     gen = MotionTokenGenerator(GEN)
     tokens = torch.randint(0, GEN.codebook_size, (2, 8, GEN.num_codebooks))
     logits = gen(tokens, torch.randn(2, GEN.d_text))
@@ -45,7 +45,7 @@ def test_soft_decode_shape_and_grad():
 
 def test_train_step_learns():
     torch.manual_seed(0)
-    tok = FsqTokenizer(TOK)
+    tok = FiniteScalarQuantizationTokenizer(TOK)
     gen = MotionTokenGenerator(GEN)
     trainer = GeneratorTrainer(
         gen, tok, GeneratorTrainingConfig(lr=3e-3, cfg_dropout=0.0, pkeep=1.0), downsample=4
@@ -65,7 +65,7 @@ def test_train_step_learns():
 
 
 def test_cfg_dropout_step_is_finite():
-    tok = FsqTokenizer(TOK)
+    tok = FiniteScalarQuantizationTokenizer(TOK)
     gen = MotionTokenGenerator(GEN)
     trainer = GeneratorTrainer(
         gen, tok, GeneratorTrainingConfig(cfg_dropout=1.0), downsample=4
@@ -76,7 +76,7 @@ def test_cfg_dropout_step_is_finite():
 
 
 def test_term_split_reports_each_group():
-    tok = FsqTokenizer(TOK)
+    tok = FiniteScalarQuantizationTokenizer(TOK)
     gen = MotionTokenGenerator(GEN)
     trainer = GeneratorTrainer(
         gen, tok, GeneratorTrainingConfig(cfg_dropout=0.0, pkeep=1.0), downsample=4
@@ -88,7 +88,7 @@ def test_term_split_reports_each_group():
 
 
 def test_fk_consistency_terms_finite():
-    tok = FsqTokenizer(TOK)
+    tok = FiniteScalarQuantizationTokenizer(TOK)
     gen = MotionTokenGenerator(GEN)
     cfg = GeneratorTrainingConfig(
         cfg_dropout=0.0, pkeep=1.0, loss_weights=LossWeights(fk_self=0.5, fk_gt=0.5)
@@ -105,7 +105,7 @@ def test_fk_consistency_terms_finite():
 
 
 def test_uncertainty_weighting_optimizes_log_vars():
-    tok = FsqTokenizer(TOK)
+    tok = FiniteScalarQuantizationTokenizer(TOK)
     gen = MotionTokenGenerator(GEN)
     trainer = GeneratorTrainer(
         gen,
@@ -150,7 +150,10 @@ def test_ema_tracks_and_restores():
 def test_generator_step_with_a_nan_loss_raises_before_the_update():
     gen = MotionTokenGenerator(GEN)
     trainer = GeneratorTrainer(
-        gen, FsqTokenizer(TOK), GeneratorTrainingConfig(cfg_dropout=0.0, pkeep=1.0), downsample=4
+        gen,
+        FiniteScalarQuantizationTokenizer(TOK),
+        GeneratorTrainingConfig(cfg_dropout=0.0, pkeep=1.0),
+        downsample=4,
     )
     before = {name: value.clone() for name, value in gen.state_dict().items()}
 
@@ -169,7 +172,9 @@ def __resumable_trainer(grad_accum: int = 1) -> GeneratorTrainer:
         grad_accum=grad_accum,
         loss_weighting=LossWeighting.UNCERTAINTY,
     )
-    trainer = GeneratorTrainer(MotionTokenGenerator(GEN), FsqTokenizer(TOK), config, downsample=4)
+    trainer = GeneratorTrainer(
+        MotionTokenGenerator(GEN), FiniteScalarQuantizationTokenizer(TOK), config, downsample=4
+    )
     trainer.build_scheduler(8)
     return trainer
 
@@ -213,7 +218,7 @@ def test_a_partial_accumulation_window_has_the_weight_of_a_full_window(monkeypat
             cfg_dropout=0.0, pkeep=1.0, grad_accum=grad_accum, grad_clip=1e9
         )
         trainer = GeneratorTrainer(
-            MotionTokenGenerator(GEN), FsqTokenizer(TOK), config, downsample=4
+            MotionTokenGenerator(GEN), FiniteScalarQuantizationTokenizer(TOK), config, downsample=4
         )
         monkeypatch.setattr(trainer.optimizer, "step", lambda: None)
         __train_one_epoch(trainer, motion, text)

@@ -10,16 +10,16 @@ import torch
 
 from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.motion.representation import DIM
-from text2motion.tokenization.nn_model import MotionTokenizerNetwork
+from text2motion.tokenization.nn_model import TokenizerNetwork
 
 _END = None
 
 
 @torch.no_grad()
 def measure_decoder_context(
-    tokenizer: MotionTokenizerNetwork, downsample: int, probe_len: int = 32, trials: int = 4
+    tokenizer: TokenizerNetwork, downsample: int, probe_len: int = 32, trials: int = 4
 ) -> tuple[int, int]:
-    num_quantizers = len(tokenizer.latent_quantizer().quantizers)
+    num_quantizers = len(tokenizer.quantizer_stack().quantizers)
     codebook_size = tokenizer.codebook_size
     device = next(tokenizer.parameters()).device
     centre = probe_len // 2
@@ -67,7 +67,7 @@ def __put_drop_oldest(out_queue: "queue_mod.Queue", item: object) -> None:
 class StreamingMotionDecoder:
     def __init__(
         self,
-        tokenizer: MotionTokenizerNetwork,
+        tokenizer: TokenizerNetwork,
         downsample: int,
         mean: torch.Tensor,
         std: torch.Tensor,

@@ -42,7 +42,7 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
     batch = next(iter(repository.captioned_batch_loader(Split.TRAIN, args.batch_size)))
     tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
     architecture = app.resolve_generator_spec(args.backbone, tokenizer.codebook_size, dropout=0.0)
-    tokenizer.tokenizer_model.requires_grad_(False)
+    tokenizer.network.requires_grad_(False)
     scaler = repository.load_scaler()
     train_config = replace(
         app.config.train,
@@ -55,7 +55,7 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
     )
     trainer = GeneratorTrainer(
         architecture.create_model(app.device),
-        tokenizer.tokenizer_model,
+        tokenizer.network,
         train_config,
         downsample=app.config.tokenizer.downsample,
         text_encoder=app.load_text_encoder(),
@@ -111,7 +111,7 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
     scaler = repository.load_scaler()
     trainer = GeneratorTrainer(
         module,
-        tokenizer.tokenizer_model,
+        tokenizer.network,
         replace(app.config.train, grad_accum=args.grad_accum),
         downsample=app.config.tokenizer.downsample,
         text_encoder=text_encoder,

@@ -97,7 +97,7 @@ def main() -> None:
     mean = torch.from_numpy(scaler.mean).to(app.device)
     std = torch.from_numpy(scaler.std).to(app.device)
     decoder = StreamingMotionDecoder(
-        tokenizer.tokenizer_model, downsample=tokenizer.downsample, mean=mean, std=std
+        tokenizer.network, downsample=tokenizer.downsample, mean=mean, std=std
     )
     chunk_frames = decoder.chunk_tokens * decoder.downsample
     service = app.config.service

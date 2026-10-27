@@ -12,7 +12,7 @@ from text2motion.motion.model import (
     MotionClip,
     MotionTokens,
 )
-from text2motion.tokenization.nn_model import MotionTokenizer
+from text2motion.tokenization.nn_model import FrozenMotionTokenizer
 
 
 class TextToMotionGenerator:
@@ -20,7 +20,7 @@ class TextToMotionGenerator:
         self,
         token_generator: MotionTokenGenerator,
         text_encoder: CLIPTextEncoder,
-        tokenizer: MotionTokenizer,
+        tokenizer: FrozenMotionTokenizer,
     ) -> None:
         self.token_generator = token_generator
         self.text_encoder = text_encoder
@@ -29,7 +29,7 @@ class TextToMotionGenerator:
     def eval(self) -> TextToMotionGenerator:
         self.token_generator.eval()
         self.text_encoder.eval()
-        self.tokenizer.tokenizer_model.eval()
+        self.tokenizer.network.eval()
         return self
 
     @property
@@ -77,7 +77,7 @@ class TextToMotionGenerator:
         return torch.where(ended.any(dim=1), first_end, indices.shape[1]).tolist()
 
     def __decode_rows(self, indices: torch.Tensor, lengths: list[int]) -> list[torch.Tensor]:
-        decoder = self.tokenizer.tokenizer_model
+        decoder = self.tokenizer.network
         if len(set(lengths)) == 1:
             return list(decoder.decode(indices[:, : lengths[0]]))
         return [

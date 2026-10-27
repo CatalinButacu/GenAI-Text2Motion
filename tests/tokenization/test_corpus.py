@@ -17,7 +17,7 @@ from text2motion.tokenization.corpus import (
     read_pack_identity,
     window_starts,
 )
-from text2motion.tokenization.nn_model import MotionTokenizer
+from text2motion.tokenization.nn_model import FrozenMotionTokenizer
 
 
 @pytest.mark.parametrize(
@@ -29,12 +29,12 @@ def test_windows_cover_every_frame_with_an_end_aligned_last_window(frames, start
     assert window_starts(frames, 16, 16) == starts
 
 
-def __fake_tokenizer() -> MotionTokenizer:
+def __fake_tokenizer() -> FrozenMotionTokenizer:
     def encode(clip):
         steps = clip.frame_count // 4
         return SimpleNamespace(indices=torch.zeros(steps, 2, dtype=torch.long), token_count=steps)
 
-    return cast(MotionTokenizer, SimpleNamespace(encode=encode))
+    return cast(FrozenMotionTokenizer, SimpleNamespace(encode=encode))
 
 
 def test_the_pack_skips_excluded_clips_and_records_its_identity(tmp_path):

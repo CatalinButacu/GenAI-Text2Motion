@@ -211,9 +211,9 @@ def demo_probe(args) -> None:
     downsample = app.config.tokenizer.downsample
     studio = load_dataclass(StudioConfig, args.studio_config)
     scaler = app.create_motion_repository().load_scaler()
-    left, right = measure_decoder_context(tokenizer.tokenizer_model, downsample)
+    left, right = measure_decoder_context(tokenizer.network, downsample)
     decoder = StreamingMotionDecoder(
-        tokenizer.tokenizer_model,
+        tokenizer.network,
         downsample,
         torch.from_numpy(scaler.mean).to(device),
         torch.from_numpy(scaler.std).to(device),

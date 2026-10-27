@@ -21,7 +21,7 @@ from text2motion.motion.storage import (
 from text2motion.tokenization.contracts import TokenizerTrainingRequest
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_model import (
-    MotionTokenizerNetwork,
+    TokenizerNetwork,
     feature_velocity_reconstruction_loss,
 )
 
@@ -36,7 +36,7 @@ TOKENIZER_RESUME_FORMAT = "text2motion.tokenizer_resume"
 class TokenizerTrainer:
     def __init__(
         self,
-        tokenizer_network: MotionTokenizerNetwork,
+        tokenizer_network: TokenizerNetwork,
         lr: float,
         weight_decay: float,
         ema_decay: float,

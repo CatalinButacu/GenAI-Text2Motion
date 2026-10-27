@@ -10,7 +10,7 @@ from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import JOINTS, recover_from_ric
 from text2motion.motion.storage import FEATURES_DIR
-from text2motion.tokenization.nn_model import MotionTokenizerNetwork
+from text2motion.tokenization.nn_model import TokenizerNetwork
 
 _ReconFidScorer = Callable[[list[np.ndarray], list[np.ndarray]], float]
 
@@ -30,7 +30,7 @@ def select_reconstruction_evaluation_clip_ids(
 
 @torch.no_grad()
 def evaluate_tokenizer_reconstruction(
-    module: MotionTokenizerNetwork,
+    module: TokenizerNetwork,
     root: Path,
     scaler: MotionScaler,
     max_frames: int,

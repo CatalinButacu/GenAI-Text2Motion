@@ -5,17 +5,17 @@ from text2motion.tokenization.contracts import (
     TokenizerKind,
 )
 from text2motion.tokenization.nn_model import (
-    MotionTokenizer,
-    MotionTokenizerNetwork,
+    FrozenMotionTokenizer,
+    TokenizerNetwork,
     build_tokenizer_network,
 )
 
 __all__ = [
-    "MotionTokenizer",
+    "FrozenMotionTokenizer",
     "FsqComposition",
     "RvqConfig",
     "TokenizerConfig",
     "TokenizerKind",
-    "MotionTokenizerNetwork",
+    "TokenizerNetwork",
     "build_tokenizer_network",
 ]

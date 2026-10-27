@@ -37,7 +37,7 @@ def load_inference_pipeline(
         generator.token_generator.enable_cuda_graph_decode()
     scaler = app.create_motion_repository().load_scaler()
     decoder = StreamingMotionDecoder(
-        tokenizer.tokenizer_model,
+        tokenizer.network,
         downsample=app.config.tokenizer.downsample,
         mean=torch.from_numpy(scaler.mean).to(app.device),
         std=torch.from_numpy(scaler.std).to(app.device),

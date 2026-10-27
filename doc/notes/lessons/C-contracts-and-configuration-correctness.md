@@ -64,7 +64,7 @@ scatter-gather assertion deep inside the embedding lookup -- correct behavior, w
 from the actual defect.
 
 Fix (`app/commands/generator.py:186`): branch on `config.tokenizer.kind` and read
-`config.rvq_baseline.codebook_size` for RVQ, matching how `RvqBaselineTokenizer.codebook_size`
+`config.rvq_baseline.codebook_size` for RVQ, matching how `ResidualVectorQuantizationTokenizer.codebook_size`
 (`tokenization/nn_model.py:418`) already derives it for the real tokenizer object. `pretrain` had simply
 never been exercised against an RVQ config before -- `run_twins.sh`'s `transformer_rvq` pair calls the
 same code path and would have failed identically on the (never-yet-run) cloud campaign.

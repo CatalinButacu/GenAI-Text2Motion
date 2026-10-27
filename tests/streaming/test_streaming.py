@@ -14,7 +14,7 @@ from text2motion.streaming.decoder import (
     collect_stream,
     run_producer,
 )
-from text2motion.tokenization.nn_model import FsqTokenizer
+from text2motion.tokenization.nn_model import FiniteScalarQuantizationTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorConfig(
@@ -33,7 +33,7 @@ GEN = GeneratorConfig(
 
 
 def make_decoder() -> StreamingMotionDecoder:
-    tok = FsqTokenizer(TOK)
+    tok = FiniteScalarQuantizationTokenizer(TOK)
     mean = torch.zeros(263)
     std = torch.ones(263)
     return StreamingMotionDecoder(tok, 4, mean, std, chunk_tokens=4)
@@ -136,7 +136,7 @@ def test_explicit_context_skips_the_probe():
 
     decode_mod.measure_decoder_context = counting
     try:
-        tok = FsqTokenizer(TOK)
+        tok = FiniteScalarQuantizationTokenizer(TOK)
         mean = torch.zeros(263)
         std = torch.ones(263)
 
@@ -158,7 +158,7 @@ def test_stream_forwards_guidance_and_end_stopping():
             for _ in range(steps):
                 yield torch.zeros(1, 8, dtype=torch.long)
 
-    tok = FsqTokenizer(TOK)
+    tok = FiniteScalarQuantizationTokenizer(TOK)
     decoder = StreamingMotionDecoder(
         tok, 4, torch.zeros(263), torch.ones(263), left_context=1, lookahead=1
     )

@@ -137,7 +137,7 @@ def main() -> None:
                         text_at=text_at,
                     )
                 )
-                decoded = tokenizer.tokenizer_model.decode(torch.stack(steps, dim=1)).cpu().numpy()
+                decoded = tokenizer.network.decode(torch.stack(steps, dim=1)).cpu().numpy()
                 features[method].extend(np.asarray(resources.denormalize(clip)) for clip in decoded)
             logger.info(f"generated sequences {start + 1} to {start + len(group)}")
 

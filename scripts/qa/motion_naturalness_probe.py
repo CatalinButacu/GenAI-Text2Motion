@@ -77,7 +77,7 @@ def main() -> None:
             caption = text_path.read_text(encoding="utf-8").splitlines()[0].split("#")[0].strip()
             stages["ground_truth"].append(motion_statistics(recover_skeleton(raw)))
             normalized = torch.from_numpy(resources.normalize(raw)).unsqueeze(0).to(app.device)
-            network = tokenizer.tokenizer_model
+            network = tokenizer.network
             indices = network.encode(normalized)
             roundtrip = network.decode(indices)[0].cpu().numpy()
             stages["tokenizer_roundtrip"].append(
