@@ -4,8 +4,8 @@ import yaml
 
 from text2motion.studio.avatar import SmplxAvatarController
 
-LIVE_FIT_KEYS = {"model_dir", "device", "threads", "gender", "num_betas"}
-LIVE_SCHEDULE_KEYS = {"retrofit_window"}
+LIVE_FIT_KEYS = frozenset({"model_dir", "device", "threads", "gender", "num_betas"})
+LIVE_SCHEDULE_KEYS = frozenset({"retrofit_window"})
 
 
 def test_the_studio_file_holds_only_settings_that_the_live_studio_reads():

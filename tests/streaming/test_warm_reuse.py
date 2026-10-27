@@ -1,5 +1,6 @@
 import socket
 import threading
+from types import MappingProxyType
 
 import pytest
 
@@ -10,7 +11,9 @@ from text2motion.streaming.protocol import (
 )
 from text2motion.studio.scene import StudioSession
 
-POLICY = {"anchor_every_tokens": 0, "anchor_context_tokens": 16, "cuda_graph_decode": False}
+POLICY = MappingProxyType(
+    {"anchor_every_tokens": 0, "anchor_context_tokens": 16, "cuda_graph_decode": False}
+)
 
 
 def __release(tmp_path) -> tuple[str, str, str, str]:
@@ -50,7 +53,7 @@ def __connect(release: tuple[str, str, str, str], port: int, tmp_path):
         port,
         tmp_path / "service.log",
         service_config="service.yml",
-        policy=POLICY,
+        policy=dict(POLICY),
     )
 
 
@@ -58,7 +61,9 @@ def test_a_warm_service_with_the_same_release_is_reused(tmp_path):
     release = __release(tmp_path)
     identity = release_identity(*release)
     commands: list[str] = []
-    port = __warm_service({"type": "hello", "identity": identity, "policy": POLICY}, {}, commands)
+    port = __warm_service(
+        {"type": "hello", "identity": identity, "policy": dict(POLICY)}, {}, commands
+    )
 
     client = __connect(release, port, tmp_path)
 
@@ -72,7 +77,7 @@ def test_a_retrained_checkpoint_at_the_same_path_is_reloaded(tmp_path):
     (tmp_path / "ckpt.bin").write_bytes(b"retrained")
     new_identity = release_identity(*release)
     commands: list[str] = []
-    hello = {"type": "hello", "identity": old_identity, "policy": POLICY}
+    hello = {"type": "hello", "identity": old_identity, "policy": dict(POLICY)}
     port = __warm_service(hello, new_identity, commands)
 
     client = __connect(release, port, tmp_path)
@@ -86,7 +91,7 @@ def test_a_service_that_loads_another_release_is_refused(tmp_path):
     release = __release(tmp_path)
     identity = release_identity(*release)
     commands: list[str] = []
-    hello = {"type": "hello", "identity": {}, "policy": POLICY}
+    hello = {"type": "hello", "identity": {}, "policy": dict(POLICY)}
     port = __warm_service(hello, {**identity, "tokenizer_sha256": "other"}, commands)
 
     with pytest.raises(RuntimeError, match="tokenizer_sha256"):

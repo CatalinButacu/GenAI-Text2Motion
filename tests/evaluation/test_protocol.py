@@ -1,5 +1,5 @@
 import zlib
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from typing import cast
 
 import numpy as np
@@ -21,7 +21,9 @@ from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.storage import FEATURES_DIR
 
 CLIPS = 40
-DROPPED = {"missing_files": 0, "not_finite": 0, "out_of_length": 0, "no_caption": 0}
+DROPPED = MappingProxyType(
+    {"missing_files": 0, "not_finite": 0, "out_of_length": 0, "no_caption": 0}
+)
 
 
 def __write_clip(root, clip_id: str, frames: int, lines: list[str]) -> None:

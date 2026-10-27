@@ -2,25 +2,22 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from types import MappingProxyType
 
 PACKAGE_ROOT = Path("src/text2motion")
-ALLOWED_DEPENDENCIES = {
-    "motion": {"motion"},
-    "tokenization": {"motion", "tokenization"},
-    "generation": {"motion", "tokenization", "generation"},
-    "evaluation": {"motion", "tokenization", "generation", "evaluation"},
-    "streaming": {"motion", "tokenization", "generation", "streaming"},
-    "studio": {"motion", "studio"},
-    "app": {
-        "motion",
-        "tokenization",
-        "generation",
-        "evaluation",
-        "streaming",
-        "studio",
-        "app",
-    },
-}
+ALLOWED_DEPENDENCIES = MappingProxyType(
+    {
+        "motion": frozenset({"motion"}),
+        "tokenization": frozenset({"motion", "tokenization"}),
+        "generation": frozenset({"motion", "tokenization", "generation"}),
+        "evaluation": frozenset({"motion", "tokenization", "generation", "evaluation"}),
+        "streaming": frozenset({"motion", "tokenization", "generation", "streaming"}),
+        "studio": frozenset({"motion", "studio"}),
+        "app": frozenset(
+            {"motion", "tokenization", "generation", "evaluation", "streaming", "studio", "app"}
+        ),
+    }
+)
 
 
 def imported_stages(path: Path) -> set[str]:
@@ -75,8 +72,8 @@ def test_application_bootstrap_is_used_only_at_entrypoints() -> None:
     assert not offenders, "composition leaked outside app entrypoints: " + ", ".join(offenders)
 
 
-CONTRACT_SAFE_ROLES = {"contracts", "representation", "model"}
-OWN_STAGE_CONTRACT_SAFE_ROLES = {"representation"}
+CONTRACT_SAFE_ROLES = frozenset({"contracts", "representation", "model"})
+OWN_STAGE_CONTRACT_SAFE_ROLES = frozenset({"representation"})
 
 
 def stage_packages_on_disk() -> set[str]:
