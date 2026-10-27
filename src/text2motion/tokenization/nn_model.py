@@ -79,7 +79,14 @@ class TemporalResidualBlock(nn.Module):
         return x + self.net(x)
 
 
-class MotionFeatureEncoder(nn.Module):
+class FrameSequenceConvolution(nn.Module):
+    net: nn.Sequential
+
+    def forward(self, frames: torch.Tensor) -> torch.Tensor:
+        return self.net(frames.transpose(1, 2)).transpose(1, 2)
+
+
+class MotionFeatureEncoder(FrameSequenceConvolution):
     def __init__(
         self, feature_count: int, width: int, downsample: int, residual_block_count: int
     ) -> None:
@@ -95,11 +102,8 @@ class MotionFeatureEncoder(nn.Module):
 
         self.net = nn.Sequential(*layers)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x.transpose(1, 2)).transpose(1, 2)
 
-
-class MotionFeatureDecoder(nn.Module):
+class MotionFeatureDecoder(FrameSequenceConvolution):
     def __init__(
         self, feature_count: int, width: int, downsample: int, residual_block_count: int
     ) -> None:
@@ -115,9 +119,6 @@ class MotionFeatureDecoder(nn.Module):
 
         layers.append(nn.Conv1d(width, feature_count, 3, padding=1))
         self.net = nn.Sequential(*layers)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x.transpose(1, 2)).transpose(1, 2)
 
 
 class FiniteScalarQuantizationTokenizer(TokenizerNetwork):
