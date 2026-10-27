@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import torch
 from torch import nn
+from torch.optim.swa_utils import get_ema_multi_avg_fn
 
 
 ############################################################
@@ -10,6 +11,7 @@ from torch import nn
 class ExponentialMovingAverage:
     def __init__(self, model: nn.Module, decay: float) -> None:
         self.decay = decay
+        self.__average = get_ema_multi_avg_fn(decay)
         self.shadow = {
             name: param.detach().clone()
             for name, param in model.named_parameters()
@@ -19,11 +21,9 @@ class ExponentialMovingAverage:
 
     @torch.no_grad()
     def update(self, model: nn.Module) -> None:
-        for name, param in model.named_parameters():
-            shadow = self.shadow.get(name)
-            if shadow is None:
-                continue
-            shadow.mul_(self.decay).add_(param, alpha=1 - self.decay)
+        parameters = dict(model.named_parameters())
+        current: list[torch.Tensor] = [parameters[name] for name in self.shadow]
+        self.__average(list(self.shadow.values()), current, None)
 
     @torch.no_grad()
     def load_state_dict(self, state: dict[str, torch.Tensor]) -> None:
