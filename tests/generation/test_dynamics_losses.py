@@ -86,7 +86,6 @@ class _FakeTokenizer:
             (),
             {"quantizer_units": [unit], "compose_latent_codes": lambda self, codes: codes[0]},
         )()
-        self.codebook_tables = None
         self.post_q = lambda codes: codes
         self.decoder = lambda codes: torch.zeros(codes.size(0), codes.size(1) * 4, DIM)
 

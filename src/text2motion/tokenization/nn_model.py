@@ -29,7 +29,6 @@ class MotionTokenizerNetwork(nn.Module, ABC):
     decoder: nn.Module
     pre_q: nn.Module
     post_q: nn.Module
-    codebook_tables: list[torch.Tensor] | None = None
 
     def latent_quantizer(self) -> LatentQuantizer:
         quantizer = self.quantizer

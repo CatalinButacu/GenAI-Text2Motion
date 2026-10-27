@@ -19,15 +19,10 @@ from text2motion.tokenization.nn_model import MotionTokenizerNetwork
 def __codebook_tables(
     tokenizer: MotionTokenizerNetwork, device: torch.device
 ) -> list[torch.Tensor]:
-    cached = tokenizer.codebook_tables
-    if cached is not None and cached[0].device == device:
-        return cached
-
     tables = []
     for unit in tokenizer.latent_quantizer().quantizer_units:
         all_idx = torch.arange(unit.codebook_size, device=device)
         tables.append(unit.indices_to_codes(all_idx))
-    tokenizer.codebook_tables = tables
     return tables
 
 
