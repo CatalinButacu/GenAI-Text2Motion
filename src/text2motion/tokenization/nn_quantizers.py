@@ -134,7 +134,7 @@ class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
         self.num_quantizers = num_quantizers
         self.dropout_p = dropout_p
 
-    def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         residual = z
         quantized = torch.zeros_like(z)
         indices: list[torch.Tensor] = []
@@ -149,7 +149,7 @@ class ResidualFiniteScalarQuantizer(ResidualQuantizerStack):
             else:
                 indices.append(dropped_code_indices(z))
 
-        return quantized, torch.stack(indices, dim=-1)
+        return quantized, torch.stack(indices, dim=-1), z.new_zeros(())
 
 
 class GroupedFiniteScalarQuantizer(QuantizerStack):
@@ -166,7 +166,7 @@ class GroupedFiniteScalarQuantizer(QuantizerStack):
     def combine_code_vectors(self, codes: list[torch.Tensor]) -> torch.Tensor:
         return torch.cat(codes, dim=-1)
 
-    def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         codes: list[torch.Tensor] = []
         indices: list[torch.Tensor] = []
         for group_index, group in enumerate(typed_modules(self.groups, FiniteScalarQuantizer)):
@@ -174,7 +174,7 @@ class GroupedFiniteScalarQuantizer(QuantizerStack):
             code = group.quantize(chunk)
             codes.append(code)
             indices.append(group.codes_to_indices(code))
-        return torch.cat(codes, dim=-1), torch.stack(indices, dim=-1)
+        return torch.cat(codes, dim=-1), torch.stack(indices, dim=-1), z.new_zeros(())
 
     def indices_to_codes(self, indices: torch.Tensor) -> torch.Tensor:
         return torch.cat(

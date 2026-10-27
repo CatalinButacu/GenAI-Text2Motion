@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import assert_never
 
 import torch
@@ -24,7 +23,7 @@ from text2motion.tokenization.nn_quantizers import (
 )
 
 
-class TokenizerNetwork(nn.Module, ABC):
+class TokenizerNetwork(nn.Module):
     encoder: nn.Module
     decoder: nn.Module
     pre_q: nn.Module
@@ -33,21 +32,29 @@ class TokenizerNetwork(nn.Module, ABC):
     def quantizer_stack(self) -> QuantizerStack:
         quantizer = self.quantizer
         if not isinstance(quantizer, QuantizerStack):
-            raise TypeError("the tokenizer network has no latent quantizer")
+            raise TypeError("the tokenizer network has no quantizer stack")
         return quantizer
 
     @property
-    @abstractmethod
-    def codebook_size(self) -> int: ...
+    def codebook_size(self) -> int:
+        return self.quantizer_stack().quantizers[0].codebook_size
 
-    @abstractmethod
-    def encode(self, x: torch.Tensor) -> torch.Tensor: ...
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        _, indices, _ = self.quantizer_stack()(self.pre_q(self.encoder(x)))
+        return reject_dropped_codes(indices)
 
-    @abstractmethod
-    def decode(self, indices: torch.Tensor) -> torch.Tensor: ...
+    def decode(self, indices: torch.Tensor) -> torch.Tensor:
+        code_vectors = self.quantizer_stack().indices_to_codes(indices)
+        return self.decoder(self.post_q(code_vectors))
 
-    @abstractmethod
-    def forward(self, x: torch.Tensor) -> TokenizerReconstruction: ...
+    def forward(self, x: torch.Tensor) -> TokenizerReconstruction:
+        latent = self.pre_q(self.encoder(x))
+        quantized, indices, commitment_loss = self.quantizer_stack()(latent)
+        return TokenizerReconstruction(
+            reconstruction=self.decoder(self.post_q(quantized)),
+            token_indices=indices,
+            commitment_loss=commitment_loss,
+        )
 
 
 def downsample_stage_count(downsample: int) -> int:
@@ -110,7 +117,6 @@ class FiniteScalarQuantizationTokenizer(TokenizerNetwork):
 
     def __init__(self, cfg: TokenizerConfig) -> None:
         super().__init__()
-        self.cfg = cfg
         self.encoder = MotionFeatureEncoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
         self.decoder = MotionFeatureDecoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
 
@@ -129,24 +135,6 @@ class FiniteScalarQuantizationTokenizer(TokenizerNetwork):
         self.pre_q = nn.Linear(cfg.width, latent_dim)
         self.post_q = nn.Linear(latent_dim, cfg.width)
 
-    @property
-    def codebook_size(self) -> int:
-        return self.quantizer.quantizers[0].codebook_size
-
-    def encode(self, x: torch.Tensor) -> torch.Tensor:
-        _, indices = self.quantizer(self.pre_q(self.encoder(x)))
-        return reject_dropped_codes(indices)
-
-    def decode(self, indices: torch.Tensor) -> torch.Tensor:
-        return self.decoder(self.post_q(self.quantizer.indices_to_codes(indices)))
-
-    def forward(self, x: torch.Tensor) -> TokenizerReconstruction:
-        quantized, indices = self.quantizer(self.pre_q(self.encoder(x)))
-        recon = self.decoder(self.post_q(quantized))
-        return TokenizerReconstruction(
-            reconstruction=recon, token_indices=indices, commitment_loss=x.new_zeros(())
-        )
-
 
 def feature_velocity_reconstruction_loss(recon: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     feat = F.l1_loss(recon, target)
@@ -158,7 +146,6 @@ def feature_velocity_reconstruction_loss(recon: torch.Tensor, target: torch.Tens
 class ResidualVectorQuantizationTokenizer(TokenizerNetwork):
     def __init__(self, cfg: ResidualVectorQuantizationConfig) -> None:
         super().__init__()
-        self.cfg = cfg
         self.encoder = MotionFeatureEncoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
         self.decoder = MotionFeatureDecoder(cfg.in_dim, cfg.width, cfg.downsample, cfg.n_resblocks)
         self.pre_q = nn.Linear(cfg.width, cfg.code_dim)
@@ -166,29 +153,8 @@ class ResidualVectorQuantizationTokenizer(TokenizerNetwork):
         self.rvq = ResidualVectorQuantizer(cfg)
 
     @property
-    def codebook_size(self) -> int:
-        return self.cfg.codebook_size
-
-    @property
     def quantizer(self) -> ResidualVectorQuantizer:
         return self.rvq
-
-    def encode(self, x: torch.Tensor) -> torch.Tensor:
-        z = self.pre_q(self.encoder(x))
-        _, indices, _ = self.rvq(z)
-        return reject_dropped_codes(indices)
-
-    def decode(self, indices: torch.Tensor) -> torch.Tensor:
-        codes = self.rvq.indices_to_codes(indices)
-        return self.decoder(self.post_q(codes))
-
-    def forward(self, x: torch.Tensor) -> TokenizerReconstruction:
-        z = self.pre_q(self.encoder(x))
-        quantized, indices, commit = self.rvq(z)
-        recon = self.decoder(self.post_q(quantized))
-        return TokenizerReconstruction(
-            reconstruction=recon, token_indices=indices, commitment_loss=commit
-        )
 
 
 def build_tokenizer_network(
