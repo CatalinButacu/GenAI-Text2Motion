@@ -1,40 +1,91 @@
 # tokenization
 
-This package turns motion features (HumanML3D-263) into discrete token indices and back. It
-depends only on the `motion` package (see `tests/app/test_import_boundaries.py`).
+This package turns motion into tokens and tokens back into motion. The motion is a clip of
+HumanML3D-263 features, one 263-value row per frame, normalized with the train-split mean and
+standard deviation (`MotionScaler`). A token step covers `downsample` frames (4 by default), and
+each step holds one code index for each codebook. The generator learns on these token indices,
+so the work in this package comes first: you configure a tokenizer, train it, measure it, freeze
+it, and then encode the whole corpus with it.
 
-Internal chain, from the base up: `contracts` → `nn_quantizers` → `nn_model` → `corpus`,
-`metrics`, `trainer`. `ema` has no local imports.
+## Configure
 
-## Interface used by the rest of `src`
+You start with a `TokenizerConfig`. It describes the main tokenizer, a finite scalar quantizer
+(FSQ) that needs no learned codebook. The YAML section `tokenizer:` fills it. Its `kind` is a
+`TokenizerKind`: `FINITE_SCALAR` (`fsq` on the command line) or `RESIDUAL_VECTOR` (`rvq`). When
+you select `rvq`, the baseline with learned codebooks, its settings come from a second config,
+`ResidualVectorQuantizationConfig`, which the YAML section `rvq_baseline:` fills.
 
-| Name | File | What it is | Used by |
-|---|---|---|---|
-| `TokenizerConfig` | `contracts` | Config of the finite scalar tokenizer (YAML `tokenizer:`) | `app/config` |
-| `ResidualVectorQuantizationConfig` | `contracts` | Config of the residual vector baseline (YAML `rvq_baseline:`) | `app/config` |
-| `TokenizerKind` | `contracts` | `FINITE_SCALAR` (`fsq`) or `RESIDUAL_VECTOR` (`rvq`) | `app/cli`, `app/config`, `app/commands/generator`, `app/commands/tokenizer` |
-| `TrainTokenizerRequest` | `contracts` | Arguments of the `train-tokenizer` command | `app/cli`, `app/commands/tokenizer` |
-| `TokenizeRequest` | `contracts` | Arguments of the `tokenize` command | `app/cli`, `app/commands/data` |
-| `build_tokenizer_network` | `nn_model` | Builds the network that the config selects | `app/bootstrap` |
-| `TokenizerNetwork` | `nn_model` | Base network: `encode`, `decode`, `forward`, `quantizer_stack`, `codebook_size` | `generation/losses`, `generation/trainer`, `streaming/decoder` |
-| `FrozenMotionTokenizer` | `nn_model` | Evaluation wrapper: `MotionClip` ↔ `MotionTokens` | `app/bootstrap`, `generation/pipeline` |
-| `TokenizerTrainer` | `trainer` | One optimizer step, EMA weights, code statistics | `app/commands/tokenizer` |
-| `train_tokenizer` | `trainer` | The training loop with resume and best checkpoint | `app/commands/tokenizer` |
-| `evaluate_tokenizer_reconstruction` | `metrics` | Reconstruction FID and MPJPE on a split | `app/commands/tokenizer` |
-| `build_token_pack` | `corpus` | Encodes the corpus into a token pack file | `app/commands/data` |
-| `read_pack_identity` | `corpus` | Reads the identity of a token pack | `app/commands/generator`, `generation/pretrain` |
-| `pack_clip_keys` | `corpus` | Lists the clip keys in a token pack | `generation/pretrain` |
-| `ExponentialMovingAverage` | `ema` | EMA copy of model weights | `generation/trainer` |
+## Build
 
-All users import from the file, for example `text2motion.tokenization.nn_model`. No code imports
-from `text2motion.tokenization` itself.
+With the configs ready, `build_tokenizer_network(finite_scalar_config, residual_vector_config)`
+gives you a `TokenizerNetwork`. The `kind` in the first config selects the network, and the second
+config matters only for `rvq`. The network is a normal PyTorch module, so you move it to a device
+and load a state dict as usual.
 
-## Used only by tests and scripts
+A `TokenizerNetwork` has three calls. `encode(motion)` takes a float tensor of shape
+`[batch, frames, 263]` and returns integer indices of shape `[batch, frames / downsample,
+codebooks]`. `decode(indices)` does the opposite and returns features of shape `[batch, frames,
+263]`. `forward(motion)` does both in one pass, for training, and returns a
+`TokenizerReconstruction` with the reconstruction, the token indices and the commitment loss. The
+commitment loss is zero for FSQ. Give a frame count that is a multiple of `downsample`. Other
+counts do not raise an error, but the output is shorter: 62 frames in give 60 frames out.
 
-- `contracts`: `DROPPED_CODE`, `FiniteScalarStackLayout`
-- `corpus`: `PACK_FORMAT`, `PACK_IDENTITY_KEY`, `PACK_VERSION`, `window_starts`
-- `nn_model`: `FiniteScalarQuantizationTokenizer`, `ResidualVectorQuantizationTokenizer`,
-  `downsample_stage_count`, `feature_velocity_reconstruction_loss`
-- `nn_quantizers`: `FiniteScalarQuantizer`, `QuantizerStack`, `VectorQuantizer`, `typed_modules`
+## Train
 
-Everything else in the package is internal.
+To train a new network, wrap it in a `TokenizerTrainer(network, lr, weight_decay, ema_decay,
+commitment_beta)`. Use `commitment_beta` only for `rvq`. Each `train_step(motion)` takes one
+batch of `[batch, window, 263]` features, does one AdamW step and returns a dict of floats:
+`recon`, `commit`, `total`, `perplexity` and `usage_frac`. The trainer also keeps an exponential
+moving average (EMA) of the weights. The evaluations and the saved checkpoint use these averaged
+weights, not the raw ones.
+
+You do not usually call `train_step` yourself. `train_tokenizer(trainer, loader, request, device,
+evaluate, checkpoint_path, resume_path)` runs the full loop for the epochs in a
+`TrainTokenizerRequest`. Every `eval_every` epochs, and at the last epoch, it calls
+`evaluate(Split.VALIDATION)` with the EMA weights in place. Your `evaluate` function must return a
+dict with `recon_fid`, `mpjpe_mm`, `feature_l2` and `clips`. When `recon_fid` improves, the loop
+saves the EMA weights to `checkpoint_path`. At each evaluation it also saves the full training
+state to `resume_path`, so a run that stops can continue with `resume=True` from the last
+evaluation. It returns the best validation reconstruction FID.
+
+`ExponentialMovingAverage(model, decay)` is the EMA tool on its own. Call `update(model)` after
+each optimizer step, `copy_to(model)` before an evaluation and `restore(model)` after it.
+
+## Evaluate
+
+To measure a network, call `evaluate_tokenizer_reconstruction(network, root, scaler, max_frames,
+downsample, device, max_clips, split, reconstruction_fid_scorer)`. It encodes and decodes the clips
+of one split from the dataset folder `root` and compares the result with the original clips. It
+returns `clips`, `mpjpe_mm` (the mean joint position error in millimetres) and `feature_l2`. When
+you give it a `reconstruction_fid_scorer`, it also returns `recon_fid`. A lower value is better for
+all three measures. Use the test split only once, after training, on the best checkpoint.
+
+## Freeze and use
+
+After training, the network does not change again. `FrozenMotionTokenizer(network, downsample,
+device)` puts it in evaluation mode and works with clips in place of tensors.
+`encode(clip)` takes a `MotionClip` with normalized features, cuts it to a multiple of
+`downsample` frames and returns `MotionTokens` with indices of shape `[steps, codebooks]` and the
+kept frame count. A clip shorter than one token step raises a `ValueError`. `decode(tokens)` gives
+a `MotionClip` back. The application reads `codebook_size` from this object to size the
+generator.
+
+## Tokenize the corpus
+
+The last step encodes the whole pretraining corpus once, so the generator never runs the
+tokenizer during its own training. `build_token_pack(tokenizer, scaler, request, excluded,
+identity)` takes the frozen tokenizer, the scaler and a `TokenizeRequest`. The request gives the
+features folder, the window length and stride, and the output file. The function cuts each clip
+into windows, skips the clip names in `excluded` (the held-out clips), encodes each window and
+writes one `.npz` file. In that file each window is an `int16` array of shape `[steps,
+codebooks]`, and one extra entry holds a JSON identity record. The record contains your `identity`
+dict, the source count and checksum, and the window settings. The function returns a short
+summary: `sequences`, `excluded`, `segments`, `token_steps` and `pack_mb`.
+
+To read a pack later, `read_pack_identity(path)` returns the identity record as a dict, so you can
+check that the pack matches the tokenizer you load. It raises a `ValueError` for a file without a
+record. `pack_clip_keys(pack)` takes the open `np.load` result and returns the window keys without
+the record entry.
+
+Every other name in the package is internal. Use the names above, and import each one from its
+file, for example `from text2motion.tokenization.nn_model import FrozenMotionTokenizer`.
