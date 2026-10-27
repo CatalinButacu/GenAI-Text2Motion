@@ -18,7 +18,7 @@ from text2motion.motion.storage import (
     is_legacy_resume,
     restore_rng_state,
 )
-from text2motion.tokenization.contracts import TokenizerTrainingRequest
+from text2motion.tokenization.contracts import TrainTokenizerRequest
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_model import (
     TokenizerNetwork,
@@ -134,7 +134,7 @@ class TokenizerTrainer:
 def train_tokenizer(
     trainer: TokenizerTrainer,
     loader,
-    request: TokenizerTrainingRequest,
+    request: TrainTokenizerRequest,
     device: str,
     evaluate: _Evaluator,
     checkpoint_path: Path,

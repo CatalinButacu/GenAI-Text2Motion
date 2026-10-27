@@ -9,7 +9,7 @@ import torch
 
 from text2motion.motion import preparation
 from text2motion.motion.normalization import MotionScaler
-from text2motion.tokenization.contracts import TokenPackRequest
+from text2motion.tokenization.contracts import TokenizeRequest
 from text2motion.tokenization.corpus import (
     PACK_IDENTITY_KEY,
     build_token_pack,
@@ -42,8 +42,12 @@ def test_the_pack_skips_excluded_clips_and_records_its_identity(tmp_path):
     features.mkdir()
     np.save(features / "kept.npy", np.zeros((40, 263), np.float32))
     np.save(features / "heldout.npy", np.zeros((40, 263), np.float32))
-    request = TokenPackRequest(
-        features_dir=features, out_path=tmp_path / "pack.npz", segment_frames=16, stride=16
+    request = TokenizeRequest(
+        config=tmp_path / "unused.yaml",
+        features_dir=features,
+        token_pack=tmp_path / "pack.npz",
+        segment_frames=16,
+        stride=16,
     )
     scaler = cast(MotionScaler, SimpleNamespace(normalize=lambda feat: feat))
 
@@ -65,8 +69,12 @@ def test_pack_readers_count_only_clip_windows(tmp_path):
     features = tmp_path / "features"
     features.mkdir()
     np.save(features / "kept.npy", np.zeros((40, 263), np.float32))
-    request = TokenPackRequest(
-        features_dir=features, out_path=tmp_path / "pack.npz", segment_frames=16, stride=16
+    request = TokenizeRequest(
+        config=tmp_path / "unused.yaml",
+        features_dir=features,
+        token_pack=tmp_path / "pack.npz",
+        segment_frames=16,
+        stride=16,
     )
     scaler = cast(MotionScaler, SimpleNamespace(normalize=lambda feat: feat))
     build_token_pack(__fake_tokenizer(), scaler, request, set(), {"tokenizer_sha256": "abc"})

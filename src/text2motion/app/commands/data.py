@@ -14,7 +14,7 @@ from text2motion.motion.preparation import (
     run_hml3d_preparation,
 )
 from text2motion.motion.storage import MEAN_FILE, SPLIT_FILES, STD_FILE, sha256_file
-from text2motion.tokenization.contracts import TokenizeRequest, TokenPackRequest
+from text2motion.tokenization.contracts import TokenizeRequest
 from text2motion.tokenization.corpus import build_token_pack
 
 logger = logging.getLogger(__name__)
@@ -65,12 +65,7 @@ def run_tokenize(app: ApplicationContext, request: TokenizeRequest) -> None:
     summary = build_token_pack(
         tokenizer,
         app.create_motion_repository().load_scaler(),
-        TokenPackRequest(
-            features_dir=request.features_dir,
-            out_path=request.token_pack,
-            segment_frames=request.segment_frames,
-            stride=request.stride,
-        ),
+        request,
         excluded,
         identity,
     )

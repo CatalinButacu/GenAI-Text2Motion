@@ -12,7 +12,7 @@ from tqdm import tqdm
 from text2motion.motion.model import MotionClip
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.storage import sha256_file
-from text2motion.tokenization.contracts import TokenPackRequest
+from text2motion.tokenization.contracts import TokenizeRequest
 from text2motion.tokenization.nn_model import FrozenMotionTokenizer
 
 PACK_IDENTITY_KEY = "__identity__"
@@ -57,7 +57,7 @@ def read_pack_identity(path: str | Path) -> dict[str, object]:
 def build_token_pack(
     tokenizer: FrozenMotionTokenizer,
     scaler: MotionScaler,
-    request: TokenPackRequest,
+    request: TokenizeRequest,
     excluded: set[str],
     identity: dict[str, object],
 ) -> dict[str, float]:
@@ -98,7 +98,7 @@ def build_token_pack(
     }
     pack[PACK_IDENTITY_KEY] = np.array(json.dumps(record, sort_keys=True))
 
-    out_path = Path(request.out_path)
+    out_path = Path(request.token_pack)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = out_path.with_name(f".{out_path.stem}.{os.getpid()}.tmp.npz")
     try:

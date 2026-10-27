@@ -59,28 +59,6 @@ class TokenizerReconstruction(NamedTuple):
     commitment_loss: torch.Tensor
 
 
-@dataclass(frozen=True)
-class TokenizerTrainingRequest:
-    epochs: int = 50
-    window: int = 64
-    batch_size: int = 128
-    ema_decay: float = 0.99
-    eval_every: int = 5
-    max_eval_clips: int | None = None
-    num_workers: int = 0
-    checkpoint_name: str | None = None
-    resume: bool = False
-    accept_legacy_resume: bool = False
-
-
-@dataclass(frozen=True)
-class TokenPackRequest:
-    features_dir: Path
-    out_path: Path
-    segment_frames: int = _MOTION_FRAMES
-    stride: int = _MOTION_FRAMES
-
-
 class TokenizeRequest(CommandRequest):
     features_dir: Path = Field(
         default=CorpusLayout().amass_features_dir,
@@ -112,31 +90,23 @@ class TrainTokenizerRequest(CommandRequest):
     tokenizer: TokenizerKind = Field(
         description="quantizer family: fsq has no learned codebook, rvq is the baseline"
     )
-    epochs: int = Field(
-        default=TokenizerTrainingRequest().epochs, description="passes over the training set"
-    )
+    epochs: int = Field(default=50, description="passes over the training set")
     window: int = Field(
-        default=TokenizerTrainingRequest().window,
+        default=64,
         description="training crop in frames; a longer crop gives more context and uses more memory",
     )
-    batch_size: int = Field(
-        default=TokenizerTrainingRequest().batch_size,
-        description="clips per step; limited by GPU memory",
-    )
+    batch_size: int = Field(default=128, description="clips per step; limited by GPU memory")
     ema_decay: float = Field(
-        default=TokenizerTrainingRequest().ema_decay,
+        default=0.99,
         description="decay of the averaged weights that are evaluated; higher is smoother and slower",
     )
-    eval_every: int = Field(
-        default=TokenizerTrainingRequest().eval_every,
-        description="epochs between reconstruction evaluations",
-    )
+    eval_every: int = Field(default=5, description="epochs between reconstruction evaluations")
     max_eval_clips: int | None = Field(
-        default=TokenizerTrainingRequest().max_eval_clips,
+        default=None,
         description="cap on evaluation clips; a low cap is faster and gives a noisier FID",
     )
     num_workers: int = Field(
-        default=TokenizerTrainingRequest().num_workers,
+        default=0,
         description="data loader processes; 0 loads in the training process and needs the least RAM",
     )
     ckpt_name: str | None = Field(

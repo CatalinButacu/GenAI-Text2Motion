@@ -7,11 +7,21 @@ import torch
 
 from text2motion.app.config import TokenizerConfig
 from text2motion.motion.storage import atomic_torch_save
-from text2motion.tokenization.contracts import TokenizerTrainingRequest
+from text2motion.tokenization.contracts import TokenizerKind, TrainTokenizerRequest
 from text2motion.tokenization.nn_model import FiniteScalarQuantizationTokenizer
 from text2motion.tokenization.trainer import TokenizerTrainer, train_tokenizer
 
 CFG = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
+
+
+def __training_request(tmp_path, resume=False) -> TrainTokenizerRequest:
+    return TrainTokenizerRequest(
+        config=tmp_path / "unused.yaml",
+        tokenizer=TokenizerKind.FINITE_SCALAR,
+        epochs=1,
+        eval_every=1,
+        resume=resume,
+    )
 
 
 class _FakeTrainer:
@@ -78,7 +88,7 @@ def test_a_non_finite_recon_fid_stops_the_run_without_a_save(tmp_path):
         train_tokenizer(
             cast(TokenizerTrainer, _FakeTrainer()),
             loader,
-            TokenizerTrainingRequest(epochs=1, eval_every=1),
+            __training_request(tmp_path),
             "cpu",
             evaluate=lambda split: dict(metrics),
             checkpoint_path=checkpoint_path,
@@ -96,7 +106,7 @@ def test_resume_without_the_resume_file_fails(tmp_path):
         train_tokenizer(
             cast(TokenizerTrainer, _FakeTrainer()),
             loader,
-            TokenizerTrainingRequest(epochs=1, eval_every=1, resume=True),
+            __training_request(tmp_path, resume=True),
             "cpu",
             evaluate=lambda split: {},
             checkpoint_path=tmp_path / "tokenizer.pt",

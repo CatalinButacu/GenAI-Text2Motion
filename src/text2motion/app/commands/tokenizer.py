@@ -12,7 +12,6 @@ from text2motion.motion.contracts import Split
 from text2motion.motion.datasets import dataset_size
 from text2motion.tokenization.contracts import (
     TokenizerKind,
-    TokenizerTrainingRequest,
     TrainTokenizerRequest,
 )
 from text2motion.tokenization.metrics import evaluate_tokenizer_reconstruction
@@ -78,18 +77,7 @@ def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) ->
     train_tokenizer(
         trainer,
         loader,
-        TokenizerTrainingRequest(
-            epochs=args.epochs,
-            window=args.window,
-            batch_size=args.batch_size,
-            ema_decay=args.ema_decay,
-            eval_every=args.eval_every,
-            max_eval_clips=args.max_eval_clips,
-            num_workers=args.num_workers,
-            checkpoint_name=name,
-            resume=args.resume,
-            accept_legacy_resume=args.accept_legacy_resume,
-        ),
+        args,
         device=app.device,
         evaluate=evaluate,
         checkpoint_path=checkpoint_dir / name,
@@ -101,7 +89,7 @@ def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) ->
     best_path = checkpoint_dir / name
     if not best_path.is_file():
         return
-    module.load_state_dict(torch.load(best_path, map_location=app.device))
+    module.load_state_dict(torch.load(best_path, map_location=app.device, weights_only=True))
     module.eval()
     metrics = evaluate(Split.TEST)
     log_metrics(
