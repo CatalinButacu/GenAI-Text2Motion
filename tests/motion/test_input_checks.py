@@ -10,7 +10,7 @@ from text2motion.motion.datasets import (
     collate_motion_clips,
 )
 from text2motion.motion.model import MotionClip
-from text2motion.motion.normalization import MotionScaler
+from text2motion.motion.normalization import MotionScaler, load_clips
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import (
     FEATURES_DIR,
@@ -158,3 +158,22 @@ def test_streamed_recovery_accepts_cuda_features():
     on_cuda = representation.StreamingSkeletonRecovery()(features.cuda())
 
     np.testing.assert_allclose(on_cuda, on_cpu, atol=1e-5)
+
+
+@pytest.mark.parametrize(
+    ("bad", "error", "match"),
+    [
+        (None, FileNotFoundError, "no feature file"),
+        (np.array([[np.nan, 0.0]], np.float32), ValueError, "NaN or Inf"),
+        (np.array([[np.inf, 0.0]], np.float32), ValueError, "NaN or Inf"),
+        (np.zeros((0, 2), np.float32), ValueError, "empty"),
+    ],
+    ids=["missing", "nan", "inf", "empty"],
+)
+def test_fitting_statistics_refuses_a_missing_or_bad_train_clip(tmp_path, bad, error, match):
+    np.save(tmp_path / "good.npy", np.ones((3, 2), np.float32))
+    if bad is not None:
+        np.save(tmp_path / "bad.npy", bad)
+
+    with pytest.raises(error, match=match):
+        load_clips(tmp_path, ["good", "bad"])

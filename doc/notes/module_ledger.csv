@@ -16,3 +16,4 @@ date,module,kind,item,change,evidence
 2026-10-30,motion,fix,N8,root recovery keeps the input dtype (float64 input gave float32 zeros),same test file; float32 path unchanged
 2026-10-30,motion,fix,A20,recover_from_rot flattens the root positions like the rotations and returns the batch shape; the get_offsets_joints side effect that the generator loss uses is kept,E2 now passes without its expected-failure mark
 2026-10-30,motion,fix,A21,RAW_OFFSETS is read-only; its readers copy it with torch.tensor; Skeleton keeps its own numpy copy,tests/motion/test_representation_recovery.py; no torch not-writable warning with warnings as errors
+2026-10-30,motion,fix,A10,load_clips raises for missing train clips and for empty / non 2-D / NaN / Inf clips in place of skipping them,tests/motion/test_input_checks.py; all 23384 real train clips still load

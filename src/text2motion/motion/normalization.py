@@ -105,16 +105,22 @@ def read_split_names(split_path: Path) -> list[str]:
 
 
 def load_clips(vec_dir: Path, names: list[str]) -> list[np.ndarray]:
-    clips = []
-    for name in sorted(set(names)):
-        path = vec_dir / f"{name}.npy"
-        if not path.is_file():
-            continue
-        array = np.load(path)
-        if np.isnan(array).any():
-            logger.info(f"NaN feature, skipping: {name}")
-            continue
-        clips.append(array)
+    unique = sorted(set(names))
+    missing = [name for name in unique if not (vec_dir / f"{name}.npy").is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"{len(missing)} train clips have no feature file under {vec_dir}: {missing[:10]}"
+        )
+    clips = [np.load(vec_dir / f"{name}.npy") for name in unique]
+    malformed = [
+        name
+        for name, clip in zip(unique, clips, strict=True)
+        if clip.ndim != 2 or clip.shape[0] == 0 or not np.isfinite(clip).all()
+    ]
+    if malformed:
+        raise ValueError(
+            f"{len(malformed)} train clips are empty, not 2-D, or hold NaN or Inf: {malformed[:10]}"
+        )
     return clips
 
 
