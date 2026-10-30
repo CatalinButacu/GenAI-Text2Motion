@@ -203,15 +203,14 @@ def test_a_release_motion_must_be_finite_frames_of_263(motion):
 
 
 def test_the_official_conversion_refuses_a_name_in_two_splits(tmp_path):
-    import pyarrow as pa
-    import pyarrow.parquet as pq
+    import pandas as pd
 
     source = tmp_path / "release"
     source.mkdir()
     for split in Split:
         motion = np.zeros((4, 263), np.float32).tolist()
-        table = pa.table({"motion": [motion], "meta_data": [{"name": "000007"}]})
-        pq.write_table(table, source / f"{split.value}-00000.parquet")
+        frame = pd.DataFrame({"motion": [motion], "meta_data": [{"name": "000007"}]})
+        frame.to_parquet(source / f"{split.value}-00000.parquet")
 
     with pytest.raises(ValueError, match="000007 appears in"):
         preparation.write_motions(source, tmp_path / "out")

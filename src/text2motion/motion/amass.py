@@ -116,6 +116,17 @@ def heldout_sources(index_csv: Path, out_dir: Path, pose_root: Path) -> set[Path
     return excluded
 
 
+def resolve_gender(value: object) -> Gender:
+    raw = value.item() if isinstance(value, np.ndarray) else value
+    text = raw.decode() if isinstance(raw, bytes) else str(raw)
+    try:
+        return Gender(text.strip().lower())
+    except ValueError as error:
+        raise ValueError(
+            f"unknown AMASS gender {value!r}; expected one of {list(Gender)}"
+        ) from error
+
+
 def resolve_model_root(smplx_dir: Path) -> Path:
     if (smplx_dir / "smplx").is_dir():
         return smplx_dir
@@ -181,8 +192,7 @@ class AmassPoseExtractor:
         }
 
     def __model(self, gender: object):
-        value = gender.decode() if isinstance(gender, bytes) else str(gender)
-        return self._models.get(value, self._models[Gender.FEMALE.value])
+        return self._models[resolve_gender(gender).value]
 
     def to_float_tensor(self, array: np.ndarray) -> torch.Tensor:
         return torch.as_tensor(array, dtype=torch.float32, device=self.device)
@@ -242,6 +252,11 @@ class AmassPoseExtractor:
             body = np.asarray(data["pose_body"][sample], dtype=np.float32)
             hand = np.asarray(data["pose_hand"][sample], dtype=np.float32)
             trans = np.asarray(data["trans"][sample], dtype=np.float32)
+            if np.asarray(data["betas"]).shape[0] < self._beta_count:
+                raise ValueError(
+                    f"{src_path}: {np.asarray(data['betas']).shape[0]} betas, the model needs "
+                    f"{self._beta_count}"
+                )
             betas = np.asarray(data["betas"][: self._beta_count], dtype=np.float32)
             model = self.__model(data["gender"])
 
@@ -266,4 +281,6 @@ class AmassPoseExtractor:
             )
         joints = torch.cat(chunks, dim=0)
         y_up_joints = torch.stack((joints[..., 0], joints[..., 2], joints[..., 1]), dim=-1)
+        if not torch.isfinite(y_up_joints).all():
+            raise ValueError(f"{src_path}: the extracted joints hold NaN or Inf values")
         return y_up_joints.cpu().numpy()

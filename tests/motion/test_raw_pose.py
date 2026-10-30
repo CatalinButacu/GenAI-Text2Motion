@@ -7,7 +7,8 @@ import pytest
 import torch
 
 from text2motion.app.config import load_config
-from text2motion.motion.amass import AmassPoseExtractor
+from text2motion.motion.amass import AmassPoseExtractor, resolve_gender
+from text2motion.motion.model import Gender
 
 
 class RecordingSmplx:
@@ -134,3 +135,67 @@ def test_smplx_amass_extractor_real_file():
     assert joints is not None
     assert joints.ndim == 3 and joints.shape[1:] == (22, 3)
     assert np.isfinite(joints).all()
+
+
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        (np.array(b"male"), Gender.MALE),
+        (np.array("female"), Gender.FEMALE),
+        (b"neutral", Gender.NEUTRAL),
+        (" Male ", Gender.MALE),
+    ],
+    ids=["bytes_array", "text_array", "bytes", "spaces_and_case"],
+)
+def test_the_stored_gender_is_decoded(stored, expected):
+    assert resolve_gender(stored) is expected
+
+
+def test_an_unknown_gender_raises():
+    with pytest.raises(ValueError, match="unknown AMASS gender"):
+        resolve_gender(np.array(b"robot"))
+
+
+def __write_capture(path, gender, betas, trans) -> None:
+    frames = trans.shape[0]
+    np.savez(
+        path,
+        root_orient=np.zeros((frames, 3), dtype=np.float32),
+        pose_body=np.zeros((frames, 63), dtype=np.float32),
+        pose_hand=np.zeros((frames, 90), dtype=np.float32),
+        trans=trans,
+        betas=betas,
+        gender=gender,
+        mocap_frame_rate=np.float32(20),
+    )
+
+
+def test_a_bytes_gender_reaches_the_model_of_that_gender(tmp_path):
+    models = {gender: RecordingSmplx() for gender in ("neutral", "male", "female")}
+    extractor = __recording_extractor(models["neutral"])
+    extractor._models = models
+    source = tmp_path / "clip.npz"
+    __write_capture(
+        source, np.array(b"male"), np.zeros(16, np.float32), np.ones((4, 3), np.float32)
+    )
+
+    extractor.extract(source)
+
+    assert models["male"].calls
+    assert not models["female"].calls
+
+
+@pytest.mark.parametrize(
+    ("betas", "trans", "match"),
+    [
+        (np.zeros(10, np.float32), np.ones((4, 3), np.float32), "betas"),
+        (np.zeros(16, np.float32), np.full((4, 3), np.nan, np.float32), "NaN or Inf"),
+    ],
+    ids=["too_few_betas", "nan_joints"],
+)
+def test_an_unusable_capture_raises(tmp_path, betas, trans, match):
+    source = tmp_path / "clip.npz"
+    __write_capture(source, np.array(b"neutral"), betas, trans)
+
+    with pytest.raises(ValueError, match=match):
+        __recording_extractor(RecordingSmplx()).extract(source)

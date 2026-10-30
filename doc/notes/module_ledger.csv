@@ -26,3 +26,6 @@ date,module,kind,item,change,evidence
 2026-10-30,motion,fix,A8,the corpus records a (size; mtime) fingerprint per source and refuses to reuse a feature whose source changed,same test file
 2026-10-30,motion,fix,A11,manifests are honest: a limited corpus build and an index stage with missing files are not complete; an empty pose tree raises,tests/motion/test_corpus_manifest.py and test_hml3d_stages.py
 2026-10-30,motion,fix,A12a,an official release motion must be a finite [frames; 263] array,tests/motion/test_corpus_manifest.py
+2026-10-30,motion,fix,A1,AMASS gender decoded from 0-d bytes or text arrays and an unknown value raises (a bytes array fell back to the female model); fewer than 16 betas raise; POSE_VERSION 2,tests/motion/test_raw_pose.py; no raw AMASS on disk so no existing data changes
+2026-10-30,motion,fix,A12b,the AMASS extraction raises for NaN or Inf joints,tests/motion/test_raw_pose.py
+2026-10-30,motion,finding,DATA,pose_data has no pose manifest and raw AMASS is not on disk; the corpus cannot be rebuilt; final pretraining uses the legacy AMASS_263 features with held-out names excluded at pack time,complete_pose_recipe requires the manifest
