@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 import torch
@@ -8,6 +10,7 @@ from text2motion.motion.datasets import (
     CaptionedMotionDataset,
     MotionWindowDataset,
     collate_motion_clips,
+    parse_text_file,
 )
 from text2motion.motion.model import MotionClip
 from text2motion.motion.normalization import MotionScaler, load_clips
@@ -19,6 +22,7 @@ from text2motion.motion.storage import (
     STD_FILE,
     TEXTS_DIR,
     atomic_numpy_save,
+    clip_frame_counts,
 )
 
 
@@ -177,3 +181,40 @@ def test_fitting_statistics_refuses_a_missing_or_bad_train_clip(tmp_path, bad, e
 
     with pytest.raises(error, match=match):
         load_clips(tmp_path, ["good", "bad"])
+
+
+@pytest.mark.parametrize("times", ["inf#0.0", "0.0#-1.0"], ids=["infinite", "negative"])
+def test_a_caption_with_infinite_or_negative_times_raises(tmp_path, times):
+    path = tmp_path / "A.txt"
+    path.write_text(f"a person walks#a/DET#{times}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="finite and not negative"):
+        parse_text_file(path)
+
+
+def test_a_caption_with_nan_times_keeps_the_official_zero(tmp_path):
+    path = tmp_path / "A.txt"
+    path.write_text("a person walks#a/DET#nan#nan\n", encoding="utf-8")
+    annotation = parse_text_file(path)[0]
+    assert (annotation.start_time, annotation.end_time) == (0.0, 0.0)
+
+
+def test_a_window_dataset_records_the_clips_it_drops(tmp_path):
+    dataset = MotionWindowDataset(
+        __small_dataset_root(tmp_path), MotionDataConfig(mirror_augment=False), Split.TRAIN, 70
+    )
+    assert dataset.dropped_clip_ids == ["A"]
+
+
+def test_the_frame_count_cache_rereads_an_equal_size_replacement(tmp_path):
+    vec_dir = tmp_path / FEATURES_DIR
+    vec_dir.mkdir()
+    path = vec_dir / "A.npy"
+    np.save(path, np.zeros((80, DIM), np.float32))
+    assert clip_frame_counts(vec_dir, ["A"]) == {"A": 80}
+    size = path.stat().st_size
+    np.save(path, np.zeros((40, DIM), np.float64))
+    stat = path.stat()
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+
+    assert path.stat().st_size == size
+    assert clip_frame_counts(vec_dir, ["A"]) == {"A": 40}

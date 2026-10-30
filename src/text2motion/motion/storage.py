@@ -167,16 +167,19 @@ def clip_frame_counts(vec_dir: Path, clip_ids: list[str]) -> dict[str, int]:
         path = vec_dir / f"{clip_id}.npy"
         if not path.is_file():
             continue
-        size = path.stat().st_size
+        stat = path.stat()
+        identity = [stat.st_size, stat.st_mtime_ns]
         entry = cache.get(clip_id)
-        if entry is not None and entry[1] == size:
+        if entry is not None and entry[1:] == identity:
             lengths[clip_id] = entry[0]
             continue
         length = int(np.load(path, mmap_mode="r").shape[0])
         lengths[clip_id] = length
-        cache[clip_id] = [length, size]
+        cache[clip_id] = [length, *identity]
         dirty = True
 
     if dirty:
-        cache_path.write_text(json.dumps(cache), encoding="utf-8")
+        temporary = cache_path.with_name(f".{cache_path.name}.{os.getpid()}.tmp")
+        temporary.write_text(json.dumps(cache), encoding="utf-8")
+        temporary.replace(cache_path)
     return lengths

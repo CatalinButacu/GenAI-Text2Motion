@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Sized
 from multiprocessing import RawValue
 from pathlib import Path
@@ -19,6 +20,8 @@ from text2motion.motion.storage import (
     item_rng,
     split_clip_ids,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def check_no_missing_files(kind: str, clip_ids: list[str]) -> None:
@@ -53,7 +56,10 @@ class CaptionedMotionDataset(Dataset):
         self._text_dir = Path(texts_dir) if texts_dir is not None else root / TEXTS_DIR
         self.scaler = MotionScaler.load(root, dim=DIM)
 
-        self._ids = self.__select_usable_clip_ids(split_clip_ids(root, split))
+        self._ids, self.dropped_clip_ids = self.__select_usable_clip_ids(
+            split_clip_ids(root, split)
+        )
+        log_dropped_clips(self.dropped_clip_ids, f"shorter than {self._min_len} frames")
         if not self._ids:
             raise RuntimeError(f"no usable clips for split {split!r} under {self._vec_dir}")
         uncaptioned = self.__clips_without_usable_caption()
@@ -78,7 +84,7 @@ class CaptionedMotionDataset(Dataset):
     def __clip_id_variants(self, name: str) -> list[str]:
         return [name, f"M{name}"] if self._mirror else [name]
 
-    def __select_usable_clip_ids(self, names: list[str]) -> list[str]:
+    def __select_usable_clip_ids(self, names: list[str]) -> tuple[list[str], list[str]]:
         candidates = [clip_id for name in names for clip_id in self.__clip_id_variants(name)]
         lengths = clip_frame_counts(self._vec_dir, candidates)
         check_no_missing_files(
@@ -88,7 +94,9 @@ class CaptionedMotionDataset(Dataset):
             "caption",
             [c for c in candidates if not (self._text_dir / f"{c}.txt").is_file()],
         )
-        return [clip_id for clip_id in candidates if lengths[clip_id] >= self._min_len]
+        kept = [clip_id for clip_id in candidates if lengths[clip_id] >= self._min_len]
+        dropped = [clip_id for clip_id in candidates if lengths[clip_id] < self._min_len]
+        return kept, dropped
 
     def set_epoch(self, epoch: int) -> None:
         self._epoch.value = int(epoch)
@@ -195,15 +203,21 @@ class MotionWindowDataset(Dataset):
         root = Path(root)
         self._vec_dir = root / FEATURES_DIR
         self.scaler = MotionScaler.load(root, dim=DIM)
-        self._ids, self._cache = self.__load_windowable_clips(split_clip_ids(root, split))
+        self._ids, self._cache, self.dropped_clip_ids = self.__load_windowable_clips(
+            split_clip_ids(root, split)
+        )
+        log_dropped_clips(self.dropped_clip_ids, f"shorter than the window of {window} frames")
         if not self._ids:
             raise RuntimeError(f"no clips >= window {window} for split {split!r}")
         self._overflows = np.array([clip.shape[0] - window for clip in self._cache], np.int64)
         self._starts = self._overflows // 2
         self._starts_epoch = -1
 
-    def __load_windowable_clips(self, names: list[str]) -> tuple[list[str], list[np.ndarray]]:
+    def __load_windowable_clips(
+        self, names: list[str]
+    ) -> tuple[list[str], list[np.ndarray], list[str]]:
         ids: list[str] = []
+        short: list[str] = []
         clips: list[np.ndarray] = []
         non_finite: list[str] = []
         variants = [v for name in names for v in ([name, f"M{name}"] if self._mirror else [name])]
@@ -213,6 +227,7 @@ class MotionWindowDataset(Dataset):
         for clip_id in variants:
             feat = np.load(self._vec_dir / f"{clip_id}.npy").astype(np.float32)
             if feat.shape[0] < self._window:
+                short.append(clip_id)
                 continue
             if not np.isfinite(feat).all():
                 non_finite.append(clip_id)
@@ -225,7 +240,7 @@ class MotionWindowDataset(Dataset):
                 f"{len(non_finite)} non-finite clips in this split; drop them from the split list: "
                 f"{non_finite[:20]}{suffix}"
             )
-        return ids, clips
+        return ids, clips, short
 
     def set_epoch(self, epoch: int) -> None:
         self._epoch.value = int(epoch)
@@ -305,6 +320,11 @@ def collate_motion_clips(clips: list[MotionClip]) -> MotionBatch:
     )
 
 
+def log_dropped_clips(dropped: list[str], reason: str) -> None:
+    if dropped:
+        logger.info(f"dropped {len(dropped)} clips {reason} (first: {dropped[:5]})")
+
+
 def parse_text_file(path: Path) -> list[TextAnnotation]:
     annotations: list[TextAnnotation] = []
     for raw_line in path.read_text(encoding="utf-8").splitlines():
@@ -317,6 +337,10 @@ def parse_text_file(path: Path) -> list[TextAnnotation]:
         caption, tokens, start, end = parts[0], parts[1], parts[2], parts[3]
         start_time = float(start)
         end_time = float(end)
+        if np.isinf(start_time) or np.isinf(end_time) or start_time < 0 or end_time < 0:
+            raise ValueError(
+                f"caption times must be finite and not negative in {path}: {raw_line!r}"
+            )
         annotations.append(
             TextAnnotation(
                 caption=caption,
