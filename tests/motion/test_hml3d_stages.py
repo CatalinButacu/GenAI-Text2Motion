@@ -79,3 +79,32 @@ def test_the_index_stage_records_clips_without_a_pose_file(tmp_path, monkeypatch
     assert manifest["written"] == 1
     assert (layout.joints / "000100.npy").is_file()
     assert (layout.joints / "M000100.npy").is_file()
+
+
+def test_the_index_stage_refuses_bad_crop_bounds_and_marks_missing_files(tmp_path, monkeypatch):
+    layout = __layout(tmp_path, monkeypatch)
+    pose = tmp_path / "walk.npy"
+    np.save(pose, np.zeros((50, 22, 3), np.float32))
+    index = tmp_path / "index.csv"
+    index.write_text(
+        "source_path,new_name,start_frame,end_frame\n"
+        "./pose_data/ACCAD/walk.npy,000100.npy,0,20\n"
+        "./pose_data/ACCAD/walk.npy,000102.npy,-1,20\n"
+        "./pose_data/ACCAD/walk.npy,000103.npy,20,20\n"
+        "./pose_data/ACCAD/walk.npy,000104.npy,49,60\n"
+        "./pose_data/ACCAD/gone.npy,000101.npy,0,20\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        preparation, "resolve_pose_path", lambda source, root: pose if "walk" in source else None
+    )
+    request = PreparationRequest(out_dir=tmp_path, index_csv=index)
+
+    with pytest.raises(ValueError, match="bad crop bounds"):
+        preparation.build_indexed_joint_clips(request, layout)
+
+    manifest = __manifest(tmp_path / preparation.INDEX_MANIFEST)
+    assert manifest["invalid_names"] == ["000102.npy", "000103.npy", "000104.npy"]
+    assert manifest["missing_names"] == ["000101.npy"]
+    assert manifest["complete"] is False
+    assert (layout.joints / "000100.npy").is_file()

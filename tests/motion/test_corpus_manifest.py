@@ -1,4 +1,6 @@
 import json
+import os
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -139,3 +141,77 @@ def test_failures_finish_the_build_then_raise_with_the_names(tmp_path, monkeypat
     assert manifest["complete"] is False
     assert manifest["failed_names"] == ["ACCAD__bad_stageii.npy"]
     assert manifest["written"] == 2
+
+
+def test_the_minimum_length_applies_to_the_encoded_frames(tmp_path, monkeypatch):
+    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+
+    summary = preparation.build_amass_pretraining_corpus(request, regen, out_dir, 40)
+
+    assert summary["skipped_short"] == 1
+    assert summary["written"] == 1
+
+
+def test_a_reused_feature_with_a_changed_source_is_refused(tmp_path, monkeypatch):
+    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
+    source = regen / "pose_data" / "ACCAD" / "walk_stageii.npy"
+    stat = source.stat()
+    os.utime(source, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+
+    with pytest.raises(ValueError, match="changed or is not recorded"):
+        preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
+
+
+def test_a_limited_build_is_not_complete(tmp_path, monkeypatch):
+    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+
+    preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10, limit=1)
+
+    assert __manifest(out_dir)["complete"] is False
+    assert __manifest(out_dir)["limit"] == 1
+
+
+def test_a_missing_reference_clip_stops_the_build(tmp_path, monkeypatch):
+    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    (regen / "joints" / "000021.npy").unlink()
+
+    with pytest.raises(FileNotFoundError, match="000021"):
+        preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
+
+
+def test_another_fps_stops_the_build(tmp_path, monkeypatch):
+    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+
+    with pytest.raises(ValueError, match="fps=30"):
+        preparation.build_amass_pretraining_corpus(replace(request, fps=30), regen, out_dir, 10)
+
+
+def test_two_pose_files_with_one_corpus_name_are_refused():
+    with pytest.raises(ValueError, match="more than one pose file"):
+        preparation.check_unique_names(["a__b.npy", "c.npy", "a__b.npy"])
+
+
+@pytest.mark.parametrize(
+    "motion",
+    [np.zeros((0, 263)), np.zeros(263), np.full((2, 263), np.nan)],
+    ids=["empty", "one_dimension", "nan"],
+)
+def test_a_release_motion_must_be_finite_frames_of_263(motion):
+    with pytest.raises(ValueError):
+        preparation.checked_release_motion("000001", motion)
+
+
+def test_the_official_conversion_refuses_a_name_in_two_splits(tmp_path):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    source = tmp_path / "release"
+    source.mkdir()
+    for split in Split:
+        motion = np.zeros((4, 263), np.float32).tolist()
+        table = pa.table({"motion": [motion], "meta_data": [{"name": "000007"}]})
+        pq.write_table(table, source / f"{split.value}-00000.parquet")
+
+    with pytest.raises(ValueError, match="000007 appears in"):
+        preparation.write_motions(source, tmp_path / "out")

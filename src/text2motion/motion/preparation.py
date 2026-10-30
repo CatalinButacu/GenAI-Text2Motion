@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,7 +40,7 @@ logger = logging.getLogger(__name__)
 NPY_FILES = "*.npy"
 CORPUS_MANIFEST = "corpus_manifest.json"
 CORPUS_FORMAT = "text2motion.amass_corpus"
-CORPUS_VERSION = 1
+CORPUS_VERSION = 2
 POSE_MANIFEST = "pose_manifest.json"
 INDEX_MANIFEST = "index_manifest.json"
 FEATURES_MANIFEST = "features_manifest.json"
@@ -48,6 +49,7 @@ POSE_VERSION = 1
 _ADOPT_SAMPLE = 20
 _ADOPT_TOLERANCE = 1e-4
 _REFERENCE_CLIP_ID = "000021"
+_HML3D_FPS = 20
 _RIGHT_CHAIN = (2, 5, 8, 11, 14, 17, 19, 21)
 _LEFT_CHAIN = (1, 4, 7, 10, 13, 16, 18, 20)
 _LEFT_HAND_CHAIN = (22, 23, 24, 34, 35, 36, 25, 26, 27, 31, 32, 33, 28, 29, 30)
@@ -71,12 +73,29 @@ def __parquet_module():
     return pq
 
 
+def checked_release_motion(name: str, motion) -> np.ndarray:
+    feature = np.asarray(motion, dtype=np.float32)
+    if feature.ndim != 2 or feature.shape[0] == 0 or feature.shape[-1] != DIM:
+        raise ValueError(f"{name}: expected [frames, {DIM}], got {feature.shape}")
+    if not np.isfinite(feature).all():
+        raise ValueError(f"{name}: the motion holds NaN or Inf values")
+    return feature
+
+
+def check_hml3d_fps(fps: int) -> None:
+    if fps != _HML3D_FPS:
+        raise ValueError(
+            f"the HumanML3D index frames and feature constants are {_HML3D_FPS} fps; got fps={fps}"
+        )
+
+
 def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
     pq = __parquet_module()
 
     vec_dir = out_dir / FEATURES_DIR
     vec_dir.mkdir(parents=True, exist_ok=True)
     split_names: dict[str, list[str]] = {split: [] for split in Split}
+    seen: dict[str, str] = {}
 
     for split in Split:
         files = __parquet_files(src, split)
@@ -90,10 +109,13 @@ def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
                 rows = batch.to_pydict()
                 for motion, meta in zip(rows["motion"], rows["meta_data"], strict=True):
                     name = meta["name"]
-                    feature = np.asarray(motion, dtype=np.float32)
-                    if feature.shape[-1] != DIM:
-                        raise ValueError(f"{name}: expected {DIM}-dim, got {feature.shape}")
-                    np.save(vec_dir / f"{name}.npy", feature)
+                    if name in seen:
+                        raise ValueError(
+                            f"{name} appears in {seen[name]!r} and again in {split!r}; "
+                            "one feature file cannot belong to two splits"
+                        )
+                    seen[name] = split
+                    atomic_numpy_save(checked_release_motion(name, motion), vec_dir / f"{name}.npy")
                     split_names[split].append(name)
 
     for split, names in split_names.items():
@@ -258,6 +280,7 @@ def build_indexed_joint_clips(
 
     written = 0
     missing: list[str] = []
+    invalid: list[str] = []
     for i in tqdm(range(index_file.shape[0]), desc="index->joints"):
         source_path = index_file.loc[i]["source_path"]
         new_name = index_file.loc[i]["new_name"]
@@ -274,8 +297,14 @@ def build_indexed_joint_clips(
             trim = head_trim_frames(source_path, fps)
             if trim:
                 data = data[trim:]
+            if start_frame < 0 or end_frame <= start_frame:
+                invalid.append(str(new_name))
+                continue
             data = data[start_frame:end_frame]
             data[..., 0] *= -1
+        if data.shape[0] < 2:
+            invalid.append(str(new_name))
+            continue
 
         data_m = swap_left_right(data)
         atomic_numpy_save(data, layout.joints / f"{new_name}")
@@ -283,8 +312,19 @@ def build_indexed_joint_clips(
         written += 1
 
     recipe = {"index_sha256": sha256_file(Path(request.index_csv)), "fps": fps}
-    status = {"written": written, "missing": len(missing), "missing_names": missing}
-    write_manifest(layout.out_dir / INDEX_MANIFEST, recipe, {**status, "complete": True})
+    status = {
+        "written": written,
+        "missing": len(missing),
+        "missing_names": missing,
+        "invalid_names": invalid,
+        "complete": not missing and not invalid,
+    }
+    write_manifest(layout.out_dir / INDEX_MANIFEST, recipe, status)
+    if invalid:
+        raise ValueError(
+            f"index->joints: {len(invalid)} rows have bad crop bounds or fewer than 2 frames "
+            f"(names in {INDEX_MANIFEST}); first: {invalid[:3]}"
+        )
     if missing:
         logger.warning(
             f"index->joints: {len(missing)} of {len(index_file)} clips have no pose file "
@@ -358,6 +398,7 @@ def run_hml3d_preparation(
     adopt_pose_folder: bool = False,
 ) -> None:
     stage = PreparationStage(stage)
+    check_hml3d_fps(request.fps)
     layout = Hml3dPreparationLayout(Path(request.out_dir))
     layout.mkdirs()
 
@@ -369,6 +410,25 @@ def run_hml3d_preparation(
         encode_joint_clips_to_hml3d263(request, layout)
     if stage in (PreparationStage.STATS, PreparationStage.ALL):
         compute_hml3d_normalization_stats(layout, request.joint_count)
+
+
+def source_fingerprint(path: Path) -> list[int]:
+    stat = path.stat()
+    return [stat.st_size, stat.st_mtime_ns]
+
+
+def __stored_fingerprints(manifest_path: Path) -> dict[str, list[int]]:
+    if not manifest_path.is_file():
+        return {}
+    return json.loads(manifest_path.read_text(encoding="utf-8")).get("source_fingerprints", {})
+
+
+def check_unique_names(names: list[str]) -> None:
+    repeated = sorted(name for name, count in Counter(names).items() if count > 1)
+    if repeated:
+        raise ValueError(
+            f"{len(repeated)} corpus names come from more than one pose file: {repeated[:3]}"
+        )
 
 
 def corpus_feature_name(pose_path: Path, pose_root: Path) -> str:
@@ -389,12 +449,12 @@ def heldout_feature_names(index_csv: Path, out_dir: Path, pose_root: Path) -> se
 
 def __reference_joints_path(joints_dir: Path) -> Path:
     preferred = joints_dir / f"{_REFERENCE_CLIP_ID}.npy"
-    if preferred.is_file():
-        return preferred
-    candidates = sorted(joints_dir.glob("[0-9]*.npy"))
-    if not candidates:
-        raise FileNotFoundError(f"no reference joints in {joints_dir}")
-    return candidates[0]
+    if not preferred.is_file():
+        raise FileNotFoundError(
+            f"{preferred} missing; the official HumanML3D skeleton reference is clip "
+            f"{_REFERENCE_CLIP_ID}, and another clip would change every bone length"
+        )
+    return preferred
 
 
 def complete_pose_recipe(pose_root: Path) -> dict[str, object]:
@@ -465,7 +525,7 @@ def __corpus_features(
     joints = np.load(src)[:, : request.joint_count]
     trim = head_trim_frames(src.relative_to(pose_root), request.fps)
     joints = joints[trim:].copy()
-    if joints.shape[0] < min_frames:
+    if joints.shape[0] - 1 < min_frames:
         return None
     joints[..., 0] *= -1
     features, _, _, _ = encode_joints(joints, params)
@@ -488,6 +548,7 @@ def build_amass_pretraining_corpus(
         )
     if request.index_csv is None:
         raise ValueError("index_csv must be set (the leakage guard needs the official index)")
+    check_hml3d_fps(request.fps)
     index_csv = Path(request.index_csv)
     reference_path = __reference_joints_path(regen_dir / "joints")
     joint_count = request.joint_count
@@ -507,12 +568,19 @@ def build_amass_pretraining_corpus(
             f"{len(present)} heldout files are already in {vec_dir} (first: {present[:3]}); "
             "build into a new folder"
         )
-    vec_dir.mkdir(parents=True, exist_ok=True)
-    write_manifest(manifest_path, recipe, {"complete": False})
-
+    previous_fingerprints = __stored_fingerprints(manifest_path)
     sources = sorted(pose_root.rglob(NPY_FILES))
+    if not sources:
+        raise FileNotFoundError(f"no pose files under {pose_root}")
     if limit:
         sources = sources[:limit]
+    names = [corpus_feature_name(src, pose_root) for src in sources]
+    check_unique_names(names)
+    fingerprints = {name: source_fingerprint(src) for name, src in zip(names, sources, strict=True)}
+    vec_dir.mkdir(parents=True, exist_ok=True)
+    write_manifest(
+        manifest_path, recipe, {"complete": False, "source_fingerprints": previous_fingerprints}
+    )
     counts = {"written": 0, "reused": 0, "skipped_heldout": 0, "skipped_short": 0, "frames": 0}
     failed: list[str] = []
     for src in tqdm(sources, desc="pose->263 (all AMASS)"):
@@ -522,6 +590,11 @@ def build_amass_pretraining_corpus(
             continue
         save_path = vec_dir / name
         if save_path.is_file():
+            if previous_fingerprints.get(name) != fingerprints[name]:
+                raise ValueError(
+                    f"{save_path} exists, but its source {src} changed or is not recorded; "
+                    "build into a new folder"
+                )
             counts["reused"] += 1
             counts["frames"] += int(np.load(save_path, mmap_mode="r").shape[0])
             continue
@@ -544,7 +617,15 @@ def build_amass_pretraining_corpus(
         "hours": round(counts["frames"] / request.fps / 3600, 2),
     }
     write_manifest(
-        manifest_path, recipe, {**summary, "complete": not failed, "failed_names": failed}
+        manifest_path,
+        recipe,
+        {
+            **summary,
+            "limit": limit,
+            "complete": not failed and not limit,
+            "failed_names": failed,
+            "source_fingerprints": fingerprints,
+        },
     )
     if failed:
         raise RuntimeError(

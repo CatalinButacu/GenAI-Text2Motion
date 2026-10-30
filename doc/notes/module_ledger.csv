@@ -17,3 +17,12 @@ date,module,kind,item,change,evidence
 2026-10-30,motion,fix,A20,recover_from_rot flattens the root positions like the rotations and returns the batch shape; the get_offsets_joints side effect that the generator loss uses is kept,E2 now passes without its expected-failure mark
 2026-10-30,motion,fix,A21,RAW_OFFSETS is read-only; its readers copy it with torch.tensor; Skeleton keeps its own numpy copy,tests/motion/test_representation_recovery.py; no torch not-writable warning with warnings as errors
 2026-10-30,motion,fix,A10,load_clips raises for missing train clips and for empty / non 2-D / NaN / Inf clips in place of skipping them,tests/motion/test_input_checks.py; all 23384 real train clips still load
+2026-10-30,motion,fix,A2,the corpus and feature stages require the official reference clip 000021 (no silent fallback to another skeleton),tests/motion/test_corpus_manifest.py; 000021 exists in data/HumanML3D_263/joints
+2026-10-30,motion,fix,A3,HumanML3D preparation and the corpus build raise for fps other than 20,same test file
+2026-10-30,motion,fix,A4,the index stage refuses a negative start / empty range / slice under 2 frames and lists them; an end past the clip is still clamped as in the official code,tests/motion/test_hml3d_stages.py
+2026-10-30,motion,fix,A5,the corpus minimum length applies to the encoded frames (joints - 1); CORPUS_VERSION 1 -> 2 so an old corpus folder is refused,tests/motion/test_corpus_manifest.py; changes boundary clips at the next corpus rebuild only
+2026-10-30,motion,fix,A6,two pose files that map to one corpus name are refused before any write,same test file
+2026-10-30,motion,fix,A7,the official conversion refuses a clip name repeated across splits and writes atomically,tests/motion/test_corpus_manifest.py (two parquet splits with one name); no repeated names in the current release
+2026-10-30,motion,fix,A8,the corpus records a (size; mtime) fingerprint per source and refuses to reuse a feature whose source changed,same test file
+2026-10-30,motion,fix,A11,manifests are honest: a limited corpus build and an index stage with missing files are not complete; an empty pose tree raises,tests/motion/test_corpus_manifest.py and test_hml3d_stages.py
+2026-10-30,motion,fix,A12a,an official release motion must be a finite [frames; 263] array,tests/motion/test_corpus_manifest.py
