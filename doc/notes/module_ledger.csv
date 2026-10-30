@@ -1,0 +1,7 @@
+date,module,kind,item,change,evidence
+2026-10-30,motion,test,E1,recovery from ric reproduces the encoded global joints,max error 6e-8 on synthetic joints; tests/motion/test_representation_recovery.py
+2026-10-30,motion,test,E3,streamed recovery equals whole recovery for chunks of 1 3 7 16 frames,max error 6e-8; same test file; real data: 7.2e-7 m on 50 val clips
+2026-10-30,motion,test,E2,batched recover_from_rot pinned as a strict expected failure until A20,RuntimeError on a batch of 2; same test file
+2026-10-30,motion,test,E4,mirroring twice gives back the input for 22 and 52 joints,exact equality; same test file
+2026-10-30,motion,decision,B1-B4,kept official HumanML3D behavior (face-joint order; mirrors in stats; end-time drop; no arcsin clip),checked against the official HumanML3D and text-to-motion code by 4 reviewers
+2026-10-30,motion,decision,C3,streaming yaw is a half angle by the official convention; no math change,streamed equals whole recovery (E3)

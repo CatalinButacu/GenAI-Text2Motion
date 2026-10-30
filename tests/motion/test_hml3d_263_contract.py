@@ -13,21 +13,8 @@ JOINTS_NUM = 22
 EXPECTED_DIM = 263
 
 
-def __synthetic_motion(num_frames: int = 30, seed: int = 0) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    base = param_util.RAW_OFFSETS.astype(np.float64) * 0.3
-    joints = np.tile(base[None], (num_frames, 1, 1))
-    for chain in param_util.KINEMATIC_CHAINS:
-        for j in range(1, len(chain)):
-            joints[:, chain[j]] += joints[:, chain[j - 1]]
-    t = np.linspace(0, 1, num_frames)[:, None, None]
-    joints = joints + 0.05 * np.sin(2 * np.pi * t) + 0.02 * rng.standard_normal(joints.shape)
-    joints[:, 0, [0, 2]] += 0.1 * t[:, 0]  # root drifts in xz so velocities are nonzero
-    return joints
-
-
-def test_263_layout_and_recovery() -> None:
-    motion = __synthetic_motion()
+def test_263_layout_and_recovery(synthetic_joints) -> None:
+    motion = synthetic_joints
     params = feature_params(target_offsets(motion))
 
     data, global_positions, local_positions, l_velocity = encode_joints(motion, params)
@@ -51,8 +38,8 @@ def test_263_layout_and_recovery() -> None:
     assert torch.isfinite(rec).all()
 
 
-def test_param_constants_exact() -> None:
-    params = feature_params(target_offsets(__synthetic_motion()))
+def test_param_constants_exact(synthetic_joints) -> None:
+    params = feature_params(target_offsets(synthetic_joints))
     assert params.face_joints == (2, 1, 17, 16)
     assert params.left_feet == (7, 10)
     assert params.right_feet == (8, 11)
