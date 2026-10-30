@@ -1,4 +1,4 @@
-# .\.venv\Scripts\python.exe scripts/qa/golden_outputs.py save-tokenizer
+# .\.venv\Scripts\python.exe scripts/qa/golden_outputs.py save-tokenizer|save-generator
 from __future__ import annotations
 
 import argparse
@@ -9,8 +9,11 @@ from pathlib import Path
 
 import torch
 
-from text2motion.app.config import load_config
+from text2motion.app.bootstrap import ApplicationBootstrap, apply_precision
+from text2motion.app.config import Float32Precision, load_config
+from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.generation.losses import soft_decode
+from text2motion.motion.contracts import Split
 from text2motion.motion.storage import sha256_file
 from text2motion.tokenization.contracts import TokenizerKind
 from text2motion.tokenization.nn_model import TokenizerNetwork, build_tokenizer_network
@@ -21,6 +24,27 @@ FSQ_CHECKPOINT = Path("artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt")
 RVQ_CONFIG = Path("configs/tokenizer/rvq_l8_1024.yaml")
 RVQ_CHECKPOINT = Path("artifacts/checkpoints/tokenizer/rvq_l8_1024.pt")
 TOKENIZER_INPUTS = (FSQ_CONFIG, FSQ_CHECKPOINT, RVQ_CONFIG, RVQ_CHECKPOINT)
+GENERATOR_GOLDEN_PATH = Path("tests/golden/generator_golden.json")
+GENERATOR_CONFIG = Path("configs/generator/gen_pilot_fsq8x1024.yaml")
+GENERATOR_CASES = (
+    (
+        Backbone.TRANSFORMER,
+        Path("artifacts/checkpoints/generator/generator_transformer_bs8_e60.pt"),
+    ),
+    (Backbone.MAMBA, Path("artifacts/checkpoints/generator/generator_mamba_bs8_e60.pt")),
+)
+GOLDEN_CLIPS = 32
+GENERATOR_INPUTS = (
+    GENERATOR_CONFIG,
+    FSQ_CHECKPOINT,
+    *(checkpoint for _, checkpoint in GENERATOR_CASES),
+    Path("data/official_evaluator/extracted/text_mot_match/model/finest.tar"),
+    Path("data/eval_stats/mean.npy"),
+    Path("data/eval_stats/std.npy"),
+    Path("data/HumanML3D_official/Mean.npy"),
+    Path("data/HumanML3D_official/Std.npy"),
+    Path("data/HumanML3D_official/val.txt"),
+)
 
 
 def tensor_fingerprint(tensor: torch.Tensor) -> dict[str, object]:
@@ -106,10 +130,43 @@ def __save_tokenizer_golden() -> None:
     print(f"saved {len(outputs)} fingerprints -> {TOKENIZER_GOLDEN_PATH}")
 
 
+def generator_metrics() -> dict[str, dict[str, float]]:
+    app = ApplicationBootstrap.from_config(GENERATOR_CONFIG, device="cuda")
+    apply_precision(Float32Precision.HIGHEST)
+    tokenizer = app.load_tokenizer(FSQ_CHECKPOINT)
+    evaluator = app.create_humanml3d_generation_evaluator()
+    metrics: dict[str, dict[str, float]] = {}
+    for backbone, checkpoint in GENERATOR_CASES:
+        generator = app.load_text_to_motion_generator(
+            backbone, checkpoint, tokenizer, tokenizer_checkpoint=FSQ_CHECKPOINT
+        )
+        metrics[backbone.value] = evaluator.evaluate_checkpoint_selection_metrics(
+            generator,
+            Split.VALIDATION,
+            max_clips=GOLDEN_CLIPS,
+            sampling=SamplingConfig(),
+            batch_size=8,
+        )
+    return metrics
+
+
+def __save_generator_golden() -> None:
+    record = {
+        "torch": torch.__version__,
+        "inputs": input_pins(GENERATOR_INPUTS),
+        "outputs": generator_metrics(),
+    }
+    GENERATOR_GOLDEN_PATH.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    print(f"saved metrics of {len(GENERATOR_CASES)} generators -> {GENERATOR_GOLDEN_PATH}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="write the golden output fingerprints")
-    parser.add_argument("command", choices=["save-tokenizer"])
-    parser.parse_args()
+    parser.add_argument("command", choices=["save-tokenizer", "save-generator"])
+    arguments = parser.parse_args()
+    if arguments.command == "save-generator":
+        __save_generator_golden()
+        return
     __save_tokenizer_golden()
 
 

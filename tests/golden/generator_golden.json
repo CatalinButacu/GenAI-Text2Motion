@@ -1,0 +1,37 @@
+{
+  "torch": "2.12.0+cu132",
+  "inputs": {
+    "configs/generator/gen_pilot_fsq8x1024.yaml": "d79318054ad3b2dab98f316e32fc2c162f1d115738d26256e17c5c9da96ae64c",
+    "artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt": "c999607b0deaf1fd916fd5255d68e5fc6286455c928a4ff4b277614a77a2472c",
+    "artifacts/checkpoints/generator/generator_transformer_bs8_e60.pt": "0e5a41d08bfe786f10862aa377916d6545fbe6e1d85ca8d9b6ee5b7db6ae3261",
+    "artifacts/checkpoints/generator/generator_mamba_bs8_e60.pt": "88978b27cab308456bcb61ad9927f8e1bf55d146382743f1fd4820b48fe0f31f",
+    "data/official_evaluator/extracted/text_mot_match/model/finest.tar": "881e45bea6fb84b15eca6e7cdd75d602b58a72f2038c223ee96ab75d4f684ada",
+    "data/eval_stats/mean.npy": "0bdb5ba69a3a9e34d71990db15bc535ebc024c8d95ddb5574196f96058faa7d3",
+    "data/eval_stats/std.npy": "6a5f7d60301c9465972fc225f8ad0ee8f957e7720431189123eb6d15873a9557",
+    "data/HumanML3D_official/Mean.npy": "608a786006ae1a4211cffe5ea1ea42fbf76f1563e0809c5c29bb94a0be604c88",
+    "data/HumanML3D_official/Std.npy": "b465478574d0344122e0090edc6281234defba4ce659d681f4a99b011f9779bc",
+    "data/HumanML3D_official/val.txt": "a6dc41af9dc20a7757c63a3b60ccefa09fcd888fdfb5b348d11fbb2d0eba3f8f"
+  },
+  "outputs": {
+    "transformer": {
+      "clips": 32,
+      "requested_clips": 32,
+      "dropped": 1,
+      "fid": 4.863577643316032,
+      "r_top1": 0.375,
+      "r_top3": 0.59375,
+      "mm_dist": 4.048164367675781,
+      "diversity": 8.76485538482666
+    },
+    "mamba": {
+      "clips": 32,
+      "requested_clips": 32,
+      "dropped": 1,
+      "fid": 5.472419616720402,
+      "r_top1": 0.375,
+      "r_top3": 0.5,
+      "mm_dist": 4.531591415405273,
+      "diversity": 8.657309532165527
+    }
+  }
+}
