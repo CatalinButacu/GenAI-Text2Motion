@@ -32,7 +32,7 @@ from text2motion.generation.trainer import (
 )
 from text2motion.motion.contracts import Split
 from text2motion.motion.datasets import dataset_size
-from text2motion.tokenization.corpus import read_pack_identity
+from text2motion.tokenization.corpus import check_pack_precision, read_pack_identity
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +207,7 @@ def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
         raise ValueError(
             f"{args.token_pack} was encoded with another tokenizer than {tokenizer_checkpoint}"
         )
+    check_pack_precision(pack_identity, app.config.precision.value)
     if app.config.tokenizer.kind == TokenizerKind.RESIDUAL_VECTOR:
         vocab = app.config.rvq_baseline.codebook_size
     else:

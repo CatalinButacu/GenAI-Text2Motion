@@ -53,6 +53,16 @@ def read_pack_identity(path: str | Path) -> dict[str, object]:
     return identity
 
 
+def check_pack_precision(identity: dict[str, object], precision: str) -> None:
+    encoded = identity.get("precision")
+    if encoded != precision:
+        raise ValueError(
+            f"the token pack was encoded with precision {encoded!r}, but this run uses "
+            f"{precision!r}; the two settings give different tokens, so rebuild the pack with "
+            "the tokenize command or set the same precision in the config"
+        )
+
+
 @torch.no_grad()
 def build_token_pack(
     tokenizer: FrozenMotionTokenizer,

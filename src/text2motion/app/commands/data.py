@@ -55,6 +55,7 @@ def run_tokenize(app: ApplicationContext, request: TokenizeRequest) -> None:
     excluded = heldout_feature_names(index_csv, dataset_dir, Path(request.regen_dir) / "pose_data")
     identity: dict[str, object] = {
         "tokenizer_sha256": sha256_file(checkpoint),
+        "precision": app.config.precision.value,
         "mean_sha256": sha256_file(dataset_dir / MEAN_FILE),
         "std_sha256": sha256_file(dataset_dir / STD_FILE),
         "index_sha256": sha256_file(index_csv),

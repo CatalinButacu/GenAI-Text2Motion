@@ -14,6 +14,7 @@ from text2motion.tokenization.contracts import TokenizeRequest
 from text2motion.tokenization.corpus import (
     PACK_IDENTITY_KEY,
     build_token_pack,
+    check_pack_precision,
     pack_clip_keys,
     read_pack_identity,
     window_starts,
@@ -136,6 +137,14 @@ def test_a_pack_without_any_window_is_not_written(tmp_path, case):
     with pytest.raises(ValueError, match="would be empty"):
         build_token_pack(__fake_tokenizer(), scaler, request, excluded, {})
     assert not (tmp_path / "pack.npz").exists()
+
+
+@pytest.mark.parametrize("encoded", ["highest", None])
+def test_a_pack_from_another_precision_is_refused(encoded):
+    identity = {} if encoded is None else {"precision": encoded}
+    with pytest.raises(ValueError, match="rebuild the pack"):
+        check_pack_precision(identity, "tf32")
+    check_pack_precision({"precision": "tf32"}, "tf32")
 
 
 @pytest.mark.parametrize("field", ["segment_frames", "stride"])
