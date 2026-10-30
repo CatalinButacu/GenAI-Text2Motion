@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import math
 import sys
 import types
 from abc import ABC, abstractmethod
@@ -33,6 +34,21 @@ class RMSNorm(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return F.rms_norm(x, self.weight.shape, self.weight, self.eps)
+
+
+DT_MIN = 1e-3
+DT_MAX = 1e-1
+DT_FLOOR = 1e-4
+
+
+def init_reference_dt(dt_proj: nn.Linear, dt_rank: int) -> None:
+    bound = dt_rank**-0.5
+    span = math.log(DT_MAX) - math.log(DT_MIN)
+    with torch.no_grad():
+        nn.init.uniform_(dt_proj.weight, -bound, bound)
+        dt = torch.exp(torch.rand(dt_proj.out_features) * span + math.log(DT_MIN))
+        dt = dt.clamp(min=DT_FLOOR)
+        dt_proj.bias.copy_(dt + torch.log(-torch.expm1(-dt)))
 
 
 def parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
@@ -71,6 +87,7 @@ class MambaMixer(nn.Module):
         self.conv1d = nn.Conv1d(self.d_inner, self.d_inner, d_conv, groups=self.d_inner, bias=True)
         self.x_proj = nn.Linear(self.d_inner, dt_rank + 2 * d_state, bias=False)
         self.dt_proj = nn.Linear(dt_rank, self.d_inner, bias=True)
+        init_reference_dt(self.dt_proj, dt_rank)
         a = torch.arange(1, d_state + 1, dtype=torch.float32).repeat(self.d_inner, 1)
         self.a_log = nn.Parameter(torch.log(a))
         self.d_skip = nn.Parameter(torch.ones(self.d_inner))
