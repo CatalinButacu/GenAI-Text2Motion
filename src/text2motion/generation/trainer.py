@@ -195,7 +195,7 @@ class GeneratorTrainer:
             device = next(token_generator.parameters()).device
             self._mean = torch.from_numpy(np.asarray(mean, dtype=np.float32)).to(device)
             self._std = torch.from_numpy(np.asarray(std, dtype=np.float32)).to(device)
-            self._skeleton = Skeleton(torch.from_numpy(RAW_OFFSETS), KINEMATIC_CHAINS, str(device))
+            self._skeleton = Skeleton(torch.tensor(RAW_OFFSETS), KINEMATIC_CHAINS, str(device))
 
         self.optimizer = torch.optim.AdamW(
             groups, lr=training_config.lr, weight_decay=training_config.weight_decay

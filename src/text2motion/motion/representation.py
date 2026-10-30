@@ -80,6 +80,7 @@ RAW_OFFSETS = np.array(
         [0, -1, 0],
     ]
 )
+RAW_OFFSETS.setflags(write=False)
 
 KINEMATIC_CHAINS = (
     (0, 2, 5, 8, 11),
@@ -113,7 +114,7 @@ class FeatureParams:
 
 
 def target_offsets(reference_joints: np.ndarray) -> torch.Tensor:
-    raw_offsets = torch.from_numpy(RAW_OFFSETS)
+    raw_offsets = torch.tensor(RAW_OFFSETS)
     example = torch.from_numpy(reference_joints).float()
     skeleton = Skeleton(raw_offsets, KINEMATIC_CHAINS, "cpu")
     return skeleton.get_offsets_joints(example[0])
@@ -134,7 +135,7 @@ def feature_params(offsets: torch.Tensor) -> FeatureParams:
 
 
 def __uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarray:
-    raw_offsets = torch.from_numpy(params.raw_offsets)
+    raw_offsets = torch.tensor(params.raw_offsets)
     target_offset = params.target_offsets
 
     src_skel = Skeleton(raw_offsets, params.chains, "cpu")
@@ -168,7 +169,7 @@ def encode_joints(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndar
     foot_threshold = params.foot_velocity_threshold
     face_joints = params.face_joints
     left_feet, right_feet = params.left_feet, params.right_feet
-    raw_offsets = torch.from_numpy(params.raw_offsets)
+    raw_offsets = torch.tensor(params.raw_offsets)
 
     positions = __uniform_skeleton(positions, params)
 
@@ -321,7 +322,8 @@ def recover_from_rot(data: torch.Tensor, joint_count: int, skeleton: Skeleton) -
     cont6d_params = torch.cat([r_rot_cont6d, cont6d_params], dim=-1)
     cont6d_params = cont6d_params.view(-1, joint_count, 6)
 
-    return skeleton.forward_kinematics_cont6d(cont6d_params, r_pos)
+    joints = skeleton.forward_kinematics_cont6d(cont6d_params, r_pos.reshape(-1, 3))
+    return joints.reshape(data.shape[:-1] + (joint_count, 3))
 
 
 def normalization_stats(clips: list[np.ndarray], joint_count: int) -> tuple[np.ndarray, np.ndarray]:

@@ -149,7 +149,7 @@ class Skeleton:
         self, offset: torch.Tensor, kinematic_tree: tuple[tuple[int, ...], ...], device: str
     ) -> None:
         self.device = device
-        self._raw_offset_np = offset.numpy()
+        self._raw_offset_np = offset.detach().cpu().numpy().copy()
         self._raw_offset = offset.clone().detach().to(device).float()
         self._kinematic_tree = kinematic_tree
         self._offset = None

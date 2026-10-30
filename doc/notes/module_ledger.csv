@@ -14,3 +14,5 @@ date,module,kind,item,change,evidence
 2026-10-30,motion,fix,C3,StreamingSkeletonRecovery builds its tensors on the input device; CUDA input now works and equals CPU,same test file (atol 1e-5)
 2026-10-30,motion,fix,N2,encode_joints needs at least 2 frames (1 frame gave an empty feature array),same test file
 2026-10-30,motion,fix,N8,root recovery keeps the input dtype (float64 input gave float32 zeros),same test file; float32 path unchanged
+2026-10-30,motion,fix,A20,recover_from_rot flattens the root positions like the rotations and returns the batch shape; the get_offsets_joints side effect that the generator loss uses is kept,E2 now passes without its expected-failure mark
+2026-10-30,motion,fix,A21,RAW_OFFSETS is read-only; its readers copy it with torch.tensor; Skeleton keeps its own numpy copy,tests/motion/test_representation_recovery.py; no torch not-writable warning with warnings as errors

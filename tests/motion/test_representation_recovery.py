@@ -32,11 +32,10 @@ def test_streamed_recovery_equals_whole_recovery(synthetic_joints, chunk):
     np.testing.assert_allclose(np.concatenate(parts), whole, atol=1e-5)
 
 
-@pytest.mark.xfail(strict=True, reason="A20: recover_from_rot does not flatten the root positions")
 def test_batched_rotation_recovery_equals_recovery_of_each_sequence(synthetic_joints):
     features, global_positions = __encoded(synthetic_joints)
     skeleton = Skeleton(
-        torch.from_numpy(representation.RAW_OFFSETS).float(), representation.KINEMATIC_CHAINS, "cpu"
+        torch.tensor(representation.RAW_OFFSETS).float(), representation.KINEMATIC_CHAINS, "cpu"
     )
     skeleton.get_offsets_joints(torch.from_numpy(global_positions[0]).float())
     single = torch.from_numpy(features).float()
@@ -52,3 +51,16 @@ def test_mirroring_twice_gives_back_the_input(joint_count):
     joints = np.random.default_rng(1).standard_normal((5, joint_count, 3))
 
     np.testing.assert_array_equal(swap_left_right(swap_left_right(joints)), joints)
+
+
+def test_the_shared_offsets_are_read_only_and_a_skeleton_keeps_its_own_copy(synthetic_joints):
+    assert not representation.RAW_OFFSETS.flags.writeable
+    source = representation.RAW_OFFSETS.astype(np.float32)
+    skeleton = Skeleton(torch.from_numpy(source), representation.KINEMATIC_CHAINS, "cpu")
+    before = skeleton.inverse_kinematics_np(synthetic_joints, (2, 1, 17, 16)).copy()
+    assert np.isfinite(before).all()
+
+    source[:] = 0.0
+
+    after = skeleton.inverse_kinematics_np(synthetic_joints, (2, 1, 17, 16))
+    np.testing.assert_array_equal(after, before)
