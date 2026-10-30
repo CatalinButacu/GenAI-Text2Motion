@@ -20,7 +20,7 @@ Only HumanML3D trains the tokenizer: the loader reads the HumanML3D train split,
 
 You do not usually call `train_step` yourself. `train_tokenizer(trainer, loader, request, device, evaluate, checkpoint_path, resume_path)` runs the full loop for the epochs in a `TrainTokenizerRequest`. Every `eval_every` epochs, and at the last epoch, it calls `evaluate(Split.VALIDATION)` with the EMA weights in place. Your `evaluate` function must return a dict with `recon_fid`, `mpjpe_mm`, `feature_l2` and `clips`. When `recon_fid` improves, the loop saves the EMA weights to `checkpoint_path`. At each evaluation it also saves the full training state to `resume_path`, so a run that stops can continue with `resume=True` from the last evaluation. It returns the best validation reconstruction FID.
 
-`ExponentialMovingAverage(model, decay)` is the EMA tool on its own. Call `update(model)` after each optimizer step, `copy_to(model)` before an evaluation and `restore(model)` after it.
+`ExponentialMovingAverage(model, decay, average_buffers=False)` is the EMA tool on its own. Call `update(model)` after each optimizer step, `copy_to(model)` before an evaluation and `restore(model)` after it. With `average_buffers=True` it also averages the floating-point buffers, as `torch.optim.swa_utils.AveragedModel(use_buffers=True)` does. The tokenizer trainer turns this on, because the RVQ codebooks are buffers that the k-means EMA updates, not the optimizer; without it, the evaluation would pair the averaged encoder with the live codebook. The generator keeps the default, so its old resume files still load.
 
 ## Evaluate
 

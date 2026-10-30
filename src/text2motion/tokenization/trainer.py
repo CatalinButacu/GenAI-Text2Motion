@@ -50,7 +50,9 @@ class TokenizerTrainer:
         self.optimizer = torch.optim.AdamW(
             tokenizer_network.parameters(), lr=lr, weight_decay=weight_decay
         )
-        self.parameter_ema = ExponentialMovingAverage(tokenizer_network, ema_decay)
+        self.parameter_ema = ExponentialMovingAverage(
+            tokenizer_network, ema_decay, average_buffers=True
+        )
 
     def code_statistics(self, indices: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         codebook_size = self.tokenizer_network.codebook_size

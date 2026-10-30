@@ -190,6 +190,17 @@ def test_an_rvq_step_with_nan_motion_leaves_the_codebooks_finite():
         assert torch.equal(network.state_dict()[name], value), name
 
 
+def test_the_tokenizer_ema_averages_the_rvq_codebooks():
+    network = build_tokenizer_network(
+        TokenizerConfig(kind=TokenizerKind.RESIDUAL_VECTOR),
+        ResidualVectorQuantizationConfig(width=32, code_dim=8, codebook_size=16, quant_dropout=0.0),
+    )
+    trainer = TokenizerTrainer(network, lr=1e-3, weight_decay=0.0, ema_decay=0.9)
+    codebooks = [name for name, _ in network.named_buffers() if name.endswith(".embed")]
+    assert codebooks
+    assert set(codebooks) <= trainer.parameter_ema.shadow.keys()
+
+
 def test_an_epoch_without_a_batch_raises():
     with pytest.raises(ValueError, match="no batch"):
         __resumable_trainer().train_epoch([], "cpu")

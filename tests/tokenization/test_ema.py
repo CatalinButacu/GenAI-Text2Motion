@@ -85,3 +85,23 @@ def test_loading_a_bad_ema_state_raises(problem):
         state["0.weight"][0, 0] = float("nan")
     with pytest.raises((KeyError, ValueError)):
         ema.load_state_dict(state)
+
+
+@pytest.mark.parametrize("average_buffers", [False, True])
+def test_floating_buffers_are_averaged_only_on_request(average_buffers):
+    model, _ = __small_model()
+    codebook = torch.zeros(2)
+    model.register_buffer("codebook", codebook)
+    model.register_buffer("counter", torch.zeros(1, dtype=torch.long))
+    ema = ExponentialMovingAverage(model, decay=0.5, average_buffers=average_buffers)
+    codebook.fill_(4.0)
+    ema.update(model)
+    assert "counter" not in ema.shadow
+    assert ("codebook" in ema.shadow) == average_buffers
+    if not average_buffers:
+        return
+    torch.testing.assert_close(ema.shadow["codebook"], torch.full((2,), 2.0))
+    ema.copy_to(model)
+    torch.testing.assert_close(codebook, torch.full((2,), 2.0))
+    ema.restore(model)
+    torch.testing.assert_close(codebook, torch.full((2,), 4.0))
