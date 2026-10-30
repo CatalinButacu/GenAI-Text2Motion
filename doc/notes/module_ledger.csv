@@ -56,3 +56,4 @@ date,module,kind,item,change,evidence
 2026-10-30,tokenization,decision,n,no check for zero active codebooks: active_stage_count keeps at least 1 stage,nn_quantizers.py active_stage_count
 2026-10-30,tokenization,finding,R1,residual FSQ subtracts bounded codes from unbounded latents; only the quantizer: residual variant; not the thesis path; deferred,council reviewer
 2026-10-30,tokenization,decision,u,RVQ one-hot GEMM and per-stage sync kept until an RVQ retrain needs them,RVQ is a baseline
+2026-10-30,tokenization,freeze,32aecca0cfba67e74e7c5b32d69a67e682b341c6a502cca619740c8c4952cda7,tokenization frozen after two audits; a two-member review and the fixes above,122 tokenization tests pass; golden tests identical; tests/golden/test_module_freeze.py enforces this hash
