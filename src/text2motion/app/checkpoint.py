@@ -4,6 +4,7 @@ import json
 import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import torch
@@ -15,6 +16,7 @@ from text2motion.motion.storage import atomic_torch_save, sha256_file
 _BUNDLE_FORMAT = "text2motion.generator_bundle"
 _BUNDLE_VERSION = 1
 GENERATOR_EXECUTION_FIELDS = frozenset({"use_kernel"})
+GENERATOR_FIELDS_ADDED_LATER = MappingProxyType({"per_step_text": False})
 
 
 ############################################################
@@ -85,7 +87,10 @@ class GeneratorBundle:
     def verify_generator_config(self, resolved_config: dict[str, Any]) -> None:
         stored = {
             key: value
-            for key, value in self.resolved_generator_config.items()
+            for key, value in {
+                **GENERATOR_FIELDS_ADDED_LATER,
+                **self.resolved_generator_config,
+            }.items()
             if key not in GENERATOR_EXECUTION_FIELDS
         }
         expected = {

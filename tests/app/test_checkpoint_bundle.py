@@ -89,3 +89,29 @@ def test_a_bundle_refuses_a_config_that_builds_another_model(tmp_path, change, r
         return
     with pytest.raises(ValueError, match="another generator config"):
         bundle.verify_generator_config(other)
+
+
+@pytest.mark.parametrize(("per_step_text", "raises"), [(False, False), (True, True)])
+def test_a_bundle_from_before_per_step_text_matches_only_the_prefix_only_config(
+    tmp_path, per_step_text, raises
+):
+    cfg = GeneratorConfig(d_model=32, n_layers=1, num_codebooks=2, codebook_size=16, n_heads=1)
+    tokenizer = tmp_path / "tokenizer.pt"
+    torch.save({"weight": torch.ones(1)}, tokenizer)
+    old_config = {key: value for key, value in asdict(cfg).items() if key != "per_step_text"}
+    bundle = GeneratorBundle.capture(
+        torch.nn.Linear(1, 1),
+        torch.nn.Linear(1, 1),
+        backbone="transformer",
+        tokenizer_ckpt=tokenizer,
+        resolved_generator_config=old_config,
+        epoch=1,
+        validation_fid=1.0,
+    )
+    current = asdict(cfg) | {"per_step_text": per_step_text}
+
+    if not raises:
+        bundle.verify_generator_config(current)
+        return
+    with pytest.raises(ValueError, match="per_step_text"):
+        bundle.verify_generator_config(current)

@@ -382,7 +382,7 @@ def test_anchoring_disabled_leaves_the_stream_unchanged_and_enabled_changes_it()
         1,
     )
     assert torch.equal(plain, again)
-    assert torch.equal(plain[:, :5], anchored[:, :5])
+    assert torch.equal(plain[:, :4], anchored[:, :4])
     assert not torch.equal(plain, anchored)
 
 

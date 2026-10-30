@@ -36,8 +36,11 @@ def streaming_state_size_bytes(state) -> int:
 
 
 @torch.no_grad()
-def __advance(generator: MotionTokenGenerator, tokens: torch.Tensor, state):
-    h, state = generator.backbone.step(generator.embed_motion_tokens(tokens), state)
+def __advance(
+    generator: MotionTokenGenerator, tokens: torch.Tensor, state, text_vector: torch.Tensor
+):
+    embedded = generator.add_per_step_text(generator.embed_motion_tokens(tokens), text_vector)
+    h, state = generator.backbone.step(embedded, state)
     nxt = generator.predict_token_logits(h).argmax(-1)
     if generator.end_id is not None:
         nxt = nxt.clamp(max=generator.cfg.codebook_size - 1)
@@ -54,11 +57,12 @@ def warm_up_streaming_generator(
     state = generator.backbone.init_state(batch, torch.device(device))
     text = torch.randn(batch, cfg.text_prefix_len, cfg.d_text, device=device)
     prefix = generator.project_text_prefix(text)
+    text_vector = generator.per_step_text_vector(text, prefix)
     for position in range(prefix.size(1)):
         _, state = generator.backbone.step(prefix[:, position], state)
     tokens = torch.zeros(batch, cfg.num_codebooks, dtype=torch.long, device=device)
     for _ in range(steps):
-        tokens, state = __advance(generator, tokens, state)
+        tokens, state = __advance(generator, tokens, state, text_vector)
     if device == "cuda":
         torch.cuda.synchronize()
 
@@ -79,6 +83,7 @@ def benchmark_streaming_horizons(
     state = generator.backbone.init_state(1, torch.device(device))
     text = torch.randn(1, cfg.text_prefix_len, cfg.d_text, device=device)
     prefix = generator.project_text_prefix(text)
+    text_vector = generator.per_step_text_vector(text, prefix)
     for position in range(prefix.size(1)):
         h, state = generator.backbone.step(prefix[:, position], state)
 
@@ -89,7 +94,7 @@ def benchmark_streaming_horizons(
         if cuda:
             torch.cuda.synchronize()
         t0 = time.perf_counter()
-        tokens, state = __advance(generator, tokens, state)
+        tokens, state = __advance(generator, tokens, state, text_vector)
         if cuda:
             torch.cuda.synchronize()
         step_ms.append((time.perf_counter() - t0) * 1000)
@@ -130,6 +135,7 @@ def benchmark_concurrent_streams(
         state = generator.backbone.init_state(batch, torch.device(device))
         text = torch.randn(batch, cfg.text_prefix_len, cfg.d_text, device=device)
         prefix = generator.project_text_prefix(text)
+        text_vector = generator.per_step_text_vector(text, prefix)
         for position in range(prefix.size(1)):
             _, state = generator.backbone.step(prefix[:, position], state)
 
@@ -139,7 +145,7 @@ def benchmark_concurrent_streams(
             if cuda:
                 torch.cuda.synchronize()
             t0 = time.perf_counter()
-            tokens, state = __advance(generator, tokens, state)
+            tokens, state = __advance(generator, tokens, state, text_vector)
             if cuda:
                 torch.cuda.synchronize()
             step_ms.append((time.perf_counter() - t0) * 1000)

@@ -17,7 +17,9 @@ from text2motion.generation.contracts import BackboneChoice as BackboneChoice
 from text2motion.generation.nn_backbones import (
     MambaBackbone,
     TransformerBackbone,
+    init_reference_embedding,
     instantiate_backbone,
+    zero_linear_bias,
 )
 
 
@@ -27,16 +29,24 @@ from text2motion.generation.nn_backbones import (
 class MotionTokenGenerator(nn.Module):
     def __init__(self, cfg: GeneratorConfig) -> None:
         super().__init__()
+        if cfg.per_step_text and cfg.text_prefix_len != 1:
+            raise ValueError(
+                f"per_step_text adds the one-vector text prefix to every token; "
+                f"text_prefix_len must be 1, got {cfg.text_prefix_len}"
+            )
         self.cfg = cfg
         self.end_id = cfg.codebook_size if cfg.use_end_token else None
         vocab = cfg.codebook_size + (1 if cfg.use_end_token else 0)
-        self.token_emb = nn.ModuleList(
-            [nn.Embedding(vocab, cfg.d_model) for _ in range(cfg.num_codebooks)]
-        )
+        token_emb = [nn.Embedding(vocab, cfg.d_model) for _ in range(cfg.num_codebooks)]
+        heads = [nn.Linear(cfg.d_model, vocab) for _ in range(cfg.num_codebooks)]
+        for embedding in token_emb:
+            init_reference_embedding(embedding)
+        for head in heads:
+            zero_linear_bias(head)
+        self.token_emb = nn.ModuleList(token_emb)
         self.text_proj = nn.Linear(cfg.d_text, cfg.d_model)
-        self.heads = nn.ModuleList(
-            [nn.Linear(cfg.d_model, vocab) for _ in range(cfg.num_codebooks)]
-        )
+        zero_linear_bias(self.text_proj)
+        self.heads = nn.ModuleList(heads)
         self.emb_drop = nn.Dropout(cfg.dropout)
         self.backbone = instantiate_backbone(cfg)
         self.captured_steps: dict[int, CapturedDecodeStep] | None = None
@@ -55,13 +65,14 @@ class MotionTokenGenerator(nn.Module):
             )
         self.captured_steps = {}
 
-    def decode_step_for(self, state: list, batch: int):
+    def decode_step_for(self, state: list, batch: int, text_vector: torch.Tensor):
         if self.captured_steps is None:
-            return EagerDecodeStep(self, state)
+            return EagerDecodeStep(self, state, text_vector)
         if batch not in self.captured_steps:
-            self.captured_steps[batch] = CapturedDecodeStep(self, batch)
+            self.captured_steps[batch] = CapturedDecodeStep(self, batch, text_vector)
         captured = self.captured_steps[batch]
         captured.load_state(state)
+        captured.load_text_vector(text_vector)
         return captured
 
     def embed_motion_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
@@ -82,12 +93,26 @@ class MotionTokenGenerator(nn.Module):
             )
         return self.text_proj(text_emb)
 
+    def per_step_text_vector(self, text_emb: torch.Tensor, prefix: torch.Tensor) -> torch.Tensor:
+        if not self.cfg.per_step_text:
+            return torch.zeros_like(prefix)
+        present = text_emb.reshape(prefix.size(0), -1).ne(0).any(-1)
+        return prefix * present[:, None, None].to(prefix.dtype)
+
+    def add_per_step_text(self, embedded: torch.Tensor, text_vector: torch.Tensor) -> torch.Tensor:
+        if not self.cfg.per_step_text:
+            return embedded
+        if embedded.dim() == 2:
+            return embedded + text_vector[:, 0]
+        return embedded + text_vector
+
     def predict_token_logits(self, h: torch.Tensor) -> torch.Tensor:
         return torch.stack([head(h) for head in self.heads], dim=-2)
 
     def forward(self, tokens: torch.Tensor, text_emb: torch.Tensor) -> torch.Tensor:
-        emb = self.embed_motion_tokens(tokens)
         prefix = self.project_text_prefix(text_emb)
+        text_vector = self.per_step_text_vector(text_emb, prefix)
+        emb = self.add_per_step_text(self.embed_motion_tokens(tokens), text_vector)
         seq_in = torch.cat([prefix, emb[:, :-1]], dim=1)
         h = self.backbone(self.emb_drop(seq_in))[:, prefix.size(1) - 1 :]
         return self.predict_token_logits(h)
@@ -149,12 +174,14 @@ class MotionTokenGenerator(nn.Module):
             raise ValueError("text_at changes the text at a reset; set anchor_every above 0")
         text_for = text_at or (lambda index: text_emb)
 
-        def prefix_of(text: torch.Tensor) -> torch.Tensor:
+        def with_null_rows(text: torch.Tensor) -> torch.Tensor:
             if guided:
-                text = torch.cat([text, torch.zeros_like(text)], dim=0)
-            return self.project_text_prefix(text)
+                return torch.cat([text, torch.zeros_like(text)], dim=0)
+            return text
 
-        prefix = prefix_of(text_emb)
+        streamed_text = with_null_rows(text_emb)
+        prefix = self.project_text_prefix(streamed_text)
+        text_vector = self.per_step_text_vector(streamed_text, prefix)
         batch = prefix.size(0)
         self.check_stream_budget(
             steps, prefix.size(1), uniforms, anchor_every, anchor_context if anchor_every else 0
@@ -163,15 +190,18 @@ class MotionTokenGenerator(nn.Module):
         def start_from(context: list[torch.Tensor]):
             backbone = self.backbone
             if isinstance(backbone, TransformerBackbone):
-                embedded = [self.embed_motion_tokens(feed) for feed in context]
+                embedded = [
+                    self.add_per_step_text(self.embed_motion_tokens(feed), text_vector)
+                    for feed in context
+                ]
                 sequence = torch.cat([prefix, *[e.unsqueeze(1) for e in embedded]], dim=1)
                 h, state = backbone.prefill(sequence)
-                return self.predict_token_logits(h), self.decode_step_for(state, batch)
+                return self.predict_token_logits(h), self.decode_step_for(state, batch, text_vector)
             state = backbone.init_state(batch, device)
             h, state = backbone.step(prefix[:, 0], state)
             for position in range(1, prefix.size(1)):
                 h, state = backbone.step(prefix[:, position], state)
-            step = self.decode_step_for(state, batch)
+            step = self.decode_step_for(state, batch, text_vector)
             logits = self.predict_token_logits(h)
             for feed in context:
                 logits = step(feed)
@@ -204,7 +234,9 @@ class MotionTokenGenerator(nn.Module):
             if since_anchor < anchor_every:
                 logits = decode_step(feed)
                 continue
-            prefix = prefix_of(text_for(index))
+            streamed_text = with_null_rows(text_for(index))
+            prefix = self.project_text_prefix(streamed_text)
+            text_vector = self.per_step_text_vector(streamed_text, prefix)
             logits, decode_step = start_from(list(recent))
             since_anchor = 0
 
@@ -213,12 +245,15 @@ class MotionTokenGenerator(nn.Module):
 #       EagerDecodeStep
 ############################################################
 class EagerDecodeStep:
-    def __init__(self, model: MotionTokenGenerator, state: list) -> None:
+    def __init__(self, model: MotionTokenGenerator, state: list, text_vector: torch.Tensor) -> None:
         self.model = model
         self.state = state
+        self.text_vector = text_vector
 
     def __call__(self, feed: torch.Tensor) -> torch.Tensor:
-        embedded = self.model.embed_motion_tokens(feed)
+        embedded = self.model.add_per_step_text(
+            self.model.embed_motion_tokens(feed), self.text_vector
+        )
         h, self.state = self.model.backbone.step(embedded, self.state)
         return self.model.predict_token_logits(h)
 
@@ -229,20 +264,23 @@ class EagerDecodeStep:
 class CapturedDecodeStep:
     warmup_steps = 3
 
-    def __init__(self, model: MotionTokenGenerator, batch: int) -> None:
+    def __init__(self, model: MotionTokenGenerator, batch: int, text_vector: torch.Tensor) -> None:
         device = next(model.parameters()).device
         codebooks = model.cfg.num_codebooks
         self.tokens = torch.zeros(batch, codebooks, dtype=torch.long, device=device)
+        self.text_vector = text_vector.detach().clone()
         self.state = model.backbone.init_state(batch, device)
         side_stream = torch.cuda.Stream(device)
         side_stream.wait_stream(torch.cuda.current_stream(device))
         with torch.cuda.stream(side_stream):
             for _ in range(self.warmup_steps):
-                EagerDecodeStep(model, list(self.state))(self.tokens)
+                EagerDecodeStep(model, list(self.state), self.text_vector)(self.tokens)
         torch.cuda.current_stream(device).wait_stream(side_stream)
         self.graph = torch.cuda.CUDAGraph()
         with torch.cuda.graph(self.graph):
-            embedded = model.embed_motion_tokens(self.tokens)
+            embedded = model.add_per_step_text(
+                model.embed_motion_tokens(self.tokens), self.text_vector
+            )
             h, next_state = model.backbone.step(embedded, list(self.state))
             for (ssm, conv), (next_ssm, next_conv) in zip(self.state, next_state, strict=True):
                 ssm.copy_(next_ssm)
@@ -253,6 +291,14 @@ class CapturedDecodeStep:
         for (ssm, conv), (source_ssm, source_conv) in zip(self.state, state, strict=True):
             ssm.copy_(source_ssm)
             conv.copy_(source_conv)
+
+    def load_text_vector(self, text_vector: torch.Tensor) -> None:
+        if text_vector.shape != self.text_vector.shape:
+            raise ValueError(
+                f"the captured decode step holds a text vector of shape "
+                f"{tuple(self.text_vector.shape)}, got {tuple(text_vector.shape)}"
+            )
+        self.text_vector.copy_(text_vector)
 
     def __call__(self, feed: torch.Tensor) -> torch.Tensor:
         self.tokens.copy_(feed)

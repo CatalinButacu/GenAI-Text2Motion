@@ -78,6 +78,7 @@ class GeneratorConfig:
     max_seq_len: int = 96
     dropout: float = 0.1
     text_prefix_len: int = 1
+    per_step_text: bool = False
     use_end_token: bool = False
     use_kernel: bool = False
     d_state: int = 16

@@ -51,6 +51,27 @@ def init_reference_dt(dt_proj: nn.Linear, dt_rank: int) -> None:
         dt_proj.bias.copy_(dt + torch.log(-torch.expm1(-dt)))
 
 
+EMBEDDING_STD = 0.02
+
+
+def init_reference_embedding(embedding: nn.Embedding) -> None:
+    nn.init.normal_(embedding.weight, std=EMBEDDING_STD)
+
+
+def zero_linear_bias(layer: nn.Linear) -> None:
+    if layer.bias is None:
+        raise ValueError("the reference init zeros a bias that this layer does not have")
+    nn.init.zeros_(layer.bias)
+
+
+def init_residual_output(layer: nn.Linear, residual_count: int) -> None:
+    if residual_count < 1:
+        raise ValueError(f"residual_count must be >= 1, got {residual_count}")
+    with torch.no_grad():
+        nn.init.kaiming_uniform_(layer.weight, a=math.sqrt(5))
+        layer.weight.div_(math.sqrt(residual_count))
+
+
 def parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     length = a.size(1)
     shift = 1
@@ -174,6 +195,7 @@ class MambaBlock(nn.Module):
         self.mixer = MambaMixer(
             cfg.d_model, cfg.d_state, cfg.d_conv, cfg.expand, cfg.dt_rank, cfg.use_kernel
         )
+        init_residual_output(self.mixer.out_proj, cfg.n_layers)
         self.drop = nn.Dropout(cfg.dropout)
 
     def init_state(self, batch: int, device: torch.device):
@@ -250,11 +272,13 @@ class TransformerBlock(nn.Module):
         self.norm2 = RMSNorm(cfg.d_model)
         self.qkv = nn.Linear(cfg.d_model, 3 * cfg.d_model, bias=False)
         self.proj = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
-        self.mlp = nn.Sequential(
-            nn.Linear(cfg.d_model, 4 * cfg.d_model),
-            nn.GELU(),
-            nn.Linear(4 * cfg.d_model, cfg.d_model),
-        )
+        init_residual_output(self.proj, 2 * cfg.n_layers)
+        mlp_in = nn.Linear(cfg.d_model, 4 * cfg.d_model)
+        mlp_out = nn.Linear(4 * cfg.d_model, cfg.d_model)
+        zero_linear_bias(mlp_in)
+        zero_linear_bias(mlp_out)
+        init_residual_output(mlp_out, 2 * cfg.n_layers)
+        self.mlp = nn.Sequential(mlp_in, nn.GELU(), mlp_out)
         self.drop = nn.Dropout(cfg.dropout)
         self.attn_drop = cfg.dropout
 
@@ -300,6 +324,7 @@ class TransformerBackbone(SequenceBackbone):
     def __init__(self, cfg: GeneratorConfig) -> None:
         super().__init__()
         self.pos = nn.Embedding(cfg.max_seq_len + 1, cfg.d_model)
+        init_reference_embedding(self.pos)
         self.blocks = nn.ModuleList([TransformerBlock(cfg) for _ in range(cfg.n_layers)])
         self.norm_f = RMSNorm(cfg.d_model)
 
