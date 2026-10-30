@@ -31,6 +31,21 @@ class TokenizerKind(StrEnum):
     RESIDUAL_VECTOR = "rvq"
 
 
+def check_network_ranges(*sizes: int) -> None:
+    if any(size < 1 for size in sizes):
+        raise ValueError(f"network sizes must be positive, got {sizes}")
+
+
+def check_fraction(name: str, value: float) -> None:
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"{name} must be in [0, 1], got {value}")
+
+
+def check_not_negative(name: str, value: float) -> None:
+    if value < 0:
+        raise ValueError(f"{name} must not be negative, got {value}")
+
+
 ############################################################
 #       TokenizerConfig
 ############################################################
@@ -45,6 +60,11 @@ class TokenizerConfig:
     quantizer: FiniteScalarStackLayout = FiniteScalarStackLayout.GROUPED
     quant_dropout: float = 0.2
     n_resblocks: int = 3
+
+    def __post_init__(self) -> None:
+        check_network_ranges(self.in_dim, self.width, self.downsample, self.num_quantizers)
+        check_fraction("quant_dropout", self.quant_dropout)
+        check_not_negative("n_resblocks", self.n_resblocks)
 
 
 ############################################################
@@ -63,6 +83,15 @@ class ResidualVectorQuantizationConfig:
     commitment_beta: float = 0.02
     quant_dropout: float = 0.2
     reset_threshold: float = 1.0
+
+    def __post_init__(self) -> None:
+        check_network_ranges(self.in_dim, self.width, self.downsample, self.num_quantizers)
+        check_network_ranges(self.codebook_size, self.code_dim, 1, 1)
+        check_fraction("quant_dropout", self.quant_dropout)
+        check_fraction("ema_decay", self.ema_decay)
+        check_not_negative("n_resblocks", self.n_resblocks)
+        check_not_negative("commitment_beta", self.commitment_beta)
+        check_not_negative("reset_threshold", self.reset_threshold)
 
 
 ############################################################

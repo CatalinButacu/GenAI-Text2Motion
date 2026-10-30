@@ -40,7 +40,7 @@ class TokenizerNetwork(nn.Module):
                 f"the motion has {frames} frames; the tokenizer needs a positive multiple of "
                 f"downsample {self.downsample}, so cut the clip before encode"
             )
-        return motion
+        return reject_non_finite_motion(motion)
 
     def quantizer_stack(self) -> QuantizerStack:
         quantizer = self.quantizer
@@ -55,9 +55,7 @@ class TokenizerNetwork(nn.Module):
     def encode(self, motion: torch.Tensor) -> torch.Tensor:
         checked = self.checked_frame_count(motion)
         _, indices, _ = self.quantizer_stack()(self.pre_q(self.encoder(checked)))
-        invalid = torch.isfinite(checked).logical_not().any() | (indices < 0).any()
-        if bool(invalid):
-            reject_non_finite_motion(checked)
+        if bool((indices < 0).any()):
             reject_dropped_codes(indices)
         return indices
 
@@ -193,6 +191,11 @@ class FiniteScalarQuantizationTokenizer(TokenizerNetwork):
 def feature_velocity_reconstruction_loss(
     reconstruction: torch.Tensor, target: torch.Tensor
 ) -> torch.Tensor:
+    if reconstruction.shape != target.shape or target.shape[0] == 0 or target.shape[1] < 2:
+        raise ValueError(
+            f"the reconstruction loss needs equal shapes with at least 2 frames, got "
+            f"{tuple(reconstruction.shape)} and {tuple(target.shape)}"
+        )
     feature_loss = F.l1_loss(reconstruction, target)
     reconstruction_velocity = reconstruction[:, 1:] - reconstruction[:, :-1]
     target_velocity = target[:, 1:] - target[:, :-1]
@@ -272,7 +275,13 @@ class FrozenMotionTokenizer:
                 f"clip has {motion.frame_count} frames, fewer than one token at downsample "
                 f"{self.downsample}"
             )
+        if motion.features.dim() != 2 or motion.features.shape[0] < motion.frame_count:
+            raise ValueError(
+                f"the clip says {motion.frame_count} frames, but its features have shape "
+                f"{tuple(motion.features.shape)}"
+            )
         features = motion.features[:usable].unsqueeze(0).to(self.device)
+        self.network.eval()
         indices = self.network.encode(features)[0]
         return MotionTokens(
             indices=indices,
@@ -287,7 +296,17 @@ class FrozenMotionTokenizer:
                 f"token indices must have shape [steps, codebooks] or [batch, steps, codebooks], "
                 f"got {tuple(indices.shape)}"
             )
+        if indices.dim() == 3 and indices.shape[0] != 1:
+            raise ValueError(
+                f"decode returns one clip; got a batch of {indices.shape[0]} token sequences"
+            )
         if indices.dim() == 2:
             indices = indices.unsqueeze(0)
+        if tokens.frame_count != indices.shape[1] * self.downsample:
+            raise ValueError(
+                f"{indices.shape[1]} token steps give {indices.shape[1] * self.downsample} frames, "
+                f"but the tokens say {tokens.frame_count}"
+            )
+        self.network.eval()
         features = self.network.decode(indices.to(self.device))[0]
         return MotionClip(features=features, frame_count=int(features.shape[0]))

@@ -132,7 +132,7 @@ def test_fsq_levels_below_three_or_empty_raise(levels):
     ids=["grouped_fsq", "residual_fsq", "rvq"],
 )
 def test_a_stack_without_quantizers_raises(build):
-    with pytest.raises(ValueError, match="at least 1 quantizer"):
+    with pytest.raises(ValueError, match="at least 1 quantizer|must be positive"):
         build()
 
 

@@ -18,6 +18,7 @@ from text2motion.tokenization.nn_model import FrozenMotionTokenizer
 PACK_IDENTITY_KEY = "__identity__"
 PACK_FORMAT = "text2motion.token_pack"
 PACK_VERSION = 1
+INT16_CODES = 32768
 
 
 def window_starts(frames: int, segment: int, stride: int) -> list[int]:
@@ -80,6 +81,15 @@ def build_token_pack(
 
     pack: dict[str, np.ndarray] = {}
     token_steps = 0
+    if tokenizer.codebook_size > INT16_CODES:
+        raise ValueError(
+            f"{tokenizer.codebook_size} codes do not fit the int16 token pack (at most {INT16_CODES})"
+        )
+    if request.segment_frames % tokenizer.downsample:
+        raise ValueError(
+            f"segment_frames {request.segment_frames} is not a multiple of the downsample "
+            f"{tokenizer.downsample}; the encoder would cut each window"
+        )
     for path in tqdm(kept, desc="encode"):
         normalized = scaler.normalize(np.load(path).astype(np.float32))
         for start in window_starts(normalized.shape[0], request.segment_frames, request.stride):

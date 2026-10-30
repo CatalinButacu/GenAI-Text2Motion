@@ -23,7 +23,6 @@ from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_model import (
     TokenizerNetwork,
     feature_velocity_reconstruction_loss,
-    reject_non_finite_motion,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,17 +76,18 @@ class TokenizerTrainer:
         return perplexity, usage_fraction
 
     def train_step(self, motion: torch.Tensor) -> dict[str, torch.Tensor]:
-        checked = reject_non_finite_motion(motion)
-        reconstruction, indices, commitment_loss = self.tokenizer_network(checked)
+        reconstruction, indices, commitment_loss = self.tokenizer_network(motion)
 
         reconstruction_loss = feature_velocity_reconstruction_loss(reconstruction, motion)
         total = reconstruction_loss + self.commitment_beta * commitment_loss
 
         self.optimizer.zero_grad()
         total.backward()
-        nn.utils.clip_grad_norm_(
-            self.tokenizer_network.parameters(), self.grad_clip, error_if_nonfinite=True
+        gradient_norm = nn.utils.clip_grad_norm_(
+            self.tokenizer_network.parameters(), self.grad_clip
         )
+        if not bool(torch.isfinite(gradient_norm) & torch.isfinite(total)):
+            raise RuntimeError("non-finite loss or gradient norm; the step is not applied")
         self.optimizer.step()
         self.parameter_ema.update(self.tokenizer_network)
 
@@ -106,6 +106,14 @@ class TokenizerTrainer:
         totals: dict[str, torch.Tensor] = {}
         steps = 0
         for batch in loader:
+            if (
+                isinstance(batch, MotionBatch)
+                and int(batch.lengths.min()) < batch.features.shape[1]
+            ):
+                raise ValueError(
+                    "the tokenizer trains on fixed windows; this batch is padded, and the padding "
+                    "would enter the loss"
+                )
             motion = batch.features if isinstance(batch, MotionBatch) else batch
             self.current_inputs = {"motion": motion}
             self.current_step = steps
@@ -136,9 +144,23 @@ class TokenizerTrainer:
             "run_dir": None if run_dir is None else str(run_dir),
             "epoch": epoch,
             "best_fid": best_fid,
+            "settings": self.resume_settings(),
+        }
+
+    def resume_settings(self) -> dict[str, float]:
+        return {
+            "ema_decay": float(self.parameter_ema.decay),
+            "commitment_beta": float(self.commitment_beta),
+            "grad_clip": float(self.grad_clip),
         }
 
     def load_resume_state(self, state: dict, legacy: bool) -> tuple[int, float]:
+        stored = state.get("settings")
+        if not legacy and stored != self.resume_settings():
+            raise ValueError(
+                f"the resume file was trained with {stored}, this run uses "
+                f"{self.resume_settings()}; resume with the same settings"
+            )
         self.tokenizer_network.load_state_dict(state["tokenizer"])
         self.optimizer.load_state_dict(state["optimizer"])
         self.parameter_ema.load_state_dict(state["ema"])

@@ -36,7 +36,9 @@ def __fake_tokenizer() -> FrozenMotionTokenizer:
         steps = clip.frame_count // 4
         return SimpleNamespace(indices=torch.zeros(steps, 2, dtype=torch.long), token_count=steps)
 
-    return cast(FrozenMotionTokenizer, SimpleNamespace(encode=encode))
+    return cast(
+        FrozenMotionTokenizer, SimpleNamespace(encode=encode, codebook_size=16, downsample=4)
+    )
 
 
 def test_the_pack_skips_excluded_clips_and_records_its_identity(tmp_path):

@@ -41,3 +41,18 @@ date,module,kind,item,change,evidence
 2026-10-30,motion,decision,C2,deferred to the generation module: the data path already raises on non-finite features; the loss path decision needs a measurement of near-zero 6D norms in training,see generation audit
 2026-10-30,motion,decision,C4,deferred: CLI request classes in motion/contracts.py are a structure decision of the owner,no numeric effect
 2026-10-30,motion,freeze,70f8042e2d5fca273479c923d1467b959ba98f879d4640895a853e7ad8047064,motion frozen after two audits; a council review and the fixes above,139 motion tests pass; golden tests identical; tests/golden/test_module_freeze.py enforces this hash
+2026-10-30,tokenization,fix,a,token indices must be an integer tensor,tests/tokenization/test_validation.py
+2026-10-30,tokenization,fix,b,FSQ codebook size by integer product with an int64 capacity check,same test file
+2026-10-30,tokenization,fix,c,FSQ constructor refuses levels whose end digit the boundary margin makes unreachable (bound_scale unchanged),same test file; golden identical
+2026-10-30,tokenization,fix,d,frozen decode refuses a batch and a frame count that disagrees with the token steps; frozen encode needs enough feature rows; both enforce eval mode,same test file
+2026-10-30,tokenization,fix,e-f,the token pack refuses more than 32768 codes and a segment length that is not a multiple of the downsample,same test file
+2026-10-30,tokenization,fix,g,the tokenizer trainer refuses a padded MotionBatch,same test file
+2026-10-30,tokenization,fix,h-j-l,reconstruction metrics read the downsample from the network; check the reconstruction shape; finiteness and FID; restore the train or eval mode,tests/tokenization/test_metrics.py
+2026-10-30,tokenization,fix,i,encode and forward reject non-finite input before the quantizer runs (RVQ codebooks stay unchanged),test_validation.py
+2026-10-30,tokenization,fix,k,range checks in TokenizerConfig and ResidualVectorQuantizationConfig,test_validation.py
+2026-10-30,tokenization,fix,m-s,the loss refuses empty batches and fewer than 2 frames; one sync checks the loss and the gradient norm before the update,test_validation.py and test_trainer.py
+2026-10-30,tokenization,fix,p-q,RVQ returns codes from the codebook used for the assignment and starts with coherent counts (cluster_size ones); changes future RVQ training only,test_validation.py; old rvq_*.pt results came from the old order
+2026-10-30,tokenization,fix,t,resume refuses other trainer settings (ema_decay; commitment_beta; grad_clip),test_validation.py
+2026-10-30,tokenization,decision,n,no check for zero active codebooks: active_stage_count keeps at least 1 stage,nn_quantizers.py active_stage_count
+2026-10-30,tokenization,finding,R1,residual FSQ subtracts bounded codes from unbounded latents; only the quantizer: residual variant; not the thesis path; deferred,council reviewer
+2026-10-30,tokenization,decision,u,RVQ one-hot GEMM and per-stage sync kept until an RVQ retrain needs them,RVQ is a baseline

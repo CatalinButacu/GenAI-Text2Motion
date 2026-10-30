@@ -15,6 +15,8 @@ from text2motion.tokenization.nn_model import TokenizerNetwork
 #       IdentityTokenizer
 ############################################################
 class IdentityTokenizer(TokenizerNetwork):
+    downsample = 4
+
     def forward(self, motion: torch.Tensor) -> TokenizerReconstruction:
         empty = motion.new_zeros(())
         return TokenizerReconstruction(motion, empty.long(), empty)

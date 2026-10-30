@@ -36,7 +36,7 @@ def evaluate_tokenizer_reconstruction(
     root: Path,
     scaler: MotionScaler,
     max_frames: int,
-    downsample: int = 4,
+    downsample: int | None = None,
     joint_count: int = JOINTS,
     device: str = "cpu",
     max_clips: int | None = None,
@@ -45,7 +45,44 @@ def evaluate_tokenizer_reconstruction(
     shuffle_seed: int | None = None,
     reconstruction_fid_scorer: ReconstructionFidScorer | None = None,
 ) -> dict[str, float]:
+    if downsample is not None and downsample != module.downsample:
+        raise ValueError(
+            f"downsample {downsample} differs from the network downsample {module.downsample}"
+        )
+    was_training = module.training
     module.eval()
+    try:
+        return __reconstruction_metrics(
+            module,
+            root,
+            scaler,
+            max_frames,
+            module.downsample,
+            joint_count,
+            device,
+            max_clips,
+            split=split,
+            shuffle_seed=shuffle_seed,
+            reconstruction_fid_scorer=reconstruction_fid_scorer,
+        )
+    finally:
+        module.train(was_training)
+
+
+def __reconstruction_metrics(
+    module: TokenizerNetwork,
+    root: Path,
+    scaler: MotionScaler,
+    max_frames: int,
+    downsample: int,
+    joint_count: int,
+    device: str,
+    max_clips: int | None,
+    *,
+    split: Split | str,
+    shuffle_seed: int | None = None,
+    reconstruction_fid_scorer: ReconstructionFidScorer | None = None,
+) -> dict[str, float]:
     ids = select_reconstruction_evaluation_clip_ids(
         root, split, max_clips=max_clips, shuffle_seed=shuffle_seed
     )
@@ -85,6 +122,13 @@ def evaluate_tokenizer_reconstruction(
         reference = np.stack(batch)
         normalized = torch.from_numpy(scaler.normalize(reference)).to(device)
         reconstruction_normalized = module(normalized)[0].cpu().numpy()
+        if reconstruction_normalized.shape != normalized.shape:
+            raise ValueError(
+                f"the reconstruction has shape {reconstruction_normalized.shape}, the input "
+                f"{tuple(normalized.shape)}"
+            )
+        if not np.isfinite(reconstruction_normalized).all():
+            raise ValueError("the reconstruction holds NaN or Inf values")
         reconstruction = np.asarray(scaler.denormalize(reconstruction_normalized), np.float32)
 
         reference_features.extend(reference)
@@ -105,5 +149,7 @@ def evaluate_tokenizer_reconstruction(
 
     if reconstruction_fid_scorer is not None:
         metrics["recon_fid"] = reconstruction_fid_scorer(reference_features, reconstructed_features)
+        if not np.isfinite(metrics["recon_fid"]):
+            raise ValueError(f"the reconstruction FID is not finite: {metrics['recon_fid']}")
 
     return metrics

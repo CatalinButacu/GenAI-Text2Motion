@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 
 import torch
@@ -50,6 +51,8 @@ class QuantizerStack(nn.Module, ABC):
                 f"the indices have {indices.shape[-1]} codebooks, but this quantizer stack has "
                 f"{expected}; the tokens come from another tokenizer configuration"
             )
+        if indices.is_floating_point() or indices.is_complex() or indices.dtype == torch.bool:
+            raise TypeError(f"token indices must be an integer tensor, got {indices.dtype}")
         codebook_size = quantizers[0].codebook_size
         if bool(((indices < 0) | (indices >= codebook_size)).any()):
             raise ValueError(
@@ -138,7 +141,19 @@ class FiniteScalarQuantizer(Quantizer):
         self.register_buffer("bound_shift", bound_shift, persistent=False)
 
         self.dimension_count = len(levels)
-        self.codebook_size = int(torch.prod(level_values).item())
+        self.codebook_size = math.prod(levels)
+        if self.codebook_size > 2**62:
+            raise ValueError(
+                f"FSQ levels {levels} give {self.codebook_size} codes; too many for int64"
+            )
+        reachable = torch.round(bound_scale - bound_offset) - torch.round(
+            -bound_scale - bound_offset
+        )
+        if bool((reachable < level_values - 1).any()):
+            raise ValueError(
+                f"FSQ levels {levels}: the boundary margin {boundary_margin} makes an end digit "
+                "unreachable; use smaller levels"
+            )
         self.register_load_state_dict_pre_hook(reject_other_fsq_levels)
 
     def bound(self, latent: torch.Tensor) -> torch.Tensor:
@@ -271,7 +286,7 @@ class VectorQuantizer(Quantizer):
 
         embed = torch.randn(codebook_size, code_width)
         self.register_buffer("embed", embed)
-        self.register_buffer("cluster_size", torch.zeros(codebook_size))
+        self.register_buffer("cluster_size", torch.ones(codebook_size))
         self.register_buffer("embed_avg", embed.clone())
 
     def __distances(self, flat_latents: torch.Tensor) -> torch.Tensor:
@@ -312,10 +327,10 @@ class VectorQuantizer(Quantizer):
             indices = self.__distances(flat_latents).argmin(1)
             assignments = F.one_hot(indices, self.codebook_size).type_as(flat_latents)
 
+            quantized = (assignments @ self.embed).view_as(latent)
             if self.training:
                 self.__ema_update(flat_latents, assignments)
 
-        quantized = (assignments @ self.embed).view_as(latent)
         commitment_loss = F.mse_loss(latent, quantized.detach())
         return quantized, indices.view(latent.shape[:-1]), commitment_loss
 
