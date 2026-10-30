@@ -1,0 +1,170 @@
+{
+  "torch": "2.12.0+cu132",
+  "inputs": {
+    "configs/tokenizer/fsq_g8_v1024.yaml": "2ee31f4fc22827ad24b179fe5d40ee5e15868efc0873ebfd641c99dce02513cf",
+    "artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt": "c999607b0deaf1fd916fd5255d68e5fc6286455c928a4ff4b277614a77a2472c",
+    "configs/tokenizer/rvq_l8_1024.yaml": "963fc8d141d1c72d38c4c405a9aefa9c51b15a3acd91512f80827f941f09eee8",
+    "artifacts/checkpoints/tokenizer/rvq_l8_1024.pt": "21100f55ff413b2a47aa70deca0b6a04a4627b46ec4f3c2c8c41b088d8207e72"
+  },
+  "outputs": {
+    "fsq_g8/indices": {
+      "sha256": "a3adf5d3430f7390f9e89096836f2b7dfa700e4accdb6671aa98a73a2819e040",
+      "shape": [
+        2,
+        16,
+        8
+      ],
+      "dtype": "torch.int64"
+    },
+    "fsq_g8/decode": {
+      "sha256": "7f709738d0bbcf4624d49dfa1f1b59195d3f52ad8b1b2c31d0053843458d977f",
+      "shape": [
+        2,
+        64,
+        263
+      ],
+      "dtype": "torch.float32"
+    },
+    "fsq_g8/recon": {
+      "sha256": "7f709738d0bbcf4624d49dfa1f1b59195d3f52ad8b1b2c31d0053843458d977f",
+      "shape": [
+        2,
+        64,
+        263
+      ],
+      "dtype": "torch.float32"
+    },
+    "fsq_g8/commit": {
+      "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "shape": [],
+      "dtype": "torch.float32"
+    },
+    "fsq_g8/soft_decode": {
+      "sha256": "401c87b729bd1357a04f535a6c2f80d2fbed9b7c388adc31019f25caaff264d8",
+      "shape": [
+        2,
+        64,
+        263
+      ],
+      "dtype": "torch.float32"
+    },
+    "fsq_g8/train_recon": {
+      "sha256": "7f709738d0bbcf4624d49dfa1f1b59195d3f52ad8b1b2c31d0053843458d977f",
+      "shape": [
+        2,
+        64,
+        263
+      ],
+      "dtype": "torch.float32"
+    },
+    "fsq_g8/train_indices": {
+      "sha256": "a3adf5d3430f7390f9e89096836f2b7dfa700e4accdb6671aa98a73a2819e040",
+      "shape": [
+        2,
+        16,
+        8
+      ],
+      "dtype": "torch.int64"
+    },
+    "rvq_l8/indices": {
+      "sha256": "e13d3f44f5e36791f77b6506554594ccf8abb7cf6bd72115a6518bf536052a97",
+      "shape": [
+        2,
+        16,
+        8
+      ],
+      "dtype": "torch.int64"
+    },
+    "rvq_l8/decode": {
+      "sha256": "ffe03005069c6cd043c303798a0a8c82de6a0d2a5fdf5a5338a4f036ad0da12a",
+      "shape": [
+        2,
+        64,
+        263
+      ],
+      "dtype": "torch.float32"
+    },
+    "rvq_l8/recon": {
+      "sha256": "ffe03005069c6cd043c303798a0a8c82de6a0d2a5fdf5a5338a4f036ad0da12a",
+      "shape": [
+        2,
+        64,
+        263
+      ],
+      "dtype": "torch.float32"
+    },
+    "rvq_l8/commit": {
+      "sha256": "6ac075e5fdf8b310c3d29f85e0348614add38acd93f327967827103018b8f534",
+      "shape": [],
+      "dtype": "torch.float32"
+    },
+    "rvq_l8/soft_decode": {
+      "sha256": "08232070942fb1016ad93a52d754d6503a4241bc3451dd489cf4def59028b8e2",
+      "shape": [
+        2,
+        64,
+        263
+      ],
+      "dtype": "torch.float32"
+    },
+    "fsq_residual/indices": {
+      "sha256": "6614a96f787ef6caaaaf57b25c1266540977275aa921b3d508c69fba66a776e6",
+      "shape": [
+        2,
+        16,
+        8
+      ],
+      "dtype": "torch.int64"
+    },
+    "fsq_residual/decode": {
+      "sha256": "92f9da205f2c86fc1853b8afecd52715c3fc6ba138678a22808fd2a04f422344",
+      "shape": [
+        2,
+        64,
+        263
+      ],
+      "dtype": "torch.float32"
+    },
+    "fsq_residual/recon": {
+      "sha256": "92f9da205f2c86fc1853b8afecd52715c3fc6ba138678a22808fd2a04f422344",
+      "shape": [
+        2,
+        64,
+        263
+      ],
+      "dtype": "torch.float32"
+    },
+    "fsq_residual/commit": {
+      "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "shape": [],
+      "dtype": "torch.float32"
+    },
+    "fsq_residual/soft_decode": {
+      "sha256": "0125787a621e878ac10c7ae3ce77961b798d356f330a7361fda73796148ce59f",
+      "shape": [
+        2,
+        64,
+        263
+      ],
+      "dtype": "torch.float32"
+    },
+    "fsq_residual/train_recon": {
+      "sha256": "92f9da205f2c86fc1853b8afecd52715c3fc6ba138678a22808fd2a04f422344",
+      "shape": [
+        2,
+        64,
+        263
+      ],
+      "dtype": "torch.float32"
+    },
+    "fsq_residual/train_indices": {
+      "sha256": "b80a121da3295ac30c79afe45d973f20914531b842fc801b752f395e3836d4a6",
+      "shape": [
+        2,
+        16,
+        8
+      ],
+      "dtype": "torch.int64"
+    }
+  }
+}
