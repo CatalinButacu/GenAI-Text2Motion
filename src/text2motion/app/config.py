@@ -164,6 +164,8 @@ class ApplicationConfig:
     mlflow_tracking: bool = False
     device: ComputeDevice = ComputeDevice.CUDA
     precision: Float32Precision = Float32Precision.TF32
+    failure_logs: bool = True
+    detect_anomaly: bool = False
     avatar: SmplxAvatarConfig = field(default_factory=SmplxAvatarConfig)
     paths: ProjectPathsConfig = field(default_factory=ProjectPathsConfig)
     service: MotionServiceConfig = field(default_factory=MotionServiceConfig)

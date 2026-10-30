@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
+import traceback
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -19,6 +23,9 @@ STD_FILE = "Std.npy"
 STATS_PROVENANCE_FILE = "stats_provenance.json"
 CLIP_LENGTHS_FILE = "clip_lengths.json"
 RESUME_VERSION = 2
+FAILURE_DUMP_FILE = "failure_dump.pt"
+
+logger = logging.getLogger(__name__)
 
 
 SPLIT_FILES = MappingProxyType({split: f"{split.value}.txt" for split in Split})
@@ -67,6 +74,49 @@ def sha256_file(path: str | Path) -> str:
 def capture_rng_state() -> dict[str, Any]:
     cuda_states = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else []
     return {"torch": torch.get_rng_state(), "cuda": cuda_states}
+
+
+def non_finite_names(module: torch.nn.Module) -> list[str]:
+    names = []
+    for name, parameter in module.named_parameters():
+        if not torch.isfinite(parameter).all():
+            names.append(name)
+        if parameter.grad is not None and not torch.isfinite(parameter.grad).all():
+            names.append(f"{name}.grad")
+    return names
+
+
+def write_failure_dump(
+    path: str | Path | None,
+    state: dict[str, Any],
+    inputs: dict[str, Any],
+    epoch_step: int,
+    module: torch.nn.Module,
+    error: BaseException,
+) -> None:
+    if path is None:
+        return
+    dump = state | {
+        "inputs": inputs,
+        "epoch_step": epoch_step,
+        "non_finite": non_finite_names(module),
+        "error": "".join(traceback.format_exception(error)),
+    }
+    atomic_torch_save(dump, path)
+    logger.error(f"wrote a failure dump to {path}; non-finite tensors: {dump['non_finite']}")
+
+
+@contextmanager
+def dump_on_failure(
+    path: str | Path | None,
+    capture: Callable[[], tuple[dict[str, Any], dict[str, Any], int, torch.nn.Module]],
+) -> Iterator[None]:
+    try:
+        yield
+    except Exception as error:
+        if path is not None:
+            write_failure_dump(path, *capture(), error)
+        raise
 
 
 def restore_rng_state(state: dict[str, Any]) -> None:

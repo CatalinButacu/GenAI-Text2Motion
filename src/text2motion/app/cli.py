@@ -157,7 +157,12 @@ def main(argv: list[str] | None = None) -> None:
         device=getattr(request, "device", None),
         seed=getattr(request, "seed", None),
     )
-    COMMANDS[selected.command].handler(app, request)
+    try:
+        COMMANDS[selected.command].handler(app, request)
+    except Exception:
+        if app.config.failure_logs:
+            logger.exception(f"command {selected.command} failed")
+        raise
 
 
 if __name__ == "__main__":

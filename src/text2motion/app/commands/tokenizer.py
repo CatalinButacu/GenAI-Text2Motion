@@ -84,6 +84,7 @@ def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) ->
         resume_path=resume_path,
         on_metrics=lambda record: log_metrics(run_dir, record),
         run_dir=run_dir,
+        failure_dump_path=app.failure_dump_path(run_dir),
     )
 
     best_path = checkpoint_dir / name

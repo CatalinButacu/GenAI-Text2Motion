@@ -33,6 +33,7 @@ from text2motion.motion.storage import (
     RESUME_VERSION,
     atomic_torch_save,
     capture_rng_state,
+    dump_on_failure,
     is_legacy_resume,
     restore_rng_state,
 )
@@ -203,6 +204,8 @@ class GeneratorTrainer:
         self.scheduler: torch.optim.lr_scheduler.LambdaLR | None = None
         self.total_steps: int | None = None
         self._accum_count = 0
+        self.current_inputs: dict[str, object] = {}
+        self.current_step = 0
 
     def build_scheduler(self, total_steps: int) -> None:
         self.total_steps = total_steps
@@ -329,6 +332,12 @@ class GeneratorTrainer:
         totals: dict[str, torch.Tensor] = {}
         steps = 0
         for batch in loader:
+            self.current_inputs = {
+                "features": batch.features,
+                "lengths": batch.lengths,
+                "captions": list(batch.captions),
+            }
+            self.current_step = steps
             text_emb = self.encode(list(batch.captions))
             parts = self.train_step(batch.features.to(device), text_emb, batch.lengths.to(device))
             for key, value in parts.items():
@@ -339,6 +348,12 @@ class GeneratorTrainer:
                 heartbeat.write_text(str(steps), encoding="utf-8")
         self.apply_pending_gradients()
         return {key: value.item() / steps for key, value in totals.items()}
+
+    def trained_modules(self) -> nn.ModuleDict:
+        modules = nn.ModuleDict({"token_generator": self.token_generator})
+        if self.text_encoder is not None:
+            modules["text_encoder"] = self.text_encoder
+        return modules
 
     @contextmanager
     def ema_weights(self):
@@ -408,6 +423,7 @@ def train_generator(
     resume_path: Path,
     run_dir: Path | None = None,
     on_metrics: MetricSink = lambda metrics: None,
+    failure_dump_path: Path | None = None,
 ) -> float:
     best_fid = float("inf")
     start_epoch = 0
@@ -441,7 +457,16 @@ def train_generator(
     for epoch in range(start_epoch, request.epochs):
         loader.dataset.set_epoch(epoch)
         epoch_started = time.perf_counter()
-        means = trainer.train_epoch(loader, device, heartbeat=heartbeat)
+        with dump_on_failure(
+            failure_dump_path,
+            lambda epoch=epoch, best_fid=best_fid, stale_evaluations=stale_evaluations: (
+                trainer.resume_state(epoch, best_fid, stale_evaluations, run_dir),
+                trainer.current_inputs,
+                trainer.current_step,
+                trainer.trained_modules(),
+            ),
+        ):
+            means = trainer.train_epoch(loader, device, heartbeat=heartbeat)
         epoch_minutes = (time.perf_counter() - epoch_started) / 60
         learning_rate = trainer.optimizer.param_groups[0]["lr"]
         on_metrics(

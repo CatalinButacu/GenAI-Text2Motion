@@ -195,6 +195,7 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         resume_path=resume_path,
         run_dir=run_dir,
         on_metrics=lambda record: log_metrics(run_dir, record),
+        failure_dump_path=app.failure_dump_path(run_dir),
     )
 
 
@@ -255,4 +256,5 @@ def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
         on_metrics=lambda record: log_metrics(run_dir, record),
         seed=app.config.seed,
         run_dir=run_dir,
+        failure_dump_path=app.failure_dump_path(run_dir),
     )

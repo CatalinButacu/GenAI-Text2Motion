@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 from text2motion.generation.contracts import (
@@ -27,6 +28,7 @@ from text2motion.motion.storage import (
     capture_rng_state,
     is_legacy_resume,
     restore_rng_state,
+    write_failure_dump,
 )
 from text2motion.tokenization.corpus import pack_clip_keys, read_pack_identity
 
@@ -196,6 +198,27 @@ def __load_pretraining_resume(
     return step, start_epoch
 
 
+def __pretraining_state(
+    generator: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    total_steps: int,
+    run_dir: Path | None,
+    step: int,
+    epoch: int,
+) -> dict:
+    return {
+        "format": PRETRAIN_RESUME_FORMAT,
+        "version": RESUME_VERSION,
+        "generator": generator.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "total_steps": total_steps,
+        "rng": capture_rng_state(),
+        "run_dir": None if run_dir is None else str(run_dir),
+        "step": step,
+        "epoch": epoch,
+    }
+
+
 def pretrain_generator(
     architecture: GeneratorModelSpec,
     generator,
@@ -206,6 +229,7 @@ def pretrain_generator(
     on_metrics: MetricSink = lambda metrics: None,
     seed: int = 2026,
     run_dir: Path | None = None,
+    failure_dump_path: Path | None = None,
 ) -> None:
     loader, val_loader, budget = build_token_loaders(request, seed)
     logger.info(
@@ -258,28 +282,41 @@ def pretrain_generator(
         running = 0.0
         seen = 0
         opt.zero_grad(set_to_none=True)
+        inputs: dict[str, torch.Tensor] = {}
 
-        for microbatch_index, (tokens, lengths) in enumerate(loader):
-            if microbatch_index >= budget.microbatches:
-                break
-            tokens, lengths = tokens.to(device), lengths.to(device)
-            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):
-                raw_loss = token_ce_loss(
-                    generator(tokens, null_condition(tokens.size(0))), tokens, lengths
-                )
-                loss = raw_loss / request.grad_accum
-            loss.backward()
-            if (microbatch_index + 1) % request.grad_accum == 0:
-                torch.nn.utils.clip_grad_norm_(
-                    generator.parameters(), train.grad_clip, error_if_nonfinite=True
-                )
-                for group in opt.param_groups:
-                    group["lr"] = train.lr * lr_multiplier(step)
-                opt.step()
-                opt.zero_grad(set_to_none=True)
-                step += 1
-            running += raw_loss.item()
-            seen += 1
+        try:
+            for microbatch_index, (tokens, lengths) in enumerate(loader):
+                if microbatch_index >= budget.microbatches:
+                    break
+                tokens, lengths = tokens.to(device), lengths.to(device)
+                inputs = {"tokens": tokens, "lengths": lengths}
+                with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):
+                    raw_loss = token_ce_loss(
+                        generator(tokens, null_condition(tokens.size(0))), tokens, lengths
+                    )
+                    loss = raw_loss / request.grad_accum
+                loss.backward()
+                if (microbatch_index + 1) % request.grad_accum == 0:
+                    torch.nn.utils.clip_grad_norm_(
+                        generator.parameters(), train.grad_clip, error_if_nonfinite=True
+                    )
+                    for group in opt.param_groups:
+                        group["lr"] = train.lr * lr_multiplier(step)
+                    opt.step()
+                    opt.zero_grad(set_to_none=True)
+                    step += 1
+                running += raw_loss.item()
+                seen += 1
+        except Exception as error:
+            write_failure_dump(
+                failure_dump_path,
+                __pretraining_state(generator, opt, total_steps, run_dir, step, epoch),
+                inputs,
+                seen,
+                generator,
+                error,
+            )
+            raise
 
         if step != (epoch + 1) * budget.optimizer_steps:
             raise RuntimeError(
@@ -312,18 +349,7 @@ def pretrain_generator(
         logger.info(line)
         atomic_torch_save(generator.state_dict(), out_path)
         atomic_torch_save(
-            {
-                "format": PRETRAIN_RESUME_FORMAT,
-                "version": RESUME_VERSION,
-                "generator": generator.state_dict(),
-                "optimizer": opt.state_dict(),
-                "total_steps": total_steps,
-                "rng": capture_rng_state(),
-                "run_dir": None if run_dir is None else str(run_dir),
-                "step": step,
-                "epoch": epoch,
-            },
-            resume_path,
+            __pretraining_state(generator, opt, total_steps, run_dir, step, epoch), resume_path
         )
         if device == "cuda":
             torch.cuda.empty_cache()

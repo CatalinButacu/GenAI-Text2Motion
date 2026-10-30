@@ -1,5 +1,6 @@
 import json
 import pickle
+from types import SimpleNamespace
 from typing import cast
 
 import numpy as np
@@ -132,3 +133,37 @@ def test_pretraining_budget_matches_different_physical_batches():
 def test_pretraining_budget_rejects_invalid_accumulation(batch_size, grad_accum):
     with pytest.raises(ValueError, match="must be positive"):
         PretrainingBudget.build(100, batch_size, grad_accum)
+
+
+class _FailingGenerator(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.weight = torch.nn.Parameter(torch.zeros(1))
+
+    def forward(self, tokens, condition):
+        raise RuntimeError("boom")
+
+
+def test_a_failed_pretraining_step_writes_a_dump_with_the_tokens(tmp_path):
+    request = GeneratorPretrainingRequest(
+        token_pack=make_pack(tmp_path, identity=True), epochs=1, batch_size=2, val_fraction=0.0
+    )
+    architecture = SimpleNamespace(config=SimpleNamespace(text_prefix_len=1, d_text=2))
+    dump_path = tmp_path / "failure_dump.pt"
+
+    with pytest.raises(RuntimeError, match="boom"):
+        pretrain_generator(
+            cast(GeneratorModelSpec, architecture),
+            _FailingGenerator(),
+            request,
+            GeneratorTrainingConfig(),
+            "cpu",
+            tmp_path / "pretrained.pt",
+            failure_dump_path=dump_path,
+        )
+
+    dump = torch.load(dump_path, weights_only=True)
+    assert dump["epoch"] == 0
+    assert dump["epoch_step"] == 0
+    assert dump["inputs"]["tokens"].shape[0] == 2
+    assert "generator" in dump

@@ -25,6 +25,7 @@ from text2motion.generation.nn_text import CLIPTextEncoder
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.contracts import PreparationRequest
 from text2motion.motion.datasets import MotionDataModule
+from text2motion.motion.storage import FAILURE_DUMP_FILE
 from text2motion.tokenization.nn_model import FrozenMotionTokenizer, build_tokenizer_network
 
 
@@ -175,6 +176,11 @@ class ApplicationContext:
         directory.mkdir(parents=True, exist_ok=True)
         return directory
 
+    def failure_dump_path(self, run_dir: Path) -> Path | None:
+        if not self.config.failure_logs:
+            return None
+        return Path(run_dir) / FAILURE_DUMP_FILE
+
     def with_config(self, config_path: str | Path) -> ApplicationContext:
         return ApplicationBootstrap.from_config(config_path, device=self.device)
 
@@ -213,10 +219,12 @@ class ApplicationBootstrap:
         resolved_seed = config.seed if seed is None else seed
         seed_everything(resolved_seed, config.deterministic)
         apply_precision(config.precision)
+        torch.autograd.set_detect_anomaly(config.detect_anomaly)
         resolved_device = resolve_device(config.device, device)
         logger.info(
             f"config {config_path}  device {resolved_device}  seed {resolved_seed}  "
-            f"deterministic {config.deterministic}  precision {config.precision.value}"
+            f"deterministic {config.deterministic}  precision {config.precision.value}  "
+            f"failure_logs {config.failure_logs}  detect_anomaly {config.detect_anomaly}"
         )
         return ApplicationContext(
             config=config,

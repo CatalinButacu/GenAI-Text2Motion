@@ -1,7 +1,11 @@
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
+import torch
 
+from text2motion.app import cli
+from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.app.cli import COMMANDS, parse_request
 from text2motion.evaluation.contracts import BenchmarkRequest, StreamingBenchmarkProtocol
 
@@ -121,3 +125,36 @@ def test_every_command_parses_its_defaults_or_asks_for_required_flags():
     }
     for command in COMMANDS:
         assert parse_request(command, required.get(command, [])) is not None
+
+
+@pytest.mark.parametrize("failure_logs", [True, False])
+def test_a_failed_command_is_logged_only_when_failure_logs_is_on(
+    tmp_path, monkeypatch, caplog, failure_logs
+):
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        f"device: cpu\ndeterministic: false\nfailure_logs: {str(failure_logs).lower()}\n",
+        encoding="utf-8",
+    )
+
+    def fail(app, request):
+        raise RuntimeError("boom")
+
+    failing = cli.Command(BenchmarkRequest, fail, "always fails")
+    monkeypatch.setattr(cli, "COMMANDS", MappingProxyType({**cli.COMMANDS, "benchmark": failing}))
+    monkeypatch.setattr(cli, "configure_logging", lambda level: None)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        cli.main(["benchmark", "--config", str(config)])
+
+    assert ("command benchmark failed" in caplog.text) == failure_logs
+
+
+def test_detect_anomaly_follows_the_config(tmp_path):
+    config = tmp_path / "config.yaml"
+    config.write_text("device: cpu\ndeterministic: false\ndetect_anomaly: true\n", encoding="utf-8")
+    try:
+        ApplicationBootstrap.from_config(config)
+        assert torch.is_anomaly_enabled()
+    finally:
+        torch.autograd.set_detect_anomaly(False)

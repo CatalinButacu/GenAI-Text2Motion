@@ -14,6 +14,7 @@ from text2motion.motion.storage import (
     RESUME_VERSION,
     atomic_torch_save,
     capture_rng_state,
+    dump_on_failure,
     is_legacy_resume,
     restore_rng_state,
 )
@@ -53,6 +54,8 @@ class TokenizerTrainer:
         self.parameter_ema = ExponentialMovingAverage(
             tokenizer_network, ema_decay, average_buffers=True
         )
+        self.current_inputs: dict[str, torch.Tensor] = {}
+        self.current_step = 0
 
     def code_statistics(self, indices: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         codebook_size = self.tokenizer_network.codebook_size
@@ -104,6 +107,8 @@ class TokenizerTrainer:
         steps = 0
         for batch in loader:
             motion = batch.features if isinstance(batch, MotionBatch) else batch
+            self.current_inputs = {"motion": motion}
+            self.current_step = steps
             parts = self.train_step(motion.to(device, non_blocking=True))
             for key, value in parts.items():
                 totals[key] = totals[key] + value if key in totals else value
@@ -156,6 +161,7 @@ def train_tokenizer(
     resume_path: Path,
     on_metrics: MetricSink = lambda metrics: None,
     run_dir: Path | None = None,
+    failure_dump_path: Path | None = None,
 ) -> float:
     best_fid = float("inf")
     start_epoch = 0
@@ -176,7 +182,16 @@ def train_tokenizer(
 
     for epoch in range(start_epoch, request.epochs):
         loader.dataset.set_epoch(epoch)
-        means = trainer.train_epoch(loader, device)
+        with dump_on_failure(
+            failure_dump_path,
+            lambda epoch=epoch, best_fid=best_fid: (
+                trainer.resume_state(epoch, best_fid, run_dir),
+                trainer.current_inputs,
+                trainer.current_step,
+                trainer.tokenizer_network,
+            ),
+        ):
+            means = trainer.train_epoch(loader, device)
         on_metrics({"epoch": epoch + 1, **means})
         logger.info(
             f"epoch {epoch + 1:3d}  [common] recon {means['recon']:.4f} total {means['total']:.4f}  "

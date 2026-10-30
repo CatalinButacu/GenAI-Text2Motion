@@ -94,3 +94,36 @@ def test_a_non_finite_fid_stops_the_run_without_a_save(tmp_path):
 
     assert saved == []
     assert torch.load(tmp_path / "generator_last.pt")["epoch"] == 59
+
+
+class _FailingTrainer(_FakeTrainer):
+    current_inputs = {"captions": ["a person walks"]}
+    current_step = 4
+
+    def train_epoch(self, loader, device, heartbeat=None):
+        raise RuntimeError("boom")
+
+    def trained_modules(self):
+        return torch.nn.Linear(1, 1)
+
+
+def test_a_failed_generator_epoch_writes_a_dump(tmp_path):
+    dump_path = tmp_path / "failure_dump.pt"
+    loader = SimpleNamespace(dataset=SimpleNamespace(set_epoch=lambda epoch: None))
+
+    with pytest.raises(RuntimeError, match="boom"):
+        train_generator(
+            cast(GeneratorTrainer, _FailingTrainer()),
+            loader,
+            GeneratorTrainingRequest(epochs=1, eval_every=1),
+            "cpu",
+            evaluate=lambda split: {},
+            save_best=lambda epoch, fid: None,
+            resume_path=tmp_path / "generator_last.pt",
+            failure_dump_path=dump_path,
+        )
+
+    dump = torch.load(dump_path, weights_only=True)
+    assert dump["epoch"] == 0
+    assert dump["epoch_step"] == 4
+    assert dump["inputs"] == {"captions": ["a person walks"]}

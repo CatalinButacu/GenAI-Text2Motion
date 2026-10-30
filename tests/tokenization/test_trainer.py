@@ -201,6 +201,37 @@ def test_the_tokenizer_ema_averages_the_rvq_codebooks():
     assert set(codebooks) <= trainer.parameter_ema.shadow.keys()
 
 
+class _OneBatchLoader(list):
+    dataset = SimpleNamespace(set_epoch=lambda epoch: None)
+
+
+def test_a_failed_tokenizer_epoch_writes_a_dump_with_the_batch(tmp_path):
+    trainer = __resumable_trainer()
+    first_name, first = next(iter(trainer.tokenizer_network.named_parameters()))
+    first.register_hook(lambda gradient: gradient * float("inf"))
+    motion = torch.randn(2, 32, 263)
+    dump_path = tmp_path / "failure_dump.pt"
+
+    with pytest.raises(RuntimeError, match="non-finite"):
+        train_tokenizer(
+            trainer,
+            _OneBatchLoader([motion]),
+            __training_request(tmp_path),
+            "cpu",
+            evaluate=lambda split: {},
+            checkpoint_path=tmp_path / "tokenizer.pt",
+            resume_path=tmp_path / "tokenizer_last.pt",
+            failure_dump_path=dump_path,
+        )
+
+    dump = torch.load(dump_path, weights_only=True)
+    assert f"{first_name}.grad" in dump["non_finite"]
+    assert dump["epoch_step"] == 0
+    assert dump["epoch"] == 0
+    torch.testing.assert_close(dump["inputs"]["motion"], motion)
+    assert dump["tokenizer"].keys() == trainer.tokenizer_network.state_dict().keys()
+
+
 def test_an_epoch_without_a_batch_raises():
     with pytest.raises(ValueError, match="no batch"):
         __resumable_trainer().train_epoch([], "cpu")
