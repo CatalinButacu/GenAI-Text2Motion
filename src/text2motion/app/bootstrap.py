@@ -66,7 +66,6 @@ class ApplicationContext:
         )
         return FrozenMotionTokenizer(
             tokenizer_network,
-            downsample=self.config.tokenizer.downsample,
             device=self.device,
         )
 

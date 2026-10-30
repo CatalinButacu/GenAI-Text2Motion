@@ -28,7 +28,7 @@ To measure a network, call `evaluate_tokenizer_reconstruction(network, root, sca
 
 ## Freeze and use
 
-After training, the network does not change again. `FrozenMotionTokenizer(network, downsample, device)` puts it in evaluation mode and works with clips in place of tensors. `encode(clip)` takes a `MotionClip` with normalized features, cuts it to a multiple of `downsample` frames and returns `MotionTokens` with indices of shape `[steps, codebooks]` and the kept frame count. A clip shorter than one token step raises a `ValueError`. `decode(tokens)` gives a `MotionClip` back. The application reads `codebook_size` from this object to size the generator.
+After training, the network does not change again. `FrozenMotionTokenizer(network, device)` puts it in evaluation mode and works with clips in place of tensors. It reads the downsample factor from the network, so the two cannot disagree. `encode(clip)` takes a `MotionClip` with normalized features, cuts it to a multiple of `downsample` frames and returns `MotionTokens` with indices of shape `[steps, codebooks]` and the kept frame count. A clip shorter than one token step raises a `ValueError`. `decode(tokens)` gives a `MotionClip` back. The application reads `codebook_size` from this object to size the generator.
 
 ## Tokenize the corpus
 

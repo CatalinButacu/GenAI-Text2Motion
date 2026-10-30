@@ -247,11 +247,10 @@ class FrozenMotionTokenizer:
     def __init__(
         self,
         network: TokenizerNetwork,
-        downsample: int,
         device: str | torch.device = "cpu",
     ) -> None:
         self.network = network.to(device).eval()
-        self.downsample = downsample
+        self.downsample = network.downsample
         self.device = device
 
     @property

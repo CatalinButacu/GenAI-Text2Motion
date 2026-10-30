@@ -99,20 +99,20 @@ def test_a_frame_count_that_is_not_a_multiple_of_downsample_raises(frames, call)
 
 
 def test_the_frozen_tokenizer_cuts_a_clip_to_whole_token_steps():
-    frozen = FrozenMotionTokenizer(FiniteScalarQuantizationTokenizer(CFG), CFG.downsample)
+    frozen = FrozenMotionTokenizer(FiniteScalarQuantizationTokenizer(CFG))
     tokens = frozen.encode(MotionClip(features=torch.randn(62, 263), frame_count=62))
     assert tokens.frame_count == 60
     assert tokens.indices.shape == (15, CFG.num_quantizers)
 
 
 def test_the_frozen_tokenizer_rejects_a_clip_shorter_than_one_token_step():
-    frozen = FrozenMotionTokenizer(FiniteScalarQuantizationTokenizer(CFG), CFG.downsample)
+    frozen = FrozenMotionTokenizer(FiniteScalarQuantizationTokenizer(CFG))
     with pytest.raises(ValueError, match="fewer than one token"):
         frozen.encode(MotionClip(features=torch.randn(3, 263), frame_count=3))
 
 
 def test_the_frozen_tokenizer_rejects_one_dimensional_indices():
-    frozen = FrozenMotionTokenizer(FiniteScalarQuantizationTokenizer(CFG), CFG.downsample)
+    frozen = FrozenMotionTokenizer(FiniteScalarQuantizationTokenizer(CFG))
     tokens = MotionTokens(indices=torch.zeros(CFG.num_quantizers, dtype=torch.long), frame_count=4)
     with pytest.raises(ValueError, match="token indices must have shape"):
         frozen.decode(tokens)
