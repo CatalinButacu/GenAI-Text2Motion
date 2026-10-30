@@ -148,3 +148,11 @@ def test_decode_of_an_index_outside_the_codebook_raises(tok, bad_index):
 def test_an_rvq_tokenizer_without_its_config_raises():
     with pytest.raises(ValueError, match="needs its ResidualVectorQuantizationConfig"):
         build_tokenizer_network(replace(FSQ_CFG, kind=TokenizerKind.RESIDUAL_VECTOR))
+
+
+@pytest.mark.parametrize("strict", [True, False])
+def test_a_checkpoint_with_other_fsq_levels_of_the_same_length_is_refused(strict):
+    trained = FiniteScalarQuantizationTokenizer(FSQ_CFG)
+    other = FiniteScalarQuantizationTokenizer(replace(FSQ_CFG, fsq_levels=(8, 4, 8, 4)))
+    with pytest.raises(RuntimeError, match="levels: the checkpoint has"):
+        other.load_state_dict(trained.state_dict(), strict=strict)

@@ -83,6 +83,27 @@ def round_straight_through(latent: torch.Tensor) -> torch.Tensor:
     return latent + (torch.round(latent) - latent).detach()
 
 
+def reject_other_fsq_levels(
+    module: nn.Module,
+    state_dict: dict[str, torch.Tensor],
+    prefix: str,
+    local_metadata: dict,
+    strict: bool,
+    missing_keys: list[str],
+    unexpected_keys: list[str],
+    error_msgs: list[str],
+) -> None:
+    built = module.get_buffer("levels")
+    stored = state_dict.get(f"{prefix}levels")
+    if stored is None or torch.equal(stored.to(built), built):
+        return
+    error_msgs.append(
+        f"{prefix}levels: the checkpoint has {stored.tolist()}, but the config builds "
+        f"{built.tolist()}; the FSQ bounds come from the config, so the tokens would change; "
+        "load the checkpoint with the config it was trained with"
+    )
+
+
 ############################################################
 #       FiniteScalarQuantizer
 ############################################################
@@ -118,6 +139,7 @@ class FiniteScalarQuantizer(Quantizer):
 
         self.dimension_count = len(levels)
         self.codebook_size = int(torch.prod(level_values).item())
+        self.register_load_state_dict_pre_hook(reject_other_fsq_levels)
 
     def bound(self, latent: torch.Tensor) -> torch.Tensor:
         return torch.tanh(latent + self.bound_shift) * self.bound_scale - self.bound_offset
