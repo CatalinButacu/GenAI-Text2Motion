@@ -218,3 +218,15 @@ def test_the_frame_count_cache_rereads_an_equal_size_replacement(tmp_path):
 
     assert path.stat().st_size == size
     assert clip_frame_counts(vec_dir, ["A"]) == {"A": 40}
+
+
+def test_a_collated_batch_does_not_share_memory_with_the_window_cache(tmp_path):
+    dataset = MotionWindowDataset(
+        __small_dataset_root(tmp_path), MotionDataConfig(mirror_augment=False), Split.TRAIN, 16
+    )
+    before = dataset[0].features.clone()
+    batch = collate_motion_clips([dataset[0], dataset[1]])
+
+    batch.features.add_(1000.0)
+
+    torch.testing.assert_close(dataset[0].features, before)

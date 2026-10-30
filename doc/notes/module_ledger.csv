@@ -34,3 +34,10 @@ date,module,kind,item,change,evidence
 2026-10-30,motion,fix,A16,the frame-count cache keys each length by (size; mtime_ns) and is written atomically; old caches are re-read once,same test file (equal-size replacement)
 2026-10-30,motion,fix,A9,the held-out guard tries the official and the short AMASS folder name; excludes every file variant of a capture; raises for a held-out clip without an index row,tests/motion/test_amass_paths.py; real data: 2922 held-out ids all have rows and 2249 pose files are excluded before and after (no leak missed)
 2026-10-30,motion,optimization,D3,heldout_feature_names skips hashing files that are already excluded; same result,by construction (those names are added before the loop)
+2026-10-30,motion,test,N3,a collated batch does not share memory with the window cache (collate copies),tests/motion/test_input_checks.py
+2026-10-30,motion,decision,D1,no change: caption parsing per item is not a bottleneck,generator loader 13.6 ms per batch (4 workers) vs 158 ms per step (measured 2026-10-28)
+2026-10-30,motion,decision,D2,no change: caching the scaler statistics on the GPU saves 0.1 ms per call (0.44 -> 0.34 ms; identical output),A/B in one process; under 0.3 percent of a 158 ms step
+2026-10-30,motion,decision,C1,keep the train-only refit Mean/Std (HumanML3D group averaging on train only; no test leakage); evaluation must convert to the evaluator statistics (check in the evaluation module),evaluator Std differs up to 96 percent; a switch means retraining every model
+2026-10-30,motion,decision,C2,deferred to the generation module: the data path already raises on non-finite features; the loss path decision needs a measurement of near-zero 6D norms in training,see generation audit
+2026-10-30,motion,decision,C4,deferred: CLI request classes in motion/contracts.py are a structure decision of the owner,no numeric effect
+2026-10-30,motion,freeze,70f8042e2d5fca273479c923d1467b959ba98f879d4640895a853e7ad8047064,motion frozen after two audits; a council review and the fixes above,139 motion tests pass; golden tests identical; tests/golden/test_module_freeze.py enforces this hash
