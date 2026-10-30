@@ -42,6 +42,24 @@ class MotionScaler:
     mean: np.ndarray
     std: np.ndarray
 
+    def __post_init__(self) -> None:
+        if self.mean.shape != self.std.shape:
+            raise ValueError(f"Mean/Std shape mismatch: {self.mean.shape} vs {self.std.shape}")
+        check_scaler_values(self.mean, self.std, "MotionScaler")
+
+    def check_features(self, feats) -> None:
+        floating = (
+            feats.is_floating_point()
+            if isinstance(feats, torch.Tensor)
+            else np.issubdtype(np.asarray(feats).dtype, np.floating)
+        )
+        if not floating:
+            raise TypeError("normalization needs floating-point features")
+        if feats.shape[-1] != self.mean.shape[0]:
+            raise ValueError(
+                f"features have width {feats.shape[-1]}, the scaler has {self.mean.shape[0]}"
+            )
+
     @classmethod
     def load(cls, out_dir: Path, dim: int | None = None) -> MotionScaler:
         mean_path = out_dir / MEAN_FILE
@@ -54,19 +72,19 @@ class MotionScaler:
             )
         mean = np.load(mean_path).astype(np.float32)
         std = np.load(std_path).astype(np.float32)
-        if mean.shape != std.shape:
-            raise ValueError(f"Mean/Std shape mismatch: {mean.shape} vs {std.shape}")
         if dim is not None and mean.shape[-1] != dim:
             raise ValueError(f"Mean/Std must be {dim}-dim, got {mean.shape}")
         check_scaler_values(mean, std, out_dir)
         return cls(mean=mean, std=std)
 
     def normalize(self, feats):
+        self.check_features(feats)
         if isinstance(feats, torch.Tensor):
             return (feats - self.__as_tensor(self.mean, feats)) / self.__as_tensor(self.std, feats)
         return (feats - self.mean) / self.std
 
     def denormalize(self, feats):
+        self.check_features(feats)
         if isinstance(feats, torch.Tensor):
             return feats * self.__as_tensor(self.std, feats) + self.__as_tensor(self.mean, feats)
         return feats * self.std + self.mean

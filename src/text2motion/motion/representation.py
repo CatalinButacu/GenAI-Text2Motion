@@ -161,6 +161,10 @@ def __uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarr
 
 
 def encode_joints(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarray, ...]:
+    if positions.ndim != 3 or positions.shape[0] < 2:
+        raise ValueError(
+            f"encode_joints needs joints of shape [frames >= 2, joints, 3], got {positions.shape}"
+        )
     foot_threshold = params.foot_velocity_threshold
     face_joints = params.face_joints
     left_feet, right_feet = params.left_feet, params.right_feet
@@ -253,17 +257,35 @@ def encode_joints(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndar
     return data, global_positions, positions, l_velocity
 
 
+def feature_width(joint_count: int) -> int:
+    return 8 + (joint_count - 1) * 9 + joint_count * 3
+
+
+def check_feature_width(data: torch.Tensor, joint_count: int) -> None:
+    expected = feature_width(joint_count)
+    if data.dim() < 2 or data.shape[-1] != expected:
+        raise ValueError(
+            f"recovery needs features of shape [..., frames, {expected}] for {joint_count} "
+            f"joints, got {tuple(data.shape)}"
+        )
+
+
+def check_finite_features(data: torch.Tensor) -> None:
+    if not torch.isfinite(data).all():
+        raise ValueError("the motion features hold NaN or Inf values")
+
+
 def __recover_root(data: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     rot_vel = data[..., 0]
     r_rot_ang = torch.zeros_like(rot_vel).to(data.device)
     r_rot_ang[..., 1:] = rot_vel[..., :-1]
     r_rot_ang = torch.cumsum(r_rot_ang, dim=-1)
 
-    r_rot_quat = torch.zeros(data.shape[:-1] + (4,)).to(data.device)
+    r_rot_quat = torch.zeros(data.shape[:-1] + (4,), dtype=data.dtype, device=data.device)
     r_rot_quat[..., 0] = torch.cos(r_rot_ang)
     r_rot_quat[..., 2] = torch.sin(r_rot_ang)
 
-    r_pos = torch.zeros(data.shape[:-1] + (3,)).to(data.device)
+    r_pos = torch.zeros(data.shape[:-1] + (3,), dtype=data.dtype, device=data.device)
     r_pos[..., 1:, [0, 2]] = data[..., :-1, 1:3]
     r_pos = qrot(qinv(r_rot_quat), r_pos)
 
@@ -274,6 +296,7 @@ def __recover_root(data: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 
 
 def recover_from_ric(data: torch.Tensor, joint_count: int) -> torch.Tensor:
+    check_feature_width(data, joint_count)
     r_rot_quat, r_pos = __recover_root(data)
     positions = data[..., 4 : (joint_count - 1) * 3 + 4]
     positions = positions.view(positions.shape[:-1] + (-1, 3))
@@ -287,6 +310,7 @@ def recover_from_ric(data: torch.Tensor, joint_count: int) -> torch.Tensor:
 
 
 def recover_from_rot(data: torch.Tensor, joint_count: int, skeleton: Skeleton) -> torch.Tensor:
+    check_feature_width(data, joint_count)
     r_rot_quat, r_pos = __recover_root(data)
 
     r_rot_cont6d = quaternion_to_cont6d(r_rot_quat)
@@ -338,6 +362,7 @@ def recover_skeleton(feat263: np.ndarray | torch.Tensor) -> np.ndarray:
         if isinstance(feat263, torch.Tensor)
         else torch.as_tensor(feat263, dtype=torch.float32)
     )
+    check_finite_features(data)
     return recover_from_ric(data.float(), JOINTS).cpu().numpy()
 
 
@@ -353,8 +378,8 @@ class StreamingSkeletonRecovery:
         self.offset = np.zeros(2, dtype=np.float32)
 
     @staticmethod
-    def __yaw_quat(yaw: float) -> torch.Tensor:
-        quat = torch.zeros(4, dtype=torch.float32)
+    def __yaw_quat(yaw: float, device: torch.device) -> torch.Tensor:
+        quat = torch.zeros(4, dtype=torch.float32, device=device)
         quat[0] = math.cos(yaw)
         quat[2] = math.sin(yaw)
         return quat
@@ -365,18 +390,19 @@ class StreamingSkeletonRecovery:
             if isinstance(feat263, torch.Tensor)
             else torch.as_tensor(np.asarray(feat263), dtype=torch.float32)
         )
+        check_finite_features(data)
         local = recover_from_ric(data, JOINTS)
 
-        carry = self.__yaw_quat(self.yaw).expand(local.shape[:-1] + (4,))
+        carry = self.__yaw_quat(self.yaw, data.device).expand(local.shape[:-1] + (4,))
         placed = qrot(qinv(carry), local)
         placed[..., 0] += float(self.offset[0])
         placed[..., 2] += float(self.offset[1])
 
         yaw_next = self.yaw + float(data[..., 0].sum())
-        step = torch.zeros(3, dtype=torch.float32)
+        step = torch.zeros(3, dtype=torch.float32, device=data.device)
         step[0] = data[-1, 1]
         step[2] = data[-1, 2]
-        step = qrot(qinv(self.__yaw_quat(yaw_next)), step)
+        step = qrot(qinv(self.__yaw_quat(yaw_next, data.device)), step)
 
         root_last = placed[-1, 0]
         self.offset = np.array(

@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import torch
 
+from text2motion.motion import representation
 from text2motion.motion.contracts import MotionDataConfig, Split
 from text2motion.motion.datasets import (
     CaptionedMotionDataset,
@@ -9,6 +10,7 @@ from text2motion.motion.datasets import (
     collate_motion_clips,
 )
 from text2motion.motion.model import MotionClip
+from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import (
     FEATURES_DIR,
@@ -91,3 +93,68 @@ def test_a_negative_index_gives_the_same_clip_as_python_indexing(tmp_path):
 def test_collate_rejects_clips_that_would_broadcast_or_mix(clips):
     with pytest.raises(ValueError):
         collate_motion_clips(clips)
+
+
+@pytest.mark.parametrize(
+    ("mean", "std", "match"),
+    [
+        (np.zeros(3, np.float32), np.ones(4, np.float32), "shape mismatch"),
+        (np.zeros(3, np.float32), np.array([1.0, 0.0, 1.0], np.float32), "zero or negative"),
+        (np.array([0.0, np.nan, 0.0], np.float32), np.ones(3, np.float32), "not finite"),
+    ],
+)
+def test_a_scaler_built_directly_rejects_bad_statistics(mean, std, match):
+    with pytest.raises(ValueError, match=match):
+        MotionScaler(mean=mean, std=std)
+
+
+@pytest.mark.parametrize(
+    ("features", "error"),
+    [
+        (np.ones((2, 3), np.int64), TypeError),
+        (torch.ones(2, 3, dtype=torch.int64), TypeError),
+        (np.ones((2, 1), np.float32), ValueError),
+    ],
+    ids=["numpy_integers", "torch_integers", "broadcast_width"],
+)
+def test_the_scaler_rejects_integer_or_other_width_features(features, error):
+    scaler = MotionScaler(mean=np.zeros(3, np.float32), std=np.full(3, 2.0, np.float32))
+    with pytest.raises(error):
+        scaler.normalize(features)
+
+
+def test_recovery_rejects_another_width_and_non_finite_values():
+    with pytest.raises(ValueError, match="263"):
+        representation.recover_from_ric(torch.zeros(4, 272), 22)
+    features = np.zeros((4, DIM), np.float32)
+    features[1, 7] = np.nan
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        representation.recover_skeleton(features)
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        representation.StreamingSkeletonRecovery()(features)
+
+
+def test_encoding_one_frame_raises(synthetic_joints):
+    params = representation.feature_params(representation.target_offsets(synthetic_joints))
+    with pytest.raises(ValueError, match="frames >= 2"):
+        representation.encode_joints(synthetic_joints[:1], params)
+
+
+def test_float64_recovery_keeps_its_dtype_and_matches_float32():
+    features = torch.from_numpy(np.random.default_rng(2).standard_normal((6, DIM)))
+
+    double = representation.recover_from_ric(features, 22)
+    single = representation.recover_from_ric(features.float(), 22)
+
+    assert double.dtype == torch.float64
+    torch.testing.assert_close(double.float(), single, atol=1e-5, rtol=1e-5)
+
+
+def test_streamed_recovery_accepts_cuda_features():
+    assert torch.cuda.is_available(), "this test checks the CUDA path; this run has no CUDA"
+    features = torch.from_numpy(np.random.default_rng(3).standard_normal((8, DIM))).float()
+
+    on_cpu = representation.StreamingSkeletonRecovery()(features)
+    on_cuda = representation.StreamingSkeletonRecovery()(features.cuda())
+
+    np.testing.assert_allclose(on_cuda, on_cpu, atol=1e-5)

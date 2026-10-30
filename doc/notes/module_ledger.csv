@@ -9,3 +9,8 @@ date,module,kind,item,change,evidence
 2026-10-30,motion,fix,A18,MotionDataConfig requires 0 < min <= max length and a source; a window must be positive,same test file; configs load unchanged (all checks pass)
 2026-10-30,motion,fix,A19,a negative index of the captioned dataset gives the same clip and random stream as Python indexing; out of range raises IndexError,same test file
 2026-10-30,motion,fix,A15,collate rejects an empty batch; non 2-D features; a frame count other than the feature rows; another width dtype or device,same test file; golden tests identical
+2026-10-30,motion,fix,A13,MotionScaler validates its statistics when built; normalize and denormalize need floating features of the scaler width,tests/motion/test_input_checks.py; golden tests identical
+2026-10-30,motion,fix,A14,recover_from_ric and recover_from_rot check the 263 width; recover_skeleton and the streaming recovery reject NaN or Inf (not in the loss path: no GPU sync),same test file
+2026-10-30,motion,fix,C3,StreamingSkeletonRecovery builds its tensors on the input device; CUDA input now works and equals CPU,same test file (atol 1e-5)
+2026-10-30,motion,fix,N2,encode_joints needs at least 2 frames (1 frame gave an empty feature array),same test file
+2026-10-30,motion,fix,N8,root recovery keeps the input dtype (float64 input gave float32 zeros),same test file; float32 path unchanged
