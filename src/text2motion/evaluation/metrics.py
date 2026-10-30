@@ -9,13 +9,29 @@ from text2motion.motion.representation import FPS
 
 logger = logging.getLogger(__name__)
 
+FRECHET_DIAGONAL_OFFSET = 1e-6
+FRECHET_IMAGINARY_TOLERANCE = 1e-3
+
 
 def frechet_gaussian_distance(
     mu1: np.ndarray, sigma1: np.ndarray, mu2: np.ndarray, sigma2: np.ndarray
 ) -> float:
     diff = mu1 - mu2
-    covmean = np.real(np.asarray(linalg.sqrtm(sigma1 @ sigma2)))
-    return float(diff @ diff + np.trace(sigma1 + sigma2 - 2.0 * covmean))
+    covmean = np.asarray(linalg.sqrtm(sigma1 @ sigma2))
+    if not np.isfinite(covmean).all():
+        logger.warning(
+            f"the square root of the covariance product is not finite; adding "
+            f"{FRECHET_DIAGONAL_OFFSET} to both diagonals, as the Guo et al. reference does"
+        )
+        offset = np.eye(sigma1.shape[0]) * FRECHET_DIAGONAL_OFFSET
+        covmean = np.asarray(linalg.sqrtm((sigma1 + offset) @ (sigma2 + offset)))
+    imaginary = float(np.abs(np.imag(np.diagonal(covmean))).max())
+    if imaginary > FRECHET_IMAGINARY_TOLERANCE:
+        raise ValueError(
+            f"the square root of the covariance product has an imaginary diagonal part of "
+            f"{imaginary:.3g}, above {FRECHET_IMAGINARY_TOLERANCE}; the FID is not defined"
+        )
+    return float(diff @ diff + np.trace(sigma1 + sigma2 - 2.0 * np.real(covmean)))
 
 
 def fid(real_feats: np.ndarray, gen_feats: np.ndarray, warn_rank_deficient: bool = True) -> float:

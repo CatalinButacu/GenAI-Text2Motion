@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from text2motion.evaluation import metrics
 from text2motion.evaluation.metrics import (
     diversity,
     frechet_gaussian_distance,
@@ -23,6 +24,35 @@ def test_frechet_distance_of_scaled_gaussians_matches_the_closed_form():
     identity = np.eye(2)
     distance = frechet_gaussian_distance(np.zeros(2), 4.0 * identity, np.zeros(2), identity)
     assert distance == pytest.approx(2.0)
+
+
+def test_a_non_finite_square_root_is_computed_again_with_a_diagonal_offset(monkeypatch):
+    calls = []
+
+    def sqrtm(matrix):
+        calls.append(matrix)
+        if len(calls) == 1:
+            return np.full_like(matrix, np.nan)
+        return np.eye(2)
+
+    monkeypatch.setattr(metrics.linalg, "sqrtm", sqrtm)
+    identity = np.eye(2)
+    distance = frechet_gaussian_distance(np.zeros(2), identity, np.zeros(2), identity)
+    offset = 1.0 + metrics.FRECHET_DIAGONAL_OFFSET
+    np.testing.assert_allclose(calls[1], np.eye(2) * offset**2)
+    assert distance == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize(("imaginary", "raises"), [(1e-7, False), (1e-2, True)])
+def test_an_imaginary_square_root_above_the_tolerance_raises(monkeypatch, imaginary, raises):
+    monkeypatch.setattr(metrics.linalg, "sqrtm", lambda matrix: np.eye(2) * (1.0 + 1j * imaginary))
+    identity = np.eye(2)
+    if not raises:
+        distance = frechet_gaussian_distance(np.zeros(2), identity, np.zeros(2), identity)
+        assert distance == pytest.approx(0.0)
+        return
+    with pytest.raises(ValueError, match="imaginary"):
+        frechet_gaussian_distance(np.zeros(2), identity, np.zeros(2), identity)
 
 
 def test_mm_dist_is_the_mean_distance_of_matched_rows():
