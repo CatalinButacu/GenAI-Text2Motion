@@ -46,6 +46,15 @@ class MotionDataConfig:
     max_motion_len: int = 196
     min_motion_len: int = 40
 
+    def __post_init__(self) -> None:
+        if not 0 < self.min_motion_len <= self.max_motion_len:
+            raise ValueError(
+                f"motion lengths need 0 < min_motion_len <= max_motion_len, got "
+                f"{self.min_motion_len} and {self.max_motion_len}"
+            )
+        if not self.sources:
+            raise ValueError("the data config needs at least one motion source")
+
 
 ############################################################
 #       TextAnnotation

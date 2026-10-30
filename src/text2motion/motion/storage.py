@@ -54,6 +54,7 @@ def atomic_torch_save(state: Any, path: str | Path) -> None:
 
 def atomic_numpy_save(array: np.ndarray, path: str | Path) -> None:
     destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
     try:
         with temporary.open("wb") as handle:

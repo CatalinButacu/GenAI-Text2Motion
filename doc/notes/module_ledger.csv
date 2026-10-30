@@ -5,3 +5,7 @@ date,module,kind,item,change,evidence
 2026-10-30,motion,test,E4,mirroring twice gives back the input for 22 and 52 joints,exact equality; same test file
 2026-10-30,motion,decision,B1-B4,kept official HumanML3D behavior (face-joint order; mirrors in stats; end-time drop; no arcsin clip),checked against the official HumanML3D and text-to-motion code by 4 reviewers
 2026-10-30,motion,decision,C3,streaming yaw is a half angle by the official convention; no math change,streamed equals whole recovery (E3)
+2026-10-30,motion,fix,A17,atomic_numpy_save creates the missing parent folder,tests/motion/test_input_checks.py
+2026-10-30,motion,fix,A18,MotionDataConfig requires 0 < min <= max length and a source; a window must be positive,same test file; configs load unchanged (all checks pass)
+2026-10-30,motion,fix,A19,a negative index of the captioned dataset gives the same clip and random stream as Python indexing; out of range raises IndexError,same test file
+2026-10-30,motion,fix,A15,collate rejects an empty batch; non 2-D features; a frame count other than the feature rows; another width dtype or device,same test file; golden tests identical

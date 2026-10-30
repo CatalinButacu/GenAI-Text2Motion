@@ -103,6 +103,9 @@ class CaptionedMotionDataset(Dataset):
         return self.scaler.denormalize(feat)
 
     def __getitem__(self, idx: int) -> MotionClip:
+        if not -len(self._ids) <= idx < len(self._ids):
+            raise IndexError(f"index {idx} is out of range for {len(self._ids)} clips")
+        idx = idx % len(self._ids)
         clip_id = self._ids[idx]
         feat = np.load(self._vec_dir / f"{clip_id}.npy").astype(np.float32)
         if feat.shape[-1] != DIM:
@@ -181,6 +184,8 @@ class MotionWindowDataset(Dataset):
         seed: int = 42,
     ) -> None:
         split = Split(split)
+        if window <= 0:
+            raise ValueError(f"the window must be a positive frame count, got {window}")
         self._window = window
         self._train = split == Split.TRAIN
         self._mirror = data.mirror_augment and self._train
@@ -265,7 +270,29 @@ def dataset_size(loader: DataLoader) -> int:
     return len(dataset)
 
 
+def check_collatable(clips: list[MotionClip]) -> None:
+    if not clips:
+        raise ValueError("a motion batch needs at least one clip")
+    first = clips[0].features
+    for clip in clips:
+        features = clip.features
+        if features.dim() != 2 or not 0 < clip.frame_count == features.shape[0]:
+            raise ValueError(
+                f"clip {clip.clip_id!r}: features {tuple(features.shape)} do not hold "
+                f"frame_count={clip.frame_count} frames"
+            )
+        if (features.shape[1], features.dtype, features.device) != (
+            first.shape[1],
+            first.dtype,
+            first.device,
+        ):
+            raise ValueError(
+                f"clip {clip.clip_id!r}: width, dtype or device differs from the first clip"
+            )
+
+
 def collate_motion_clips(clips: list[MotionClip]) -> MotionBatch:
+    check_collatable(clips)
     max_len = max(clip.frame_count for clip in clips)
     feature_dim = clips[0].features.shape[1]
     padded = clips[0].features.new_zeros(len(clips), max_len, feature_dim)
