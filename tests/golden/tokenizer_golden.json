@@ -3,7 +3,7 @@
   "inputs": {
     "configs/tokenizer/fsq_g8_v1024.yaml": "2ee31f4fc22827ad24b179fe5d40ee5e15868efc0873ebfd641c99dce02513cf",
     "artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt": "c999607b0deaf1fd916fd5255d68e5fc6286455c928a4ff4b277614a77a2472c",
-    "configs/tokenizer/rvq_l8_1024.yaml": "963fc8d141d1c72d38c4c405a9aefa9c51b15a3acd91512f80827f941f09eee8",
+    "configs/tokenizer/rvq_l8_1024.yaml": "4dda35285346253b9a26d3a7bc062fa4d25b0b6f2001f30262ef543a84e12e23",
     "artifacts/checkpoints/tokenizer/rvq_l8_1024.pt": "21100f55ff413b2a47aa70deca0b6a04a4627b46ec4f3c2c8c41b088d8207e72"
   },
   "outputs": {
