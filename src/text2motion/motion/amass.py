@@ -56,27 +56,27 @@ def head_trim_frames(source_path: str | Path, fps: int) -> int:
     return int(round(_HEAD_TRIM_SECONDS.get(dataset_name(source_path), 0.0) * fps))
 
 
-def __pose_candidates(source_path: str, pose_root: Path) -> tuple[Path | None, list[Path]]:
+def pose_folders_and_candidates(source_path: str, pose_root: Path) -> tuple[list[Path], list[Path]]:
     parts = [part for part in Path(source_path).parts if part not in (".", "pose_data")]
     if not parts:
-        return None, []
-    dataset = _FOLDER_NAMES.get(parts[0], parts[0])
-    relative = Path(dataset, *parts[1:])
-    stem = relative.stem
+        return [], []
+    datasets = list(dict.fromkeys([_FOLDER_NAMES.get(parts[0], parts[0]), parts[0]]))
+    stem = Path(parts[-1]).stem
     base = stem[:-6] if stem.endswith("_poses") else stem
-    folder = pose_root / relative.parent
-
     stems = list(dict.fromkeys([base, base.replace(" ", "_"), stem, stem.replace(" ", "_")]))
-    names = [
-        f"{candidate}{suffix}.npy" for candidate in stems for suffix in ("_stageii", "_poses", "")
-    ]
-    return folder, [folder / name for name in dict.fromkeys(names)]
+    names = list(
+        dict.fromkeys(
+            f"{candidate}{suffix}.npy"
+            for candidate in stems
+            for suffix in ("_stageii", "_poses", "")
+        )
+    )
+    folders = [pose_root / Path(dataset, *parts[1:-1]) for dataset in datasets]
+    return folders, [folder / name for folder in folders for name in names]
 
 
 def resolve_pose_path(source_path: str, pose_root: Path) -> Path | None:
-    folder, candidates = __pose_candidates(source_path, pose_root)
-    if folder is None:
-        return None
+    _, candidates = pose_folders_and_candidates(source_path, pose_root)
     return next((candidate for candidate in candidates if candidate.is_file()), None)
 
 
@@ -92,18 +92,24 @@ def heldout_sources(index_csv: Path, out_dir: Path, pose_root: Path) -> set[Path
 
     held_ids = read_heldout_ids(out_dir)
     index = pd.read_csv(index_csv)
+    without_row = sorted(held_ids - {Path(str(name)).stem for name in index["new_name"]})
+    if without_row:
+        raise RuntimeError(
+            f"leakage guard failed: {len(without_row)} held-out clips have no row in "
+            f"{index_csv}, so their source capture cannot be excluded; first: {without_row[:5]}"
+        )
     excluded: set[Path] = set()
     unexcludable: list[str] = []
     for row in index.to_dict("records"):
         if Path(str(row["new_name"])).stem not in held_ids:
             continue
         source_path = str(row["source_path"])
-        resolved = resolve_pose_path(source_path, pose_root)
-        if resolved is not None:
-            excluded.add(resolved.resolve())
+        folders, candidates = pose_folders_and_candidates(source_path, pose_root)
+        matches = [candidate.resolve() for candidate in candidates if candidate.is_file()]
+        if matches:
+            excluded.update(matches)
             continue
-        folder, _ = __pose_candidates(source_path, pose_root)
-        if folder is not None and folder.is_dir():
+        if any(folder.is_dir() for folder in folders):
             unexcludable.append(source_path)
 
     if unexcludable:

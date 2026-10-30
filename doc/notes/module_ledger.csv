@@ -32,3 +32,5 @@ date,module,kind,item,change,evidence
 2026-10-30,motion,fix,N4,caption times that are infinite or negative raise; NaN still maps to 0.0 as in the official loader,tests/motion/test_input_checks.py
 2026-10-30,motion,fix,N7,both datasets record and log the clips they drop as too short (dropped_clip_ids); the kept clips do not change,same test file
 2026-10-30,motion,fix,A16,the frame-count cache keys each length by (size; mtime_ns) and is written atomically; old caches are re-read once,same test file (equal-size replacement)
+2026-10-30,motion,fix,A9,the held-out guard tries the official and the short AMASS folder name; excludes every file variant of a capture; raises for a held-out clip without an index row,tests/motion/test_amass_paths.py; real data: 2922 held-out ids all have rows and 2249 pose files are excluded before and after (no leak missed)
+2026-10-30,motion,optimization,D3,heldout_feature_names skips hashing files that are already excluded; same result,by construction (those names are added before the loop)

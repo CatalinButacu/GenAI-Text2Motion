@@ -52,6 +52,9 @@ def test_untrimmed_dataset_gets_zero():
     assert head_trim_frames("CMU/01/01_01.npy", FPS) == 0
 
 
+NOT_DOWNLOADED = "./pose_data/ACCAD/98/gone_poses.npz"
+
+
 def build_corpus_tree(tmp_path, spelling: str):
     pose_root = tmp_path / "pose_data"
     (pose_root / "CMU" / "01").mkdir(parents=True)
@@ -65,8 +68,8 @@ def build_corpus_tree(tmp_path, spelling: str):
     index = tmp_path / "index.csv"
     pd.DataFrame(
         {
-            "source_path": ["./pose_data/CMU/01/01_01_poses.npz"],
-            "new_name": ["000001.npy"],
+            "source_path": ["./pose_data/CMU/01/01_01_poses.npz", NOT_DOWNLOADED],
+            "new_name": ["000001.npy", "000002.npy"],
         }
     ).to_csv(index, index=False)
     return index, out_dir, pose_root
@@ -92,8 +95,8 @@ def test_guard_stays_quiet_when_the_capture_is_simply_not_downloaded(tmp_path):
     index2 = tmp_path / "index2.csv"
     pd.DataFrame(
         {
-            "source_path": ["./pose_data/ACCAD/99/absent_poses.npz"],
-            "new_name": ["000001.npy"],
+            "source_path": ["./pose_data/ACCAD/99/absent_poses.npz", NOT_DOWNLOADED],
+            "new_name": ["000001.npy", "000002.npy"],
         }
     ).to_csv(index2, index=False)
 
@@ -145,3 +148,32 @@ def test_heldout_guard_excludes_underscored_captures(tmp_path):
     ).to_csv(index, index=False)
 
     assert heldout_sources(index, out_dir, pose_root) == {target.resolve()}
+
+
+def test_the_guard_excludes_every_variant_under_the_official_folder_name(tmp_path):
+    index, out_dir, pose_root = build_corpus_tree(tmp_path, "01_01_poses.npy")
+    official = pose_root / "MPI_HDM05" / "bk"
+    official.mkdir(parents=True)
+    for name in ("walk_stageii.npy", "walk_poses.npy"):
+        np.save(official / name, np.zeros((4, 22, 3), np.float32))
+    pd.DataFrame(
+        {
+            "source_path": ["./pose_data/MPI_HDM05/bk/walk_poses.npz", NOT_DOWNLOADED],
+            "new_name": ["000001.npy", "000002.npy"],
+        }
+    ).to_csv(index, index=False)
+
+    excluded = heldout_sources(index, out_dir, pose_root)
+
+    assert excluded == {
+        (official / "walk_stageii.npy").resolve(),
+        (official / "walk_poses.npy").resolve(),
+    }
+
+
+def test_the_guard_refuses_a_heldout_clip_without_an_index_row(tmp_path):
+    index, out_dir, pose_root = build_corpus_tree(tmp_path, "01_01_poses.npy")
+    (out_dir / "test.txt").write_text("\n".join(["M000002", "000003"]), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="no row in"):
+        heldout_sources(index, out_dir, pose_root)

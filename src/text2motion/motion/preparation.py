@@ -442,6 +442,8 @@ def heldout_feature_names(index_csv: Path, out_dir: Path, pose_root: Path) -> se
     heldout_hashes = {sha256_file(path) for path in heldout}
     names = {corpus_feature_name(path, pose_root) for path in heldout}
     for path in pose_root.rglob(NPY_FILES):
+        if path.resolve() in heldout:
+            continue
         if path.stat().st_size in heldout_sizes and sha256_file(path) in heldout_hashes:
             names.add(corpus_feature_name(path, pose_root))
     return names
