@@ -42,8 +42,10 @@ def test_generator_bundle_keeps_generator_encoder_and_tokenizer_identity(tmp_pat
 
     gen_state, enc_state, bundle = load_generator_checkpoint(path)
     assert gen_state.keys() == generator.state_dict().keys()
-    assert enc_state is not None and enc_state.keys() == encoder.state_dict().keys()
-    assert bundle is not None and bundle.backbone == "mamba"
+    assert enc_state is not None
+    assert enc_state.keys() == encoder.state_dict().keys()
+    assert bundle is not None
+    assert bundle.backbone == "mamba"
     bundle.verify_tokenizer(tokenizer)
 
     torch.save({"weight": torch.zeros(1)}, tokenizer)
@@ -60,3 +62,30 @@ def test_legacy_generator_state_dict_loads_without_fabricating_encoder(tmp_path)
     assert "layer.weight" in gen_state
     assert enc_state is None
     assert bundle is None
+
+
+@pytest.mark.parametrize(
+    ("change", "raises"),
+    [({"use_kernel": True}, False), ({"d_model": 64}, True), ({"use_end_token": True}, True)],
+    ids=["execution_field", "model_size", "end_token"],
+)
+def test_a_bundle_refuses_a_config_that_builds_another_model(tmp_path, change, raises):
+    cfg = GeneratorConfig(d_model=32, n_layers=1, num_codebooks=2, codebook_size=16, n_heads=1)
+    tokenizer = tmp_path / "tokenizer.pt"
+    torch.save({"weight": torch.ones(1)}, tokenizer)
+    bundle = GeneratorBundle.capture(
+        torch.nn.Linear(1, 1),
+        torch.nn.Linear(1, 1),
+        backbone="transformer",
+        tokenizer_ckpt=tokenizer,
+        resolved_generator_config=asdict(cfg),
+        epoch=1,
+        validation_fid=1.0,
+    )
+    other = asdict(cfg) | change
+
+    if not raises:
+        bundle.verify_generator_config(other)
+        return
+    with pytest.raises(ValueError, match="another generator config"):
+        bundle.verify_generator_config(other)

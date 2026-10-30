@@ -4,9 +4,7 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
-from typing import Any
 
 import torch
 import yaml
@@ -85,10 +83,6 @@ def audit_tokenizer(checkpoint: Path) -> AuditRow:
     return AuditRow(checkpoint.as_posix(), "OK", f"{stored}; {config_path.as_posix()}")
 
 
-def __plain_values(config: dict[str, Any]) -> dict[str, Any]:
-    return {key: value.value if isinstance(value, Enum) else value for key, value in config.items()}
-
-
 def __tokenizer_names_by_hash() -> dict[str, str]:
     return {sha256_file(path): path.name for path in sorted(TOKENIZER_DIR.glob("*.pt"))}
 
@@ -124,15 +118,15 @@ def __spec_difference(
     config = app.config
     codebook_size = build_tokenizer_network(config.tokenizer, config.rvq_baseline).codebook_size
     backbone = bundle.resolved_generator_config["backbone"]
-    expected = __plain_values(app.resolve_generator_spec(backbone, codebook_size).as_dict())
-    stored = __plain_values(bundle.resolved_generator_config)
     if sha256_file(tokenizer_path) != bundle.tokenizer_sha256:
         return [f"tokenizer {tokenizer_path.name} is not the recorded tokenizer"]
-    return sorted(
-        f"{key}: bundle {stored.get(key)!r}, YAML {expected.get(key)!r}"
-        for key in stored.keys() | expected.keys()
-        if stored.get(key) != expected.get(key)
-    )
+    try:
+        bundle.verify_generator_config(
+            app.resolve_generator_spec(backbone, codebook_size).as_dict()
+        )
+    except ValueError as error:
+        return [str(error)]
+    return []
 
 
 def audit_demo_entry(entry: dict[str, str], defaults: dict[str, str]) -> AuditRow:

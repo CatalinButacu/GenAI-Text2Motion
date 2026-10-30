@@ -14,6 +14,7 @@ from text2motion.motion.storage import atomic_torch_save, sha256_file
 
 _BUNDLE_FORMAT = "text2motion.generator_bundle"
 _BUNDLE_VERSION = 1
+GENERATOR_EXECUTION_FIELDS = frozenset({"use_kernel"})
 
 
 ############################################################
@@ -79,6 +80,28 @@ class GeneratorBundle:
             raise ValueError(
                 "tokenizer checkpoint does not match the generator bundle: "
                 f"expected {self.tokenizer_sha256}, got {actual}"
+            )
+
+    def verify_generator_config(self, resolved_config: dict[str, Any]) -> None:
+        stored = {
+            key: value
+            for key, value in self.resolved_generator_config.items()
+            if key not in GENERATOR_EXECUTION_FIELDS
+        }
+        expected = {
+            key: value
+            for key, value in resolved_config.items()
+            if key not in GENERATOR_EXECUTION_FIELDS
+        }
+        differences = sorted(
+            f"{key}: bundle {stored.get(key)!r}, config {expected.get(key)!r}"
+            for key in stored.keys() | expected.keys()
+            if stored.get(key) != expected.get(key)
+        )
+        if differences:
+            raise ValueError(
+                "the generator bundle was trained with another generator config; "
+                + "; ".join(differences)
             )
 
     @classmethod

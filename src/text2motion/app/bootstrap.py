@@ -107,6 +107,7 @@ class ApplicationContext:
         )
         if generator_bundle is not None:
             generator_bundle.verify_tokenizer(tokenizer_checkpoint)
+            generator_bundle.verify_generator_config(generator_spec.as_dict())
         token_generator.load_state_dict(token_generator_state)
 
         if text_encoder_state is None and text_encoder_checkpoint:
