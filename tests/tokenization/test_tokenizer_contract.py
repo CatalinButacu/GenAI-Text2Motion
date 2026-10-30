@@ -4,11 +4,12 @@ import pytest
 import torch
 
 from text2motion.app.config import ResidualVectorQuantizationConfig, TokenizerConfig
-from text2motion.tokenization.contracts import DROPPED_CODE, FiniteScalarStackLayout
+from text2motion.tokenization.contracts import DROPPED_CODE, FiniteScalarStackLayout, TokenizerKind
 from text2motion.tokenization.nn_model import (
     FiniteScalarQuantizationTokenizer,
     ResidualVectorQuantizationTokenizer,
     TokenizerNetwork,
+    build_tokenizer_network,
     downsample_stage_count,
 )
 from text2motion.tokenization.nn_quantizers import (
@@ -142,3 +143,8 @@ def test_decode_of_an_index_outside_the_codebook_raises(tok, bad_index):
     indices[0, 1, 1] = DROPPED_CODE if bad_index == "dropped" else tok.codebook_size
     with pytest.raises(ValueError, match="outside 0"):
         tok.eval().decode(indices)
+
+
+def test_an_rvq_tokenizer_without_its_config_raises():
+    with pytest.raises(ValueError, match="needs its ResidualVectorQuantizationConfig"):
+        build_tokenizer_network(replace(FSQ_CFG, kind=TokenizerKind.RESIDUAL_VECTOR))

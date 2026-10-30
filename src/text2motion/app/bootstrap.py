@@ -258,5 +258,8 @@ def resolve_device(requested: ComputeDevice | str, override: str | None = None) 
         return override
     requested = ComputeDevice(requested)
     if requested is ComputeDevice.CUDA and not torch.cuda.is_available():
-        return ComputeDevice.CPU.value
+        raise RuntimeError(
+            "the config asks for device cuda, but CUDA is not available; "
+            "set device: cpu in the config or pass --device cpu"
+        )
     return requested.value

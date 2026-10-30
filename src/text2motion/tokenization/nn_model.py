@@ -231,8 +231,11 @@ def build_tokenizer_network(
         case TokenizerKind.FINITE_SCALAR:
             return FiniteScalarQuantizationTokenizer(finite_scalar_config)
         case TokenizerKind.RESIDUAL_VECTOR:
-            residual_config = residual_vector_config or ResidualVectorQuantizationConfig()
-            return ResidualVectorQuantizationTokenizer(residual_config)
+            if residual_vector_config is None:
+                raise ValueError(
+                    "an RVQ tokenizer needs its ResidualVectorQuantizationConfig; pass rvq_baseline"
+                )
+            return ResidualVectorQuantizationTokenizer(residual_vector_config)
         case unknown:
             assert_never(unknown)
 

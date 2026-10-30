@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from text2motion.app import cli
-from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.bootstrap import ApplicationBootstrap, resolve_device
 from text2motion.app.cli import COMMANDS, parse_request
 from text2motion.evaluation.contracts import BenchmarkRequest, StreamingBenchmarkProtocol
 
@@ -158,3 +158,10 @@ def test_detect_anomaly_follows_the_config(tmp_path):
         assert torch.is_anomaly_enabled()
     finally:
         torch.autograd.set_detect_anomaly(False)
+
+
+def test_a_cuda_config_without_cuda_raises(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    with pytest.raises(RuntimeError, match="CUDA is not available"):
+        resolve_device("cuda")
+    assert resolve_device("cuda", "cpu") == "cpu"
