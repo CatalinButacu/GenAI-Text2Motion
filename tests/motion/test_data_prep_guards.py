@@ -1,8 +1,7 @@
 import numpy as np
 import pytest
 
-from text2motion.motion.normalization import fit_train_stats, read_split_names
-from text2motion.motion.representation import normalization_stats
+from text2motion.motion.normalization import fit_train_stats, normalization_stats, read_split_names
 from text2motion.motion.storage import item_rng
 
 JOINTS = 22

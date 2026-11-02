@@ -326,38 +326,6 @@ def recover_from_rot(data: torch.Tensor, joint_count: int, skeleton: Skeleton) -
     return joints.reshape(data.shape[:-1] + (joint_count, 3))
 
 
-def normalization_stats(clips: list[np.ndarray], joint_count: int) -> tuple[np.ndarray, np.ndarray]:
-    if not clips:
-        raise ValueError("normalization_stats received no clips")
-
-    data = np.concatenate(clips, axis=0)
-    mean = data.mean(axis=0)
-    std = data.std(axis=0)
-
-    expected_dim = 8 + (joint_count - 1) * 9 + joint_count * 3
-    if std.shape[-1] != expected_dim:
-        raise ValueError(
-            f"feature dim {std.shape[-1]} != expected {expected_dim} for {joint_count=}"
-        )
-
-    ric_end = 4 + (joint_count - 1) * 3
-    rot_end = 4 + (joint_count - 1) * 9
-    vel_end = rot_end + joint_count * 3
-    groups = (
-        (0, 1),
-        (1, 3),
-        (3, 4),
-        (4, ric_end),
-        (ric_end, rot_end),
-        (rot_end, vel_end),
-        (vel_end, expected_dim),
-    )
-    for start, stop in groups:
-        std[start:stop] = std[start:stop].mean()
-
-    return mean, std
-
-
 def recover_skeleton(feat263: np.ndarray | torch.Tensor) -> np.ndarray:
     data = (
         feat263

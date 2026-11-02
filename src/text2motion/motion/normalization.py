@@ -10,7 +10,6 @@ import numpy as np
 import torch
 
 from text2motion.motion.contracts import Split
-from text2motion.motion.representation import normalization_stats
 from text2motion.motion.storage import (
     MEAN_FILE,
     STATS_PROVENANCE_FILE,
@@ -122,6 +121,38 @@ def load_clips(vec_dir: Path, names: list[str]) -> list[np.ndarray]:
             f"{len(malformed)} train clips are empty, not 2-D, or hold NaN or Inf: {malformed[:10]}"
         )
     return clips
+
+
+def normalization_stats(clips: list[np.ndarray], joint_count: int) -> tuple[np.ndarray, np.ndarray]:
+    if not clips:
+        raise ValueError("normalization_stats received no clips")
+
+    data = np.concatenate(clips, axis=0)
+    mean = data.mean(axis=0)
+    std = data.std(axis=0)
+
+    expected_dim = 8 + (joint_count - 1) * 9 + joint_count * 3
+    if std.shape[-1] != expected_dim:
+        raise ValueError(
+            f"feature dim {std.shape[-1]} != expected {expected_dim} for {joint_count=}"
+        )
+
+    ric_end = 4 + (joint_count - 1) * 3
+    rot_end = 4 + (joint_count - 1) * 9
+    vel_end = rot_end + joint_count * 3
+    groups = (
+        (0, 1),
+        (1, 3),
+        (3, 4),
+        (4, ric_end),
+        (ric_end, rot_end),
+        (rot_end, vel_end),
+        (vel_end, expected_dim),
+    )
+    for start, stop in groups:
+        std[start:stop] = std[start:stop].mean()
+
+    return mean, std
 
 
 def fit_train_stats(

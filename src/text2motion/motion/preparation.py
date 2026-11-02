@@ -124,16 +124,12 @@ def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
     return split_names
 
 
-def compute_mean_std(out_dir: Path, train_names: list[str]) -> None:
-    fit_train_stats(out_dir / FEATURES_DIR, train_names, out_dir, JOINTS)
-
-
 def convert_official_release(src: Path, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     split_names = write_motions(src, out)
     for split, names in split_names.items():
         logger.info(f"{split}: {len(names)} clips")
-    compute_mean_std(out, split_names[Split.TRAIN])
+    fit_train_stats(out / FEATURES_DIR, split_names[Split.TRAIN], out, JOINTS)
 
 
 def swap_left_right(data: np.ndarray) -> np.ndarray:
@@ -385,13 +381,6 @@ def encode_joint_clips_to_hml3d263(
         )
 
 
-def compute_hml3d_normalization_stats(
-    layout: Hml3dPreparationLayout, joint_count: int
-) -> tuple[np.ndarray, np.ndarray]:
-    train_names = read_split_names(layout.out_dir / SPLIT_FILES[Split.TRAIN])
-    return fit_train_stats(layout.new_joint_vecs, train_names, layout.out_dir, joint_count)
-
-
 def run_hml3d_preparation(
     request: PreparationRequest,
     stage: PreparationStage | str = PreparationStage.ALL,
@@ -409,7 +398,8 @@ def run_hml3d_preparation(
     if stage in (PreparationStage.FEATURE, PreparationStage.ALL):
         encode_joint_clips_to_hml3d263(request, layout)
     if stage in (PreparationStage.STATS, PreparationStage.ALL):
-        compute_hml3d_normalization_stats(layout, request.joint_count)
+        train_names = read_split_names(layout.out_dir / SPLIT_FILES[Split.TRAIN])
+        fit_train_stats(layout.new_joint_vecs, train_names, layout.out_dir, request.joint_count)
 
 
 def source_fingerprint(path: Path) -> list[int]:
