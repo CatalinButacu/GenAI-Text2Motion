@@ -65,7 +65,9 @@ def test_a_clip_without_a_caption_of_minimum_length_stops_the_dataset(tmp_path):
     (tmp_path / SPLIT_FILES[Split.TRAIN]).write_text("A\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="no caption that covers"):
-        CaptionedMotionDataset(tmp_path, MotionDataConfig(mirror_augment=False), Split.TRAIN)
+        CaptionedMotionDataset(
+            tmp_path, MotionDataConfig(mirror_augment=False), Split.TRAIN, seed=2026
+        )
 
 
 def test_collate_pads_to_max():

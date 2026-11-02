@@ -202,7 +202,7 @@ def adopt_pose_folder(
     pairs = [(src, saved) for src, saved in pairs if saved.is_file()]
     if not pairs:
         raise FileNotFoundError(f"{pose_root} has no pose files to adopt")
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(2026)
     picks = sorted(rng.choice(len(pairs), min(_ADOPT_SAMPLE, len(pairs)), replace=False))
     sample = [pairs[index] for index in picks]
     mismatched = [

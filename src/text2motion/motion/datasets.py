@@ -41,7 +41,8 @@ class CaptionedMotionDataset(Dataset):
         data: MotionDataConfig,
         split: Split | str = Split.TRAIN,
         texts_dir: Path | None = None,
-        seed: int = 42,
+        *,
+        seed: int,
     ) -> None:
         split = Split(split)
         self._min_len = data.min_motion_len
@@ -189,7 +190,8 @@ class MotionWindowDataset(Dataset):
         data: MotionDataConfig,
         split: Split | str,
         window: int,
-        seed: int = 42,
+        *,
+        seed: int,
     ) -> None:
         split = Split(split)
         if window <= 0:
@@ -363,7 +365,8 @@ class MotionDataModule:
         root: Path,
         data: MotionDataConfig | None = None,
         texts_dir: Path | None = None,
-        seed: int = 42,
+        *,
+        seed: int,
     ) -> None:
         if root is None:
             raise ValueError("motion repository root must be set (regenerated 263 output dir)")

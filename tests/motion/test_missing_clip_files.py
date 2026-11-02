@@ -25,7 +25,7 @@ DATA = MotionDataConfig(mirror_augment=False, min_motion_len=40, max_motion_len=
 
 
 def test_short_clips_are_still_dropped_quietly(tmp_path):
-    dataset = CaptionedMotionDataset(__dataset_root(tmp_path), DATA, "train")
+    dataset = CaptionedMotionDataset(__dataset_root(tmp_path), DATA, "train", seed=2026)
 
     assert dataset.clip_ids == ["000000", "000001"]
 
@@ -35,7 +35,7 @@ def test_a_missing_feature_file_stops_the_captioned_loader(tmp_path):
     (root / "new_joint_vecs" / "000001.npy").unlink()
 
     with pytest.raises(FileNotFoundError, match="no feature file.*000001"):
-        CaptionedMotionDataset(root, DATA, "train")
+        CaptionedMotionDataset(root, DATA, "train", seed=2026)
 
 
 def test_a_missing_caption_file_stops_the_captioned_loader(tmp_path):
@@ -43,7 +43,7 @@ def test_a_missing_caption_file_stops_the_captioned_loader(tmp_path):
     (root / "texts" / "000000.txt").unlink()
 
     with pytest.raises(FileNotFoundError, match="no caption file.*000000"):
-        CaptionedMotionDataset(root, DATA, "train")
+        CaptionedMotionDataset(root, DATA, "train", seed=2026)
 
 
 def test_a_missing_feature_file_stops_the_window_loader(tmp_path):
@@ -51,4 +51,4 @@ def test_a_missing_feature_file_stops_the_window_loader(tmp_path):
     (root / "new_joint_vecs" / "000000.npy").unlink()
 
     with pytest.raises(FileNotFoundError, match="no feature file.*000000"):
-        MotionWindowDataset(root, DATA, "train", 32)
+        MotionWindowDataset(root, DATA, "train", 32, seed=2026)

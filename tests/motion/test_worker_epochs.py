@@ -32,8 +32,8 @@ def __dataset_root(tmp_path):
 def __datasets(root):
     data = MotionDataConfig(mirror_augment=False, min_motion_len=40, max_motion_len=64)
     return {
-        "window": MotionWindowDataset(root, data, "train", 32, seed=1),
-        "captioned": CaptionedMotionDataset(root, data, "train", seed=1),
+        "window": MotionWindowDataset(root, data, "train", 32, seed=2026),
+        "captioned": CaptionedMotionDataset(root, data, "train", seed=2026),
     }
 
 
@@ -85,7 +85,7 @@ def test_each_window_is_a_normalized_slice_of_its_clip(tmp_path, split):
     np.save(root / "Mean.npy", np.full(263, 0.5, np.float32))
     np.save(root / "Std.npy", np.full(263, 2.0, np.float32))
     data = MotionDataConfig(mirror_augment=False)
-    dataset = MotionWindowDataset(root, data, split, 32, seed=1)
+    dataset = MotionWindowDataset(root, data, split, 32, seed=2026)
     dataset.set_epoch(3)
     for index in range(CLIPS):
         raw = np.load(root / "new_joint_vecs" / f"{index:06d}.npy")

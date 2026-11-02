@@ -65,12 +65,17 @@ def test_a_data_config_rejects_impossible_values(values, match):
 def test_a_window_dataset_rejects_a_window_below_one(tmp_path):
     root = __small_dataset_root(tmp_path)
     with pytest.raises(ValueError, match="positive frame count"):
-        MotionWindowDataset(root, MotionDataConfig(mirror_augment=False), Split.TRAIN, window=0)
+        MotionWindowDataset(
+            root, MotionDataConfig(mirror_augment=False), Split.TRAIN, window=0, seed=2026
+        )
 
 
 def test_a_negative_index_gives_the_same_clip_as_python_indexing(tmp_path):
     dataset = CaptionedMotionDataset(
-        __small_dataset_root(tmp_path), MotionDataConfig(mirror_augment=False), Split.TRAIN
+        __small_dataset_root(tmp_path),
+        MotionDataConfig(mirror_augment=False),
+        Split.TRAIN,
+        seed=2026,
     )
 
     last, by_negative = dataset[len(dataset) - 1], dataset[-1]
@@ -200,7 +205,11 @@ def test_a_caption_with_nan_times_keeps_the_official_zero(tmp_path):
 
 def test_a_window_dataset_records_the_clips_it_drops(tmp_path):
     dataset = MotionWindowDataset(
-        __small_dataset_root(tmp_path), MotionDataConfig(mirror_augment=False), Split.TRAIN, 70
+        __small_dataset_root(tmp_path),
+        MotionDataConfig(mirror_augment=False),
+        Split.TRAIN,
+        70,
+        seed=2026,
     )
     assert dataset.dropped_clip_ids == ["A"]
 
@@ -222,7 +231,11 @@ def test_the_frame_count_cache_rereads_an_equal_size_replacement(tmp_path):
 
 def test_a_collated_batch_does_not_share_memory_with_the_window_cache(tmp_path):
     dataset = MotionWindowDataset(
-        __small_dataset_root(tmp_path), MotionDataConfig(mirror_augment=False), Split.TRAIN, 16
+        __small_dataset_root(tmp_path),
+        MotionDataConfig(mirror_augment=False),
+        Split.TRAIN,
+        16,
+        seed=2026,
     )
     before = dataset[0].features.clone()
     batch = collate_motion_clips([dataset[0], dataset[1]])
