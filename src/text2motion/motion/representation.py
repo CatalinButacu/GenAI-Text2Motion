@@ -6,8 +6,7 @@ from types import MappingProxyType
 import numpy as np
 import torch
 
-from text2motion.motion.kinematics import (
-    Skeleton,
+from text2motion.motion.geometry import (
     qbetween_np,
     qinv,
     qinv_np,
@@ -17,6 +16,7 @@ from text2motion.motion.kinematics import (
     quaternion_to_cont6d,
     quaternion_to_cont6d_np,
 )
+from text2motion.motion.kinematics import Skeleton
 
 DIM = 263
 JOINTS = 22
