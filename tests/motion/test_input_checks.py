@@ -10,7 +10,6 @@ from text2motion.motion.datasets import (
     CaptionedMotionDataset,
     MotionWindowDataset,
     collate_motion_clips,
-    parse_text_file,
 )
 from text2motion.motion.model import MotionClip
 from text2motion.motion.normalization import MotionScaler, load_clips
@@ -23,6 +22,7 @@ from text2motion.motion.storage import (
     TEXTS_DIR,
     atomic_numpy_save,
     clip_frame_counts,
+    parse_text_file,
 )
 
 

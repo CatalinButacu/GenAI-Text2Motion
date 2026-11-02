@@ -22,8 +22,7 @@ from text2motion.evaluation.nn_matcher import (
     load_guo_motion_normalization_stats,
 )
 from text2motion.motion.contracts import Split
-from text2motion.motion.datasets import parse_text_file
-from text2motion.motion.storage import base_clip_ids
+from text2motion.motion.storage import base_clip_ids, parse_text_file
 
 _MIN_FRAMES = 20
 

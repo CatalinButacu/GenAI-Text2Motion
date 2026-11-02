@@ -31,9 +31,8 @@ from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.generation.contracts import SamplingConfig
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.contracts import Split, TextAnnotation
-from text2motion.motion.datasets import parse_text_file
 from text2motion.motion.representation import FPS
-from text2motion.motion.storage import FEATURES_DIR
+from text2motion.motion.storage import FEATURES_DIR, parse_text_file
 
 logger = logging.getLogger(__name__)
 

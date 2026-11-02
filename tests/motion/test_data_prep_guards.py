@@ -2,9 +2,10 @@ import numpy as np
 import pytest
 
 from text2motion.motion.contracts import PreparationRequest, PreparationStage
+from text2motion.motion.datasets import item_rng
 from text2motion.motion.normalization import fit_train_stats, normalization_stats
 from text2motion.motion.preparation import run_hml3d_preparation
-from text2motion.motion.storage import item_rng, listed_clip_ids
+from text2motion.motion.storage import listed_clip_ids
 
 JOINTS = 22
 DIM = 8 + (JOINTS - 1) * 9 + JOINTS * 3
