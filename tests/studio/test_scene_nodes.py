@@ -105,7 +105,7 @@ def test_clearing_an_empty_slot_is_a_noop():
 
 
 def test_append_fitted_chunk_keeps_body_and_fit_track_aligned():
-    from text2motion.studio.scene import SmplxFitState, StudioStreamBuffers
+    from text2motion.studio.session import SmplxFitState, StudioStreamBuffers
 
     class FitResult:
         global_orient = "o"
@@ -126,7 +126,7 @@ def test_append_fitted_chunk_keeps_body_and_fit_track_aligned():
 
 
 def test_reset_fit_track_clears_both_sides_together():
-    from text2motion.studio.scene import SmplxFitState, StudioStreamBuffers
+    from text2motion.studio.session import SmplxFitState, StudioStreamBuffers
 
     class FitResult:
         global_orient = "o"
@@ -144,7 +144,7 @@ def test_reset_fit_track_clears_both_sides_together():
 
 
 def test_drain_empties_buffers_and_returns_contents():
-    from text2motion.studio.scene import StudioStreamBuffers
+    from text2motion.studio.session import StudioStreamBuffers
 
     buf = StudioStreamBuffers()
     joints = np.zeros(1)
@@ -163,7 +163,7 @@ def test_drain_empties_buffers_and_returns_contents():
 
 
 def test_live_regen_debounce_waits_then_fires():
-    from text2motion.studio.scene import LiveGenerationDebouncer
+    from text2motion.studio.session import LiveGenerationDebouncer
 
     live = LiveGenerationDebouncer()
     assert not live.debounce_elapsed(now=0.0, debounce_s=0.5)  # nothing typed yet
@@ -174,7 +174,7 @@ def test_live_regen_debounce_waits_then_fires():
 
 
 def test_live_regen_consumed_edit_stops_being_ready():
-    from text2motion.studio.scene import LiveGenerationDebouncer
+    from text2motion.studio.session import LiveGenerationDebouncer
 
     live = LiveGenerationDebouncer()
     live.mark_dirty("jump", now=0.0)
@@ -185,7 +185,7 @@ def test_live_regen_consumed_edit_stops_being_ready():
 
 
 def test_live_regen_starts_disabled_with_no_signature():
-    from text2motion.studio.scene import LiveGenerationDebouncer
+    from text2motion.studio.session import LiveGenerationDebouncer
 
     live = LiveGenerationDebouncer()
     assert live.enabled is False
@@ -197,7 +197,7 @@ def test_live_regen_starts_disabled_with_no_signature():
 def test_model_registry_uses_name_and_version(tmp_path):
     import yaml
 
-    from text2motion.studio.scene import load_model_registry
+    from text2motion.studio.session import load_model_registry
 
     registry = tmp_path / "models.yaml"
     registry.write_text(

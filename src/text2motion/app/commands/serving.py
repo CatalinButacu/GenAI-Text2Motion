@@ -101,7 +101,7 @@ def run_serve(app: ApplicationContext, args: ServeRequest) -> None:
 
 
 def __select_model(args: StudioRequest, model: str, registry: Path) -> None:
-    from text2motion.studio.scene import load_model_registry
+    from text2motion.studio.session import load_model_registry
 
     entries, _ = load_model_registry(None, registry)
     chosen = next((entry for entry in entries if entry.key == model), None)

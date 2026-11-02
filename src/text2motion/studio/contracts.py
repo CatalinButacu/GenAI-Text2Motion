@@ -1,11 +1,26 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
 from text2motion.motion.contracts import StreamedChunk
+
+
+############################################################
+#       SmplxFitResult
+############################################################
+@dataclass
+class SmplxFitResult:
+    vertices: np.ndarray
+    faces: np.ndarray
+    global_orient: np.ndarray
+    body_pose: np.ndarray
+    transl: np.ndarray
+    betas: np.ndarray
+    joint_err_cm: float
 
 
 ############################################################

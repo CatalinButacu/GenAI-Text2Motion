@@ -11,7 +11,7 @@ import numpy as np
 from text2motion.motion.representation import JOINTS
 from text2motion.studio.avatar import SmplxAvatarController
 from text2motion.studio.contracts import ViewerHost
-from text2motion.studio.scene import StudioModelEntry, live_step_budget
+from text2motion.studio.session import StudioModelEntry, live_step_budget
 
 logger = logging.getLogger(__name__)
 

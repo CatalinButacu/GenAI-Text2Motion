@@ -6,14 +6,12 @@ from typing import cast
 import numpy as np
 import pytest
 
-from text2motion.studio import avatar as avatar_module
 from text2motion.studio.avatar import SmplxAvatarController
 from text2motion.studio.contracts import ViewerHost
 from text2motion.studio.generation import StudioGenerationController
-from text2motion.studio.scene import (
+from text2motion.studio.scene import StreamSceneUpdater, StudioSceneNodes
+from text2motion.studio.session import (
     SmplxFitState,
-    StreamSceneUpdater,
-    StudioSceneNodes,
     StudioStreamBuffers,
     live_step_budget,
 )
@@ -322,7 +320,7 @@ def test_the_retrofit_fits_source_frames_like_the_live_stream(monkeypatch):
         calls.append((joints[:, 0, 0].tolist(), factor, buffers.fit_anchor))
 
     monkeypatch.setattr(avatar, "fit_single_chunk", record_fit)
-    monkeypatch.setattr(avatar_module, "solve_smplx_pose_from_joints", fake_solve)
+    monkeypatch.setattr("text2motion.studio.avatar.solve_smplx_pose_from_joints", fake_solve)
     avatar.on_fit_body_toggled()
     deadline = time.time() + 5
     while state.generating and time.time() < deadline:
@@ -397,7 +395,7 @@ def __z_rotation(degrees: float) -> np.ndarray:
 
 
 def test_pose_upsampling_ends_on_each_source_frame_and_moves_translation_linearly():
-    from text2motion.studio.avatar import upsample_pose_parameters
+    from text2motion.studio.fitting import upsample_pose_parameters
 
     orient = np.stack([__z_rotation(0), __z_rotation(30), __z_rotation(60)])
     pose = np.zeros((3, 63), np.float32)
@@ -414,7 +412,7 @@ def test_pose_upsampling_ends_on_each_source_frame_and_moves_translation_linearl
 
 
 def test_pose_upsampling_takes_the_short_way_across_180_degrees():
-    from text2motion.studio.avatar import upsample_pose_parameters
+    from text2motion.studio.fitting import upsample_pose_parameters
 
     anchor = (__z_rotation(170), np.zeros(63, np.float32), np.zeros(3, np.float32))
     orient = __z_rotation(-170)[None]

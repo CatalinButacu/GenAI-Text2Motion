@@ -17,8 +17,8 @@ from text2motion.app.cli_requests import ModelServiceRequest
 from text2motion.app.commands.serving import load_inference_pipeline
 from text2motion.generation.contracts import Backbone
 from text2motion.motion.representation import FPS, StreamingSkeletonRecovery
-from text2motion.studio.avatar import fit_smplx_to_joints
 from text2motion.studio.config import SmplxFitConfig
+from text2motion.studio.fitting import fit_smplx_to_joints
 
 
 def draw(ax, verts, faces, frame):

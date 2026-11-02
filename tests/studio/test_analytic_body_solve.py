@@ -4,11 +4,11 @@ import numpy as np
 import pytest
 import torch
 
-from text2motion.studio.avatar import (
+from text2motion.studio.config import SmplxFitConfig
+from text2motion.studio.fitting import (
     build_smplx_body_model,
     solve_smplx_pose_from_joints,
 )
-from text2motion.studio.config import SmplxFitConfig
 
 MODEL_DIR = Path("data/smplx_models")
 

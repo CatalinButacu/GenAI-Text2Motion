@@ -9,7 +9,7 @@ from text2motion.app.protocol import (
     motion_service_client,
     release_identity,
 )
-from text2motion.studio.scene import StudioSession
+from text2motion.studio.session import StudioSession
 
 POLICY = MappingProxyType(
     {"anchor_every_tokens": 0, "anchor_context_tokens": 16, "cuda_graph_decode": False}
