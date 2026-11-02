@@ -43,7 +43,7 @@ def test_tokenizer_shapes_and_index_range():
 
 
 def test_single_batch_overfit():
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     tok = FiniteScalarQuantizationTokenizer(CFG).train()
     opt = torch.optim.Adam(tok.parameters(), lr=1e-3)
     x = torch.randn(2, 32, 263)
@@ -63,7 +63,7 @@ def test_single_batch_overfit():
 
 
 def test_grouped_quantizer_matches_one_call_for_each_group():
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     quantizer = GroupedFiniteScalarQuantizer((8, 8, 4, 4), num_quantizers=3)
     latent = torch.randn(2, 5, 12) * 3
     codes, indices, _ = quantizer(latent)

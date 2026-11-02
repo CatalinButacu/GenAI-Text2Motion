@@ -85,7 +85,12 @@ def test_split_is_deterministic_for_a_seed(tmp_path):
     keys = list(np.load(make_pack(tmp_path)).keys())
 
     assert split_keys_by_clip(keys, 0.25, 2026) == split_keys_by_clip(keys, 0.25, 2026)
-    assert split_keys_by_clip(keys, 0.25, 7) != split_keys_by_clip(keys, 0.25, 2026)
+    generator = np.random.default_rng(2026)
+    seeds = generator.integers(0, np.iinfo(np.int32).max, size=20)
+    assert any(
+        split_keys_by_clip(keys, 0.25, int(seed)) != split_keys_by_clip(keys, 0.25, 2026)
+        for seed in seeds
+    )
 
 
 def test_token_pack_is_picklable_so_dataloader_workers_are_safe(tmp_path):

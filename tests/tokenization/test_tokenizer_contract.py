@@ -77,7 +77,7 @@ def test_dropped_levels_use_a_sentinel_not_code_zero():
         quant_dropout=1.0,
     )
     tok = FiniteScalarQuantizationTokenizer(cfg).train()
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
 
     saw_dropped = False
     for _ in range(20):

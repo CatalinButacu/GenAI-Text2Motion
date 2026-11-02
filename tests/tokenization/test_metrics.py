@@ -25,7 +25,7 @@ class IdentityTokenizer(TokenizerNetwork):
 def __dataset(root, clips: dict[str, int], listed: str):
     features_dir = root / FEATURES_DIR
     features_dir.mkdir()
-    generator = np.random.default_rng(0)
+    generator = np.random.default_rng(2026)
     for clip_id, frames in clips.items():
         features = generator.standard_normal((frames, DIM)).astype(np.float32) * 0.1
         np.save(features_dir / f"{clip_id}.npy", features)

@@ -46,16 +46,16 @@ class _FakeTrainer:
 
 
 def __resumable_trainer() -> TokenizerTrainer:
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     return TokenizerTrainer(
         FiniteScalarQuantizationTokenizer(CFG), lr=1e-3, weight_decay=0.0, ema_decay=0.9
     )
 
 
 def test_a_resumed_tokenizer_run_continues_like_an_uninterrupted_run(tmp_path):
-    motion = torch.randn(2, 32, 263, generator=torch.Generator().manual_seed(1))
     path = tmp_path / "tokenizer_last.pt"
     uninterrupted = __resumable_trainer()
+    motion = torch.randn(2, 32, 263)
     uninterrupted.train_step(motion)
     atomic_torch_save(uninterrupted.resume_state(0, 1.0, None), path)
     uninterrupted.train_step(motion)
@@ -142,7 +142,7 @@ def test_code_statistics_skip_a_dropped_codebook():
 
 
 def test_a_residual_vector_step_with_dropped_stages_gives_finite_values():
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     network = build_tokenizer_network(
         TokenizerConfig(kind=TokenizerKind.RESIDUAL_VECTOR),
         ResidualVectorQuantizationConfig(quant_dropout=1.0),
@@ -171,7 +171,7 @@ def test_a_non_finite_gradient_raises_before_the_update():
 
 
 def test_an_rvq_step_with_nan_motion_leaves_the_codebooks_finite():
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     network = build_tokenizer_network(
         TokenizerConfig(kind=TokenizerKind.RESIDUAL_VECTOR),
         ResidualVectorQuantizationConfig(width=32, code_dim=8, codebook_size=16, quant_dropout=0.0),

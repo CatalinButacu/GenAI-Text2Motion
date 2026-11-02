@@ -38,7 +38,7 @@ def test_encode_decode_shapes_and_contract():
 
 
 def test_overfit_one_batch():
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     tok = ResidualVectorQuantizationTokenizer(CFG).train()
     opt = torch.optim.AdamW(tok.parameters(), lr=3e-3)
     x = torch.randn(2, 32, 263)
@@ -60,7 +60,7 @@ def test_overfit_one_batch():
 
 
 def test_codebook_updates_and_no_collapse():
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     tok = ResidualVectorQuantizationTokenizer(CFG).train()
     opt = torch.optim.AdamW(tok.parameters(), lr=3e-3)
     x = torch.randn(4, 64, 263)

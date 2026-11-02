@@ -30,7 +30,7 @@ RVQ = ResidualVectorQuantizationConfig(
 
 
 def __frozen() -> FrozenMotionTokenizer:
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     return FrozenMotionTokenizer(FiniteScalarQuantizationTokenizer(FSQ))
 
 

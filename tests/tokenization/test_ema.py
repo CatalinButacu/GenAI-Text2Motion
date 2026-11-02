@@ -6,7 +6,7 @@ from text2motion.tokenization.ema import ExponentialMovingAverage
 
 
 def __small_model() -> tuple[nn.Module, nn.Linear]:
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     first = nn.Linear(4, 3)
     second = nn.Linear(3, 2)
     second.bias.requires_grad_(False)
