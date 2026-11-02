@@ -8,14 +8,14 @@ import torch
 from text2motion.app.bootstrap import ApplicationContext
 from text2motion.app.config import load_dataclass, service_policy
 from text2motion.generation.contracts import Backbone
-from text2motion.streaming.decoder import StreamingMotionDecoder
-from text2motion.streaming.protocol import release_identity
-from text2motion.streaming.pydant_requests import (
+from text2motion.streaming.cli_requests import (
     HealthRequest,
     ModelServiceRequest,
     ServeRequest,
     StudioRequest,
 )
+from text2motion.streaming.decoder import StreamingMotionDecoder
+from text2motion.streaming.protocol import release_identity
 from text2motion.streaming.service import LoadedInferencePipeline, MotionInferenceServer
 
 logger = logging.getLogger(__name__)

@@ -38,7 +38,7 @@ from text2motion.motion.contracts import (
     PrepareRequest,
     Split,
 )
-from text2motion.streaming.pydant_requests import HealthRequest, ServeRequest, StudioRequest
+from text2motion.streaming.cli_requests import HealthRequest, ServeRequest, StudioRequest
 from text2motion.tokenization.contracts import (
     TokenizeRequest,
     TokenizerKind,
