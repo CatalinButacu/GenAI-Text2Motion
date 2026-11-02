@@ -191,14 +191,6 @@ class SmplxFitState:
         self.pose = [np.concatenate(self.pose)[count:]]
         self.transl = [np.concatenate(self.transl)[count:]]
 
-    @property
-    def is_stale(self) -> bool:
-        return self.done_version != self.version
-
-    def bump(self) -> int:
-        self.version += 1
-        return self.version
-
 
 ############################################################
 #       StudioStreamBuffers
@@ -263,13 +255,6 @@ class StudioStreamBuffers:
             self.pending_body_chunks = []
             self.fit_anchor = None
             fit.reset_track()
-
-    def accumulate(self, joints: np.ndarray) -> np.ndarray:
-        stacked = (
-            joints if self.accum_joints is None else np.concatenate([self.accum_joints, joints])
-        )
-        self.accum_joints = stacked
-        return stacked
 
     def add_source_joints(self, joints: np.ndarray) -> None:
         with self.lock:
