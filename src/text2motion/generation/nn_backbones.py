@@ -196,7 +196,6 @@ class MambaBlock(nn.Module):
             cfg.d_model, cfg.d_state, cfg.d_conv, cfg.expand, cfg.dt_rank, cfg.use_kernel
         )
         init_residual_output(self.mixer.out_proj, cfg.n_layers)
-        self.drop = nn.Dropout(cfg.dropout)
 
     def init_state(self, batch: int, device: torch.device):
         return self.mixer.init_state(batch, device)
@@ -206,7 +205,7 @@ class MambaBlock(nn.Module):
         return x_t + out, (ssm, conv)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.drop(self.mixer(self.norm(x)))
+        return x + self.mixer(self.norm(x))
 
 
 ############################################################
@@ -279,8 +278,6 @@ class TransformerBlock(nn.Module):
         zero_linear_bias(mlp_out)
         init_residual_output(mlp_out, 2 * cfg.n_layers)
         self.mlp = nn.Sequential(mlp_in, nn.GELU(), mlp_out)
-        self.drop = nn.Dropout(cfg.dropout)
-        self.attn_drop = cfg.dropout
 
     def split_heads(self, t: torch.Tensor) -> torch.Tensor:
         b, n, _ = t.shape
@@ -288,12 +285,10 @@ class TransformerBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         q, k, v = (self.split_heads(t) for t in self.qkv(self.norm1(x)).chunk(3, dim=-1))
-        a = F.scaled_dot_product_attention(
-            q, k, v, is_causal=True, dropout_p=self.attn_drop if self.training else 0.0
-        )
+        a = F.scaled_dot_product_attention(q, k, v, is_causal=True, dropout_p=0.0)
         a = a.transpose(1, 2).reshape(x.shape)
-        x = x + self.drop(self.proj(a))
-        return x + self.drop(self.mlp(self.norm2(x)))
+        x = x + self.proj(a)
+        return x + self.mlp(self.norm2(x))
 
     def prefill(self, x: torch.Tensor):
         q, k, v = (self.split_heads(t) for t in self.qkv(self.norm1(x)).chunk(3, dim=-1))
