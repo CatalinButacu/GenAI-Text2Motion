@@ -44,7 +44,7 @@ def test_soft_decode_shape_and_grad():
 
 
 def test_train_step_learns():
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     tok = FiniteScalarQuantizationTokenizer(TOK)
     gen = MotionTokenGenerator(GEN)
     trainer = GeneratorTrainer(
@@ -165,7 +165,7 @@ def test_generator_step_with_a_nan_loss_raises_before_the_update():
 
 
 def __resumable_trainer(grad_accum: int = 1) -> GeneratorTrainer:
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     config = GeneratorTrainingConfig(
         cfg_dropout=0.3,
         pkeep=0.8,
@@ -186,8 +186,9 @@ def __train_one_epoch(trainer: GeneratorTrainer, motion: torch.Tensor, text: tor
 
 
 def test_a_resumed_run_continues_like_an_uninterrupted_run(tmp_path):
-    motion = torch.randn(2, 32, 263, generator=torch.Generator().manual_seed(1))
-    text = torch.randn(2, GEN.d_text, generator=torch.Generator().manual_seed(2))
+    generator = torch.Generator().manual_seed(2026)
+    motion = torch.randn(2, 32, 263, generator=generator)
+    text = torch.randn(2, GEN.d_text, generator=generator)
     path = tmp_path / "generator_last.pt"
     uninterrupted = __resumable_trainer()
     __train_one_epoch(uninterrupted, motion, text)
@@ -209,11 +210,12 @@ def test_a_resumed_run_continues_like_an_uninterrupted_run(tmp_path):
 
 
 def test_a_partial_accumulation_window_has_the_weight_of_a_full_window(monkeypatch):
-    motion = torch.randn(2, 32, 263, generator=torch.Generator().manual_seed(1))
-    text = torch.randn(2, GEN.d_text, generator=torch.Generator().manual_seed(2))
+    generator = torch.Generator().manual_seed(2026)
+    motion = torch.randn(2, 32, 263, generator=generator)
+    text = torch.randn(2, GEN.d_text, generator=generator)
     trainers = []
     for grad_accum in (2, 4):
-        torch.manual_seed(0)
+        torch.manual_seed(2026)
         config = GeneratorTrainingConfig(
             cfg_dropout=0.0, pkeep=1.0, grad_accum=grad_accum, grad_clip=1e9
         )

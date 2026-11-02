@@ -16,7 +16,7 @@ from text2motion.generation.nn_model import MotionTokenGenerator
 
 
 def test_a_fresh_mamba_mixer_starts_with_the_reference_dt_and_a_long_memory():
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     mixer = MambaMixer(d_model=32, d_state=16, d_conv=4, expand=2, dt_rank=8)
 
     dt = F.softplus(mixer.dt_proj.bias.detach())
@@ -45,7 +45,7 @@ def __residual_outputs(model: MotionTokenGenerator) -> list[tuple[torch.Tensor, 
 
 @pytest.mark.parametrize("backbone", list(Backbone))
 def test_both_twins_start_from_the_mamba_ssm_reference_init(backbone):
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     cfg = __cfg(backbone)
     model = MotionTokenGenerator(cfg)
 

@@ -168,7 +168,7 @@ def test_use_kernel_without_mamba_ssm_fails_loud():
 def test_kernel_matches_eager_scan():
     cfg_eager = replace(BASE, backbone=Backbone.MAMBA)
     cfg_kernel = replace(BASE, backbone=Backbone.MAMBA, use_kernel=True)
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     eager = MotionTokenGenerator(cfg_eager).cuda().eval()
     kernel = MotionTokenGenerator(cfg_kernel).cuda().eval()
     kernel.load_state_dict(eager.state_dict())

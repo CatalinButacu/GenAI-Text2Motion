@@ -41,7 +41,7 @@ def streamed_logits(
 
 
 def __parity(backbone: str) -> None:
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     cfg = small_cfg(backbone)
     gen = MotionTokenGenerator(cfg).eval()
     tokens = torch.randint(0, cfg.codebook_size, (2, 8, cfg.num_codebooks))
@@ -85,7 +85,7 @@ def test_state_is_bounded_mamba_but_kv_grows_transformer():
 
 
 def test_single_batch_overfit_mamba():
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     cfg = small_cfg("mamba")
     gen = MotionTokenGenerator(cfg).train()
     opt = torch.optim.Adam(gen.parameters(), lr=3e-3)

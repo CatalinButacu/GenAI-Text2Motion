@@ -53,7 +53,7 @@ def decoded_logits(
 @pytest.mark.parametrize("backbone", list(Backbone))
 @torch.no_grad()
 def test_a_null_text_row_gives_exactly_the_prefix_only_output(backbone):
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     cfg = small_cfg(backbone)
     model = trained_like(cfg)
     prefix_only = MotionTokenGenerator(replace(cfg, per_step_text=False)).eval()
@@ -72,7 +72,7 @@ def test_a_null_text_row_gives_exactly_the_prefix_only_output(backbone):
 @pytest.mark.parametrize("backbone", list(Backbone))
 @torch.no_grad()
 def test_eager_decode_with_per_step_text_matches_the_training_forward(backbone):
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     cfg = small_cfg(backbone)
     model = trained_like(cfg)
     tokens = torch.randint(cfg.codebook_size, (2, 8, cfg.num_codebooks))
@@ -86,11 +86,11 @@ def test_eager_decode_with_per_step_text_matches_the_training_forward(backbone):
 
 @torch.no_grad()
 def test_transformer_re_anchoring_over_the_full_history_keeps_the_per_step_text():
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     cfg = small_cfg(Backbone.TRANSFORMER)
     model = trained_like(cfg)
     text = torch.randn(1, cfg.d_text)
-    uniforms = seeded_sampling_uniforms([0], 8, cfg.num_codebooks, "cpu")
+    uniforms = seeded_sampling_uniforms([2026], 8, cfg.num_codebooks, "cpu")
 
     def streamed(anchor_every: int) -> torch.Tensor:
         return torch.stack(
@@ -117,7 +117,7 @@ def test_per_step_text_refuses_a_multi_vector_prefix():
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda graphs need a cuda device")
 @torch.no_grad()
 def test_graph_decode_follows_a_prompt_change_like_eager_decode():
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     cfg = small_cfg(Backbone.MAMBA)
     model = trained_like(cfg).cuda()
     model.enable_cuda_graph_decode()
