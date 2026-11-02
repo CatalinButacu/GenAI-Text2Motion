@@ -6,7 +6,7 @@ import torch
 
 from text2motion.app.checkpoint import OverfitGate, sha256_file
 from text2motion.app.config import ApplicationConfig
-from text2motion.generation.contracts import Backbone
+from text2motion.generation.contracts import Backbone, OverfitCriteria
 from text2motion.generation.nn_model import GeneratorModelSpec
 
 
@@ -108,6 +108,38 @@ def test_overfit_gate_accepts_valid_metrics():
 
 
 @pytest.mark.parametrize(
+    ("criteria", "message"),
+    [
+        (OverfitCriteria(min_token_accuracy=0.999), "token accuracy 0.995 is below 0.999"),
+        (OverfitCriteria(max_ce=0.01), "CE 0.05 is above 0.01"),
+        (OverfitCriteria(max_total_ratio=0.01), "total loss ratio 0.04 is above 0.01"),
+    ],
+)
+def test_overfit_gate_reports_custom_criteria(criteria, message):
+    gate = __gate()
+    assert not criteria.accepts(gate.token_accuracy, gate.ce, gate.total_ratio)
+    with pytest.raises(RuntimeError) as error:
+        gate.validate_metrics(criteria)
+    assert str(error.value) == f"overfit gate {message}"
+
+
+@pytest.mark.parametrize(
+    ("token_accuracy", "ce", "total_ratio", "expected"),
+    [
+        (0.99, 0.1, 0.05, True),
+        (0.98, 0.1, 0.05, False),
+        (0.99, 0.11, 0.05, False),
+        (0.99, 0.1, 0.06, False),
+        (math.nan, 0.1, 0.05, False),
+        (0.99, math.nan, 0.05, False),
+        (0.99, 0.1, math.nan, False),
+    ],
+)
+def test_overfit_criteria_accepts_preserves_comparisons(token_accuracy, ce, total_ratio, expected):
+    assert OverfitCriteria().accepts(token_accuracy, ce, total_ratio) is expected
+
+
+@pytest.mark.parametrize(
     "overrides",
     [
         {
@@ -149,7 +181,7 @@ def test_overfit_gate_rejects_weak_accuracy(tmp_path):
         ce=0.05,
     ).save(gate_path)
 
-    with pytest.raises(RuntimeError, match="below 99%"):
+    with pytest.raises(RuntimeError, match=r"below 0\.99"):
         OverfitGate.load(gate_path).verify_setup(
             config_path=config_path,
             tokenizer_ckpt=tokenizer_path,

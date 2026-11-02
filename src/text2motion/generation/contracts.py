@@ -53,11 +53,21 @@ class OverfitCriteria:
     max_total_ratio: float = 0.05
 
     def accepts(self, token_accuracy: float, ce: float, total_ratio: float) -> bool:
-        return (
-            token_accuracy >= self.min_token_accuracy
-            and ce <= self.max_ce
-            and total_ratio <= self.max_total_ratio
-        )
+        return not self.failure_messages(token_accuracy, ce, total_ratio)
+
+    def failure_messages(self, token_accuracy: float, ce: float, total_ratio: float) -> list[str]:
+        failures: list[str] = []
+        if not token_accuracy >= self.min_token_accuracy:
+            failures.append(
+                f"overfit gate token accuracy {token_accuracy} is below {self.min_token_accuracy}"
+            )
+        if not ce <= self.max_ce:
+            failures.append(f"overfit gate CE {ce} is above {self.max_ce}")
+        if not total_ratio <= self.max_total_ratio:
+            failures.append(
+                f"overfit gate total loss ratio {total_ratio} is above {self.max_total_ratio}"
+            )
+        return failures
 
 
 DEFAULT_OVERFIT_CRITERIA = OverfitCriteria()

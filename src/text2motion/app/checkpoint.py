@@ -198,12 +198,9 @@ class OverfitGate:
             raise RuntimeError(f"overfit gate CE {self.ce} is negative")
         if self.first_total <= 0:
             raise RuntimeError("overfit gate first_total must be positive")
-        if self.token_accuracy < criteria.min_token_accuracy:
-            raise RuntimeError("overfit gate token accuracy is below 99%")
-        if self.ce > criteria.max_ce:
-            raise RuntimeError("overfit gate CE is above 0.1")
-        if self.total_ratio > criteria.max_total_ratio:
-            raise RuntimeError("overfit gate total loss did not fall by 95%")
+        failures = criteria.failure_messages(self.token_accuracy, self.ce, self.total_ratio)
+        if failures:
+            raise RuntimeError(failures[0])
 
     def verify_setup(
         self,
