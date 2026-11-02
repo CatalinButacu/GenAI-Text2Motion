@@ -11,11 +11,8 @@ ALLOWED_DEPENDENCIES = MappingProxyType(
         "tokenization": frozenset({"motion", "tokenization"}),
         "generation": frozenset({"motion", "tokenization", "generation"}),
         "evaluation": frozenset({"motion", "tokenization", "generation", "evaluation"}),
-        "streaming": frozenset({"motion", "tokenization", "generation", "streaming"}),
         "studio": frozenset({"motion", "studio"}),
-        "app": frozenset(
-            {"motion", "tokenization", "generation", "evaluation", "streaming", "studio", "app"}
-        ),
+        "app": frozenset({"motion", "tokenization", "generation", "evaluation", "studio", "app"}),
     }
 )
 

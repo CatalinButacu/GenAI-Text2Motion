@@ -13,10 +13,10 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.cli_requests import ModelServiceRequest
 from text2motion.app.commands.serving import load_inference_pipeline
 from text2motion.generation.contracts import Backbone
 from text2motion.motion.representation import DIM, FPS, kinematic_bones, recover_skeleton
-from text2motion.streaming.cli_requests import ModelServiceRequest
 
 
 def run(a: argparse.Namespace) -> None:

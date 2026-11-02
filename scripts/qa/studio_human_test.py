@@ -16,7 +16,7 @@ from aitviewer.utils.pyqt6_window import Keys as StudioWindowKeys
 from moderngl_window.context.headless.window import Window as HeadlessWindow
 
 from text2motion.app.config import load_dataclass, load_service_config, service_policy
-from text2motion.streaming.protocol import MotionStreamProtocol, motion_service_client
+from text2motion.app.protocol import MotionStreamProtocol, motion_service_client
 from text2motion.studio.config import StudioConfig
 from text2motion.studio.viewer import StreamingStudioViewer
 

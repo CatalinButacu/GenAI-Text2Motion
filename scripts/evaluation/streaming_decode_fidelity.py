@@ -9,11 +9,11 @@ import torch
 
 from text2motion.app.config import load_config
 from text2motion.app.run_log import log_metrics, start_run
+from text2motion.generation.decoder import StreamingMotionDecoder, measure_decoder_context
 from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import FEATURES_DIR, base_clip_ids
-from text2motion.streaming.decoder import StreamingMotionDecoder, measure_decoder_context
 from text2motion.tokenization.nn_model import build_tokenizer_network
 
 

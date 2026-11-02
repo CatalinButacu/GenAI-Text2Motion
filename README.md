@@ -143,20 +143,20 @@ text2motion benchmark        --config configs/generator/final100m_fsq8x1024.yaml
 
 ### Layout
 
-Dependencies point inward: `app -> studio / streaming / evaluation -> generation -> tokenization -> motion`.
+Dependencies point inward: `app -> evaluation -> generation -> tokenization -> motion`.
+The app also composes the studio, which depends only on motion.
 
 ```
 src/text2motion/
   motion/         263 layout, kinematics, data set, AMASS preparation
   tokenization/   FSQ and RVQ tokenizer, trainer, corpus encoding
-  generation/     transformer and Mamba generators, text encoder, trainers, losses
+  generation/     generators, text encoder, trainers, losses, incremental decode
   evaluation/     FID, R-precision, MM-Dist, Diversity, MultiModality, streaming benchmark
-  streaming/      incremental decode loop, service, wire protocol
   studio/         SMPL-X fit and aitviewer studio
-  app/            config, checkpoint schemas, composition root, command line
+  app/            config, checkpoints, composition, CLI, service, wire protocol
 configs/          YAML settings
 scripts/          training drivers, evaluation, benchmarks, figures, rendering
-tests/            one folder for each source stage
+tests/            source-package tests plus the retained streaming test folder
 doc/              thesis (LaTeX) and notes
 ```
 

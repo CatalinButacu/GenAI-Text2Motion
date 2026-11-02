@@ -7,7 +7,7 @@ import statistics
 from pathlib import Path
 
 from text2motion.app.config import load_config, load_service_config, service_policy
-from text2motion.streaming.protocol import motion_service_client
+from text2motion.app.protocol import motion_service_client
 
 DELIVERY_SCOPE = (
     "delivery through the motion service: trained checkpoint, CLIP text encoder, sampling with "

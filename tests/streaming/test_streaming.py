@@ -7,13 +7,13 @@ import torch
 
 from text2motion.app.config import GeneratorConfig, TokenizerConfig
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.nn_model import MotionTokenGenerator
-from text2motion.motion.representation import kinematic_bones, recover_skeleton
-from text2motion.streaming.decoder import (
+from text2motion.generation.decoder import (
     StreamingMotionDecoder,
     collect_stream,
     run_producer,
 )
+from text2motion.generation.nn_model import MotionTokenGenerator
+from text2motion.motion.representation import kinematic_bones, recover_skeleton
 from text2motion.tokenization.nn_model import FiniteScalarQuantizationTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
@@ -125,7 +125,7 @@ def test_recover_skeleton_and_bones():
 
 
 def test_explicit_context_skips_the_probe():
-    import text2motion.streaming.decoder as decode_mod
+    import text2motion.generation.decoder as decode_mod
 
     calls = []
     original = decode_mod.measure_decoder_context

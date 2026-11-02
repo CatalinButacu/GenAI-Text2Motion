@@ -12,16 +12,12 @@ digraph architecture {
     app -> evaluation [color="#35617f", penwidth=1.5];
     app -> generation [color="#35617f", penwidth=1.5];
     app -> motion [color="#35617f", penwidth=1.5];
-    app -> streaming [color="#35617f", penwidth=1.5];
     app -> studio [color="#35617f", penwidth=1.5];
     app -> tokenization [color="#35617f", penwidth=1.5];
     evaluation -> generation;
     evaluation -> motion;
     generation -> motion;
     generation -> tokenization;
-    streaming -> generation;
-    streaming -> motion;
-    streaming -> tokenization;
     studio -> motion;
     tokenization -> motion;
 }

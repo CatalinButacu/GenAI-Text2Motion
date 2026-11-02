@@ -4,7 +4,7 @@ from typing import cast
 
 import numpy as np
 
-from text2motion.streaming.protocol import MotionInferenceClient, MotionStreamProtocol
+from text2motion.app.protocol import MotionInferenceClient, MotionStreamProtocol
 
 
 def __stub_server(server: socket.socket, script: str, chunks: list[np.ndarray]) -> None:
@@ -81,7 +81,7 @@ class _HelloOnlyPipeline:
 
 
 def __serve_in_thread(pipeline) -> tuple[socket.socket, object, threading.Thread]:
-    from text2motion.streaming.service import MotionInferenceServer
+    from text2motion.app.server import MotionInferenceServer
 
     server_side, client_side = socket.socketpair()
     server = MotionInferenceServer(pipeline, policy={"anchor_every_tokens": 0})
@@ -226,7 +226,7 @@ def test_a_client_that_stops_reading_early_leaves_the_connection_usable():
 
 
 def test_inference_stats_report_the_time_to_the_first_chunk():
-    from text2motion.streaming.service import LoadedInferencePipeline, MotionInferenceServer
+    from text2motion.app.server import LoadedInferencePipeline, MotionInferenceServer
 
     pipeline = cast(LoadedInferencePipeline, _HelloOnlyPipeline())
     server = MotionInferenceServer(pipeline, policy={})

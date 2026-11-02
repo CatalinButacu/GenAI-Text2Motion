@@ -14,6 +14,7 @@ from jsonargparse.typing import register_type
 from pydantic import BaseModel
 
 from text2motion.app.bootstrap import ApplicationBootstrap, ApplicationContext
+from text2motion.app.cli_requests import HealthRequest, ServeRequest, StudioRequest
 from text2motion.app.commands.data import run_prepare, run_tokenize
 from text2motion.app.commands.evaluation import run_bench, run_evaluate
 from text2motion.app.commands.generator import run_pretrain, run_sanity_overfit, run_train_generator
@@ -38,7 +39,6 @@ from text2motion.motion.contracts import (
     PrepareRequest,
     Split,
 )
-from text2motion.streaming.cli_requests import HealthRequest, ServeRequest, StudioRequest
 from text2motion.tokenization.contracts import (
     TokenizeRequest,
     TokenizerKind,

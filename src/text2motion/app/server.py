@@ -13,10 +13,10 @@ from pathlib import Path
 
 import torch
 
+from text2motion.app.protocol import MotionStreamProtocol
+from text2motion.generation.decoder import StreamingMotionDecoder
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.representation import FPS, StreamingSkeletonRecovery
-from text2motion.streaming.decoder import StreamingMotionDecoder
-from text2motion.streaming.protocol import MotionStreamProtocol
 
 logger = logging.getLogger(__name__)
 

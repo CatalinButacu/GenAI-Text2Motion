@@ -193,8 +193,8 @@ def demo_probe(args) -> None:
         )
     from text2motion.app.bootstrap import ApplicationBootstrap
     from text2motion.app.config import load_dataclass
+    from text2motion.generation.decoder import StreamingMotionDecoder, measure_decoder_context
     from text2motion.motion.representation import recover_skeleton
-    from text2motion.streaming.decoder import StreamingMotionDecoder, measure_decoder_context
     from text2motion.studio.avatar import build_smplx_body_model, fit_smplx_to_joints
     from text2motion.studio.config import StudioConfig
 
