@@ -20,8 +20,7 @@ from text2motion.app.run_log import ensure_logging_configured
 from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
 from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.nn_model import GeneratorModelSpec
-from text2motion.generation.nn_text import CLIPTextEncoder
+from text2motion.generation.nn_model import CLIPTextEncoder, GeneratorModelSpec
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.contracts import PreparationRequest
 from text2motion.motion.datasets import MotionDataModule

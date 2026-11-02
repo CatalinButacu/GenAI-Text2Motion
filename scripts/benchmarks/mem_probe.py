@@ -8,8 +8,7 @@ import torch
 from text2motion.app.bootstrap import required_path
 from text2motion.app.config import load_config
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.nn_model import GeneratorModelSpec
-from text2motion.generation.nn_text import CLIPTextEncoder
+from text2motion.generation.nn_model import CLIPTextEncoder, GeneratorModelSpec
 from text2motion.generation.trainer import GeneratorTrainer
 from text2motion.motion.representation import DIM
 from text2motion.tokenization.nn_model import build_tokenizer_network

@@ -8,8 +8,7 @@ from text2motion.app.config import (
     TokenizerConfig,
 )
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.nn_model import MotionTokenGenerator
-from text2motion.generation.nn_text import CLIPTextEncoder
+from text2motion.generation.nn_model import CLIPTextEncoder, MotionTokenGenerator
 from text2motion.generation.trainer import GeneratorTrainer
 from text2motion.tokenization.nn_model import FiniteScalarQuantizationTokenizer
 

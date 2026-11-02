@@ -6,8 +6,11 @@ from text2motion.generation.contracts import (
     TextEncoderConfig,
     TextToMotionGenerationRequest,
 )
-from text2motion.generation.nn_model import GeneratorModelSpec, MotionTokenGenerator
-from text2motion.generation.nn_text import CLIPTextEncoder
+from text2motion.generation.nn_model import (
+    CLIPTextEncoder,
+    GeneratorModelSpec,
+    MotionTokenGenerator,
+)
 from text2motion.generation.pipeline import TextToMotionGenerator
 
 __all__ = [

@@ -24,8 +24,7 @@ from text2motion.generation.losses import (
     UncertaintyWeighter,
     generator_loss,
 )
-from text2motion.generation.nn_model import MotionTokenGenerator
-from text2motion.generation.nn_text import CLIPTextEncoder
+from text2motion.generation.nn_model import CLIPTextEncoder, MotionTokenGenerator
 from text2motion.motion.contracts import Evaluator, MetricSink, Split
 from text2motion.motion.kinematics import Skeleton
 from text2motion.motion.representation import KINEMATIC_CHAINS, RAW_OFFSETS

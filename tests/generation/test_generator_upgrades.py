@@ -8,8 +8,7 @@ import torch
 
 from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, TokenizerConfig
 from text2motion.generation.contracts import Backbone, SamplingConfig
-from text2motion.generation.nn_model import MotionTokenGenerator
-from text2motion.generation.nn_text import CLIPTextEncoder
+from text2motion.generation.nn_model import CLIPTextEncoder, MotionTokenGenerator
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.generation.trainer import GeneratorTrainer
 from text2motion.tokenization.nn_model import (
