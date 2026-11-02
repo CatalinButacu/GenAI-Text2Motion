@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from text2motion.motion.model import MotionBatch, MotionClip, MotionTokens
+from text2motion.motion.contracts import MotionBatch, MotionClip, MotionTokens
 from text2motion.motion.normalization import MotionScaler
 from text2motion.tokenization.contracts import (
     ResidualVectorQuantizationConfig,

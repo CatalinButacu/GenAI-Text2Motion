@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from text2motion.motion.model import MotionClip, MotionTokens
+from text2motion.motion.contracts import MotionClip, MotionTokens
 from text2motion.tokenization.contracts import (
     FiniteScalarStackLayout,
     ResidualVectorQuantizationConfig,

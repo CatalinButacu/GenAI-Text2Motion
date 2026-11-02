@@ -7,8 +7,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from text2motion.motion.contracts import Split
-from text2motion.motion.model import SMPLX_MODEL_TYPE, Gender
+from text2motion.motion.contracts import SMPLX_MODEL_TYPE, Gender, Split
 from text2motion.motion.representation import FPS, JOINTS
 from text2motion.motion.storage import base_clip_ids, sha256_file
 

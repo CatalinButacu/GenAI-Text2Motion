@@ -5,13 +5,12 @@ import pytest
 import torch
 
 from text2motion.motion import representation
-from text2motion.motion.contracts import MotionDataConfig, Split
+from text2motion.motion.contracts import MotionClip, MotionDataConfig, Split
 from text2motion.motion.datasets import (
     CaptionedMotionDataset,
     MotionWindowDataset,
     collate_motion_clips,
 )
-from text2motion.motion.model import MotionClip
 from text2motion.motion.normalization import MotionScaler, load_clips
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import (

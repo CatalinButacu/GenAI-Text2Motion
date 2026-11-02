@@ -8,8 +8,7 @@ from pathlib import Path
 import torch
 from torch import nn
 
-from text2motion.motion.contracts import Evaluator, MetricSink, Split
-from text2motion.motion.model import MotionBatch
+from text2motion.motion.contracts import Evaluator, MetricSink, MotionBatch, Split
 from text2motion.motion.storage import (
     RESUME_VERSION,
     atomic_torch_save,

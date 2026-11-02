@@ -7,7 +7,7 @@ import torch
 from text2motion.generation.contracts import SamplingConfig, TextToMotionGenerationRequest
 from text2motion.generation.nn_model import MotionTokenGenerator, seeded_sampling_uniforms
 from text2motion.generation.nn_text import CLIPTextEncoder
-from text2motion.motion.model import (
+from text2motion.motion.contracts import (
     GeneratedMotion,
     MotionClip,
     MotionTokens,

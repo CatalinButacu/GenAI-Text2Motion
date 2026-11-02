@@ -12,7 +12,7 @@ import roma
 import smplx
 import torch
 
-from text2motion.motion.model import SMPLX_MODEL_TYPE
+from text2motion.motion.contracts import SMPLX_MODEL_TYPE
 from text2motion.motion.representation import JOINTS, kinematic_bones
 from text2motion.studio.config import SmplxFitConfig
 from text2motion.studio.contracts import ViewerHost

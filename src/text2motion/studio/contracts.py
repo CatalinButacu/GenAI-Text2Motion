@@ -5,7 +5,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
-from text2motion.motion.model import StreamedChunk
+from text2motion.motion.contracts import StreamedChunk
 
 
 ############################################################

@@ -9,8 +9,13 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from text2motion.motion.contracts import MotionDataConfig, Split, TextAnnotation
-from text2motion.motion.model import MotionBatch, MotionClip
+from text2motion.motion.contracts import (
+    MotionBatch,
+    MotionClip,
+    MotionDataConfig,
+    Split,
+    TextAnnotation,
+)
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import (

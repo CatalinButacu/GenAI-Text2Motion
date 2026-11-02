@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from text2motion.motion.model import Gender
+from text2motion.motion.contracts import Gender
 
 type Color = tuple[float, float, float, float]
 type Pair = tuple[float, float]

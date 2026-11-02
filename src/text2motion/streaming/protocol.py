@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
-from text2motion.motion.model import StreamedChunk
+from text2motion.motion.contracts import StreamedChunk
 from text2motion.motion.storage import sha256_file
 
 logger = logging.getLogger(__name__)

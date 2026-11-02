@@ -18,8 +18,7 @@ from text2motion.generation.contracts import (
     GeneratorTrainingConfig,
     TextEncoderConfig,
 )
-from text2motion.motion.contracts import MotionDataConfig
-from text2motion.motion.model import Gender
+from text2motion.motion.contracts import Gender, MotionDataConfig
 from text2motion.motion.representation import DIM, FPS, JOINTS
 from text2motion.tokenization.contracts import (
     ResidualVectorQuantizationConfig,

@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from text2motion.app.config import TokenizerConfig
-from text2motion.motion.model import MotionClip, MotionTokens
+from text2motion.motion.contracts import MotionClip, MotionTokens
 from text2motion.tokenization.nn_model import (
     FiniteScalarQuantizationTokenizer,
     FrozenMotionTokenizer,

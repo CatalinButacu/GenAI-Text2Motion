@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from text2motion.motion.model import MotionClip
+from text2motion.motion.contracts import MotionClip
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.storage import sha256_file
 from text2motion.tokenization.contracts import TokenizeRequest
