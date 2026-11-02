@@ -26,6 +26,7 @@ from text2motion.motion.representation import (
     encode_joints,
     feature_params,
     recover_from_ric,
+    swap_left_right,
     target_offsets,
 )
 from text2motion.motion.storage import (
@@ -51,10 +52,6 @@ _ADOPT_SAMPLE = 20
 _ADOPT_TOLERANCE = 1e-4
 _REFERENCE_CLIP_ID = "000021"
 _HML3D_FPS = 20
-_RIGHT_CHAIN = (2, 5, 8, 11, 14, 17, 19, 21)
-_LEFT_CHAIN = (1, 4, 7, 10, 13, 16, 18, 20)
-_LEFT_HAND_CHAIN = (22, 23, 24, 34, 35, 36, 25, 26, 27, 31, 32, 33, 28, 29, 30)
-_RIGHT_HAND_CHAIN = (43, 44, 45, 46, 47, 48, 40, 41, 42, 37, 38, 39, 49, 50, 51)
 
 
 def __parquet_files(src: Path, split: str) -> list[Path]:
@@ -131,20 +128,6 @@ def convert_official_release(src: Path, out: Path) -> None:
     for split, names in split_names.items():
         logger.info(f"{split}: {len(names)} clips")
     fit_train_stats(out / FEATURES_DIR, split_names[Split.TRAIN], out, JOINTS)
-
-
-def swap_left_right(data: np.ndarray) -> np.ndarray:
-    assert len(data.shape) == 3 and data.shape[-1] == 3
-    data = data.copy()
-    data[..., 0] *= -1
-    tmp = data[:, _RIGHT_CHAIN]
-    data[:, _RIGHT_CHAIN] = data[:, _LEFT_CHAIN]
-    data[:, _LEFT_CHAIN] = tmp
-    if data.shape[1] > 24:
-        tmp = data[:, _RIGHT_HAND_CHAIN]
-        data[:, _RIGHT_HAND_CHAIN] = data[:, _LEFT_HAND_CHAIN]
-        data[:, _LEFT_HAND_CHAIN] = tmp
-    return data
 
 
 ############################################################

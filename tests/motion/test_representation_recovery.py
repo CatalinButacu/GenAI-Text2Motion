@@ -4,7 +4,7 @@ import torch
 
 from text2motion.motion import representation
 from text2motion.motion.kinematics import Skeleton
-from text2motion.motion.preparation import swap_left_right
+from text2motion.motion.representation import swap_left_right
 
 
 def __encoded(joints: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

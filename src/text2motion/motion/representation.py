@@ -95,6 +95,10 @@ _RIGHT_FEET = (8, 11)
 _LEFT_FEET = (7, 10)
 _FACE_JOINTS = (2, 1, 17, 16)
 _FOOT_VELOCITY_THRESHOLD = 0.002
+_RIGHT_CHAIN = (2, 5, 8, 11, 14, 17, 19, 21)
+_LEFT_CHAIN = (1, 4, 7, 10, 13, 16, 18, 20)
+_LEFT_HAND_CHAIN = (22, 23, 24, 34, 35, 36, 25, 26, 27, 31, 32, 33, 28, 29, 30)
+_RIGHT_HAND_CHAIN = (43, 44, 45, 46, 47, 48, 40, 41, 42, 37, 38, 39, 49, 50, 51)
 
 
 ############################################################
@@ -111,6 +115,20 @@ class FeatureParams:
     leg_joints: tuple[int, int]
     joint_count: int
     foot_velocity_threshold: float
+
+
+def swap_left_right(data: np.ndarray) -> np.ndarray:
+    assert len(data.shape) == 3 and data.shape[-1] == 3
+    data = data.copy()
+    data[..., 0] *= -1
+    tmp = data[:, _RIGHT_CHAIN]
+    data[:, _RIGHT_CHAIN] = data[:, _LEFT_CHAIN]
+    data[:, _LEFT_CHAIN] = tmp
+    if data.shape[1] > 24:
+        tmp = data[:, _RIGHT_HAND_CHAIN]
+        data[:, _RIGHT_HAND_CHAIN] = data[:, _LEFT_HAND_CHAIN]
+        data[:, _LEFT_HAND_CHAIN] = tmp
+    return data
 
 
 def target_offsets(reference_joints: np.ndarray) -> torch.Tensor:
