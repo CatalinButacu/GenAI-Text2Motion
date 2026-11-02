@@ -341,21 +341,6 @@ def sample_logits(
     return sorted_idx.gather(-1, choice).squeeze(-1)
 
 
-def token_ce_loss(
-    logits: torch.Tensor, targets: torch.Tensor, token_lengths: torch.Tensor | None = None
-) -> torch.Tensor:
-    if token_lengths is None:
-        return F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
-
-    per_token = F.cross_entropy(
-        logits.reshape(-1, logits.size(-1)), targets.reshape(-1), reduction="none"
-    ).view(targets.shape)
-    valid = (
-        torch.arange(targets.size(1), device=logits.device)[None, :] < token_lengths[:, None]
-    ).float()[..., None]
-    return (per_token * valid).sum() / valid.sum().clamp(min=1.0) / targets.size(-1)
-
-
 ############################################################
 #       GeneratorModelSpec
 ############################################################

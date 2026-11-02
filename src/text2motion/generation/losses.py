@@ -5,7 +5,6 @@ from torch import nn
 from torch.nn import functional as F
 
 from text2motion.generation.contracts import LossWeights as LossWeights
-from text2motion.generation.nn_model import token_ce_loss
 from text2motion.motion.representation import (
     FOOT_CONTACT_JOINTS,
     JOINTS,
@@ -14,6 +13,21 @@ from text2motion.motion.representation import (
     recover_from_rot,
 )
 from text2motion.tokenization.nn_model import TokenizerNetwork
+
+
+def token_ce_loss(
+    logits: torch.Tensor, targets: torch.Tensor, token_lengths: torch.Tensor | None = None
+) -> torch.Tensor:
+    if token_lengths is None:
+        return F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
+
+    per_token = F.cross_entropy(
+        logits.reshape(-1, logits.size(-1)), targets.reshape(-1), reduction="none"
+    ).view(targets.shape)
+    valid = (
+        torch.arange(targets.size(1), device=logits.device)[None, :] < token_lengths[:, None]
+    ).float()[..., None]
+    return (per_token * valid).sum() / valid.sum().clamp(min=1.0) / targets.size(-1)
 
 
 def __codebook_tables(tokenizer: TokenizerNetwork, device: torch.device) -> list[torch.Tensor]:

@@ -10,7 +10,7 @@ import torch
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.app.run_log import log_metrics, start_run
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.nn_model import token_ce_loss
+from text2motion.generation.losses import token_ce_loss
 from text2motion.motion.storage import sha256_file
 from text2motion.tokenization.corpus import pack_clip_keys, read_pack_identity
 from text2motion.tokenization.nn_model import TokenizerNetwork

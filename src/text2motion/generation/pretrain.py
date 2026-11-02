@@ -14,7 +14,8 @@ from text2motion.generation.contracts import (
     GeneratorTrainingConfig,
     MixedPrecisionMode,
 )
-from text2motion.generation.nn_model import GeneratorModelSpec, token_ce_loss
+from text2motion.generation.losses import token_ce_loss
+from text2motion.generation.nn_model import GeneratorModelSpec
 from text2motion.generation.trainer import (
     adamw_groups,
     check_schedule_horizon,
