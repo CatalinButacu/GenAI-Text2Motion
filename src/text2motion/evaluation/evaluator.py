@@ -17,10 +17,12 @@ from text2motion.evaluation.contracts import (
     GenerationEvaluationReport,
     GenerationEvaluationSet,
 )
-from text2motion.evaluation.metrics import (
-    bootstrap_fid,
+from text2motion.evaluation.embeddings import (
     compute_guo_motion_embeddings,
     compute_guo_text_embeddings,
+)
+from text2motion.evaluation.metrics import (
+    bootstrap_fid,
     diversity,
     fid,
     mm_dist,

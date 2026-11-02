@@ -7,9 +7,11 @@ import torch
 from text2motion.app.bootstrap import required_path
 from text2motion.app.config import load_config
 from text2motion.evaluation.contracts import DIVERSITY_PAIRS, GenerationEvaluationProtocol
-from text2motion.evaluation.metrics import (
+from text2motion.evaluation.embeddings import (
     compute_guo_motion_embeddings,
     compute_guo_text_embeddings,
+)
+from text2motion.evaluation.metrics import (
     diversity,
     fid,
     mm_dist,

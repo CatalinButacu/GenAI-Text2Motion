@@ -13,8 +13,8 @@ from scipy import stats
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.app.run_log import log_metrics, start_run
 from text2motion.evaluation.contracts import GenerationEvaluationSet
+from text2motion.evaluation.embeddings import compute_guo_text_embeddings
 from text2motion.evaluation.metrics import (
-    compute_guo_text_embeddings,
     motion_statistics,
     own_caption_ranks,
     paired_fid_delta,
