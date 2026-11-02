@@ -71,7 +71,7 @@ def __tokenizer_network(
     tokenizer_config = replace(config.tokenizer, kind=kind)
     if quantizer is not None:
         tokenizer_config = replace(tokenizer_config, quantizer=quantizer, quant_dropout=0.5)
-    torch.manual_seed(7)
+    torch.manual_seed(2026)
     network = build_tokenizer_network(tokenizer_config, config.rvq_baseline)
     if checkpoint is None:
         return network
@@ -81,7 +81,7 @@ def __tokenizer_network(
 
 def __case_outputs(name: str, network: TokenizerNetwork) -> dict[str, torch.Tensor]:
     results: dict[str, torch.Tensor] = {}
-    torch.manual_seed(0)
+    torch.manual_seed(2026)
     motion = torch.randn(2, 64, 263)
     network.eval()
     with torch.no_grad():
@@ -91,13 +91,13 @@ def __case_outputs(name: str, network: TokenizerNetwork) -> dict[str, torch.Tens
         reconstruction = network(motion)
         results[f"{name}/recon"] = reconstruction[0]
         results[f"{name}/commit"] = reconstruction[2]
-        torch.manual_seed(1)
+        torch.manual_seed(2026)
         logits = torch.randn(2, 16, indices.shape[-1], 1024)
         results[f"{name}/soft_decode"] = soft_decode(logits, network)
     if name == "rvq_l8":
         return results
     network.train()
-    torch.manual_seed(3)
+    torch.manual_seed(2026)
     training = network(motion)
     results[f"{name}/train_recon"] = training[0].detach()
     results[f"{name}/train_indices"] = training[1]
