@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -10,6 +12,34 @@ from text2motion.motion.amass import (
 )
 
 FPS = 20
+
+
+def test_pose_candidates_follow_the_fixed_spelling_order(tmp_path, monkeypatch):
+    checked = []
+
+    def record_candidate(path):
+        checked.append(path)
+        return False
+
+    monkeypatch.setattr(Path, "is_file", record_candidate)
+    pose_root = tmp_path / "pose_data"
+    folder = pose_root / "BMLrub" / "rub001"
+
+    assert (
+        resolve_pose_path("pose_data/BMLrub/rub001/0001_treadmill_slow_poses.npy", pose_root)
+        is None
+    )
+    assert checked == [
+        folder / "0001_treadmill_slow_stageii.npy",
+        folder / "0001_treadmill_slow_poses.npy",
+        folder / "0001_treadmill_slow.npy",
+        folder / "0001_treadmill_slow_poses_stageii.npy",
+        folder / "0001_treadmill_slow_poses_poses.npy",
+    ]
+
+    checked.clear()
+    assert resolve_pose_path("", pose_root) is None
+    assert checked == []
 
 
 @pytest.mark.parametrize(

@@ -56,11 +56,22 @@ def head_trim_frames(source_path: str | Path, fps: int) -> int:
     return int(round(_HEAD_TRIM_SECONDS.get(dataset_name(source_path), 0.0) * fps))
 
 
-def pose_folders_and_candidates(source_path: str, pose_root: Path) -> tuple[list[Path], list[Path]]:
-    parts = [part for part in Path(source_path).parts if part not in (".", "pose_data")]
+def __source_parts(source_path: str) -> list[str]:
+    return [part for part in Path(source_path).parts if part not in (".", "pose_data")]
+
+
+def __pose_folders(source_path: str, pose_root: Path) -> list[Path]:
+    parts = __source_parts(source_path)
     if not parts:
-        return [], []
+        return []
     datasets = list(dict.fromkeys([_FOLDER_NAMES.get(parts[0], parts[0]), parts[0]]))
+    return [pose_root / Path(dataset, *parts[1:-1]) for dataset in datasets]
+
+
+def __pose_candidates(source_path: str, pose_root: Path) -> list[Path]:
+    parts = __source_parts(source_path)
+    if not parts:
+        return []
     stem = Path(parts[-1]).stem
     base = stem[:-6] if stem.endswith("_poses") else stem
     stems = list(dict.fromkeys([base, base.replace(" ", "_"), stem, stem.replace(" ", "_")]))
@@ -71,12 +82,11 @@ def pose_folders_and_candidates(source_path: str, pose_root: Path) -> tuple[list
             for suffix in ("_stageii", "_poses", "")
         )
     )
-    folders = [pose_root / Path(dataset, *parts[1:-1]) for dataset in datasets]
-    return folders, [folder / name for folder in folders for name in names]
+    return [folder / name for folder in __pose_folders(source_path, pose_root) for name in names]
 
 
 def resolve_pose_path(source_path: str, pose_root: Path) -> Path | None:
-    _, candidates = pose_folders_and_candidates(source_path, pose_root)
+    candidates = __pose_candidates(source_path, pose_root)
     return next((candidate for candidate in candidates if candidate.is_file()), None)
 
 
@@ -104,7 +114,8 @@ def heldout_sources(index_csv: Path, out_dir: Path, pose_root: Path) -> set[Path
         if Path(str(row["new_name"])).stem not in held_ids:
             continue
         source_path = str(row["source_path"])
-        folders, candidates = pose_folders_and_candidates(source_path, pose_root)
+        folders = __pose_folders(source_path, pose_root)
+        candidates = __pose_candidates(source_path, pose_root)
         matches = [candidate.resolve() for candidate in candidates if candidate.is_file()]
         if matches:
             excluded.update(matches)
