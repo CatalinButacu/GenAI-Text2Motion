@@ -12,7 +12,7 @@ from text2motion.app.run_log import log_metrics, start_run
 from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM, FPS
-from text2motion.motion.storage import FEATURES_DIR, split_clip_ids
+from text2motion.motion.storage import FEATURES_DIR, base_clip_ids
 from text2motion.streaming.decoder import StreamingMotionDecoder, measure_decoder_context
 from text2motion.tokenization.nn_model import build_tokenizer_network
 
@@ -34,7 +34,7 @@ def load_clips(
 ) -> tuple[np.ndarray, MotionScaler]:
     scaler = MotionScaler.load(root, dim=DIM)
     clips = []
-    for clip_id in split_clip_ids(root, split):
+    for clip_id in base_clip_ids(root, split):
         path = root / FEATURES_DIR / f"{clip_id}.npy"
         if not path.is_file():
             continue

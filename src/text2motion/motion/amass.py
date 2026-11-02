@@ -10,7 +10,7 @@ import torch
 from text2motion.motion.contracts import Split
 from text2motion.motion.model import SMPLX_MODEL_TYPE, Gender
 from text2motion.motion.representation import FPS, JOINTS
-from text2motion.motion.storage import sha256_file, split_clip_ids
+from text2motion.motion.storage import base_clip_ids, sha256_file
 
 _HEAD_TRIM_SECONDS = MappingProxyType(
     {
@@ -83,7 +83,7 @@ def resolve_pose_path(source_path: str, pose_root: Path) -> Path | None:
 def read_heldout_ids(out_dir: Path) -> set[str]:
     held: set[str] = set()
     for split in (Split.VALIDATION, Split.TEST):
-        held.update(split_clip_ids(out_dir, split))
+        held.update(base_clip_ids(out_dir, split))
     return held
 
 

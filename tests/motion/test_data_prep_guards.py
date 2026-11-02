@@ -1,8 +1,10 @@
 import numpy as np
 import pytest
 
-from text2motion.motion.normalization import fit_train_stats, normalization_stats, read_split_names
-from text2motion.motion.storage import item_rng
+from text2motion.motion.contracts import PreparationRequest, PreparationStage
+from text2motion.motion.normalization import fit_train_stats, normalization_stats
+from text2motion.motion.preparation import run_hml3d_preparation
+from text2motion.motion.storage import item_rng, listed_clip_ids
 
 JOINTS = 22
 DIM = 8 + (JOINTS - 1) * 9 + JOINTS * 3
@@ -20,9 +22,14 @@ def build_dirs(tmp_path):
     return vec_dir
 
 
+def test_a_missing_split_file_stops_the_listed_reader(tmp_path):
+    with pytest.raises(FileNotFoundError, match="every listed id is needed"):
+        listed_clip_ids(tmp_path / "train.txt")
+
+
 def test_stats_refuse_to_fit_without_a_train_split(tmp_path):
-    with pytest.raises(FileNotFoundError, match="train split"):
-        read_split_names(tmp_path / "train.txt")
+    with pytest.raises(FileNotFoundError, match="fitted on the train split alone"):
+        run_hml3d_preparation(PreparationRequest(out_dir=tmp_path), PreparationStage.STATS)
 
 
 def test_stats_ignore_val_and_test_clips(tmp_path):
@@ -32,7 +39,7 @@ def test_stats_ignore_val_and_test_clips(tmp_path):
     write_clip(vec_dir, "000999", 1000.0)
     (tmp_path / "train.txt").write_text("000001\n000002\n", encoding="utf-8")
 
-    names = read_split_names(tmp_path / "train.txt")
+    names = listed_clip_ids(tmp_path / "train.txt")
     mean, _ = fit_train_stats(vec_dir, names, tmp_path, JOINTS)
 
     assert mean.shape == (DIM,)

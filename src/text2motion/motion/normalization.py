@@ -93,16 +93,6 @@ class MotionScaler:
         return torch.as_tensor(array, device=like.device, dtype=like.dtype)
 
 
-def read_split_names(split_path: Path) -> list[str]:
-    if not split_path.is_file():
-        raise FileNotFoundError(
-            f"{split_path} missing: normalization statistics must be fitted on the train split "
-            f"alone. Fitting over every available feature file would include val and test, "
-            f"leaking held-out data into the scaler used by every downstream model."
-        )
-    return [name.strip() for name in split_path.read_text().splitlines() if name.strip()]
-
-
 def load_clips(vec_dir: Path, names: list[str]) -> list[np.ndarray]:
     unique = sorted(set(names))
     missing = [name for name in unique if not (vec_dir / f"{name}.npy").is_file()]

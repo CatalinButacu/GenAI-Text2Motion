@@ -8,8 +8,8 @@ from text2motion.motion.storage import (
     FAILURE_DUMP_FILE,
     SPLIT_FILES,
     atomic_torch_save,
+    base_clip_ids,
     dump_on_failure,
-    split_clip_ids,
 )
 
 
@@ -30,14 +30,14 @@ def test_a_failed_save_keeps_the_previous_file(tmp_path, monkeypatch):
     assert list(tmp_path.iterdir()) == [path]
 
 
-def test_split_clip_ids_strip_the_mirror_prefix_and_keep_the_first_order(tmp_path):
+def test_base_clip_ids_strip_the_mirror_prefix_and_keep_the_first_order(tmp_path):
     (tmp_path / SPLIT_FILES[Split.VALIDATION]).write_text("000002\nM000002\n\n 000001 \nM000003\n")
-    assert split_clip_ids(tmp_path, Split.VALIDATION) == ["000002", "000001", "000003"]
+    assert base_clip_ids(tmp_path, Split.VALIDATION) == ["000002", "000001", "000003"]
 
 
-def test_split_clip_ids_without_the_split_file_raises(tmp_path):
+def test_base_clip_ids_without_the_split_file_raises(tmp_path):
     with pytest.raises(FileNotFoundError, match="split file not found"):
-        split_clip_ids(tmp_path, Split.TEST)
+        base_clip_ids(tmp_path, Split.TEST)
 
 
 @pytest.mark.parametrize("enabled", [True, False])

@@ -15,7 +15,7 @@ from torch import nn
 from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM, SLICES
-from text2motion.motion.storage import split_clip_ids
+from text2motion.motion.storage import base_clip_ids
 
 _POS_INDEX = MappingProxyType(
     {
@@ -418,7 +418,7 @@ class GuoEvaluationResources:
         )
 
     def clip_ids(self, split: Split | str) -> list[str]:
-        return split_clip_ids(self.motion_dataset_dir, split)
+        return base_clip_ids(self.motion_dataset_dir, split)
 
     def normalize(self, feats):
         return self.dataset_motion_scaler.normalize(feats)

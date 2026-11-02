@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 SPLIT_FILES = MappingProxyType({split: f"{split.value}.txt" for split in Split})
 
 
-def split_clip_ids(root: Path, split: Split | str) -> list[str]:
+def base_clip_ids(root: Path, split: Split | str) -> list[str]:
     split_path = Path(root) / SPLIT_FILES[Split(split)]
     if not split_path.is_file():
         raise FileNotFoundError(
@@ -39,6 +39,14 @@ def split_clip_ids(root: Path, split: Split | str) -> list[str]:
         )
     listed = [name.strip() for name in split_path.read_text(encoding="utf-8").splitlines()]
     return list(dict.fromkeys(name.removeprefix("M") for name in listed if name))
+
+
+def listed_clip_ids(split_path: Path) -> list[str]:
+    if not split_path.is_file():
+        raise FileNotFoundError(f"{split_path} missing: every listed id is needed")
+    return [
+        name.strip() for name in split_path.read_text(encoding="utf-8").splitlines() if name.strip()
+    ]
 
 
 def atomic_torch_save(state: Any, path: str | Path) -> None:

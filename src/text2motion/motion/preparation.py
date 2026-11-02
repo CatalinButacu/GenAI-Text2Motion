@@ -19,7 +19,7 @@ from text2motion.motion.amass import (
     resolve_pose_path,
 )
 from text2motion.motion.contracts import PreparationRequest, PreparationStage, Split
-from text2motion.motion.normalization import fit_train_stats, read_split_names
+from text2motion.motion.normalization import fit_train_stats
 from text2motion.motion.representation import (
     DIM,
     JOINTS,
@@ -32,6 +32,7 @@ from text2motion.motion.storage import (
     FEATURES_DIR,
     SPLIT_FILES,
     atomic_numpy_save,
+    listed_clip_ids,
     sha256_file,
 )
 
@@ -398,7 +399,14 @@ def run_hml3d_preparation(
     if stage in (PreparationStage.FEATURE, PreparationStage.ALL):
         encode_joint_clips_to_hml3d263(request, layout)
     if stage in (PreparationStage.STATS, PreparationStage.ALL):
-        train_names = read_split_names(layout.out_dir / SPLIT_FILES[Split.TRAIN])
+        train_split = layout.out_dir / SPLIT_FILES[Split.TRAIN]
+        if not train_split.is_file():
+            raise FileNotFoundError(
+                f"{train_split} missing: normalization statistics must be fitted on the train "
+                f"split alone. Fitting over every feature file would include val and test, "
+                f"leaking held-out data into the scaler used by every downstream model."
+            )
+        train_names = listed_clip_ids(train_split)
         fit_train_stats(layout.new_joint_vecs, train_names, layout.out_dir, request.joint_count)
 
 

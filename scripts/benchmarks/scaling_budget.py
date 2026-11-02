@@ -10,7 +10,7 @@ import numpy as np
 from text2motion.app.bootstrap import required_path
 from text2motion.app.config import load_config
 from text2motion.app.run_log import log_metrics, start_run
-from text2motion.motion.storage import split_clip_ids
+from text2motion.motion.storage import base_clip_ids
 from text2motion.tokenization.corpus import pack_clip_keys
 
 
@@ -18,7 +18,7 @@ def split_frame_counts(out_dir: Path, split: str, max_motion_len: int) -> tuple[
     clip_count = 0
     frames_total = 0
     frames_windowed = 0
-    for clip_id in split_clip_ids(out_dir, split):
+    for clip_id in base_clip_ids(out_dir, split):
         feature_file = out_dir / "new_joint_vecs" / f"{clip_id}.npy"
         if not feature_file.exists():
             continue

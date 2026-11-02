@@ -16,9 +16,9 @@ from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import (
     FEATURES_DIR,
     TEXTS_DIR,
+    base_clip_ids,
     clip_frame_counts,
     item_rng,
-    split_clip_ids,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,9 +57,7 @@ class CaptionedMotionDataset(Dataset):
         self._text_dir = Path(texts_dir) if texts_dir is not None else root / TEXTS_DIR
         self.scaler = MotionScaler.load(root, dim=DIM)
 
-        self._ids, self.dropped_clip_ids = self.__select_usable_clip_ids(
-            split_clip_ids(root, split)
-        )
+        self._ids, self.dropped_clip_ids = self.__select_usable_clip_ids(base_clip_ids(root, split))
         log_dropped_clips(self.dropped_clip_ids, f"shorter than {self._min_len} frames")
         if not self._ids:
             raise RuntimeError(f"no usable clips for split {split!r} under {self._vec_dir}")
@@ -206,7 +204,7 @@ class MotionWindowDataset(Dataset):
         self._vec_dir = root / FEATURES_DIR
         self.scaler = MotionScaler.load(root, dim=DIM)
         self._ids, self._cache, self.dropped_clip_ids = self.__load_windowable_clips(
-            split_clip_ids(root, split)
+            base_clip_ids(root, split)
         )
         log_dropped_clips(self.dropped_clip_ids, f"shorter than the window of {window} frames")
         if not self._ids:

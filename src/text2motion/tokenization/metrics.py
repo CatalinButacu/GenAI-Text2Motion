@@ -10,7 +10,7 @@ from text2motion.motion.contracts import Split
 from text2motion.motion.datasets import check_no_missing_files
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import JOINTS, recover_from_ric
-from text2motion.motion.storage import FEATURES_DIR, split_clip_ids
+from text2motion.motion.storage import FEATURES_DIR, base_clip_ids
 from text2motion.tokenization.nn_model import TokenizerNetwork
 
 type ReconstructionFidScorer = Callable[[list[np.ndarray], list[np.ndarray]], float]
@@ -24,7 +24,7 @@ def select_reconstruction_evaluation_clip_ids(
     max_clips: int | None = None,
     shuffle_seed: int | None = None,
 ) -> list[str]:
-    ids = split_clip_ids(root, split)
+    ids = base_clip_ids(root, split)
     if shuffle_seed is not None:
         np.random.default_rng(shuffle_seed).shuffle(ids)
     return ids[:max_clips]
