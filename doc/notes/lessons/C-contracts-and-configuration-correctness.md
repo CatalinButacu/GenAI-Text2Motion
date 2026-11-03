@@ -12,7 +12,7 @@
 flowchart LR
   C["contracts.py\nimmutable dataclasses, enums, Protocols\nno I/O, no model loading"] --> M["model.py\nbehavior-rich domain classes"]
   M --> O["operations.py / trainer.py / pretrain.py\nstateless algorithms, explicit deps"]
-  O --> A["app/commands/*.py\nuse cases; receive a composed app"]
+  O --> A["app/training.py / app/serving.py\nuse cases; receive a composed app"]
   A --> B["app/bootstrap.py\ncomposition root: builds the object graph"]
   B --> L["app/cli.py\nparses argv, dispatches one use case"]
 ```
@@ -49,7 +49,7 @@ single object, loaded by `app/config.py::load_config` and checked by
 
 ## C.3 Case study 1 -- vocabulary size that assumed one tokenizer kind
 
-`run_pretrain` (`app/commands/generator.py:183`) builds the generator's embedding table size before
+`run_pretrain` (`app/training.py::run_pretrain`) builds the generator's embedding table size before
 any tokenizer checkpoint is loaded -- pretraining runs on pre-tokenized AMASS packs, so it only needs
 the *shape* of the vocabulary, not real tokenizer weights. The vocabulary size was computed as
 $$
@@ -63,7 +63,7 @@ against a vocabulary $24$ tokens too small; the first out-of-range RVQ token ind
 scatter-gather assertion deep inside the embedding lookup -- correct behavior, wrong diagnosis distance
 from the actual defect.
 
-Fix (`app/commands/generator.py:186`): branch on `config.tokenizer.kind` and read
+Fix (`app/training.py::run_pretrain`): branch on `config.tokenizer.kind` and read
 `config.rvq_baseline.codebook_size` for RVQ, matching how `ResidualVectorQuantizationTokenizer.codebook_size`
 (`tokenization/nn_model.py:418`) already derives it for the real tokenizer object. `pretrain` had simply
 never been exercised against an RVQ config before -- `run_twins.sh`'s `transformer_rvq` pair calls the
@@ -97,7 +97,7 @@ editing the source.
 
 Fix: added `num_workers: int = 0` to `GeneratorTrainingRequest`
 (`generation/contracts.py:137`), the `--num_workers` flag to the `train-generator` subparser
-(`app/cli.py:114`), and threaded it into the loader call (`app/commands/generator.py:100`). Measured
+(`app/cli.py:114`), and threaded it into the loader call (`app/training.py::run_train_generator`). Measured
 effect after also adding `pin_memory` / `persistent_workers` / `prefetch_factor` to
 `MotionDataModule`'s loaders (`motion/datasets.py`): epoch time on the transformer+RVQ fine-tune
 dropped from ~15 min to ~9 min, a ~40% reduction, with a one-time ~15s worker-spawn cost absorbed once
@@ -108,7 +108,7 @@ per run rather than once per epoch.
 `TokenizerConfig.num_quantizers` and `ResidualVectorQuantizationConfig.num_quantizers` describe the same architectural fact
 (how many residual quantizer stages an RVQ tokenizer has) but are two independent fields, set
 independently in YAML (`tokenizer: {num_quantizers: 8}` and `rvq_baseline: {num_quantizers: 8}`).
-`app/bootstrap.py:76` and `app/commands/evaluation.py:92` resolve the **generator's** `num_codebooks`
+`app/bootstrap.py:76` and `app/serving.py::run_bench` resolve the **generator's** `num_codebooks`
 from `tokenizer.num_quantizers`; the **tokenizer model itself** is built from
 `rvq_baseline.num_quantizers` (`tokenization/nn_model.py:354`). Every config in this repository happens
 to keep the two numbers equal today -- verified directly, not assumed -- but nothing enforced it, and
