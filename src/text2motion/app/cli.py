@@ -15,12 +15,22 @@ from pydantic import BaseModel
 
 from text2motion.app.bootstrap import ApplicationBootstrap, ApplicationContext
 from text2motion.app.cli_requests import HealthRequest, ServeRequest, StudioRequest
-from text2motion.app.commands.data import run_prepare, run_tokenize
-from text2motion.app.commands.evaluation import run_bench, run_evaluate
-from text2motion.app.commands.generator import run_pretrain, run_sanity_overfit, run_train_generator
-from text2motion.app.commands.serving import run_health, run_serve, run_studio
-from text2motion.app.commands.tokenizer import run_train_tokenizer
 from text2motion.app.run_log import LOG_LEVELS, configure_logging
+from text2motion.app.serving import (
+    run_bench,
+    run_evaluate,
+    run_health,
+    run_serve,
+    run_studio,
+)
+from text2motion.app.training import (
+    run_prepare,
+    run_pretrain,
+    run_sanity_overfit,
+    run_tokenize,
+    run_train_generator,
+    run_train_tokenizer,
+)
 from text2motion.evaluation.contracts import (
     BenchmarkRequest,
     EvaluateRequest,

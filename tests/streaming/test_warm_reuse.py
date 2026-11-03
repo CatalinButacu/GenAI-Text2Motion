@@ -4,7 +4,7 @@ from types import MappingProxyType
 
 import pytest
 
-from text2motion.app.protocol import (
+from text2motion.app.service import (
     MotionStreamProtocol,
     motion_service_client,
     release_identity,

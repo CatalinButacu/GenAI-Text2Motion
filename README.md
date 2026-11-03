@@ -153,7 +153,7 @@ src/text2motion/
   generation/     generators, text encoder, trainers, losses, incremental decode
   evaluation/     FID, R-precision, MM-Dist, Diversity, MultiModality, streaming benchmark
   studio/         SMPL-X fit and aitviewer studio
-  app/            config, checkpoints, composition, CLI, service, wire protocol
+  app/            10 flat modules: config, checkpoints, composition, CLI, training, serving, service IPC
 configs/          YAML settings
 scripts/          training drivers, evaluation, benchmarks, figures, rendering
 tests/            source-package tests plus the retained streaming test folder

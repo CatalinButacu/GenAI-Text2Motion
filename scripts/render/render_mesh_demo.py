@@ -14,7 +14,7 @@ from matplotlib.animation import PillowWriter
 
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.app.cli_requests import ModelServiceRequest
-from text2motion.app.commands.serving import load_inference_pipeline
+from text2motion.app.serving import load_inference_pipeline
 from text2motion.generation.contracts import Backbone
 from text2motion.motion.representation import FPS, StreamingSkeletonRecovery
 from text2motion.studio.config import SmplxFitConfig

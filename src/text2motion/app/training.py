@@ -6,8 +6,8 @@ from pathlib import Path
 
 import torch
 
-from text2motion.app.bootstrap import ApplicationContext
-from text2motion.app.checkpoint import GeneratorBundle, OverfitGate, sha256_file
+from text2motion.app.bootstrap import ApplicationContext, required_path
+from text2motion.app.checkpoint import GeneratorBundle, OverfitGate
 from text2motion.app.run_log import (
     log_metrics,
     resumed_run_dir,
@@ -30,11 +30,166 @@ from text2motion.generation.trainer import (
     overfit_single_batch,
     train_generator,
 )
-from text2motion.motion.contracts import Split
+from text2motion.motion.contracts import PrepareRequest, Split
 from text2motion.motion.datasets import dataset_size
-from text2motion.tokenization.corpus import check_pack_precision, read_pack_identity
+from text2motion.motion.preparation import (
+    build_amass_pretraining_corpus,
+    convert_official_release,
+    heldout_feature_names,
+    run_hml3d_preparation,
+)
+from text2motion.motion.storage import MEAN_FILE, SPLIT_FILES, STD_FILE, sha256_file
+from text2motion.tokenization.contracts import (
+    TokenizeRequest,
+    TokenizerKind,
+    TrainTokenizerRequest,
+)
+from text2motion.tokenization.corpus import (
+    build_token_pack,
+    check_pack_precision,
+    read_pack_identity,
+)
+from text2motion.tokenization.metrics import evaluate_tokenizer_reconstruction
+from text2motion.tokenization.trainer import (
+    TokenizerTrainer,
+    train_tokenizer,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def run_prepare(app: ApplicationContext, args: PrepareRequest) -> None:
+    if args.source_release:
+        convert_official_release(Path(args.source_release), Path(args.converted_dir))
+        return
+
+    request = app.create_hml3d_preparation_request()
+    if not args.corpus:
+        regen_dir = Path(args.regen_dir)
+        if regen_dir.resolve() == Path(request.out_dir).resolve():
+            raise ValueError(
+                f"--regen_dir {regen_dir} is the training dataset (paths.hml3d_out_dir); "
+                "prepare writes only into a separate regeneration folder"
+            )
+        run_hml3d_preparation(
+            replace(request, out_dir=regen_dir), args.stage, args.adopt_pose_folder
+        )
+        return
+
+    run_dir = start_run("pretrain_corpus", app.config, app.config.paths.logs_dir, args.model_dump())
+    summary = build_amass_pretraining_corpus(
+        request, Path(args.regen_dir), Path(args.corpus_dir), args.min_frames, args.limit
+    )
+    log_metrics(run_dir, summary)
+    logger.info(summary)
+
+
+def run_tokenize(app: ApplicationContext, request: TokenizeRequest) -> None:
+    paths = app.config.paths
+    index_csv = required_path(paths.hml3d_index_csv, "hml3d_index_csv")
+    dataset_dir = required_path(paths.hml3d_out_dir, "hml3d_out_dir")
+    checkpoint = request.tokenizer_ckpt or paths.tokenizer_checkpoint
+    tokenizer = app.load_tokenizer(checkpoint)
+    excluded = heldout_feature_names(index_csv, dataset_dir, Path(request.regen_dir) / "pose_data")
+    identity: dict[str, object] = {
+        "tokenizer_sha256": sha256_file(checkpoint),
+        "precision": app.config.precision.value,
+        "mean_sha256": sha256_file(dataset_dir / MEAN_FILE),
+        "std_sha256": sha256_file(dataset_dir / STD_FILE),
+        "index_sha256": sha256_file(index_csv),
+        "val_split_sha256": sha256_file(dataset_dir / SPLIT_FILES[Split.VALIDATION]),
+        "test_split_sha256": sha256_file(dataset_dir / SPLIT_FILES[Split.TEST]),
+    }
+    run_dir = start_run("tokenize_corpus", app.config, paths.logs_dir, request.model_dump())
+    summary = build_token_pack(
+        tokenizer,
+        app.create_motion_repository().load_scaler(),
+        request,
+        excluded,
+        identity,
+    )
+    log_metrics(run_dir, summary)
+    logger.info(summary)
+
+
+def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) -> None:
+    config = replace(app.config, tokenizer=replace(app.config.tokenizer, kind=args.tokenizer))
+    app.config = config
+
+    module = app.create_tokenizer_network().to(app.device)
+    commitment = (
+        config.rvq_baseline.commitment_beta
+        if args.tokenizer is TokenizerKind.RESIDUAL_VECTOR
+        else 0.0
+    )
+    trainer = TokenizerTrainer(
+        module,
+        lr=config.train.lr,
+        weight_decay=config.train.weight_decay,
+        ema_decay=args.ema_decay,
+        commitment_beta=commitment,
+    )
+    repository = app.create_motion_repository()
+    loader = repository.window_batch_loader(
+        Split.TRAIN, args.window, args.batch_size, num_workers=args.num_workers
+    )
+    evaluator = app.create_humanml3d_generation_evaluator()
+    scaler = repository.load_scaler()
+
+    def evaluate(split: Split) -> dict[str, float]:
+        return evaluate_tokenizer_reconstruction(
+            module,
+            repository.root,
+            scaler,
+            max_frames=config.data.max_motion_len,
+            downsample=config.tokenizer.downsample,
+            device=app.device,
+            max_clips=args.max_eval_clips,
+            split=split,
+            reconstruction_fid_scorer=evaluator.calculate_reconstruction_fid,
+        )
+
+    name = args.ckpt_name or f"tokenizer_{args.tokenizer.value}.pt"
+    checkpoint_dir = app.checkpoint_directory("tokenizer")
+    resume_path = checkpoint_dir / f"{Path(name).stem}_last.pt"
+    run_dir = start_run(
+        f"tokenizer_{Path(name).stem}",
+        config,
+        app.config.paths.logs_dir,
+        args.model_dump(),
+        existing_run_dir=resumed_run_dir(resume_path, None) if args.resume else None,
+    )
+    logger.info(
+        f"train clips: {dataset_size(loader)}  device: {app.device}  "
+        f"codebook: {module.codebook_size}"
+    )
+    train_tokenizer(
+        trainer,
+        loader,
+        args,
+        device=app.device,
+        evaluate=evaluate,
+        checkpoint_path=checkpoint_dir / name,
+        resume_path=resume_path,
+        on_metrics=lambda record: log_metrics(run_dir, record),
+        run_dir=run_dir,
+        failure_dump_path=app.failure_dump_path(run_dir),
+    )
+
+    best_path = checkpoint_dir / name
+    if not best_path.is_file():
+        return
+    module.load_state_dict(torch.load(best_path, map_location=app.device, weights_only=True))
+    module.eval()
+    metrics = evaluate(Split.TEST)
+    log_metrics(
+        run_dir,
+        {"epoch": args.epochs, "split": Split.TEST.value, "final": True, **metrics},
+    )
+    logger.info(
+        f"  [TEST once | val-selected best] clips {metrics['clips']}  "
+        f"recon-FID {metrics['recon_fid']:.4f}  MPJPE {metrics['mpjpe_mm']:.1f}mm"
+    )
 
 
 def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> None:
