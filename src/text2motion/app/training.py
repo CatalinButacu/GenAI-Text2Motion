@@ -26,6 +26,7 @@ from text2motion.generation.contracts import (
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.generation.pretrain import pretrain_generator, pretraining_resume_path
 from text2motion.generation.trainer import (
+    CleanCrossEntropyLoaders,
     GeneratorTrainer,
     overfit_single_batch,
     train_generator,
@@ -295,7 +296,20 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         patience=args.patience,
         accept_legacy_resume=args.accept_legacy_resume,
         extend_schedule=args.extend_schedule,
+        clean_ce=args.clean_ce,
+        ce_batches=args.ce_batches,
+        val_ce_patience=args.val_ce_patience,
     )
+    ce_loaders = None
+    if request.clean_ce:
+        ce_loaders = CleanCrossEntropyLoaders(
+            train=repository.captioned_batch_loader(
+                Split.TRAIN, request.eval_batch_size, shuffle=False
+            ),
+            validation=repository.captioned_batch_loader(
+                Split.VALIDATION, request.eval_batch_size, shuffle=False
+            ),
+        )
     if args.fresh_selection and not args.resume:
         raise SystemExit("--fresh_selection only applies to a resumed run (pass --resume)")
     evaluator = app.create_humanml3d_generation_evaluator(args.vocab_dir)
@@ -351,6 +365,7 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         run_dir=run_dir,
         on_metrics=lambda record: log_metrics(run_dir, record),
         failure_dump_path=app.failure_dump_path(run_dir),
+        ce_loaders=ce_loaders,
     )
 
 

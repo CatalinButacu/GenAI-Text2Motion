@@ -227,6 +227,9 @@ class GeneratorTrainingRequest:
     patience: int = 0
     accept_legacy_resume: bool = False
     extend_schedule: bool = False
+    clean_ce: bool = True
+    ce_batches: int = 50
+    val_ce_patience: int = 0
 
 
 ############################################################
@@ -349,6 +352,18 @@ class TrainGeneratorRequest(CommandRequest):
     patience: int = Field(
         default=GeneratorTrainingRequest().patience,
         description="stop after this many validations without a better FID; 0 never stops early",
+    )
+    clean_ce: bool = Field(
+        default=GeneratorTrainingRequest().clean_ce,
+        description="after each epoch, log the teacher-forced CE on a fixed train subset and on validation",
+    )
+    ce_batches: int = Field(
+        default=GeneratorTrainingRequest().ce_batches,
+        description="batches of --eval_batch_size clips for each clean CE; 0 uses the full split",
+    )
+    val_ce_patience: int = Field(
+        default=GeneratorTrainingRequest().val_ce_patience,
+        description="stop after this many epochs without a lower validation CE; 0 never stops early",
     )
     accept_legacy_resume: bool = Field(
         default=False,

@@ -50,6 +50,24 @@ GENERATOR_RESUME_FORMAT = "text2motion.generator_resume"
 
 
 ############################################################
+#       CleanCrossEntropyLoaders
+############################################################
+@dataclass(frozen=True)
+class CleanCrossEntropyLoaders:
+    train: object
+    validation: object
+
+
+############################################################
+#       CleanCrossEntropyProgress
+############################################################
+@dataclass(frozen=True)
+class CleanCrossEntropyProgress:
+    best: float
+    stale: int
+
+
+############################################################
 #       ParameterPartition
 ############################################################
 @dataclass(frozen=True)
@@ -253,6 +271,56 @@ class GeneratorTrainer:
         text_emb: torch.Tensor,
         lengths: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
+        total, parts = self.batch_loss_parts(gt_motion, text_emb, lengths, with_training_noise=True)
+
+        accum = max(1, self.training_config.grad_accum)
+        if self._accum_count == 0:
+            self.optimizer.zero_grad()
+        (total / accum).backward()
+        self._accum_count += 1
+        if self._accum_count >= accum:
+            self.apply_pending_gradients()
+
+        return parts
+
+    @torch.no_grad()
+    def teacher_forced_ce(self, loader, device: str, max_batches: int = 0) -> float:
+        generator_was_training = self.token_generator.training
+        encoder_was_training = self.text_encoder is not None and self.text_encoder.training
+        self.token_generator.eval()
+        if self.text_encoder is not None:
+            self.text_encoder.eval()
+        weighted = 0.0
+        clips = 0
+        try:
+            with self.ema_weights():
+                for index, batch in enumerate(loader):
+                    if max_batches and index >= max_batches:
+                        break
+                    text_emb = self.encode(list(batch.captions))
+                    _, parts = self.batch_loss_parts(
+                        batch.features.to(device),
+                        text_emb,
+                        batch.lengths.to(device),
+                        with_training_noise=False,
+                    )
+                    weighted += float(parts["ce"]) * len(batch.captions)
+                    clips += len(batch.captions)
+        finally:
+            self.token_generator.train(generator_was_training)
+            if self.text_encoder is not None:
+                self.text_encoder.train(encoder_was_training)
+        if clips == 0:
+            raise ValueError("the CE loader gave no batch; check the split and max_batches")
+        return weighted / clips
+
+    def batch_loss_parts(
+        self,
+        gt_motion: torch.Tensor,
+        text_emb: torch.Tensor,
+        lengths: torch.Tensor | None,
+        with_training_noise: bool,
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         usable = (gt_motion.size(1) // self.downsample) * self.downsample
         gt_motion = gt_motion[:, :usable]
         if lengths is not None:
@@ -266,7 +334,7 @@ class GeneratorTrainer:
             target_tokens, token_lengths = self.append_end_targets(target_tokens, lengths)
 
         input_tokens = target_tokens
-        if self.training_config.pkeep < 1.0:
+        if with_training_noise and self.training_config.pkeep < 1.0:
             corrupt = (
                 torch.rand(target_tokens.shape, device=target_tokens.device)
                 >= self.training_config.pkeep
@@ -278,8 +346,9 @@ class GeneratorTrainer:
 
         amp_on = self.training_config.amp == MixedPrecisionMode.BF16 and gt_motion.is_cuda
         with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):
-            logits = self.token_generator(input_tokens, self.drop_text(text_emb))
-            total, parts = generator_loss(
+            condition = self.drop_text(text_emb) if with_training_noise else text_emb
+            logits = self.token_generator(input_tokens, condition)
+            return generator_loss(
                 logits,
                 target_tokens,
                 gt_motion,
@@ -294,16 +363,6 @@ class GeneratorTrainer:
                 skeleton=self._skeleton,
                 weighter=self.weighter,
             )
-
-        accum = max(1, self.training_config.grad_accum)
-        if self._accum_count == 0:
-            self.optimizer.zero_grad()
-        (total / accum).backward()
-        self._accum_count += 1
-        if self._accum_count >= accum:
-            self.apply_pending_gradients()
-
-        return parts
 
     def apply_pending_gradients(self) -> None:
         pending = self._accum_count
@@ -423,11 +482,14 @@ def train_generator(
     run_dir: Path | None = None,
     on_metrics: MetricSink = lambda metrics: None,
     failure_dump_path: Path | None = None,
+    ce_loaders: CleanCrossEntropyLoaders | None = None,
 ) -> float:
     best_fid = float("inf")
     start_epoch = 0
     stale_evaluations = 0
+    ce_progress = CleanCrossEntropyProgress(best=float("inf"), stale=0)
     heartbeat = None if run_dir is None else Path(run_dir) / "heartbeat"
+    check_ce_stop_setup(request, ce_loaders)
 
     if request.resume and not resume_path.is_file():
         raise FileNotFoundError(
@@ -478,6 +540,10 @@ def train_generator(
         )
         logger.debug(f"epoch {epoch + 1} all loss terms {means}")
 
+        ce_progress = advance_clean_ce(
+            trainer, ce_loaders, device, request.ce_batches, epoch, on_metrics, ce_progress
+        )
+
         due = (epoch + 1) % request.eval_every == 0 or epoch + 1 == request.epochs
         if due:
             with trainer.ema_weights():
@@ -509,14 +575,71 @@ def train_generator(
         if device == "cuda":
             torch.cuda.empty_cache()
 
-        if request.patience and stale_evaluations >= request.patience:
-            logger.info(
-                f"early stop at epoch {epoch + 1}: {stale_evaluations} consecutive evaluations "
-                f"without improving val FID {best_fid:.4f} (patience {request.patience})"
-            )
+        reason = early_stop_reason(request, epoch, stale_evaluations, best_fid, ce_progress)
+        if reason:
+            logger.info(reason)
             break
 
     return best_fid
+
+
+def check_ce_stop_setup(
+    request: GeneratorTrainingRequest, ce_loaders: CleanCrossEntropyLoaders | None
+) -> None:
+    if request.val_ce_patience and ce_loaders is None:
+        raise ValueError("--val_ce_patience needs the clean CE loaders (keep --clean_ce on)")
+    if request.val_ce_patience and request.resume:
+        logger.warning("resumed run: the validation-CE stop counter starts again from zero")
+
+
+def advance_clean_ce(
+    trainer: GeneratorTrainer,
+    ce_loaders: CleanCrossEntropyLoaders | None,
+    device: str,
+    max_batches: int,
+    epoch: int,
+    on_metrics: MetricSink,
+    progress: CleanCrossEntropyProgress,
+) -> CleanCrossEntropyProgress:
+    if ce_loaders is None:
+        return progress
+    record = clean_ce_record(trainer, ce_loaders, device, max_batches)
+    on_metrics({"epoch": epoch + 1, **record})
+    logger.info(
+        f"  [clean-ce] train {record['train_ce_clean']:.4f}  "
+        f"val {record['val_ce']:.4f}  gap {record['ce_gap']:+.4f}"
+    )
+    if record["val_ce"] < progress.best:
+        return CleanCrossEntropyProgress(best=record["val_ce"], stale=0)
+    return CleanCrossEntropyProgress(best=progress.best, stale=progress.stale + 1)
+
+
+def early_stop_reason(
+    request: GeneratorTrainingRequest,
+    epoch: int,
+    stale_evaluations: int,
+    best_fid: float,
+    ce_progress: CleanCrossEntropyProgress,
+) -> str:
+    if request.patience and stale_evaluations >= request.patience:
+        return (
+            f"early stop at epoch {epoch + 1}: {stale_evaluations} consecutive evaluations "
+            f"without improving val FID {best_fid:.4f} (patience {request.patience})"
+        )
+    if request.val_ce_patience and ce_progress.stale >= request.val_ce_patience:
+        return (
+            f"early stop at epoch {epoch + 1}: {ce_progress.stale} epochs without a lower "
+            f"validation CE (best {ce_progress.best:.4f}, patience {request.val_ce_patience})"
+        )
+    return ""
+
+
+def clean_ce_record(
+    trainer: GeneratorTrainer, ce_loaders: CleanCrossEntropyLoaders, device: str, max_batches: int
+) -> dict[str, float]:
+    train_ce = trainer.teacher_forced_ce(ce_loaders.train, device, max_batches)
+    val_ce = trainer.teacher_forced_ce(ce_loaders.validation, device, max_batches)
+    return {"train_ce_clean": train_ce, "val_ce": val_ce, "ce_gap": val_ce - train_ce}
 
 
 @torch.no_grad()
