@@ -66,3 +66,4 @@ CLAUDE.md
 # LaTeX build output
 doc/paper/build/
 .archify/
+doc/notes/paper-watch/
