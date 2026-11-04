@@ -98,17 +98,40 @@ def step_benchmark(args) -> None:
     device = resolve_device(config.device, args.device)
     seed_everything(config.seed, config.deterministic)
     trainer = build_trainer(config, device, args.backbone, args.tokenizer_ckpt)
-    motion, text, lengths = fixed_batch(
-        args.batch_size, config.data.max_motion_len, device, config.generator.d_text
-    )
+    for frames in args.frames:
+        motion, text, lengths = fixed_batch(
+            args.batch_size, frames, device, config.generator.d_text
+        )
+        torch.cuda.reset_peak_memory_stats()
+        ms = median_ms(
+            lambda m=motion, t=text, n=lengths: trainer.train_step(m, t, n), args.repeats
+        )
+        peak = torch.cuda.max_memory_allocated() / 1e9
+        print(
+            f"{args.backbone.value:<12} batch {args.batch_size:<3} frames {frames:<4} "
+            f"{ms:8.1f} ms/step  {ms / args.batch_size:7.1f} ms/clip  peak {peak:5.2f} GB"
+        )
 
+
+def profile_step(args) -> None:
+    config = load_config(args.config)
+    device = resolve_device(config.device, args.device)
+    seed_everything(config.seed, config.deterministic)
+    trainer = build_trainer(config, device, args.backbone, args.tokenizer_ckpt)
+    frames = args.frames[0]
+    motion, text, lengths = fixed_batch(args.batch_size, frames, device, config.generator.d_text)
+    for _ in range(2):
+        trainer.train_step(motion, text, lengths)
+    torch.cuda.synchronize()
     torch.cuda.reset_peak_memory_stats()
-    ms = median_ms(lambda: trainer.train_step(motion, text, lengths), args.repeats)
+    activities = [torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA]
+    with torch.profiler.profile(activities=activities, profile_memory=True) as profiler:
+        trainer.train_step(motion, text, lengths)
+        torch.cuda.synchronize()
     peak = torch.cuda.max_memory_allocated() / 1e9
-    print(
-        f"{args.backbone.value:<12} batch {args.batch_size:<3} "
-        f"{ms:8.1f} ms/step  {ms / args.batch_size:7.1f} ms/clip  peak {peak:5.2f} GB"
-    )
+    averages = profiler.key_averages()
+    print(averages.table(sort_by="self_device_time_total", row_limit=args.rows))
+    print(f"{args.backbone.value} batch {args.batch_size} frames {frames} peak {peak:.2f} GB")
 
 
 def sync_scan(args) -> None:
@@ -416,6 +439,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--repeats", type=int, default=8)
     parser.add_argument("--steps", type=int)
+    parser.add_argument("--frames", type=int, nargs="+")
+    parser.add_argument("--rows", type=int, default=15)
     parser.add_argument("--batches", type=int, nargs="+", default=[1, 8, 32])
     parser.add_argument("--ckpt", default=None)
     parser.add_argument("--studio_config", default="configs/studio.yml")
@@ -433,7 +458,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--probe",
         default="step",
-        choices=("determinism", "step", "sync", "rollout", "demo", "kernel"),
+        choices=("determinism", "step", "profile", "sync", "rollout", "demo", "kernel"),
     )
     return parser
 
@@ -445,6 +470,7 @@ def main() -> None:
     if args.probe == "demo":
         args.ckpt = args.ckpt or str(config.paths.generator_checkpoint(args.backbone))
     args.steps = args.steps or config.data.max_motion_len // config.tokenizer.downsample
+    args.frames = args.frames or [config.data.max_motion_len]
     args.fps = args.fps or FPS
     args.model_dir = args.model_dir or (
         str(config.paths.smplx_models) if config.paths.smplx_models else None
@@ -452,6 +478,7 @@ def main() -> None:
     {
         "determinism": determinism_check,
         "step": step_benchmark,
+        "profile": profile_step,
         "sync": sync_scan,
         "rollout": rollout_benchmark,
         "demo": demo_probe,
