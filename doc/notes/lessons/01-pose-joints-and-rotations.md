@@ -1,32 +1,33 @@
 # Lesson 1 -- A single pose: joints, skeletons, and the two languages of the body
 
-> Goal of this chapter: understand what *one frozen instant* of a human body is, before we ever
-> add time or text. Everything later (the 263 vector, rot6d, IK, why 22 joints) is built on this.
+> Goal: understand a human pose at one instant, before we add time or text.
+> This chapter introduces joints, coordinate frames, rotations, and the operations that connect them.
 
 ## 1.1 The body as a tree of joints
 
-Hold your arm still for a second. Your hand is where it is because of a *chain*: shoulder -> elbow ->
-wrist -> hand. Move the shoulder and everything downstream moves with it. This is the single most
-important idea in motion: **the body is a hierarchy (a tree), not a bag of independent points.**
+The arm contains a chain of joints: shoulder, elbow, wrist, and hand. A shoulder rotation changes the positions of the joints below it. The skeleton is a tree. Its joints have parent-child relationships.
 
-**Definitions to note**
-- **Joint** -- a point where the body articulates (shoulder, elbow, knee...). In code it is just a 3D
-  location plus, usually, a rotation.
-- **Bone / segment** -- the rigid link between a joint and its child (the upper arm connects shoulder
-  to elbow). Bones have (roughly) **fixed length**.
-- **Kinematic tree (skeleton)** -- the parent->child hierarchy of joints. Every joint has exactly one
-  parent except the **root**.
-- **Root joint** -- the top of the tree, usually the **pelvis**. It carries the body's overall
-  position and facing in the world. Everything else is described *relative to its parent*.
-  - *In our data this is exact:* SMPL-X **joint index 0 = pelvis = root** (verified in `feature.py`:
-    `positions[:, 0]` is the root; chains are root-first; joint 1 = left hip, joint 2 = right hip).
-    We keep `joints[:22]`, so the pelvis stays joint 0 throughout.
-  - *Subtlety (foreshadows Lesson 3):* in the 263 vector the root is **not** stored as a position.
-    It gets three dedicated channels -- root **angular velocity**, root **ground-plane velocity**
-    (x, z), and root **height** (y) -- and joints 1-21 are stored **relative to the root**. This is
-    why a clip's absolute heading and ground location are not numbers in the data at all.
-- **Pose** -- the configuration of the whole skeleton at **one instant in time**. (Motion, next
-  lesson, is a sequence of poses.)
+- A joint is a point where body segments connect, such as a shoulder, elbow, or knee. A representation can associate a position and a rotation with it.
+- A bone, or segment, is the link between a parent joint and a child joint. Its length is approximately fixed.
+- A kinematic tree is the hierarchy of joints. Every joint has one parent, except the root.
+- The root joint is the first joint in the tree. It is usually the pelvis.
+- A pose is the configuration of the skeleton at one instant. Motion is a sequence of poses.
+
+The root has a global position and orientation. A representation with local rotations describes each other joint's orientation relative to its parent.
+
+In our data, SMPL-X joint 0 is the pelvis. Joint 1 is the left hip, and joint 2 is the right hip. We keep `joints[:22]`, so the pelvis remains joint 0. The skeleton chains start at the root.
+
+HumanML3D-263 stores three root quantities in four scalar channels:
+
+1. The root angular increment: one channel.
+2. The root displacement in the ground plane: two channels, for x and z.
+3. The root height: one channel, for y.
+
+Thus, the root block has $1 + 2 + 1 = 4$ channels. It does not store a complete root position directly.
+
+The position block stores joints 1-21 in a frame relative to the root's ground position and orientation. It subtracts the pelvis x and z coordinates. It keeps each joint's y coordinate relative to the floor. The pelvis height remains nonzero.
+
+The representation removes the clip's initial absolute ground position and initial absolute orientation. It retains subsequent root displacement, rotation, and height.
 
 ```mermaid
 flowchart TB
@@ -40,129 +41,223 @@ flowchart TB
   SP --> RS["R shoulder"] --> RE["R elbow"] --> RW["R wrist"]
 ```
 
-*The body is a tree rooted at the pelvis; a parent's rotation propagates to every descendant. That
-inheritance down the tree is forward kinematics.*
+A parent rotation affects every descendant. Forward kinematics calculates these effects through the tree.
 
 ## 1.2 The two languages for describing a pose
 
-There are exactly two ways to write down a pose, and the whole project lives on knowing the
-difference:
+We first compare joint positions with joint rotations. Section 1.2b explains how a representation can combine them.
 
-**Language A -- positions ("where each joint is")**
-List the 3D coordinates of every joint: `(x, y, z)` per joint. Also called *keypoints* or *joint
-positions*. Intuitive, easy to plot. **Weakness:** nothing enforces bone length. A model that
-outputs positions can accidentally stretch your forearm to 2 metres between frames -- there is no
-built-in constraint that elbow->wrist stays constant.
+### Joint positions
 
-**Language B -- rotations (precise version)**
-For each joint, store a **local rotation**: how this joint's own coordinate frame is turned
-**relative to its parent's frame**, measured as a change from a fixed **rest pose** (T-pose). The
-root additionally stores a global position + global rotation (so the body can be placed and turned
-in the world). **Strength:** bone lengths are fixed by construction -- you only ever rotate rigid
-bones, so the skeleton can never stretch. Preferred by animation, robotics, and motion *generation*.
+A position representation stores `(x, y, z)` for each joint. Joint positions are also called keypoints. They are easy to inspect and plot.
 
-> *Careful wording (a common trap):* it is **not** "rotate the parent's bone-arrow into the child's
-> bone-arrow." A bone is a 1D direction; a rotation is a full 3D quantity. A direction cannot fix a
-> rotation because the **twist around the bone's own axis** is left free (the same freedom that makes
-> IK underdetermined). So we rotate a **frame relative to a frame**, not an arrow into an arrow.
+For joint $j$, write its position as:
 
-**Definitions to note**
-- **Rest pose (T-pose)** -- a fixed reference configuration; every joint's frame has a known default
-  orientation there, and all rotations are measured as a change *from* it.
-- **Local (parent-relative) rotation** -- the rotation re-orienting this joint's frame relative to its
-  parent's frame. This is the number stored per joint.
-- **World orientation** -- where the joint points in the room; **computed**, not stored, by composing
-  down the tree: `world(joint) = world(parent) * local(joint)`. *That equation is forward
-  kinematics.*
+$$
+\mathbf{p}_j = (x_j, y_j, z_j).
+$$
 
-> *Intuition (your own arm):* bend your elbow 90 deg -- that is the elbow's local rotation, relative to
-> the upper arm. Now raise the whole arm at the shoulder: the forearm swings up too, yet the elbow's
-> local rotation is unchanged (still 90 deg). The forearm moved in the world only because it
-> **inherited** the shoulder's rotation through the chain. That inheritance is the payoff of
-> "relative to parent."
+Positions alone do not enforce a fixed bone length. A model can place the elbow and wrist 2 metres apart.
 
-**Definition to note**
-- **Degrees of freedom (DoF)** -- the number of independent values needed to specify the pose. A
-  free rotation in 3D has 3 DoF. A body with J joints has roughly `3J` rotational DoF plus 3 for the
-  root's position.
+For a bone between parent $p$ and child $j$, the length is:
 
-### 1.2b "Two languages" was a simplification -- the honest picture (two separate axes)
+$$
+L_j = \|\mathbf{p}_j - \mathbf{p}_p\|.
+$$
 
-A clarification worth keeping: *what you record* and *how you encode a rotation* are **different
-choices**.
+A model that predicts positions must preserve this length through its data, architecture, or loss.
 
-**Axis 1 -- what you record about a pose:** positions, rotations, or a **hybrid**. Our
-**HumanML3D-263 is a hybrid** -- it stores positions AND rotations AND velocities AND foot-contact
-flags in one vector (opened channel-by-channel in Lesson 3). So "two languages" is the conceptual
-foundation; the representation we use is a deliberate *combination*.
+### Joint rotations
 
-**Axis 2 -- how you encode a single rotation (several sub-languages):**
-- **Euler angles** -- 3 angles; intuitive but suffers *gimbal lock* and is discontinuous.
-- **Axis-angle** -- axis + angle (3 numbers). **SMPL / SMPL-X store this.**
-- **Quaternion** -- 4 numbers on a unit sphere; no gimbal lock; ideal for interpolation (*slerp*).
-  Our `quaternion.py` math uses these.
-- **Rotation matrix** -- 3x3 (9 numbers), unambiguous but over-parameterised.
-- **6D rotation (rot6d)** -- first two matrix columns (6 numbers); third recovered by cross-product.
-  **HumanML3D-263 stores joint rotations as rot6d.**
+A local rotation specifies a joint frame's orientation relative to its parent frame. A fixed rest pose supplies the reference frames and bone offsets.
+
+The root also needs a global position and rotation. These values place the skeleton in the world.
+
+A rotation representation with fixed bone offsets preserves the bone lengths. Rotations change the bone directions without a change in their lengths. Animation and robotics commonly use this representation. Motion generators can also use it.
+
+A bone direction does not fully specify a rotation. The bone can rotate about its own axis without a change in that direction. This rotation is called twist.
+
+Thus, a local rotation relates two coordinate frames. A bone direction alone cannot determine that relationship.
+
+- The rest pose is the fixed reference configuration, such as a T-pose. It defines the default joint frames.
+- A local rotation specifies the orientation relative to the parent frame.
+- A world orientation specifies the joint frame's orientation in the global frame.
+
+World orientations follow the composition rule:
+
+`world(joint) = world(parent) * local(joint)`
+
+Here, `*` means rotation composition. This rule forms part of forward kinematics.
+
+For example, bend the elbow 90 deg. Then raise the arm at the shoulder. The forearm changes its world orientation, although the elbow's local rotation remains 90 deg.
+
+The number of degrees of freedom, or DoF, is the number of independent values that specify a configuration. A free rotation in 3D has 3 DoF. A skeleton with J unrestricted joint rotations has approximately `3J` rotational DoF, plus 3 for the root position.
+
+### 1.2b The recorded quantities and the rotation representation
+
+The quantities that a pose representation records are a separate choice from the representation of each rotation.
+
+HumanML3D-263 combines these quantities:
+
+- Joint positions.
+- Joint rotations.
+- Root and joint displacement quantities.
+- Foot-contact flags.
+
+Thus, HumanML3D-263 is a hybrid representation. Lesson 3 explains each channel block.
+
+A single rotation also has several possible representations:
+
+- Euler angles use 3 angles. They have coordinate discontinuities and can produce gimbal lock.
+- Axis-angle uses an axis and an angle, represented by 3 numbers. SMPL and SMPL-X use this representation.
+- A quaternion uses 4 numbers with unit norm. It has no gimbal lock and supports spherical linear interpolation, or SLERP. The quaternion functions are in `geometry.py`.
+- A rotation matrix uses 3x3 entries, or 9 numbers. It specifies the rotation uniquely but has more entries than independent rotational DoF.
+- A 6D rotation, or rot6d, stores the first two matrix columns. The decoder reconstructs the third column through a cross product.
+
+HumanML3D-263 stores its non-root joint rotations as rot6d.
 
 > **Paper observation -- Zhou et al., 2019, "On the Continuity of Rotation Representations in Neural
-> Networks."** Euler angles and quaternions are **discontinuous** as network outputs (a tiny real
-> rotation can force a jump in the numbers), which networks learn poorly. Their **6D** representation
-> is continuous -- and this is exactly why HumanML3D-263 uses rot6d, and why our demo can read joint
-> rotations straight off the model output.
+> Networks."** Euler angles and quaternions have discontinuities as rotation representations for neural networks.
+> A small change in the physical rotation can require a large change in the representation.
+> The paper introduces a continuous 6D representation.
 
-> **Pipeline trace:** SMPL-X axis-angle (source) -> quaternions (`quaternion.py`, intermediate math)
-> -> rot6d (stored in the 263) -> axis-angle again (demo, to drive the SMPL-X body). Three of the
-> Axis-2 languages, used at different stages, for different reasons.
+The continuous representation helps a network represent nearby rotations with nearby values. It does not guarantee a valid rotation for every possible set of six output values.
 
-#### How rot6d works (concise)
+The source and display paths use different operations:
 
-A 3D rotation written as a **3x3 matrix** is three columns -- each a unit vector saying where the x,
-y, z axes land, all mutually perpendicular (9 numbers). The **3rd column is redundant**: given two
-perpendicular axes, the third is forced (their cross product). So keep only the **first two columns =
-6 numbers**. That is rot6d.
+1. The SMPL-X body model converts the source axis-angle pose to joints.
+2. Skeleton inverse kinematics derives quaternions from those joints.
+3. The representation encoder converts the quaternions to rot6d for storage in HumanML3D-263.
+4. The live avatar recovers joints from the root and position channels.
+5. An analytical solver derives an SMPL-X axis-angle pose from the recovered joints.
+6. The SMPL-X body model converts that pose to a mesh.
 
-- **Encode:** rotation matrix -> drop column 3 -> store columns 1 and 2 (6 numbers).
-- **Decode (Gram-Schmidt fix-up):** (1) normalize vector 1 -> axis 1; (2) subtract from vector 2 its
-  overlap with axis 1, then normalize -> axis 2 (now perpendicular); (3) axis 3 = axis 1 x axis 2.
-- **Why it wins:** a network can output *any* 6 numbers and the decode step always repairs them into
-  a valid rotation -> no illegal outputs, no discontinuity (the Zhou et al. continuity result above).
-- **In the 263:** 21 joints x 6 = **126 numbers** are exactly these rot6d rotations.
+The live avatar does not apply the stored rot6d values directly as an SMPL-X pose.
 
-#### Gimbal lock (why Euler angles are avoided)
+#### How rot6d works
 
-**Euler angles** describe a rotation as three turns about three nested axes (e.g. yaw, then pitch,
-then roll), like a stack of three gimbal rings. **Gimbal lock** is when a middle turn lines two of
-those axes up with each other: two rings now spin about the *same* direction, so you have **lost one
-independent degree of freedom** -- some real rotations become unreachable, and near that
-configuration tiny real motions demand huge, jumpy changes in the angle numbers (the discontinuity).
-Classic example: pitch the camera straight up 90 deg and "yaw" and "roll" suddenly do the same thing.
-Rotation matrices, quaternions and rot6d have **no** gimbal lock; this is a core reason we never
-store Euler angles.
+A rotation matrix contains three perpendicular unit columns. Each column specifies the transformed direction of one coordinate axis.
+
+Write the matrix as:
+
+$$
+R = [\mathbf{r}_1\ \mathbf{r}_2\ \mathbf{r}_3].
+$$
+
+For a valid rotation:
+
+$$
+\|\mathbf{r}_1\| = \|\mathbf{r}_2\| = \|\mathbf{r}_3\| = 1,
+\qquad
+\mathbf{r}_1 \cdot \mathbf{r}_2 = 0,
+\qquad
+\mathbf{r}_3 = \mathbf{r}_1 \times \mathbf{r}_2.
+$$
+
+The third column follows from the first two. Rot6d therefore stores 6 numbers instead of 9.
+
+To encode a rotation:
+
+1. Obtain its rotation matrix.
+2. Keep columns 1 and 2.
+3. Store their six entries.
+
+A network can produce vectors that are not perpendicular or do not have unit length. The decoder must construct perpendicular unit axes.
+
+The current decoder uses this sequence:
+
+1. Normalize the first vector to obtain the x axis.
+2. Calculate the cross product of the x axis and the second vector.
+3. Normalize that result to obtain the z axis.
+4. Calculate the cross product of the z axis and the x axis to obtain the y axis.
+
+For the two input vectors $\mathbf{a}$ and $\mathbf{b}$:
+
+$$
+\mathbf{x} = \frac{\mathbf{a}}{\|\mathbf{a}\|},
+\qquad
+\mathbf{z} = \frac{\mathbf{x} \times \mathbf{b}}
+{\|\mathbf{x} \times \mathbf{b}\|},
+\qquad
+\mathbf{y} = \mathbf{z} \times \mathbf{x}.
+$$
+
+The resulting matrix is:
+
+$$
+R = [\mathbf{x}\ \mathbf{y}\ \mathbf{z}].
+$$
+
+This construction is equivalent to orthogonalization through the Gram-Schmidt method for nondegenerate inputs.
+
+If the first vector is zero, its normalization divides by zero. If the two vectors are collinear, their cross product is zero. Near these cases, small input errors can cause large rotation errors.
+
+The current `cont6d_to_matrix` function has no protective denominator. It does not repair every possible set of six numbers into a valid rotation.
+
+HumanML3D-263 stores rot6d for 21 joints. The block therefore contains $21 \times 6 = 126$ numbers.
+
+#### Gimbal lock
+
+Euler angles describe three successive rotations about specified axes, such as yaw, pitch, and roll. At some configurations, two axes coincide.
+
+The Euler coordinates then lose one independent rotational direction. They cannot specify three independent local rotation changes at that configuration.
+
+For example, at a camera pitch of 90 deg, yaw and roll can act about the same axis. Near this configuration, a small orientation change can require a large change in the Euler angles.
+
+Rotation matrices, quaternions, and rot6d do not have Euler gimbal lock. Rot6d still has the separate degenerate-input problem described above. This project does not store joint rotations as Euler angles.
 
 > **Paper observation -- SMPL (Loper et al., 2015).** The standard parametric human body model
-> represents a pose as **axis-angle rotations, one per joint**, plus a small shape vector. This is
-> Language B. SMPL-X (Pavlakos et al., 2019) extends it with hands and face. Our donor AMASS data is
-> the SMPL-X release -- so at the source, motion is stored as **rotations**, not positions.
+> represents a pose with axis-angle rotations for each joint and a small shape vector.
+> SMPL-X (Pavlakos et al., 2019) adds hands and a face.
+> Our source AMASS data uses the SMPL-X release, so it stores the source pose as rotations.
 
-## 1.2c The full logic, built on a 2-joint arm (the part that usually clicks)
+## 1.2c The complete calculation for a 2-joint arm
 
-Two bones -- upper arm (length 30), forearm (length 25) -- one shoulder, one elbow. Store **two
-angles only**; lengths never change.
+Consider a planar arm with a shoulder and an elbow. The upper arm has length 30, and the forearm has length 25. The shoulder remains at the origin.
 
-**Why store angles, not joint positions?**
-1. *Angles match the true freedom.* The arm has 2 degrees of freedom (2 angles). Storing all joint
-   positions = 4 numbers (redundant, most combos break bone lengths); storing only the hand = 2
-   numbers but **ambiguous** (elbow-up vs elbow-down reach the same hand point). Angles = exactly the
-   freedom, always legal, never ambiguous.
-2. *You cannot break the skeleton.* Angles + fixed lengths means the arm is always exactly 55 long
-   extended; no number can stretch it. "hand at (1000,0)" would be a 1000-long arm.
-3. *The ML reason (thesis-relevant).* If the model **outputs rotations**, every output is a valid
-   body in some pose. If it outputs **positions**, it must *learn* "bones don't stretch" from data and
-   gets it slightly wrong -> rubber-limb glitches. This is why motion generators output rotations
-   (our rot6d) and why we never need IK.
+Let $\theta_s$ be the shoulder angle. Let $\theta_e$ be the elbow angle relative to the upper arm.
 
-**Forward kinematics = a running accumulation down the chain.**
+The elbow position is:
+
+$$
+\mathbf{p}_e =
+30
+\begin{pmatrix}
+\cos\theta_s\\
+\sin\theta_s
+\end{pmatrix}.
+$$
+
+The hand position is:
+
+$$
+\mathbf{p}_h =
+\mathbf{p}_e +
+25
+\begin{pmatrix}
+\cos(\theta_s+\theta_e)\\
+\sin(\theta_s+\theta_e)
+\end{pmatrix}.
+$$
+
+The arm has 2 rotational DoF. The two angles specify those DoF, subject to the usual equivalence of angles separated by a complete turn.
+
+Compare the available choices:
+
+1. The elbow and hand positions need 4 numbers. Arbitrary values can violate the two fixed bone lengths.
+2. The hand position needs 2 numbers. It can leave an elbow-up or elbow-down ambiguity.
+3. The shoulder and elbow angles need 2 numbers. Together with the fixed lengths, they determine the joint positions.
+
+The fully extended arm has length $30 + 25 = 55$. No angle can increase that length. A requested hand position of `(1000,0)` is outside this arm's reach.
+
+A model that predicts valid rotations can preserve fixed bone lengths through forward kinematics. It does not automatically satisfy anatomical limits or produce plausible motion.
+
+A model that predicts positions must also preserve the skeleton's geometry. Otherwise, it can produce limbs whose lengths change.
+
+Our representation contains positions and rot6d. The live avatar uses inverse kinematics to derive a body pose from recovered positions.
+
+Forward kinematics accumulates rotations and positions through the chain:
+
 ```
 direction_so_far = 0;  position = (0,0)
 direction_so_far += shoulder_angle      # bone 1: inherit nothing, add shoulder
@@ -170,84 +265,121 @@ position += 30 * (cos, sin)             #         -> elbow
 direction_so_far += elbow_angle         # bone 2: inherit shoulder's turn, add elbow
 position += 25 * (cos, sin)             #         -> hand
 ```
-Each bone **inherits the accumulated turn of all ancestors, then adds its own**. That descent *is* FK
-(our `raw_pose.py` / the SMPL-X body model).
 
-**2D angle -> 3D rotation: only two things change.**
-- A 3D turn needs more freedom (three independent axes) -> a *rotation*, not one angle (-> Axis 2).
-- 3D turns **do not commute**: pitch-then-yaw a book =/= yaw-then-pitch (try it). So they combine by
-  **composition** (a multiply), not addition, and order matters.
-- The chain logic is identical: `rotation(joint) = rotation(parent) * local_rotation(joint)` -- same
-  inherit-then-apply, with `*` (compose) replacing `+` (add angle). Non-commutativity is *why* 3D
-  rotation representations (quaternion, rot6d) are a real topic.
+Each bone uses the rotations of its ancestors and its own local rotation. The skeleton functions and the SMPL-X body model calculate this relationship.
 
-## 1.3 Moving between the two languages
+The same chain rule applies in 3D, with these differences:
 
-The two languages are connected by two operations -- and the names matter, because you keep meeting
-them:
+- A 3D rotation has three independent rotational DoF.
+- Rotation composition replaces angle addition.
+- The order of the rotations matters.
 
-- **Forward Kinematics (FK): rotations -> positions.** Start at the root, walk down the tree, apply
-  each joint's rotation to its bone, and accumulate. Out come the 3D positions. FK is
-  **deterministic and cheap** -- one pass, one answer. (This is literally what the SMPL-X "body
-  model" does: feed it rotations, it returns joint/vertex positions. It is `raw_pose.py` in our
-  pipeline.)
-- **Inverse Kinematics (IK): positions -> rotations.** Given where the joints *are*, solve backwards
-  for the rotations that put them there. IK is **hard**: it is *underdetermined* (a wrist position
-  doesn't fix the forearm's twist -- many rotations reach the same point), so it needs per-frame
-  optimization and can produce jittery, popping joints.
+For example, pitch followed by yaw generally differs from yaw followed by pitch. In matrix form:
 
-> **Why this matters for us.** Because our data and our model both work in **rotations**, the demo
-> can drive a skinned body by **FK** (easy, exact). We never need fragile IK. When I said earlier
-> "no IK," this is exactly what I meant.
+$$
+R_{\mathrm{pitch}}R_{\mathrm{yaw}}
+\ne
+R_{\mathrm{yaw}}R_{\mathrm{pitch}}.
+$$
+
+The hierarchy rule remains:
+
+`rotation(joint) = rotation(parent) * local_rotation(joint)`
+
+Here, `*` means composition. Unlike addition of planar angles, general 3D rotation composition is not commutative.
+
+## 1.3 The conversion between positions and rotations
+
+Forward kinematics and inverse kinematics connect the two pose descriptions.
+
+### Forward kinematics
+
+Forward kinematics, or FK, calculates joint positions from rotations and fixed bone offsets.
+
+1. Start at the root position and orientation.
+2. Compose each local rotation with the parent rotation.
+3. Rotate the bone offset.
+4. Add the offset to the parent position.
+5. Repeat through the tree.
+
+The result is deterministic for the specified skeleton, rotations, and root position. The calculation needs one traversal of the tree.
+
+The SMPL-X body model also uses pose and shape parameters to produce joint positions and mesh vertices.
+
+### Inverse kinematics
+
+Inverse kinematics, or IK, calculates rotations from target joint positions.
+
+Positions can leave some rotations undetermined. A wrist position alone does not determine the forearm twist. Different rotations can produce the same target position.
+
+A solver must choose a solution through additional rules or constraints. Poor choices can cause abrupt changes between frames.
+
+IK does not always require iterative optimization. The skeleton IK in this project is analytical. The live SMPL-X pose solver is also analytical.
+
+A separate SMPL-X fit path uses iterative optimization. That path is not the solver that the live avatar calls.
 
 ```mermaid
 flowchart LR
-  ROT["rotations (rot6d / axis-angle)"] -->|"FK: easy, exact, one pass down the tree"| POS["joint positions (x,y,z)"]
-  POS -->|"IK: hard, underdetermined, jittery"| ROT
+  ROT["rotations (rot6d / axis-angle)"] -->|"FK: deterministic for a specified skeleton"| POS["joint positions (x,y,z)"]
+  POS -->|"IK: underdetermined; analytical or iterative"| ROT
 ```
 
-*Our data and our model both work in rotations, so we only ever need FK (the easy, exact direction) to
-draw a body. We never need fragile IK.*
+The preprocessing path uses both IK and FK. The live avatar first solves rotations from recovered joints. The body model then uses those rotations to produce the mesh.
 
-## 1.4 Coordinate frames (the quiet source of most bugs)
+Thus, the presence of rot6d in the motion vector does not remove the need for IK in this project.
 
-The same pose has different numbers depending on *what you measure it against*.
+## 1.4 Coordinate frames
 
-**Definitions to note**
-- **World frame** -- a fixed global coordinate system (origin on the floor, axes north/up/east).
-  A joint's *world position* is where it is in the room.
-- **Local / parent frame** -- coordinates measured *relative to the parent joint*. A bone's rotation
-  is naturally a *local* quantity.
-- **Root-relative / body frame** -- positions measured relative to the root, ignoring where the body
-  is in the world. Useful when you care about the *motion shape*, not its location.
-- **Up-axis convention** -- which axis means "up". Some data is **Z-up** (AMASS), graphics is often
-  **Y-up**. Mixing them flips the body on its back -- a classic bug (we convert Z-up->Y-up in stage 1).
+A joint position or rotation has meaning only with a specified coordinate frame. The same physical pose can have different coordinates in different frames.
 
-> **Paper observation -- HumanML3D (Guo et al., CVPR 2022).** The field-standard representation we use
-> deliberately stores motion in a **root-relative, facing-canonicalized** frame: every clip is
-> re-centred to the origin and rotated to face the same direction. This is *why* (we will see next
-> lesson) rotating or sliding a clip changes nothing -- that information has been factored out on
-> purpose.
+- The world frame is a fixed global coordinate system. A world position specifies a joint's position relative to its origin and axes.
+- The local frame is the parent joint's coordinate frame. A local rotation specifies the orientation relative to that frame.
+- A root-relative frame uses the root as a reference. The exact position and orientation conventions depend on the representation.
+- The up-axis convention specifies which coordinate axis points upward.
 
-## 1.5 What to hold onto from Chapter 1
+A floor-based world frame can place its origin on the floor. Its horizontal axes can have specified directions, such as north and east.
 
-1. The body is a **tree** rooted at the pelvis; children move with their parents.
-2. A pose can be written as **positions** (where joints are) or **rotations** (how bones are angled).
-   Rotations keep bone lengths fixed -- that is why generation prefers them.
-3. **FK** (rotations->positions) is easy; **IK** (positions->rotations) is hard and fragile.
-4. Numbers only mean something relative to a **frame** (world vs local vs root-relative; Y-up vs Z-up).
+HumanML3D-263 uses a specific root-relative convention. It subtracts the root x and z coordinates and expresses the joints relative to the root orientation. It keeps y coordinates relative to the floor.
 
----
+Thus, “root-relative” does not mean that every pelvis coordinate is zero. The pelvis height remains part of the representation.
 
-### Questions to answer before Lesson 2 (reply in your own words)
+AMASS uses Z-up coordinates. Our representation uses Y-up coordinates. The extraction stage converts the coordinates before the representation encoder uses them.
 
-1. If a model outputs **joint positions** and you train it badly, what physically impossible thing
-   might happen to the skeleton -- and which language would have prevented it?
-2. Our SMPL-X data stores **rotations**. To *draw* a body on screen you need **positions**. Which
-   operation converts one to the other, and is it the easy one or the hard one?
-3. In your own words: why does it matter whether data is **Y-up** or **Z-up**?
+An incorrect up-axis interpretation can place the body on its back.
 
-### Looking ahead (Lesson 2 preview)
-Lesson 2 turns a single pose into **motion**: sampling rate (fps), why 20 fps, velocity, and why a
-sequence of poses is more than just "many poses". Lesson 3 then opens the actual **263 vector** and
-shows where positions, rotations, velocities and foot-contacts each live inside it.
+> **Paper observation -- HumanML3D (Guo et al., CVPR 2022).** The representation removes the initial root position in the ground plane.
+> It also rotates the initial body orientation to a common direction.
+> Joint positions then use the root-relative convention described above.
+
+A change to the initial absolute ground position or yaw does not change the retained motion description under this convention. Subsequent displacement and rotation remain in the representation.
+
+## 1.5 What to remember from Chapter 1
+
+1. The skeleton is a tree with the pelvis as its root. Parent rotations affect descendant positions.
+2. Positions specify joint locations. Valid rotations and fixed bone offsets preserve bone lengths through FK.
+3. FK calculates positions from rotations. IK solves rotations from positions and can use an analytical or iterative method.
+4. Each position and rotation needs a coordinate frame. HumanML3D-263 keeps joint heights relative to the floor.
+
+### Questions to answer before Lesson 2
+
+1. What impossible change in bone length can a position model produce? How do valid rotations with fixed offsets prevent it?
+2. Which operation converts an SMPL-X rotational pose to joint positions? Which operation first derives the live avatar pose from recovered joints?
+3. Explain why a Y-up or Z-up convention changes the interpretation of the coordinates.
+
+### Lesson 2 preview
+
+Lesson 2 adds time to a pose sequence. It explains the frame rate, the choice of 20 fps, and velocity. Lesson 3 explains the 263 channels for positions, rotations, velocities, and foot contacts.
+
+## 1.6 Results of the implementation check
+
+The current code confirms the representation and display paths described in this lesson. These are implementation facts, not measurements of motion quality.
+
+- `src\text2motion\motion\amass.py` evaluates the source SMPL-X body model, selects the body joints, and converts the coordinates to Y-up.
+- `src\text2motion\motion\representation.py` treats joint 0 as the root and defines its block as channels 0-3.
+- `encode_joints` uses skeleton IK to obtain quaternions and converts them to rot6d. It subtracts root x and z, but preserves floor-relative y.
+- `src\text2motion\motion\geometry.py` contains the quaternion functions and `cont6d_to_matrix`. The rot6d decoder divides by vector norms without a protective denominator.
+- `src\text2motion\motion\kinematics.py` contains the analytical skeleton IK and the skeleton FK functions.
+- `src\text2motion\studio\avatar.py` calls `solve_smplx_pose_from_joints` for the live avatar.
+- `src\text2motion\studio\fitting.py` contains that analytical solver and the separate iterative function `fit_smplx_to_joints`.
+
+The live solver derives axis-angle rotations from the recovered joints. The SMPL-X body model then produces the mesh. The stored rot6d block is not a direct SMPL-X pose input.

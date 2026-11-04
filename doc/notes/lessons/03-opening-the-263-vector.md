@@ -1,8 +1,8 @@
 # Lesson 3 -- Opening the 263 vector, slice by slice
 
-> Goal: map everything from Lessons 1-2 onto the actual numbers. After this you can point at any of
-> the 263 channels and say what it is, why it exists, and which concept it came from.
-> Layout verified in `feature.py` (the `data = concatenate(...)` block).
+> Goal: connect the concepts from Lessons 1-2 to the 263 channels.
+> Identify each channel, its purpose, and the concept that it represents.
+> The layout follows `representation.py`, in the concatenation block of `encode_joints`.
 
 ## 3.0 The picture
 
@@ -10,7 +10,7 @@
 flowchart TB
   subgraph FR["one frame = 263 numbers"]
     direction TB
-    R["root 0:4 -> turn rate, ground vel x/z, height (4)"]
+    R["root 0:4 -> quaternion half-angle increment, displacement x/z, height (4)"]
     RIC["ric 4:67 -> joint positions, joints 1-21, facing removed (63)"]
     ROT["rot6d 67:193 -> joint rotations, joints 1-21 (126)"]
     VEL["vel 193:259 -> local velocities, all 22 joints (66)"]
@@ -18,222 +18,337 @@ flowchart TB
   end
 ```
 
-*One frame is these five blocks concatenated: 4 + 63 + 126 + 66 + 4 = 263. The root is velocity +
-height (not absolute position); ric and rot6d skip the pelvis, so they count 21 joints, not 22.*
+Each frame contains five blocks:
+
+1. The root block contains 4 numbers.
+2. The ric block contains 63 numbers.
+3. The rot6d block contains 126 numbers.
+4. The local velocity block contains 66 numbers.
+5. The foot-contact block contains 4 numbers.
+
+Their total is `4 + 63 + 126 + 66 + 4 = 263`.
+
+The root block stores motion increments and height. It does not store an absolute horizontal position. The ric and rot6d blocks exclude the pelvis, so each block describes 21 joints.
 
 ## 3.1 The exact layout (per frame, 22 joints)
 
 | Slice | Size | Name | Language (Lesson 1) |
 |------:|-----:|------|---------------------|
-| `[0:1]`     | 1   | root **angular** velocity (turn rate about vertical) | rotation / velocity |
-| `[1:3]`     | 2   | root **linear** velocity (ground plane x, z)         | velocity |
-| `[3:4]`     | 1   | root **height** (y)                                  | position |
-| `[4:67]`    | 63  | **ric**: joint positions, joints 1-21, root-relative | positions (A) |
-| `[67:193]`  | 126 | **rot6d**: joint rotations, joints 1-21              | rotations (B) |
-| `[193:259]` | 66  | **local velocities**, all 22 joints                  | velocity |
-| `[259:263]` | 4   | **foot-contact** flags (2 left, 2 right)             | contacts |
+| `[0:1]`     | 1   | root angular velocity: quaternion half-angle increment about the vertical axis | rotation / velocity |
+| `[1:3]`     | 2   | root linear velocity: displacement per frame in the ground plane x, z | velocity |
+| `[3:4]`     | 1   | root height above the floor (y) | position |
+| `[4:67]`    | 63  | ric: positions of joints 1-21; pelvis-relative x/z, floor-relative y, heading removed | positions (A) |
+| `[67:193]`  | 126 | rot6d: rotations of joints 1-21 | rotations (B) |
+| `[193:259]` | 66  | local velocities: displacement per frame for all 22 joints | velocity |
+| `[259:263]` | 4   | foot-contact flags (2 left, 2 right) | contacts |
 
 `1 + 2 + 1 + 63 + 126 + 66 + 4 = 263`.
 
+The code uses the name “velocity” for displacement per frame. These channels do not store metres per second. Channel `[0]` does not store ordinary yaw radians per second.
+
 ## 3.1a What "ric" means (read this before the table)
 
-**ric = Rotation-Invariant Coordinates** -- joint *positions* (Language A) measured in a frame where
-the body's **facing direction is removed**. From the code's `get_rifke` ("rotation-invariant forward
-kinematics").
+ric means Rotation-Invariant Coordinates. This block stores joint positions, which are Language A in Lesson 1. The function `root_relative_positions` in `representation.py` removes the horizontal root position and the heading.
 
-*Picture:* a camera mounted behind the pelvis that **always turns to face the way the body faces**.
-Filmed by it, "walk north" and "walk east" look **identical** -- same limbs, only the heading
-differed, and the camera cancelled the heading. That is rotation-invariant: spin the whole body about
-the vertical axis and these numbers do not change.
+The function applies these steps:
 
-> **Definition to note -- ric:** 3D positions of joints 1-21 in the pelvis-following, facing-cancelled
-> frame (numbers `[4:67]`). They say "where the limbs are relative to the body," never "which way the
-> body points in the room."
+1. Subtract the pelvis x coordinate from each joint x coordinate.
+2. Subtract the pelvis z coordinate from each joint z coordinate.
+3. Keep each joint y coordinate above the floor.
+4. Rotate the coordinates into the frame with the heading removed.
+5. Store the positions of joints 1-21.
 
-*Why it is the clever part:*
-1. The model learns each action **once**, not once per compass direction ("walking" is one pattern in
-   ric space). The heading is handled separately by the root angular-velocity channel `[0]`.
-2. It is exactly **why yaw-rotating or sliding a clip changes no numbers**: facing is divided out of
-   ric, and absolute position was never stored (only root velocity). A rotated clip yields identical
-   ric.
+For joint k, the coordinates before the rotation are:
 
-*Three different "where" concepts, now distinct:* root velocity `[0:3]` = how the **pelvis moves**;
-root height `[3]` = how high the pelvis sits; ric `[4:67]` = the **other joints relative to the
-pelvis, facing removed**. World position/facing is not stored -- integrate the root velocity to get it.
+$$
+\tilde p_k = (x_k-x_0,\ y_k,\ z_k-z_0).
+$$
+
+Here, joint 0 is the pelvis. The function does not subtract the pelvis height. Thus, ric positions are pelvis-relative in x/z and floor-relative in y.
+
+The heading removal lets the model use the same local position description for an action with different horizontal directions. The root angular-velocity channel stores the change in heading separately.
+
+A yaw rotation of a clip preserves its ric positions after the heading removal. A horizontal translation also preserves them. A vertical translation has a different meaning because y describes height above the floor.
+
+The root and ric blocks describe different quantities:
+
+- `[0:3]` describes changes in the pelvis heading and horizontal position.
+- `[3]` describes the pelvis height above the floor.
+- `[4:67]` describes the other joints with pelvis-relative x/z and floor-relative y.
+
+The vector does not store the original horizontal position or absolute heading. Recovery accumulates the root increments to obtain a trajectory in the canonical frame.
 
 ## 3.1b Which value belongs to which joint (the "which is which" map)
 
-22 joints, indexed 0-21, **pelvis = joint 0 = the root**. Key idea: the pelvis is the **reference
-frame** (a camera the body carries) -- you record *how it moves* and *its height*, and everything
-else *relative to it*. So the pelvis cannot be measured against itself: it is absent from the
-position and rotation blocks.
+The skeleton has 22 joints, with indices 0-21. Joint 0 is the pelvis and the root.
+
+The root block stores the pelvis motion and height. The ric and rot6d blocks store the other joints. The local velocity block includes the pelvis.
 
 | Block | Index range | Which joints | Per joint |
 |------|------------|--------------|-----------|
-| root (pelvis) | `[0:4]`     | **joint 0 only** | `[0]` turn rate * `[1:3]` ground velocity * `[3]` height |
-| ric positions | `[4:67]`    | joints **1-21** (21) | 3 numbers, pelvis-relative |
-| rot6d rotations | `[67:193]`| joints **1-21** (21) | 6 numbers |
-| local velocities | `[193:259]` | **all 22** (0-21) | 3 numbers |
+| root (pelvis) | `[0:4]`     | joint 0 only | `[0]` half-angle increment; `[1:3]` ground displacement; `[3]` height |
+| ric positions | `[4:67]`    | joints 1-21 (21) | 3 numbers; pelvis-relative x/z, floor-relative y |
+| rot6d rotations | `[67:193]`| joints 1-21 (21) | 6 numbers |
+| local velocities | `[193:259]` | all 22 (0-21) | 3 numbers |
 | foot contacts | `[259:263]` | foot joints | 4 binary flags |
 
-- The pelvis is NOT in ric/rot6d because in its own frame its position is the origin and its rotation
-  is already the angular-velocity channel `[0]`. That is why ric/rot6d count **21 joints, not 22**.
-- Read joint k's position (k = 1..21): `[4 + (k-1)*3 : 4 + (k-1)*3 + 3]`. Left hip (joint 1) = `[4:7]`.
-- Absolute pelvis x/z and facing are NOT stored -> recover by integrating `[0]` and `[1:3]`.
+The pelvis is absent from ric because the root block already supplies its position for recovery. Its horizontal ric coordinates are zero, but its height is generally nonzero.
+
+The pelvis rotation is absent from rot6d because recovery reconstructs it from channel `[0]`. Both blocks therefore contain 21 joints.
+
+To find joint k, where k is 1..21, use `[4 + (k-1)*3 : 4 + (k-1)*3 + 3]`. The left hip, joint 1, uses `[4:7]`.
+
+To recover the pelvis trajectory, accumulate channel `[0]` and the displacements in `[1:3]`. Use the recovery functions to apply the correct rotation convention.
 
 ## 3.2 Reading it (each block ties back to a concept)
 
-**Root block `[0:4]` -- the body's "where + facing", as velocity + height.**
-Note what is *absent*: no absolute x, z position, no absolute heading. Only the **turn rate**,
-**ground-plane speed**, and **height**. To place the body in the world you **integrate** the turn
-rate to get facing and the linear velocity to get the trajectory (Lesson 2). *This is the mechanism
-behind "rotating or sliding a clip changes nothing" -- absolute pose was never stored, only its rate
-of change.*
+### Root block `[0:4]`
 
-**ric `[4:67]` -- joint positions (Language A), root-relative.**
-The 3D locations of joints 1-21 in the root's own frame (root excluded -- it sits at the origin
-here). 21 joints x 3 = 63. Easy to plot, easy for losses and the evaluator to consume directly.
+The root block contains:
 
-**rot6d `[67:193]` -- joint rotations (Language B).**
-The local rotation of each of joints 1-21 as the continuous 6-number code from Lesson 1 (root
-rotation excluded -- it is the angular-velocity channel). 21 x 6 = 126. **This is the slice the demo
-reads to drive the SMPL-X body** (rot6d -> axis-angle -> FK).
+- A quaternion half-angle increment.
+- Two horizontal displacements per frame.
+- The pelvis height above the floor.
 
-**local velocities `[193:259]` -- per-joint change per frame (Lesson 2).**
-All 22 joints, 3 each = 66. Smoothness / dynamics signal; the training velocity loss leans on this.
+Channel `[0]` comes from the arcsine of the relative quaternion y component. Recovery accumulates this value and constructs a quaternion.
 
-**foot contacts `[259:263]` -- when feet are grounded.**
-4 binary flags (heel/toe x left/right) from a velocity threshold. The anti-foot-skate signal
-(Lesson 2); the loss has a dedicated foot term.
+For frame t, let a be the value in channel `[0]`. The recovery calculation uses:
+
+$$
+\alpha_0=0,\qquad
+\alpha_t=\sum_{i=0}^{t-1}a_i,
+\qquad
+q_t=(\cos\alpha_t,\ 0,\ \sin\alpha_t,\ 0).
+$$
+
+A quaternion uses a half-angle in its sine and cosine components. Thus, a stored increment is not an ordinary yaw increment.
+
+Recovery rotates the horizontal displacements with the inverse root quaternion, then accumulates them. It takes the vertical coordinate directly from `[3]`.
+
+The initial horizontal root position is zero in the recovered frame. The vector cannot restore an arbitrary original horizontal offset or initial heading.
+
+### ric `[4:67]`
+
+This block stores the positions of joints 1-21 after removal of the horizontal root position and heading. The y coordinates remain floor-relative.
+
+The block size is `21 x 3 = 63`.
+
+The function `recover_from_ric` restores the heading and adds the horizontal root position. It then inserts the pelvis from the root block.
+
+These positions support joint plots and geometric losses. The matcher also consumes this block, together with other feature blocks.
+
+### rot6d `[67:193]`
+
+This block stores the local rotations of joints 1-21 in the continuous six-number representation from Lesson 1. The block size is `21 x 6 = 126`.
+
+Preprocessing derives these rotations from joint positions through inverse kinematics. The function `recover_from_rot` combines them with the recovered root rotation and applies forward kinematics.
+
+The live SMPL-X avatar does not apply this block directly as its pose. It uses joints from ric recovery and an analytical solver to obtain the SMPL-X pose.
+
+### Local velocities `[193:259]`
+
+This block stores local displacement per frame for all 22 joints. Its size is `22 x 3 = 66`.
+
+The encoder calculates a difference between consecutive joint positions and removes the heading. These values describe changes in the pose and supply a target for the velocity loss.
+
+### Foot contacts `[259:263]`
+
+This block contains four binary flags, with two flags per foot. The encoder compares the squared displacement of each selected foot joint with a threshold.
+
+A small displacement produces a contact flag. This test supplies a contact estimate; it does not directly test the distance above the floor.
+
+The default foot loss is L1 error on these contact channels. A separate, optional foot-skate loss penalizes horizontal foot motion during reference contact.
 
 ## 3.3 The deliberate redundancy (an important insight)
 
-The 263 stores joint **positions (ric)** *and* joint **rotations (rot6d)** *and* their
-**velocities** -- and these are mathematically redundant (rotations + FK give positions; consecutive
-positions give velocity). Why pay for all of it?
+The vector stores joint positions, joint rotations, and local velocities. These quantities overlap because forward kinematics converts rotations into positions, and position differences give velocities.
 
-- **Positions (ric)** are what the **evaluator and reconstruction loss** read most directly, and what
-  the recovery function (`recover_from_ric`) uses to draw joints.
-- **Rotations (rot6d)** are what **drives a real articulated body** without stretching bones (the demo
-  path), and what generation prefers (Lesson 1).
-- **Velocities** are the **smoothness/dynamics** hints (Lesson 2).
-- **Foot contacts** are the **grounding** hint (Lesson 2).
+Each block supports a different calculation:
 
-So the 263 is exactly the **hybrid representation** from Lesson 1.2b: it refuses to choose one
-language and instead gives the model (and the evaluator) every view at once, each cheap to compute,
-each useful to a different consumer. The redundancy is a feature, not waste.
+- The ric block supports direct recovery of joint positions and position losses.
+- The rot6d block supports recovery through forward kinematics with a skeleton.
+- The local velocity block supplies targets for changes between frames.
+- The contact block supplies targets for foot-contact estimates.
+
+The frozen matcher consumes channels `[0:259]`. These channels include the root, ric, rot6d, and local velocity blocks. It excludes the four contact channels.
+
+The 263 vector is the hybrid representation from Lesson 1.2b. The tokenizer encodes all five blocks, so the token targets contain information from each block.
 
 ## 3.3a Who reads which slice (the system view)
 
 ```mermaid
 flowchart LR
-  ALL["all 263"] --> TOK["tokenizer: 4 frames -> 6 integers"]
-  ROT["rot6d 67:193"] --> DEMO["demo: drive SMPL-X body via FK"]
-  ROOT["root vel 0:3"] --> DEMO
-  RIC["ric 4:67"] --> EVAL["evaluator + reconstruction loss"]
-  VEL["velocities 193:259"] --> SMOOTH["smoothness / velocity loss"]
-  FC["foot 259:263"] --> SMOOTH
+  ALL["all 263"] --> TOK["tokenizer: 4 frames -> 8 integers"]
+  ALL --> LOSS["feature reconstruction losses"]
+  MATCH["root + ric + rot6d + velocities 0:259"] --> EVAL["frozen Guo matcher"]
+  ROOT["root 0:4"] --> REC["recover_from_ric"]
+  RIC["ric 4:67"] --> REC
+  REC --> DEMO["analytical joint-to-pose solver -> SMPL-X body"]
+  ROT["rot6d 67:193"] --> FK["recover_from_rot + FK"]
+  ROOT --> FK
+  VEL["velocities 193:259"] --> SMOOTH["velocity loss"]
+  FC["foot 259:263"] --> FOOT["contact-channel L1 loss"]
 ```
 
-*The redundancy is deliberate: different consumers read different slices -- positions for the
-evaluator, rotations for the body, velocities/contacts for the losses.*
+The selected tokenizer produces eight integers for each group of four frames. Each integer has 1024 possible values.
+
+The matcher uses the first 259 channels. The live avatar uses recovered joints. The loss functions compare the relevant feature blocks and can also compare recovered geometry.
 
 ## 3.4 Where the 263 sits in the whole system
 
-- The **tokenizer** eats `(T, 263)` and compresses 4 frames -> 6 integers (Contribution A).
-- The **generator** is trained to produce token sequences that decode back to `(T, 263)`.
-- The **evaluator** reads `(T, 263)` (re-normalized to its Comp_v6 stats) to compute FID / R-prec.
-- The **demo** reads slice `[67:193]` (rot6d) for body pose and `[0:3]` (root velocities) for the
-  trajectory.
+The modules use the vector as follows:
 
-Everything in this project is, ultimately, this 263-number frame moving through different modules.
+1. The tokenizer compresses `(T, 263)` into discrete tokens.
+2. The generator predicts tokens that the tokenizer decodes into `(T, 263)`.
+3. The evaluator converts the features to its Comp_v6 normalization and supplies them to the frozen matcher.
+4. The studio recovers joints from the root and ric blocks, then solves the SMPL-X pose analytically.
+
+The selected tokenizer uses eight groups, with levels `[8,8,4,4]` in each group. Each group has `8 x 8 x 4 x 4 = 1024` possible values.
+
+The latent width is `8 x 4 = 32`. The temporal reduction factor is four, so four motion frames correspond to eight integers.
+
+The historical configuration with six integers and 1000 possible values remains available. It is not the selected tokenizer configuration.
 
 ## 3.4b How we KNOW the 263 is correct (the misinterpretation fear)
 
-Misreading a slice (wrong order, units, frame, up-axis) silently poisons everything and is invisible
-to "the loss went down". We validate on a ladder of independent checks, each ruling out a different
-failure:
+A wrong channel order, unit, coordinate frame, or vertical axis can invalidate a result. A decrease in loss does not establish a correct representation.
 
-1. **Byte-faithful port** (rules out wrong layout/order): `feature.py` is ported
-   constant-for-constant from Guo's official HumanML3D code -> each slice means what the reference
-   says it means.
-2. **Finiteness + range** (rules out NaN / dead / mis-scaled channels): 0 non-finite, 0 missing
-   across splits; normalized mean ~0.03, std ~1.03, std min 0.014.
-3. **Round-trip = 0** (rules out non-invertible packing): `recover_from_ric(process_file(joints))`
-   vs original -> **L1 = 0.0000**. Exercises the **root + ric (position)** path.
+The checks address separate properties:
+
+1. Compare the constants and concatenation order in `representation.py` with the official HumanML3D implementation.
+2. Check the features for non-finite values, absent channels, and unexpected ranges.
+3. Encode joints with `encode_joints`, then recover them with `recover_from_ric`.
 4. **Cross-path agreement** (rules out rot6d vs position inconsistency): `recover_from_ric`
    (positions) and `recover_from_rot` (rot6d + FK) must rebuild the *same* skeleton -> validates the
    **rot6d** block against the position block.
-5. **External oracle** (rules out any semantic/unit/order misread): the frozen Guo evaluator (a
-   trained net expecting a specific format) reproduces published GT numbers on our 263 -> R@1 0.514
-   vs 0.511, Diversity 9.67 vs 9.50, MM-Dist 2.977 vs 2.974; and our per-channel **Mean correlates
-   0.99997** with the official eval stats.
+5. Check the frozen Guo matcher on reference motions and compare its outputs with reference measurements.
 
-**External (paper) proof of the layout.** The 263 spec is **Guo et al., CVPR 2022** (HumanML3D),
-re-documented identically across follow-ups (e.g. MotionStreamer, arXiv:2503.15451). Published
-composition: `4 root + (J-1)*3 ric + (J-1)*6 rot6d + J*3 vel + 4 foot`; for J=22 -> 4+63+126+66+4 =
-263 -- block-for-block equal to our `feature.py` slices `[0:4] [4:67] [67:193] [193:259] [259:263]`.
-Our code header names the exact ported file (`.../HumanML3D/blob/main/motion_representation.ipynb`),
-so we match the standard *by construction*; the frozen Guo evaluator reproducing published metrics on
-our data confirms it *behaviorally*.
+The round-trip target is the canonicalized, retargeted joint sequence from the encoder. It is not the untouched input sequence.
 
-> **Definitions to note.** *Round-trip test* = encode then decode and check you get the input back
-> (proves invertibility/self-consistency). *External oracle* = an independent, pre-trained component
-> that only produces sensible output on correctly-formatted input (proves semantics without trusting
-> your own code).
+The encoder changes the skeleton proportions, removes the floor offset, and sets the initial horizontal position and heading. Recovery must reproduce that encoded geometry.
 
-**Residual + the cure:** numbers settle correctness; they do not settle intuition. The cheapest
-decisive check is to **visualize** a recovered clip for a known caption and watch it -- correct
-trajectory (root velocity), planted feet (contacts + ric), correct bends (rot6d) all at once. The
-aitviewer demo is therefore also the final validation instrument, not only a deliverable.
+A source sequence with T frames produces T-1 feature frames. The last source frame supplies the final displacement but has no separate feature frame.
+
+A low round-trip error checks the root and ric path. It does not independently establish correct rot6d, local velocity, or contact values.
+
+### Published definition of the layout
+
+The 263 specification comes from **Guo et al., CVPR 2022** (HumanML3D). Follow-up work describes the same composition, for example MotionStreamer, arXiv:2503.15451.
+
+The published composition is `4 root + (J-1)*3 ric + (J-1)*6 rot6d + J*3 vel + 4 foot`. For J=22, this gives `4+63+126+66+4 = 263`.
+
+These blocks correspond to the slices in `representation.py`: `[0:4] [4:67] [67:193] [193:259] [259:263]`.
+
+The code header identifies the reference file: `.../HumanML3D/blob/main/motion_representation.ipynb`. The source comparison establishes the intended layout.
+
+A matcher result checks compatibility with a learned feature representation. It cannot establish the meaning of every channel, especially contacts, which the matcher excludes.
+
+### Definitions
+
+A round-trip test encodes a sequence, decodes it, and compares the result with the correct encoded target. This test checks consistency for the recovery path under test.
+
+An external oracle is an independent component that checks a property of the output. Here, the frozen matcher checks motion and text embeddings.
+
+### Visual checks
+
+Inspect a recovered clip with a known caption. Check the trajectory, joint positions, and foot motion separately.
+
+Inspect the rotation recovery path to check bends from rot6d. The live avatar instead checks the recovered joints and the analytical SMPL-X pose solver.
+
+The aitviewer studio supports visual checks and the demonstration. A plausible display supplements numerical checks but does not establish that every channel is correct.
 
 ## 3.4c "Why not model rot6d only, positions for loss?" (a real research axis)
 
-A natural idea: model the minimal pose (rot6d) and use ric positions only in the loss. Two honest
-layers:
+A rotation-only tokenizer can encode rot6d and use positions as loss targets. This is a separate representation experiment.
 
-**We already do a version of it.** The generator predicts **discrete tokens**, not 263 floats; the
-position/velocity/foot channels enter mainly as **loss terms** (soft-decode geometric losses). So
-"model the compact thing, supervise with positions" is the spirit of our loss design already. The
-narrow open question is only "what should the **tokenizer** encode -- all 263 or rot6d-only?".
+The current generator predicts discrete tokens. However, the tokenizer encodes all 263 channels, so its token targets also depend on positions, velocities, and contacts.
 
-**The literature trade-off (well documented, two-sided):**
-- *Rotation-only*: preserves bone lengths, but FK error **accumulates down the chain** (small spine
-  error -> large hand error) and per-joint loss weights all joints equally (QuaterNet, Pavllo et al.,
-  arXiv:1805.06485).
-- *Position-only*: direct, no chain accumulation, but breaks bone lengths -> needs re-projection.
-- *263 hybrid*: keeps both deliberately, plus velocity (smoothness) and foot (grounding).
-- *Frontier goes the OTHER way*: "Absolute Coordinates Make Motion Generation Easy" (Meng et al.,
-  arXiv:2505.19377) argues HumanML3D's local-relative pelvis modeling causes global **drift** and that
-  **absolute** joint coordinates help -- i.e. *more* explicit position info, not less. Plus a known
-  critique that HumanML3D's rotations are IK-derived and the root uses only a 1-scalar Y-axis
-  angular velocity.
+The geometric losses add supervision after soft decode. They do not make the current tokenizer rotation-only.
 
-**Our stance:** the **citable track keeps 263** (the frozen evaluator consumes it -> comparability is
-non-negotiable). A rot6d-only tokenizer is a valid, cheap **ablation** (expected *worse* recon-FID:
-evaluator reads positions + FK accumulation), reportable as a negative row. Novelty stays in the
-tokenizer/generator; representation choice (rotation vs position vs absolute) is an active separate
-axis we cite but do not claim to settle.
+The choice has these consequences:
+
+- A rotation-only representation preserves bone lengths through forward kinematics, but errors can accumulate along a joint chain.
+- A position-only representation gives direct joint targets, but it can violate bone lengths and require projection onto a skeleton.
+- The 263 hybrid representation supplies positions, rotations, local velocities, and contacts.
+
+QuaterNet, Pavllo et al., arXiv:1805.06485 discusses rotation representations and error accumulation through forward kinematics. A small rotation error near the spine can produce a larger position error at the hand.
+
+A loss on local rotations can weight joints equally without equal effects on the final joint positions. A position loss directly measures those effects.
+
+"Absolute Coordinates Make Motion Generation Easy" (Meng et al., arXiv:2505.19377) argues that local-relative pelvis representations cause global drift. It proposes absolute joint coordinates as an alternative.
+
+HumanML3D also derives rotations through inverse kinematics. Its root rotation uses one scalar about the vertical axis, with the half-angle convention described in sec. 3.2.
+
+The thesis keeps the 263 representation for compatibility with the frozen matcher. Compatibility of the feature layout alone does not establish comparability of evaluation protocols.
+
+A rot6d-only tokenizer remains a possible ablation. We expect a higher reconstruction FID because errors through forward kinematics affect the positions that the matcher consumes.
+
+This expectation is a hypothesis, not a measured result. A valid comparison must reconstruct the full matcher input, including rotations and velocities.
+
+The thesis studies the tokenizer and generator. It cites alternative representations without a claim that the representation question is settled.
 
 ## 3.5 What to hold onto
 
-1. 263 = root(4) + ric positions(63) + rot6d rotations(126) + local velocities(66) + foot(4).
-2. The **root is velocity + height, not absolute position** -> integrate to place in the world.
-3. The vector is a **deliberate hybrid**: positions for the evaluator, rotations for the body,
-   velocities for smoothness, contacts for grounding.
-4. Different modules read different slices; the demo reads **rot6d** to animate SMPL-X.
-
----
+1. The layout is `root(4) + ric positions(63) + rot6d rotations(126) + local velocities(66) + foot(4) = 263`.
+2. The root stores a quaternion half-angle increment, horizontal displacements per frame, and height.
+3. The ric block uses pelvis-relative x/z and floor-relative y, with the heading removed.
+4. The tokenizer encodes all 263 channels; the matcher consumes `[0:259]`.
+5. The live SMPL-X avatar uses recovered ric joints and an analytical pose solver.
 
 ### Questions before Lesson 4
 
-1. The root block stores velocity and height but **not** absolute x/z position or heading. What must
-   you *do* to those velocity channels to actually place the body in the room?
-2. The vector stores both ric (positions) and rot6d (rotations) for the joints, which is redundant.
-   Give one consumer that prefers **positions** and one that prefers **rotations**.
-3. Which single slice does the demo read to pose the SMPL-X body, and why that one and not ric?
+1. How do the recovery functions obtain a trajectory from the root increments?
+2. Which coordinates in ric are pelvis-relative, and which coordinate remains floor-relative?
+3. Which function recovers positions directly, and which function uses rot6d with forward kinematics?
+4. Which feature blocks does the frozen matcher consume?
+5. How does the live studio obtain the SMPL-X pose from the decoded vector?
 
 ### Looking ahead (Lesson 4 preview)
-Lesson 4: why 263 floats per frame is too much for a generator to predict directly, and how the
-**tokenizer** (Contribution A) turns that continuous vector into a few discrete integers -- the bridge
-from "motion representation" to "a model that generates motion".
+
+Lesson 4 explains how the tokenizer converts continuous motion features into discrete integers. The generator then predicts those integers instead of direct feature values.
+
+## 3.6 Results and limits
+
+This section contains the reported measurements. The code establishes the implementation details; the supplied findings provide the numerical reports below.
+
+### Feature checks
+
+The earlier report records:
+
+- 0 non-finite values.
+- 0 absent items across the splits.
+- A normalized mean of approximately 0.03.
+- A normalized standard deviation of approximately 1.03.
+- A minimum channel standard deviation of 0.014.
+
+These aggregate values do not establish correct units or semantics for every channel. They also do not imply unit variance for each channel.
+
+### Root and ric recovery
+
+The reported round-trip L1 error is 0.0000. Its target is the canonicalized, retargeted encoded joints, with the last source frame excluded.
+
+This result concerns the root and ric recovery path. It does not establish recovery accuracy for every feature block.
+
+### Frozen matcher checks
+
+The earlier report gives R@1 0.514 against a published value of 0.511. It also reports a correlation of 0.99997 between the channel means and the official evaluation statistics.
+
+The protocol-path check from 2026-11-02 sends real test motion through our evaluation path. It reports these values against the published real-motion row:
+
+- R@3: 0.799 against 0.797.
+- Diversity: 9.505 against 9.503.
+- MM-Dist: 2.964 against 2.974.
+
+These measurements support compatibility with the matcher input. They do not independently establish the correctness of all 263 channels.
+
+### Protocol limits
+
+The changes for the official 4,648-sample generation population remain drafted, not applied. The Diversity and MultiModality seed fixes also remain drafted.
+
+The current evaluation code selects base clip identifiers. It does not yet implement the complete official generation population.
+
+Tokenizer reconstruction evaluation measures decoded versions of reference motions. Generation evaluation measures motions that the generator produces from text.
+
+These evaluations use different populations and procedures. A tokenizer reconstruction result does not establish compliance with the official generation protocol.
+
+The numerical reports above are supplied findings. Their cited STATUS entry is unavailable in this checkout, so the measurements are not independently verified here.

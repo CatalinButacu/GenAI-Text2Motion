@@ -1,37 +1,46 @@
 # Lesson 4 -- From motion to tokens: the tokenizer (Contribution A)
 
-> Goal: bridge from "how motion is represented" (Lessons 1-3) to "a model that generates motion".
-> The key move is turning the continuous 263 vector into a few discrete integers.
+> Goal: connect the motion representation in Lessons 1-3 to a model that generates motion.
+> The tokenizer converts each continuous motion sequence into a sequence of discrete integers.
 
 ## 4.1 Why not just generate the 263 floats directly?
 
-You could try to predict the 263 numbers per frame as raw floats. The field mostly does NOT, for
-three reasons:
+A model can predict 263 continuous values for each frame. This project instead uses discrete motion tokens for these reasons:
 
-1. **Continuous high-dim regression blurs.** Predicting 263 continuous values per frame, the model
-   hedges toward the average of plausible motions -> washed-out, mushy output (the same L2-blur
-   problem from the loss lesson, one level up).
-2. **Autoregression wants choices, not values.** The thesis novelty is *streaming* = predict the
-   next step from the past. "Predict the next *value*" is hard and unstable; "predict the next
-   *token* from a fixed vocabulary" is a clean classification problem -- the exact thing transformers
-   and SSMs are superb at.
-3. **It unlocks the LLM playbook.** Once motion is a sequence of tokens, generating motion becomes
-   *literally the same problem* as generating text: predict the next token. All the machinery
-   (cross-entropy, sampling, CFG, KV-cache vs SSM-state) transfers directly.
+1. A regression loss can favor the average of several possible motions. The average can lose motion detail.
+2. An autoregressive model predicts the next token from previous tokens. A fixed vocabulary makes this task a classification problem.
+3. Token sequences support cross-entropy, token selection, and classifier-free guidance (CFG). Transformers use a KV-cache; state-space models use a recurrent state.
 
-## 4.2 The core analogy: a tokenizer is BPE for motion
+Let $x_t \in \mathbb{R}^{263}$ denote the motion features at frame $t$. A continuous model predicts $\hat{x}_t$ directly.
 
-A text LLM never sees raw characters -- a **tokenizer** (BPE) chops text into a fixed vocabulary of
-sub-word tokens, and the model predicts the next token. We do the same for motion:
+The tokenizer instead produces discrete indices $z_s$ at token step $s$. The generator predicts these indices from the text condition $c$ and previous indices:
 
-| Text LLM | Our motion model |
+$$
+p_\theta(z_s \mid z_{<s}, c).
+$$
+
+The decoder converts the predicted indices into motion features. The tokenizer therefore determines which motion features the generator can express through its tokens.
+
+## 4.2 The token interface
+
+A text model and a motion model both accept discrete token indices. Their tokenizers operate on different inputs and use different methods.
+
+| Text model | Motion model |
 |---|---|
 | characters | 263 floats per frame |
-| BPE tokenizer | the **motion tokenizer** (Contribution A) |
-| token vocabulary (~50k) | the **codebook** (6 x 1000 codes) |
-| "predict next word" | "predict next motion token" |
+| BPE tokenizer | motion tokenizer (Contribution A) |
+| token vocabulary (~50k) | fixed vocabulary (8 x 1024 codes) |
+| next text token | next motion token |
 
-Once you see this mapping, the whole generator (Lesson 5) is just "an LLM over motion words."
+BPE divides text into subword tokens. The motion tokenizer uses a learned encoder, a quantizer, and a learned decoder.
+
+The selected tokenizer produces eight indices at each token step:
+
+$$
+z_s = (z_{s,1}, \ldots, z_{s,8}), \qquad z_{s,g} \in \{0,\ldots,1023\}.
+$$
+
+The generator uses one output head for each group. Lesson 8 introduces its autoregressive objective.
 
 ```mermaid
 flowchart LR
@@ -41,190 +50,388 @@ flowchart LR
   end
   subgraph MOT["our motion model"]
     direction LR
-    F["263 floats / frame"] --> TOK["motion tokenizer (enc -> quant -> dec)"] --> MV["6 codes / step (vocab 1000)"] --> GEN["predict next motion token"]
+    F["263 floats / frame"] --> TOK["motion tokenizer (enc -> quant -> dec)"] --> MV["8 codes / step (vocab 1024)"] --> GEN["predict next motion token"]
   end
 ```
 
-*Once motion is a sequence of tokens, generation is literally next-token prediction -- the entire LLM
-playbook (cross-entropy, sampling, CFG, KV-cache vs SSM-state) transfers directly.*
-
 ## 4.3 What the tokenizer is: encoder -> quantizer -> decoder
 
-A learned compressor with three parts (all in `tokenizer.py`):
+The networks are in `src\text2motion\tokenization\nn_model.py`. The quantizers are in `src\text2motion\tokenization\nn_quantizers.py`.
 
-- **Encoder** -- convolutions that take `(T, 263)` and produce a lower-rate latent. Ours
-  **downsamples time by 4**: 4 frames in -> 1 latent step out (two stride-2 convs). So a 196-frame
-  clip becomes ~49 token steps.
-- **Quantizer** -- snaps each latent to the nearest entry of a fixed set, turning a continuous vector
-  into **discrete integer codes**. This is the FSQ step (next section).
-- **Decoder** -- convolutions that take codes back up to `(T, 263)`. Used to *reconstruct* motion
-  (and, in the generator's soft-decode loss, to turn predicted tokens back into motion).
+The tokenizer has three parts:
 
-**Definitions to note**
-- **Codebook** -- the fixed vocabulary of code vectors. Each token is an index into it.
-- **Downsampling factor** -- frames per token step (ours = 4). Fewer tokens = shorter sequences for
-  the generator = faster, but coarser.
-- **Reconstruction** -- encode then decode; how faithfully the motion survives the round trip. Our
-  headline metric (recon-FID; FSQ 6x1000 = 0.0274, best cell 0.0170 -- full seeded matrix in Lesson 7).
+1. The encoder converts the motion features into a continuous latent sequence.
+2. The quantizer converts each latent vector into discrete indices.
+3. The decoder converts the selected code vectors into reconstructed motion features.
 
-## 4.4 The landscape of quantizers (every option, and its catch)
+Let $E$ denote the encoder, $Q$ the quantizer, and $D$ the decoder:
 
-The quantizer is the heart of the tokenizer -- turning the continuous latent into discrete codes.
-There is a whole family, and they fall on a spectrum from "learned codebook" to "fixed grid":
+$$
+h = E(x), \qquad q = Q(h), \qquad \hat{x} = D(q).
+$$
 
-| Quantizer | How | Catch | Cite |
-|---|---|---|---|
-| **Plain VQ-VAE** | one learned codebook, nearest-neighbour lookup | **codebook collapse** / dead codes -- most codes go unused. T2M-GPT naive VQ recon-FID **0.492** (awful) | van den Oord 2017 (1711.00937) |
-| **VQ + EMA + dead-code reset** | update codes by moving average; reinit unused ones | works, but fragile machinery; the *minimum* viable VQ. T2M-GPT: 0.070 (7x better than naive) | Jukebox, SoundStream |
-| **RVQ (Residual VQ)** | a cascade: each codebook quantizes the *residual* of the previous | more capacity -> finer recon (MoMask **0.019**), but still learned codebooks + EMA/reset + commitment loss + quant-dropout | SoundStream (2107.03312), EnCodec (2210.13438), MoMask (2312.00063) |
-| **Grouped / Product VQ** | split the latent into groups, quantize each separately | combinatorial vocabulary from small codebooks; still learned | -- |
-| **FSQ (Finite Scalar Quantization)** | **no learned codebook** -- round each latent dim onto a small fixed grid | implicit vocab = product of levels; ~100% usage, **no collapse, no EMA/reset/commitment** | Mentzer 2023 (2309.15505); motion: ScaMo (2412.14559) |
-| **LFQ / MAGVIT-v2** | binary per-dim quantization, huge implicit vocab | image/video; vocab too large for HumanML3D's data scale | 2310.05737 |
+The encoder uses two convolution stages with stride 2. Their combined downsample factor is 4:
 
-The trend across audio -> image -> motion: **move work out of the learned codebook and into a fixed
-structure**, because learned codebooks are the thing that collapses and needs babysitting. FSQ is the
-extreme: *no* codebook at all.
+$$
+S = T/4.
+$$
+
+Here, $T$ is the number of frames and $S$ is the number of token steps. A 196-frame clip produces 49 token steps.
+
+The network requires a positive frame count divisible by 4. The frozen wrapper removes excess final frames before it calls the encoder.
+
+The decoder restores the frame rate and produces 263 features per frame. The generator also uses it for the soft-decode loss.
+
+Use these definitions consistently:
+
+- A code vector is a discrete vector that the quantizer selects.
+- A token index identifies a code vector.
+- A vocabulary is the set of possible token indices.
+- A learned codebook stores code vectors that change during tokenizer training.
+- An FSQ grid defines code vectors without a learned codebook.
+- The downsample factor is the number of frames per token step.
+- Reconstruction means an encoder, quantizer, and decoder pass on an existing motion sequence.
+
+A larger downsample factor reduces the sequence length for the generator. It also reduces the temporal resolution of the latent sequence.
+
+## 4.4 The quantizer options
+
+Quantizers differ in their code vectors and their method of latent conversion:
+
+1. Plain VQ-VAE selects the nearest vector from one learned codebook. Some code vectors can remain unused.
+2. VQ with EMA and dead-code reset updates code vectors through an exponential moving average. A reset replaces unused code vectors.
+3. Residual Vector Quantization (RVQ) uses several learned codebooks. Each level quantizes the residual from previous levels.
+4. Grouped or Product VQ divides a latent vector into groups. Each group uses a separate learned codebook.
+5. Finite Scalar Quantization (FSQ) uses a fixed scalar grid for each latent dimension. It has no learned codebook.
+6. LFQ uses binary scalar values. Its implicit vocabulary can be large.
+
+The published context and numerical comparisons appear in section 4.4c at the end.
 
 ### RVQ mechanics (the baseline)
-**Residual Vector Quantization** is a cascade of *learned* codebooks, coarse-to-fine:
-1. Take the encoder latent `z`. Find its nearest code `c1` in **codebook 1**. Quantized so far = `c1`.
-2. Compute the **residual** `r1 = z - c1` (the leftover error). Find its nearest code `c2` in
-   **codebook 2**. Quantized = `c1 + c2`. New residual `r2 = r1 - c2`.
-3. Repeat for all 6 codebooks: `z ~= c1 + c2 + ... + c6`. The **6 indices** are the token step.
 
-So each level *refines the previous error* -- early codebooks capture gross motion, later ones add
-detail. The codebooks are **learned** and need the machinery: **EMA** updates the codes toward the
-data, **dead-code reset** reinitialises codes that stop being used (fighting collapse), a
-**commitment loss** pulls the encoder output toward its chosen codes, and **quantization dropout**
-randomly truncates levels in training for robustness. Decode = sum the selected codes -> decoder.
+RVQ represents a latent vector as a sum of code vectors. Let $h$ be the encoder latent and $C_r$ the codebook at level $r$:
 
-### FSQ mechanics (ours)
-**Round each latent dimension onto a small fixed grid** (levels e.g. (8,5,5,5)); the tuple of rounded
-dims *is* the integer code; implicit vocab per group = product of levels (8x5x5x5 = 1000). Gradient
-flows through the rounding via a straight-through estimator (`round_straight_through`). **No codebook is learned**,
+$$
+r_0 = h, \qquad
+c_r = \operatorname*{argmin}_{c \in C_r}\|r_{r-1}-c\|_2^2,
+\qquad
+r_r = r_{r-1}-c_r.
+$$
+
+For the historical six-level configuration:
+
+$$
+q = c_1+c_2+c_3+c_4+c_5+c_6.
+$$
+
+Follow the residual sequence:
+
+1. Select the nearest code vector from codebook 1.
+2. Subtract that code vector from the latent vector.
+3. Select the nearest code vector for the residual from codebook 2.
+4. Repeat the process for all six levels.
+5. Add the selected code vectors.
+6. Pass their sum to the decoder.
+
+The six indices form one token step. Early levels describe coarse motion; later levels describe residual detail.
+
+The RVQ baseline also uses:
+
+- Codebook EMA to update the learned code vectors.
+- Dead-code reset to replace unused code vectors.
+- A commitment loss to keep the encoder latent close to the selected code vectors.
+- Quantization dropout to omit later levels during training.
+
+### FSQ mechanics (the selected method)
+
+FSQ bounds each latent scalar, rounds it to a grid value, and normalizes the result. A straight-through estimator supplies the gradient.
+
+The implementation uses `round_straight_through`. The grid dimensions determine the vocabulary size:
+
+$$
+V = \prod_{i=1}^{d} L_i.
+$$
+
+Here, $d$ is the number of dimensions per group and $L_i$ is the number of levels in dimension $i$.
+
+The selected levels are [8,8,4,4]:
+
+$$
+V = 8 \times 8 \times 4 \times 4 = 1024.
+$$
+
+The historical levels (8,5,5,5) produce 1000 codes. That configuration remains part of the earlier experiments.
+
+**No codebook is learned**,
 so none of RVQ's machinery (EMA / reset / commitment) exists -- nothing to collapse.
 
-> **The structural contrast.** RVQ's 6 codes are **sequential refinement levels** (each fixes the
-> last one's error, learned codebooks). FSQ's 6 codes are **parallel partition groups** (independent,
-> fixed grids). Both yield 6 integers per step -- but one learns and refines, the other partitions and
-> rounds. That difference is the whole of Contribution A.
+RVQ levels quantize successive residuals. Grouped-FSQ groups quantize separate parts of the latent vector:
 
-### Why "6 x 1000" specifically (our config)
-- **6 groups** -> a token step emits **6 integers**. Chosen to (a) match MoMask RVQ's 6 levels =
-  same token budget per step = fair FSQ-vs-RVQ comparison; (b) give a 6x4 = **24-D latent**, the fix
-  for the residual-FSQ collapse (4-D was too small for 263-D motion).
-- **1000 codes/group** = levels (8,5,5,5) = 8x5x5x5, targeting ~2^10 (~10 bits), comparable to
-  standard VQ sizes. **Asymmetric levels** (more resolution on dim 1) are FSQ-recommended as more
-  efficient than equal splits. Integers required, so 1000 not 1024.
-- **Honesty check:** the iso-vocab ablation used (8,8,8) = **512** (matching RVQ exactly) and STILL
-  won (0.0305 vs 0.0342, seeded) -> the win is the *quantizer*, not the bigger 1000 vocab.
-- **Expressivity:** 1000^6 ~= 10^18 distinct token-steps, yet the generator only makes 6 independent
-  1000-way choices per step (6 embedding tables, 6 heads over 1000, +1 for END = 1001).
+$$
+h = [h_1;\ldots;h_G], \qquad q = [Q(h_1);\ldots;Q(h_G)].
+$$
 
-## 4.4b Reading the training logs: is the tokenizer healthy? (FSQ vs RVQ)
+The brackets and semicolons denote concatenation. The decoder receives the concatenated code vectors.
 
-The trainer logs two categories, so health is justifiable from either quantizer's point of view:
+### The selected configuration and the historical configuration
 
-**Category 1 -- common (both quantizers):**
-- `recon` -- reconstruction L1 (lower = more faithful round trip). The core "is it learning" signal.
-- `total` -- recon + (commit, RVQ only). For FSQ, total == recon.
+The selected configuration is `configs\tokenizer\fsq_g8_v1024.yaml`. The default checkpoint path in `configs\default.yaml` selects this tokenizer.
 
-**Category 2 -- quantizer health:**
-- `perplexity` -- effective codes used (exp of usage entropy). Higher = richer use of the vocabulary.
-- `usage_frac` -- fraction of the codebook actually hit (alive). Low = **collapse**.
-- `commit` -- commitment loss (RVQ machinery). **Structurally 0 for FSQ** (no codebook to commit to).
+Its parameters are:
 
-**A healthy FSQ run** looks like: `recon` falling, `perplexity` rising and high, `usage_frac` high,
-and **`commit 0.0000`** -- because FSQ rounds to a *fixed grid*, it needs **no commitment loss, no
-codebook-EMA, no dead-code reset**. Unused grid points are free (zero params), so it only needs to be
-"high enough", not maximal. The literal `commit 0.0000` in the log is the on-screen proof of the
-"no machinery" claim.
+- Eight groups.
+- Four latent dimensions per group.
+- Levels [8,8,4,4].
+- A vocabulary of 1024 codes per group.
+- A latent width of 32.
+- A downsample factor of 4.
 
-**A healthy RVQ run** looks like: `recon` falling, `perplexity`/`usage_frac` high *and kept high by
-dead-code reset* (a learned codebook collapses without it), and `commit` **small and stable** (the
-encoder stays committed to its codes). A *sick* RVQ shows `usage_frac` crashing -> reset fighting it,
-or `commit` blowing up -> encoder/codebook drifting apart.
+The latent width follows from the group count and the dimensions per group:
 
-> **The contrast IS Contribution A.** Side by side in the same harness: FSQ logs `commit 0.0000` +
-> no reset machinery; RVQ logs `commit > 0` + needs EMA + dead-code reset -- at comparable recon-FID.
-> Simplicity at matched quality, visible in the logs.
+$$
+d_{\text{latent}} = 8 \times 4 = 32.
+$$
 
-(Two EMAs, don't conflate: *codebook-EMA* updates VQ codebook entries -- FSQ has none; *weight-EMA*
-is a generic eval-stability moving-average of all weights -- the tokenizer trainer applies it to both.)
+The historical six-group configuration uses levels (8,5,5,5). It has a latent width of 24 and emits six indices from 0 to 999.
+
+That historical configuration matched the six-level RVQ token budget. Its asymmetric levels give the first dimension more resolution than the other dimensions.
+
+The historical vocabulary permits approximately 1000^6, or 10^18, distinct token tuples. Its generator uses six embedding tables and six output heads.
+
+With an END token, each historical head has 1001 outputs. The selected configuration instead uses eight embedding tables and eight heads:
+
+$$
+V_{\text{head}} = 1024 + 1 = 1025.
+$$
+
+This vocabulary count describes possible tuples. It does not measure the number of motion patterns that a trained model uses.
+
+## 4.4b Read the training logs: is the tokenizer healthy? (FSQ vs RVQ)
+
+The trainer reports a reconstruction loss and quantizer statistics. Interpret these quantities separately.
+
+### Reconstruction losses
+
+Let $x$ be the target features and $\hat{x}$ the reconstructed features. The reconstruction loss has two terms:
+
+$$
+L_{\text{feature}} = \operatorname{mean}|\hat{x}-x|,
+$$
+
+$$
+L_{\text{difference}}
+=
+\operatorname{mean}
+|(\hat{x}_{t+1}-\hat{x}_t)-(x_{t+1}-x_t)|,
+$$
+
+$$
+L_{\text{recon}} = L_{\text{feature}} + L_{\text{difference}}.
+$$
+
+The first term compares all feature values. The second term compares their differences between adjacent frames.
+
+The second term acts on all features. It does not compare only the stored velocity channels.
+
+The trainer then adds the weighted commitment loss:
+
+$$
+L_{\text{total}}
+=
+L_{\text{recon}}
++
+\texttt{commitment\_beta}\,L_{\text{commit}}.
+$$
+
+Read the loss fields as follows:
+
+- `recon` reports feature L1 plus temporal-difference L1.
+- `commit` reports the commitment loss before the coefficient.
+- `total` reports `recon` plus `commitment_beta` times `commit`.
+
+FSQ returns a zero commitment loss. Its `total` therefore equals its `recon`.
+
+### Quantizer statistics
+
+The trainer counts token indices separately for each group or level. It reports statistics averaged over the active groups or levels.
+
+Let $p_k$ be the observed fraction for code $k$:
+
+$$
+H = -\sum_k p_k \log p_k, \qquad
+\text{perplexity} = \exp(H).
+$$
+
+The usage fraction is:
+
+$$
+\text{usage fraction}
+=
+\frac{\text{number of observed codes}}{\text{vocabulary size}}.
+$$
+
+Read the health fields as follows:
+
+- `perplexity` reports the effective number of observed codes.
+- `usage_frac` reports the fraction of codes observed in the current batch.
+- `commit` reports how strongly the RVQ encoder differs from its selected code vectors.
+
+For FSQ, inspect the reconstruction loss and code statistics. A zero `commit` confirms the implementation has no commitment term.
+
+Unused FSQ grid points have no learned parameters. A run does not need maximum usage of every grid point.
+
+For RVQ, inspect the reconstruction loss, code statistics, and commitment loss. A sharp usage decrease or commitment increase can indicate a problem.
+
+### The two types of EMA
+
+Codebook EMA updates learned RVQ code vectors. FSQ has no codebook EMA.
+
+Weight EMA maintains an average of the tokenizer parameters for evaluation. The tokenizer trainer applies weight EMA to both quantizer types.
+
+The historical RVQ evaluation combined incompatible encoder and codebook EMA states. The historical codebook update order also had a defect.
+
+The fixes require a new RVQ training run. The earlier scores do not establish a valid matched-quality comparison.
+
+Contribution A therefore separates a structural fact from an experimental claim. FSQ removes learned-codebook maintenance; a corrected RVQ comparison must establish any quality advantage.
+
+## 4.5 How we selected Grouped-FSQ
+
+The original proposal combined FSQ with a residual structure. ScaMo supplied the motion context for FSQ; MoMask supplied the motion context for residual quantization.
+
+The experiment sequence was:
+
+1. Propose Residual-FSQ as Contribution A.
+2. Build an RVQ baseline with EMA, dead-code reset, commitment loss, and quantization dropout.
+3. Evaluate Residual-FSQ.
+4. Inspect the residual latent structure.
+5. Replace the residual structure with separate FSQ groups.
+6. Compare vocabulary sizes and group counts.
+
+The original diagnosis remains:
+
+Residual FSQ keeps the latent at the tiny `fsq_dim` (codes summed in ~4-D);
+later residual levels collapse onto the fixed grid, and a 4-D continuous latent cannot represent
+263-D motion. The residual structure fights the fixed grid.
+
+The original grouped-latent explanation also remains:
+
+Instead of stacking residuals in 4-D, **partition** the latent into
+6 groups (6 x 4 = 24-D), FSQ each independently. Every group is used; the latent is wide enough.
+
+These statements describe the original decision path. The selected configuration now uses eight groups and a latent width of 32.
+
+Section 4.4c contains the negative result and the historical comparisons. The defective RVQ evaluation prevents those comparisons from proving a quantizer advantage.
+
+## 4.6 Train it first, then freeze it
+
+Train the tokenizer to reconstruct motion. Then freeze it before the generator training stage.
+
+The generator predicts indices from the frozen tokenizer. It does not change the tokenizer parameters.
+
+This sequence has two purposes:
+
+1. The token targets remain stable.
+2. The experiment can assess Contribution A and Contribution B separately.
+
+A tokenizer change can change which index represents a motion pattern. A frozen tokenizer avoids that change during generator training.
+
+Reconstruction FID compares original motions with their reconstructed distribution. Generation FID compares original motions with a generated distribution.
+
+These are different distributions. Reconstruction FID is a reference for tokenizer quality, not a mathematical bound on generation FID.
+
+The decoder constrains the motion features available through tokens. That constraint does not establish an ordering between the two FID scores.
+
+## 4.7 What to retain
+
+1. The tokenizer converts a continuous motion sequence into discrete indices.
+2. The encoder reduces the frame count by a factor of 4.
+3. The selected Grouped-FSQ tokenizer emits eight indices per token step, each from 0 to 1023.
+4. Its levels are [8,8,4,4], and its latent width is 32.
+5. RVQ adds code vectors from residual levels; Grouped-FSQ concatenates code vectors from separate groups.
+6. FSQ has no learned codebook, codebook EMA, dead-code reset, or commitment term.
+7. The reconstruction loss includes feature L1 and temporal-difference L1.
+8. The generator uses a frozen tokenizer.
+9. Reconstruction FID is a reference, not a bound on generation FID.
+10. The historical RVQ scores require corrected retraining before a matched comparison.
+
+### Questions before Lesson 5
+
+1. Why does a fixed token vocabulary make the autoregressive objective a classification problem?
+2. How do eight groups and levels [8,8,4,4] produce eight indices from 0 to 1023?
+3. How do RVQ residual levels differ from Grouped-FSQ groups?
+4. Why must the tokenizer remain frozen during generator training?
+5. Why does reconstruction FID not bound generation FID?
+
+### The next lessons
+
+Lesson 5 explains the RVQ tokenizer. Lesson 6 explains FSQ and discrete capacity, and Lesson 7 presents tokenizer results.
+
+Lesson 8 introduces the generator objective. Later lessons explain the text condition and the Transformer and Mamba models.
 
 ## 4.4c Results to report (interpretation deferred to the paper)
 
+### Historical evaluation description
+
 Full HumanML3D test split (2,189 clips), recon-FID via the frozen Guo evaluator. Same conv
 encoder/decoder, width, downsample, and 500-epoch budget for every row -- only the quantizer differs.
+
+The table retains the historical measurements. The RVQ row has an invalidated evaluation and does not provide a valid baseline.
 
 | Tokenizer | codes/step x vocab | recon-FID (down) (seeded) |
 |---|---|---|
 | Grouped-FSQ | 6 x 1000 | **0.0274** |
 | Grouped-FSQ (iso-vocab) | 6 x 512 | 0.0305 |
-| Strong-RVQ | 6 x 512 | 0.0342 |
-| Grouped-FSQ (best cell) | 8 x 1024 | **0.0170** |
+| Historical RVQ (invalidated evaluation) | 6 x 512 | 0.0342 |
+| Grouped-FSQ (selected configuration) | 8 x 1024 | **0.0170** |
 | *context (cited, more compute):* T2M-GPT VQ | -- | 0.071 |
 | *context (cited, more compute):* MoMask RVQ | 6 x 512 | 0.019 |
 
-Plain reading: FSQ **beats** the strong RVQ at every matched cell (the full 3x5 matrix + the dominance
-argument live in **Lesson 7**), needs no learned codebook or collapse machinery, and the best cell
-(8x1024 = 0.0170) **beats** MoMask's tuned 0.019 on our controlled budget. (Per-cell MPJPE / perplexity
-live in the run manifests.)
+The earlier FSQ scores are numerically below the recorded RVQ score. The EMA mismatch and update defect prevent a valid conclusion about relative quality.
 
-## 4.5 How WE got to Grouped-FSQ (the actual decision path)
+The earlier iso-vocabulary experiment used levels (8,8,8), which produce 512 codes. Its score was 0.0305, compared with the invalidated RVQ score of 0.0342.
 
-This is the story to tell -- it has a hypothesis, a failure, a diagnosis, and a fix:
+That comparison does not confirm that the quantizer alone caused the difference. The RVQ baseline requires corrected retraining.
 
-1. **Hypothesis.** FSQ is motion-proven (ScaMo) and the residual *structure* is motion-proven
-   (MoMask). The original Contribution A was their **combination: Residual-FSQ** -- believed novel.
-2. **Build the bar.** A **strong-RVQ baseline** (EMA + dead-code reset + commitment + quant-dropout,
-   the T2M-GPT/MoMask/EnCodec recipe) to beat: recon-FID **0.0342** (seeded 6x512).
-3. **The failure.** Residual-FSQ **collapsed at recon-FID 0.22** -- 5x WORSE than RVQ.
-4. **The diagnosis.** Residual FSQ keeps the latent at the tiny `fsq_dim` (codes summed in ~4-D);
-   later residual levels collapse onto the fixed grid, and a 4-D continuous latent cannot represent
-   263-D motion. The residual structure fights the fixed grid.
-5. **The fix -> Grouped-FSQ.** Instead of stacking residuals in 4-D, **partition** the latent into
-   6 groups (6 x 4 = 24-D), FSQ each independently. Every group is used; the latent is wide enough.
-   Result: recon-FID **0.0274**, beating strong-RVQ 0.0342 -- and the iso-vocab check (matched 512
-   vocab -> 0.0305) confirms it is the quantizer, not codebook size. **That is Contribution A.**
+The full 3x5 matrix appears in Lesson 7. The run manifests contain per-cell MPJPE and perplexity records.
 
-So we got to FSQ for its no-collapse/no-machinery property, and to *Grouped*-FSQ specifically because
-the residual variant failed and the partitioned variant fixed it. The collapse is reported as the
-motivating negative result.
+The reviewer retains this original published-comparison claim:
 
-## 4.6 Train it first, then FREEZE it
+> the best cell
+> (8x1024 = 0.0170) **beats** MoMask's tuned 0.019 on our controlled budget.
 
-Critical workflow point: the tokenizer is trained **on its own** (reconstruct motion well), then
-**frozen**. The generator (Lesson 5) never changes the tokenizer -- it only learns to predict the
-frozen tokenizer's codes. Two reasons:
+### Replication of the selected tokenizer
 
-1. **Stable target.** If the codebook kept changing, the generator would chase a moving target.
-2. **Clean separation of contributions.** Tokenizer quality (Contribution A) and generator quality
-   (Contribution B) are measured independently. The tokenizer's recon-FID is the *ceiling* the
-   generator can reach.
+The ledger records a replication on 2026-11-02 with seed 2026 and CUDA. It scored 2,189 clips and excluded three clips that were too short.
 
-## 4.7 What to hold onto
+| Measurement | Replicated value |
+|---|---|
+| Reconstruction FID | 0.016963 |
+| MPJPE, global positions without alignment | 106.9 mm |
+| Feature L2 | 0.587 |
 
-0. Quantizers span a spectrum from **learned codebook** (VQ -> RVQ, collapse-prone, needs EMA/reset)
-   to **fixed grid** (FSQ, no codebook, no collapse). The field is moving toward fixed structure.
-1. We discretize because AR streaming wants **next-token classification**, not continuous regression
-   (which blurs), and it unlocks the **LLM playbook**.
-2. A motion tokenizer is **BPE for motion**: encoder -> quantizer -> decoder, with a **codebook** as
-   the vocabulary.
-3. Ours downsamples time **/4** and emits **6 FSQ codes per step**, each in 0..999.
-4. **FSQ** = round onto a fixed grid (no learned codebook); **Grouped-FSQ** is Contribution A.
-5. The tokenizer is **trained then frozen**; its recon-FID (0.0274 for 6x1000; best 0.0170) is the
-   generator's ceiling.
+The replicated FID agrees with the rounded record of 0.0170. However, the MPJPE shows substantial error in joint positions.
 
----
+A low reconstruction FID therefore does not imply exact geometry. FID assesses the distribution of evaluator features; MPJPE assesses joint positions.
 
-### Questions before Lesson 5
+### Historical negative result
 
-1. Why is "predict the next token" easier for a streaming model than "predict the next 263 floats"?
-2. A token step is "6 integers in 0..999". Where do the 6 and the 1000 come from?
-3. Why must the tokenizer be frozen before training the generator?
+Residual-FSQ produced a reconstruction FID of 0.22. The original report described this as about five times worse than RVQ.
 
-### Looking ahead (Lesson 5 preview)
-Lesson 5 is the generator itself (Contribution B): how text conditions it, how it predicts the next
-token causally, and the Transformer-vs-Mamba twins -- finally connecting "motion words" to the
-streaming model that writes them.
+Grouped-FSQ with six groups and 1000 codes produced 0.0274. The iso-vocabulary configuration produced 0.0305.
+
+These results explain the historical choice of a grouped structure. The invalidated RVQ score does not prove that Grouped-FSQ has better quality than corrected RVQ.
+
+### Published quantizer context
+
+This table retains the original numerical context and citations. These published values are separate from the local replication.
+
+| Quantizer | How | Catch | Cite |
+|---|---|---|---|
+| Plain VQ-VAE | selects the nearest vector from one learned codebook | unused codes and codebook collapse; T2M-GPT naive VQ recon-FID 0.492 | van den Oord 2017 (1711.00937) |
+| VQ + EMA + dead-code reset | updates codes through an average and replaces unused codes | requires codebook maintenance; T2M-GPT: 0.070 (7x better than naive) | Jukebox, SoundStream |
+| RVQ (Residual VQ) | each codebook quantizes the residual from previous levels | MoMask 0.019; requires learned codebooks, EMA/reset, commitment loss, and quantization dropout | SoundStream (2107.03312), EnCodec (2210.13438), MoMask (2312.00063) |
+| Grouped / Product VQ | divides the latent into groups and quantizes each group separately | combines small vocabularies; still uses learned codebooks | -- |
+| FSQ (Finite Scalar Quantization) | rounds each latent dimension onto a fixed grid | implicit vocab = product of levels; ~100% usage, **no collapse, no EMA/reset/commitment** | Mentzer 2023 (2309.15505); motion: ScaMo (2412.14559) |
+| LFQ / MAGVIT-v2 | uses binary values per dimension | image/video; vocabulary too large for the HumanML3D data scale | 2310.05737 |
+
+The original survey describes a trend from audio to images to motion toward fixed quantizer structures. FSQ removes the learned codebook from that structure.

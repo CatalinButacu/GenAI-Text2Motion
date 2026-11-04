@@ -1,68 +1,93 @@
 # Lesson 18 -- Scaling the tokenizer with data (not just codes)
 
-> A future-work / methods chapter. Lesson 6.6a scaled tokenizer capacity along **codes** (bits/step);
-> this scales it along **data** -- pretraining on a larger corpus (full AMASS, later derivatives). It
-> states the two non-negotiable rules, the feasibility, and the protocol, so the option is on the
-> record *before* the generator is frozen. Grounded in `motion/preparation.py`, the E7b plan lever, and the
-> scaling references in `.claude/docs/references.md` (Being-M0 / MotionLib).
+This lesson describes a future experiment. Lesson 6.6a increases the tokenizer capacity through more bits per step. This lesson increases the amount of data for tokenizer pretraining.
+
+The proposed corpus is full AMASS, with derivative datasets as later options. The experiment requires a new tokenizer version and new generator versions. Complete the experiment before you freeze the final generator if its results must appear in the final comparison.
+
+The method uses `src\text2motion\motion\preparation.py`, the E7b plan lever, and the Being-M0 / MotionLib references in `.claude/docs/references.md`. The current tokenizer command does not implement AMASS pretraining.
 
 ## 18.0 The versioned pipeline
 
+The diagram describes the proposed experiment. The preparation code exists, but the corpus and the tokenizer pretraining path require further work. Section 18.8 gives the recorded results and the current limitations.
+
 ```mermaid
 flowchart LR
-  AM["AMASS (SMPL-X G, ~151 GB) -> HML3D preparation -> 263 (~78% coverage)"] --> PT["pretrain tokenizer v2"]
+  AM["AMASS (SMPL-X G) -> HML3D preparation -> 263 (corpus provenance required)"] --> PT["exclude HML3D held-out captures and duplicates -> pretrain tokenizer v2"]
   PT --> FT["fine-tune on HumanML3D-263"]
   FT --> EV["eval on HML3D test, frozen Guo matcher, matched bits/step"]
   FT --> RT["re-tokenize HML3D -> retrain generator v2 (forced by the tokenizer change)"]
   EV --> DEC["promote v2 only if recon-FID AND downstream gen-FID beat v1"]
 ```
 
+Exclude HumanML3D validation and test source captures before tokenizer pretraining. Exclude their file variants and duplicate captures too. An exclusion only at the later generator token-pack stage does not protect the tokenizer experiment.
+
 ## 18.1 Two orthogonal axes of tokenizer capacity
 
-- **Codes** (Lesson 6.6a): bits/step $=R\log_2 V$ -- how much *information* a step can carry.
-- **Data** (this lesson): how much *motion variety* the encoder/decoder have seen. A tokenizer with
-  ample bits but trained on little data underfits the manifold; more data sharpens the same bits.
+The tokenizer has two separate capacity axes:
 
-They are independent: you can raise either. This chapter is purely the data axis.
+- Codes: the bits per step $=R\log_2 V$ determine the nominal information capacity of a token step.
+- Data: the corpus determines the variety of motion that the encoder and decoder encounter.
+
+Here, $R$ is the number of codes per step, and $V$ is the vocabulary size for each code. Lesson 6.6a describes the code axis.
+
+A tokenizer can have enough bits but too little data to learn the motion distribution. More data can improve its reconstruction at the same number of bits. This improvement depends on whether insufficient data limits the tokenizer.
+
+You can increase either axis. This lesson examines only the data axis.
 
 ## 18.2 Rule 1 -- the tokenizer is the generator's vocabulary (no hot-swap)
 
-The generator (Lesson 8) predicts token indices defined by a *specific* tokenizer. Retraining the
-tokenizer yields **different codes**, so the generator's targets change. Therefore swapping in a
-data-scaled tokenizer **forces a re-tokenize + generator retrain** -- a *versioned redo*, not a
-drop-in:
+The generator in Lesson 8 predicts token indices from a specific tokenizer. A new tokenizer can assign different indices to the same motion. These changes alter the generator targets.
+
+A new tokenizer therefore requires new token data and a new generator version:
+
 $$
 \text{tokenizer v2} \;\Rightarrow\; \text{re-tokenize data} \;\Rightarrow\; \text{generator v2}.
 $$
-**Sequencing consequence:** if v2 is to appear in the *final* numbers, train it **before** committing
-the final generator (Lesson 17 lists "freeze the tokenizer" as a precondition). Doing it afterward
-costs a full generator retrain.
+
+Encode the data again with tokenizer v2. Retrain each generator that uses those tokens. Do not replace tokenizer v1 while you retain its trained generator.
+
+Lesson 17 requires a frozen tokenizer before the final generator experiment. Train tokenizer v2 first if you intend to use it for the final results. A later tokenizer change requires a full generator retrain.
 
 ## 18.3 Rule 2 -- the citable evaluation stays on HumanML3D-263
 
-FID is comparable only on HumanML3D-263 with the frozen Guo evaluator (Lessons 7, 14, 16); AMASS has
-no comparable FID. So the recipe is **pretrain on the big corpus, fine-tune and evaluate on the
-citable one**:
+The FID comparison in Lessons 7, 14, and 16 uses HumanML3D-263 and the frozen Guo evaluator. The project has no comparable AMASS FID protocol.
+
+Pretrain on AMASS. Fine-tune on HumanML3D-263. Evaluate on the HumanML3D test split with the frozen matcher:
+
 $$
 \text{pretrain (AMASS)} \to \text{fine-tune (HML3D-263)} \to \text{eval (HML3D test, frozen matcher)},
 $$
-which is exactly the Being-M0 / MotionLib justification: scale data for the encoder, then return to
-the comparable distribution for the numbers.
 
-## 18.4 Feasibility (already wired)
+The Being-M0 / MotionLib references support this method: increase the pretraining corpus, then return to the reference distribution for evaluation.
 
-- The donor AMASS is the **SMPL-X G** release; `motion/preparation.py` forwards it through the SMPL-X body
-  model to 263 at **~78% coverage** (the rename resolver handles gaps) -- the data path exists.
-- The tokenizer is small (Lesson 6: two ~512-wide conv stacks + zero-parameter FSQ), so the 4 GB GPU
-  is fine; more data means more **steps per epoch**, not more VRAM.
+The tokenizer must not encounter HumanML3D validation or test source captures during AMASS pretraining. HumanML3D derives from AMASS, so different filenames do not prove that two captures are independent.
+
+Use the official HumanML3D index to identify the held-out source captures. Apply the exclusions before tokenizer pretraining. Require valid corpus provenance before you use the corpus.
+
+## 18.4 Feasibility and implementation requirements
+
+The donor AMASS release is SMPL-X G. The preparation path in `src\text2motion\motion\preparation.py` uses the SMPL-X body model to produce HumanML3D-263 features. Its source resolver handles differences between dataset folder names.
+
+The preparation path alone does not establish that the corpus is ready. The current corpus builder requires a complete `pose_manifest.json`. It also checks the corpus recipe through `corpus_manifest.json`.
+
+The exclusion helpers identify held-out source captures and duplicate pose files. The duplicate check compares file sizes and SHA-256 hashes. Apply these exclusions to the corpus that tokenizer v2 actually reads.
+
+The current tokenizer command uses the HumanML3D train split. Its loader is in `src\text2motion\app\training.py`. The YAML field `data.sources` does not select AMASS for tokenizer pretraining because no code reads that field.
+
+AMASS currently passes through the frozen tokenizer to produce tokens for generator pretraining. This operation does not train the tokenizer. Implement an AMASS tokenizer pretraining path before you attempt the proposed experiment.
+
+The FSQ tokenizer has an encoder and a decoder with convolution layers. The referenced configuration uses width 512 for both networks. The FSQ quantizer has no learned codebook parameters.
+
+For a fixed model, batch size, and window length, more data increases the steps per epoch. It does not increase the VRAM requirement per batch. The original feasibility estimate uses a 4 GB GPU; verify the selected configuration before the full run.
 
 ## 18.5 Will it help? -- the rate-distortion check (be honest)
 
-More data lowers the distortion curve $D(r)$ **only if the tokenizer was data-limited.** Two tempering
-facts:
-- HumanML3D is *built from* AMASS, so on the **HML3D test** AMASS mostly adds *in-distribution* data
-  -> diminishing returns, and we are already near the MoMask reconstruction ceiling (~0.019) at 8
-  codes. Headroom on that exact metric is small.
+The distortion curve $D(r)$ describes reconstruction error at a rate $r$. More data can lower this curve if insufficient data limits the tokenizer.
+
+HumanML3D derives from AMASS. Additional AMASS data therefore comes mainly from the same distribution as the HumanML3D test data. This overlap can limit the extra reconstruction benefit.
+
+MoMask provides a reference reconstruction result, not an established minimum error. A result below that reference does not show how much further improvement remains. Section 18.8 gives the recorded values.
+
 - Where it genuinely wins: **out-of-distribution robustness** (motions the generator invents that
   HML3D under-covers), the **deferred whole-body / SMPL-X track**, and as a clean **ablation row**.
 
@@ -71,23 +96,48 @@ either outcome is a reportable finding.
 
 ## 18.6 The protocol (a controlled ablation, not a silent swap)
 
-Same ruler as Lesson 7 (matched bits/step, HML3D test, seed 2026):
-1. Train **tokenizer-v2** = AMASS-pretrain -> HML3D fine-tune at the chosen best config.
-2. Compare to v1 on **recon-FID** *and* **downstream gen-FID** (the open A/B of Lesson 17).
-3. **Promote** v2 only if it beats v1 on *both*; else keep it as an ablation row + whole-body seed.
+Use the Lesson 7 protocol: matched bits per step, the same HumanML3D test population, and seed 2026. Keep the matcher and the evaluation settings identical between v1 and v2.
 
-This treats "a bigger dataset" as just another **treatment under the same protocol** -- so "scale
-helped / did not help the tokenizer" is publishable either way.
+1. Verify the corpus provenance and its preparation recipe.
+2. Exclude HumanML3D validation and test source captures, their file variants, and duplicates before tokenizer pretraining.
+3. Implement the AMASS loader for tokenizer pretraining.
+4. Pretrain tokenizer v2 on the permitted AMASS corpus.
+5. Fine-tune tokenizer v2 on the HumanML3D train split with the selected configuration.
+6. Freeze tokenizer v2 and encode the data again.
+7. Retrain the generators that use tokenizer v2.
+8. Compare v1 and v2 on reconstruction FID and downstream generator FID.
+9. Select v2 only if it improves both measures.
+10. Otherwise, retain v1 and report v2 as a separate experiment.
+
+The unsuccessful variant can also provide an initial tokenizer for the deferred whole-body experiment. This use does not establish a whole-body benefit.
+
+The larger corpus is a separate experimental treatment. Report whether it improves either measure, both measures, or neither measure. Do not replace the baseline without this comparison.
 
 ## 18.7 Big-picture fit
 
-Data-scaling is **orthogonal** to the thesis's two mechanism claims (Contribution A = FSQ-vs-RVQ at
-matched bits; Contribution B = SSM-vs-transformer at matched budget). Adding it does not muddy those
-controlled studies -- it is a *separate axis*, reported as future work / an ablation, with its
-dependency (Rule 1) and comparability constraint (Rule 2) made explicit so no claim leaks across axes.
+The thesis has two mechanism comparisons:
 
-> **Bottom line:** yes, the tokenizer can be scaled on AMASS or derivatives -- pretrain there,
-> fine-tune and score on HumanML3D-263. But the tokenizer is the generator's vocabulary, so a scaled
-> tokenizer is a versioned redo (re-tokenize + retrain), and it must be promoted only on a matched
-> recon-**and**-gen-FID win. Treated that way, "more data" is a clean, separable contribution rather
-> than a confound.
+- Contribution A compares FSQ with RVQ at matched bits per step.
+- Contribution B compares an SSM generator with a transformer generator at a matched budget.
+
+The amount of tokenizer pretraining data is a separate variable. Keep it fixed within each mechanism comparison. Report the data experiment separately as future work or an ablation.
+
+AMASS or derivative datasets can supply the pretraining data. HumanML3D-263 remains the dataset for fine-tuning and comparable evaluation. Each new tokenizer version requires new token data and new generator versions.
+
+The experiment requires both a reconstruction FID improvement and a downstream generator FID improvement before v2 replaces v1. This rule separates the data effect from the two mechanism comparisons.
+
+## 18.8 Recorded results and current limitations
+
+The original preparation report gives approximately 78% HumanML3D coverage from the donor AMASS release. This value is historical coverage, not evidence that full AMASS tokenizer pretraining is ready.
+
+The October 26 regeneration indexed 11,676 clips from 14,616 index rows. It recorded 2,940 rows without a pose file. The feature stage wrote 23,134 clips and failed on 218 outputs, which represent 109 clips and their mirrors.
+
+The failed source captures are shorter than the ranges in the HumanML3D index. These preparation results do not describe a complete corpus for the proposed tokenizer experiment.
+
+The October 30 record states that raw AMASS is absent and `pose_data` has no pose manifest. The corpus cannot currently be rebuilt through the checked preparation path. The recorded generator pretraining path uses legacy `AMASS_263` features with held-out names excluded when it builds the token pack.
+
+That later exclusion does not establish valid provenance for tokenizer pretraining. The proposed experiment requires valid corpus provenance and exclusions before the tokenizer learns from AMASS.
+
+The recorded FSQ tokenizer result at eight codes is reconstruction FID 0.0170, against the MoMask reference of approximately 0.019. The FSQ value already falls below that reference, so 0.019 is not a reconstruction limit.
+
+The tokenizer README states that nobody has run the AMASS tokenizer pretraining experiment. The proposed v2 therefore has no measured reconstruction FID or downstream generator FID.

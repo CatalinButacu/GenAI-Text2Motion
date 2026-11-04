@@ -1,12 +1,12 @@
 # Lesson 7 -- Results: confirming the two tokenizer designs by their values
 
-> The closing section for Contribution A. Lessons 5-6 argued the *designs*; here the *numbers* confirm
-> what each design predicted. Every value is traceable (run dir or STATUS.md noted).
+Lessons 5 and 6 describe the tokenizer designs. This lesson explains the comparison method, then presents the recorded results.
+
+The historical RVQ runs precede correctness fixes. Their scores remain measurements of the earlier implementation. They do not establish superiority over the corrected RVQ baseline.
 
 ## 7.0a The comparison, formally (a controlled rate-distortion experiment)
 
-The recurring worry -- "if we match the interface, are we still comparing the mechanisms?" -- dissolves
-once the comparison is named for what it is: a **controlled experiment** with three roles.
+A controlled experiment separates the quantizer mechanism from the factors that affect its reconstruction error.
 
 ```mermaid
 flowchart LR
@@ -21,72 +21,99 @@ flowchart LR
   D --> CMP["'better' = lower D at equal r (dominance)"]
 ```
 
-**The three roles.** *Treatment* (varied) = the quantizer mechanism $Q$; *controls* (fixed) =
-encoder/decoder, width, data, seed, epochs, **and the rate** $r = R\log_2 V$ bits/step; *outcome*
-(measured) = recon-FID $D$ and parameter count.
+The experiment has three roles:
 
-**Matching the rate enables the comparison, it does not blunt it.** The mechanisms' internals stay
-entirely different (RVQ *searches learned centroids and refines a residual*; FSQ *rounds onto a fixed
-lattice in parallel*). The rate $r$ is a **confound**: comparing, say, RVQ at $R{=}4$ against FSQ at
-$R{=}6$ would conflate *mechanism* with *capacity*. Fixing $r$ removes the capacity confound, so any
-gap in $D$ is attributable to $Q$ alone. Hence "do not compare layers-vs-groups" means only "do not
-compare at **unequal** $r$."
+- The treatment is the quantizer mechanism $Q$.
+- The controls include the shared encoder and decoder, width, data, seed, epochs, and rate $r = R\log_2 V$ bits/step.
+- The outcomes are recon-FID $D$ and the parameter count.
 
-**"Better" is rate-distortion dominance.** Each mechanism defines a distortion-vs-rate curve
-$D_Q(r)$; the table in 7.2 samples $D_{\text{RVQ}}(r)$ and $D_{\text{FSQ}}(r)$ at
-$r\in\{36,54,72,\dots\}$ bits. We say
+RVQ selects learned centroids and subtracts each selected code from a residual. FSQ rounds bounded values onto a fixed lattice.
+
+The rate $r$ is the nominal number of bits per token step. A larger rate permits more token combinations. It does not guarantee that the tokenizer uses all combinations.
+
+A comparison of RVQ at $R{=}4$ with FSQ at $R{=}6$ changes both the mechanism and the token budget. Equal rates remove this difference.
+
+The learned projections before and after the quantizer can differ. A shared convolutional encoder and decoder do not make the complete networks identical.
+
+Each mechanism has a distortion curve $D_Q(r)$. Section 7.2 samples $D_{\text{RVQ}}(r)$ and $D_{\text{FSQ}}(r)$ at $r\in\{36,54,72,\dots\}$ bits.
+
+The definition of rate-distortion dominance is:
 $$
 Q \text{ is better than } Q' \iff D_Q(r) \le D_{Q'}(r)\ \ \text{for every matched } r,
 $$
-with the curves strictly separated somewhere. FSQ's curve lies below RVQ's at **every** matched cell
-**and** carries 0 codebook parameters vs RVQ's 1.6-3M -- so FSQ is **Pareto-dominant** on
-$(\text{distortion}, \text{params})$.
+with a strict inequality at some matched rate.
 
-**This is a template, not a one-off.** Any future quantizer (LFQ, product-VQ, ...) drops into the same
-enc/dec at the same rates; if its curve dips below FSQ's at matched $r$ (or matches $D$ at fewer
-params), it becomes the new winner -- provably, because everything else was held fixed.
+A finite table establishes this order only at its measured rates. It does not establish the order at every possible rate.
+
+Pareto dominance on $(\text{distortion}, \text{params})$ also requires a valid count of trainable parameters. RVQ codebooks are buffers, not optimizer parameters.
+
+FSQ has no learned codebook parameters. Both tokenizers have learned encoder, decoder, and projection parameters. A complete parameter comparison must include these projections.
+
+The same protocol can compare LFQ, product-VQ, or another quantizer. Each comparison requires matched rates, shared controls, correct implementations, and complete parameter counts.
 
 ## 7.1 How the numbers are produced (the protocol)
-- **Metric:** recon-FID = encode->decode the test motions, then the **frozen Guo evaluator** scores
-  the gap between real and reconstructed (the field's tokenizer-quality metric). Plus MPJPE (mm joint
-  error) and perplexity/usage (code health).
-- **Fairness:** every row uses the **same conv encoder/decoder, width, downsample, and 500-epoch
-  budget** -- only the quantizer differs. So differences are attributable to the quantizer.
-- **Data:** full HumanML3D test split (2,189 clips), the evaluator that reproduces published GT.
 
-## 7.1b Comparison protocol -- matched INTERFACE, varied MECHANISM (the fairness contract)
-FSQ and RVQ are different mechanisms (parallel fixed-lattice groups vs sequential learned-codebook
-residual levels). That difference is the **independent variable**, not a confound -- so we cannot and
-should not make the "layering" identical. Instead we match the *interface* and vary only the mechanism.
+The reconstruction protocol has these steps:
 
-**Matched (held equal):**
-1. encoder / decoder (identical conv nets, width, downsample, resblocks);
-2. **codes per step** (the generator's token budget);
-3. **bits per step** $=$ (codes/step) $\times \log_2(\text{vocab})$ -- the information capacity;
-4. data / seed (2026) / epoch budget.
+1. Encode each test motion.
+2. Decode its tokens.
+3. Use the frozen Guo evaluator to compare the real and reconstructed motions.
+4. Report recon-FID, MPJPE, perplexity, and usage.
 
-**Varied (the treatment):** the quantizer mechanism only.
+Recon-FID measures the difference between distributions of motion features from the evaluator. Lower recon-FID indicates a smaller difference.
 
-Matched pairs (equal bits/step):
+MPJPE measures the mean error between joint positions in millimetres. Perplexity and usage describe how the tokenizer uses its codes.
+
+The historical matrix uses the same convolutional encoder and decoder, width, downsample factor, and 500-epoch budget. The quantizers and their projections differ.
+
+The reconstruction evaluation removes mirrors and selects 2,192 base clip IDs. It excludes three clips that are too short, then scores 2,189 nonmirror clips.
+
+This population is not the full official test population. The change to evaluation on the official list remains unapplied.
+
+The historical RVQ evaluation also has an EMA mismatch. It pairs an averaged encoder with the live codebook because the earlier EMA averages parameters only.
+
+Commit `84f2ebe` makes the tokenizer EMA also average floating-point buffers, which include RVQ codebooks. FSQ does not have this codebook mismatch.
+
+The earlier RVQ implementation also has inconsistent assignment and update order. Commit `1d7584e` returns codes from the codebook used for assignment and uses coherent initial counts.
+
+These fixes change future RVQ runs. They do not correct the old checkpoints or their recorded scores. Corrected RVQ retraining remains pending.
+
+## 7.1b Comparison protocol: matched interface, varied mechanism (the fairness contract)
+
+FSQ uses parallel groups on a fixed lattice. RVQ uses sequential levels with learned codebooks. The experiment compares these mechanisms without a requirement for identical internal steps.
+
+The matched controls are:
+
+1. The convolutional encoder and decoder, width, downsample factor, and residual blocks.
+2. The number of codes per step, which sets the generator token budget.
+3. The nominal bits per step $=$ (codes/step) $\times \log_2(\text{vocab})$.
+4. The data, seed 2026, and epoch budget.
+
+The treatment is the quantizer mechanism. Its implementation includes its learned projections and its rules for code updates.
+
+These pairs have equal bits per step:
 $$
 \text{FSQ } 6{\times}512:\ 6\log_2 512 = 54\text{ bits} = \text{RVQ } 6{\times}512, \qquad
 \text{FSQ } 6{\times}1024:\ 60\text{ bits} = \text{RVQ } 6{\times}1024.
 $$
-(FSQ-1000 is $6\log_2 1000 = 59.8$ bits -- within 0.3% of 60, so it was already fair on the
-information axis; the exact $(8,8,4,4)=1024$ run just removes the integer-vocab nitpick.)
 
-**Why this is fair despite different layering:** it is exactly how the field compares quantizers
-(FSQ paper vs VQ at matched codebook). And the parameter asymmetry runs *in FSQ's favor*: at matched
-vocab, RVQ carries $L\cdot K\cdot d_{\text{code}}\approx 3$M codebook params while **FSQ carries 0** --
-so a tie/win for FSQ is "more (or equal) with fewer params and no machinery."
+FSQ-1000 has $6\log_2 1000 = 59.8$ bits, within 0.3% of 60. The exact $(8,8,4,4)=1024$ configuration removes this vocabulary difference.
 
-**Future-proof:** any new quantizer (LFQ, product-VQ, ...) drops in at matched bits/step + shared
-enc/dec; the "different layering" becomes a catalogue of treatments benchmarked under one protocol.
+The FSQ paper also compares FSQ and VQ at a matched vocabulary. Equal token rates provide a useful comparison despite different internal mechanisms.
 
-## 7.2 The full matrix (seed 2026, shared enc/dec, HumanML3D-263 test recon-FID)
+The earlier estimate $L\cdot K\cdot d_{\text{code}}\approx 3$M concerns stored RVQ codebook values. These values are buffers, so the estimate is not a trainable parameter count.
 
-Complete 3 (codes/step) x 5 (mechanism x vocab), seed 2026, identical conv enc/dec, 500 epochs.
-Lower is better; each cell traces to `artifacts/outputs/runs/tokenizer/*/metrics.jsonl`.
+FSQ has zero learned codebook parameters. This fact alone does not establish fewer total trainable parameters or Pareto dominance.
+
+A future quantizer can use the same encoder and decoder at matched bits per step. The comparison must account for its projections and implementation differences.
+
+## 7.2 Results: the full matrix (seed 2026, shared enc/dec, HumanML3D-263 test recon-FID)
+
+This section contains the measured results and their limits. All RVQ comparisons below concern the historical implementation.
+
+The matrix contains three code budgets and five mechanism-vocabulary combinations. Each configuration uses seed 2026 and a 500-epoch budget.
+
+Lower recon-FID is better. Each cell traces to `artifacts/outputs/runs/tokenizer/*/metrics.jsonl`.
 
 | codes/step | RVQ-512 | RVQ-1024 | FSQ-512 | FSQ-1024 | FSQ-1000 |
 |---|---|---|---|---|---|
@@ -96,41 +123,67 @@ Lower is better; each cell traces to `artifacts/outputs/runs/tokenizer/*/metrics
 
 *Cited context (more compute): T2M-GPT VQ 0.071; MoMask RVQ 0.019.*
 
-**The dominance result (sec. 7.0a).** Read down each matched column -- $D_{\text{FSQ}}(r) < D_{\text{RVQ}}(r)$
-at **every** cell:
-- **512** (36/54/72 bits): 0.0612<0.0626, 0.0305<0.0342, 0.0196<0.0277;
-- **1024** (40/60/80 bits): 0.0527<0.0558, 0.0283<0.0310, 0.0170<0.0221.
+The historical table gives $D_{\text{FSQ}}(r) < D_{\text{RVQ}}(r)$ at all six matched rates:
 
-So FSQ Pareto-dominates the strong RVQ at all six matched rates **and** carries 0 codebook parameters
-(vs RVQ's 1.6-3M). Three further reads: (i) **monotone** improvement with codes/step in every column;
-(ii) **1024 > 512** (more bits -> lower distortion) consistently; (iii) the best cell **FSQ 8x1024 =
-0.0170 beats MoMask's tuned 0.019** on our controlled small budget, and FSQ 8x512 = 0.0196 ties it.
-FSQ-1000 (round vocab, $(8,5,5,5)$) tracks between 512 and 1024, as expected from its ~0.3%-lower bits.
+- At 512 codes, the rates are 36/54/72 bits: 0.0612<0.0626, 0.0305<0.0342, and 0.0196<0.0277.
+- At 1024 codes, the rates are 40/60/80 bits: 0.0527<0.0558, 0.0283<0.0310, and 0.0170<0.0221.
 
-> **Provenance:** all 15 cells are seed-2026, 500-epoch, test recon-FID via the frozen Guo evaluator,
-> read from the run manifests.
+This order does not establish dominance over corrected RVQ. It also does not establish Pareto dominance in total trainable parameters.
+
+The table supports these additional observations:
+
+- Recon-FID decreases as the number of codes per step increases in every column.
+- The 1024-vocabulary result has lower recon-FID than the corresponding 512-vocabulary result for each mechanism.
+- FSQ-1000, with $(8,5,5,5)$, has lower recon-FID than both other FSQ vocabularies at four and six codes per step.
+- At eight codes per step, FSQ-1000 lies between FSQ-512 and FSQ-1024.
+
+The earlier published-method interpretation remains:
+
+> the best cell **FSQ 8x1024 =
+> 0.0170 beats MoMask's tuned 0.019** on our controlled small budget, and FSQ 8x512 = 0.0196 ties it.
+
+This statement concerns the historical comparison. It does not describe a new evaluation of the published method.
+
+The equal-N audit is in `artifacts\outputs\generalization.md`. It uses 1,000 clips per split and seed 2026.
+
+The audit gives `gap = test - train` <= 0 for 13/15 cells. The gap ranges from -0.010 to +0.003.
+
+The two positive gaps are RVQ configurations:
+
+- `rvq_l4_512`: +0.0030.
+- `rvq_l8_512`: +0.0018.
+
+Every FSQ configuration has a nonpositive gap. This observation does not prove that FSQ cannot overfit.
+
+The FSQ encoder, decoder, and projections are learned. They can memorize data even though the lattice is fixed.
+
+FSQ also has lower test recon-FID than historical RVQ at every matched rate in this equal-N audit. Examples are:
+
+- 8x512: 0.0208 versus 0.0309.
+- 8x1024: 0.0207 versus 0.0236.
+- 6x1024: 0.0313 versus 0.0315.
+
+The earlier interpretation of uncertainty and checkpoint selection remains:
+
+> both are
+> within the 1000-clip sampling noise
 >
-> **Generalization (resolved -- `outputs/generalization.md`, equal-N=1000 audit).** The train/val/test
-> gap confirms **no overfitting**: `gap = test - train` is <= 0 for **13/15 cells** (range -0.010 to
-> +0.003), i.e. the tokenizer reconstructs held-out test as well as or better than train. The only two
-> non-negative gaps are **both RVQ** -- `rvq_l4_512` (+0.0030) and `rvq_l8_512` (+0.0018); both are
-> within the 1000-clip sampling noise, but the pattern is telling: **every FSQ cell is strictly <= 0**
-> (zero codebook params -> nothing to memorize), while the only whisper of train-favoring is RVQ's
-> (learnable codebook). So if any overfitting hint exists it is RVQ's, never FSQ's -- which *strengthens*
-> Contribution A. FSQ still
-> beats RVQ at every matched cell under this equal-N audit (8x512: 0.0208 vs 0.0309; 8x1024: 0.0207 vs
-> 0.0236; 6x1024: 0.0313 vs 0.0315). Honest note: test sits ~0.01-0.02 below val for every cell -- the
+> Honest note: test sits ~0.01-0.02 below val for every cell -- the
 > historical test-based checkpoint selection mildly (and uniformly) flattered the headline, so the
 > FSQ-vs-RVQ comparison is unaffected; the trainer now selects on val (sec. 7.4). (Absolute values exceed
 > the sec. 7.2 headline because FID is N-biased: 1000 clips vs the full test split.)
 
-## 7.2a Codebook health -- a second, independent axis
+The reference to the full test split in this historical statement means the larger reconstruction population described in section 7.1.
 
-Reconstruction distortion alone cannot tell you whether a codebook is *used well* -- a tokenizer can
-reconstruct fine while most codes sit dead and a handful absorb all the traffic. We log perplexity
-$\exp(H(p_{\text{code}}))$ (uniform use of $V$ codes gives perplexity $V$; collapse to one code gives 1)
-and usage fraction (codes touched at least once, over $V$) every training epoch; final-epoch values for
-the same 15 cells, as `perplexity (usage%)`:
+### 7.2a Codebook health: a second, independent axis
+
+A low reconstruction error does not guarantee broad code use. A tokenizer can reconstruct motions while it uses only a small code subset.
+
+Perplexity is $\exp(H(p_{\text{code}}))$. Uniform use of $V$ codes gives perplexity $V$. Use of only one code gives perplexity 1.
+
+The usage fraction is the number of codes used at least once, divided by $V$. The historical runs record both measures each epoch.
+
+The table gives the final-epoch values for all 15 configurations as `perplexity (usage%)`.
 
 | codes/step | RVQ-512 | RVQ-1024 | FSQ-512 | FSQ-1024 | FSQ-1000 |
 |---|---|---|---|---|---|
@@ -138,64 +191,128 @@ the same 15 cells, as `perplexity (usage%)`:
 | **6** | 321 (81%) | 547 (68%) | 345 (89%) | 586 (74%) | 561 (73%) |
 | **8** | 343 (85%) | 543 (67%) | 340 (88%) | 577 (73%) | 542 (72%) |
 
-FSQ has strictly higher perplexity **and** higher usage than RVQ at every one of the 15 cells -- not
-just the headline 8x1024 one. The reconstruction win is not bought by concentrating capacity on fewer,
-harder-working codes; FSQ's grid is the more uniformly exercised codebook on top of being the better
-reconstructor. This is the field-standard second axis (reconstruction fidelity + codebook health +
-downstream task performance -- sec. 7.4 covers why the third axis matters here specifically).
+There are six matched FSQ-RVQ comparisons. FSQ has higher usage in all six and higher perplexity in five.
 
-## 7.3 What the DESIGN predicted vs what the VALUES show
-- **"FSQ needs no machinery, no collapse" (Lesson 6 design)** -> `commit 0.0000` throughout, usage
-  healthy (FSQ exercises ~the full lattice by construction; perplexity 577-589 / usage 73-74% at
-  1024 vocab, sec. 7.2a), recon better than RVQ at every matched cell. **Confirmed.**
-- **"The FSQ win is the quantizer, not a bigger vocabulary"** -> the matched-512 column: FSQ beats RVQ
-  at the SAME 512 vocab at every codes/step (6x512: 0.0305 < 0.0342; 8x512: 0.0196 < 0.0277).
-  **Confirmed** -- the win is the mechanism, not codebook size.
-- **"A strong RVQ stays healthy via its machinery" (Lesson 5 design)** -> RVQ usage held up by
-  dead-code reset, commit small/stable; a genuinely strong baseline (best RVQ 8x1024 = 0.0221).
-  **Confirmed, but weaker than FSQ's**: perplexity 543 / usage 67% vs FSQ's 577 / 73% at the same
-  1024 vocab (sec. 7.2a) -- dead-code reset keeps RVQ healthy in absolute terms, not competitive terms.
-- **Plain reading (seeded matrix):** FSQ **dominates** the strong RVQ at all six matched rates --
-  modestly at low rate (4x512: +2%) and decisively at high rate (8x1024: 0.0170 vs 0.0221, ~23%) -- and
-  the best FSQ cell **beats** MoMask's tuned 0.019. "Uniformly better at lower complexity," stronger
-  than the pre-seed "comparable" reading.
+The exception is 8x512. FSQ has perplexity 340, compared with RVQ at 343. Its usage is still higher: 88% versus 85%.
 
-## 7.4 Honest caveats (state these in the paper)
-- Our strong-RVQ (best 8x1024 = 0.0221; matched 6x512 = 0.0342) is **weaker than MoMask's tuned RVQ**
-  (0.019, far more compute). The *comparison* is fair (shared enc/dec/budget); the FSQ-beats-MoMask
-  cell (8x1024 = 0.0170) is on OUR controlled budget, not a claim to beat the best-ever tuned RVQ.
-- recon-FID is a **reconstruction** result (the generator's ceiling). The downstream generation A/B
-  (FSQ-tokens vs RVQ-tokens generator) is measured at two epoch budgets (`paper/FEEDBACK.md`'s
-  2026-09-20/21 updates): at an undertrained 18 epochs RVQ appeared to beat FSQ on test FID (0.832 vs
-  3.30); retraining both matched to a converged 60 epochs **reversed this** -- FSQ 0.132 vs RVQ's
-  0.294, R@1 statistically tied (0.395 vs 0.392). FSQ now leads on all three axes measured
-  (reconstruction, codebook health sec. 7.2a, and generation) -- the 18-epoch signal was an
-  undertraining artifact, not a real property of the RVQ token stream. Still single seed at 60 epochs
-  too. Absorbed into the dissertation draft's sec. 4.4a.
-- **Single seed (2026) per config** -- no variance bars yet; the dominance is at one seed (sec. 7.0a).
-- **Generalization gap (resolved):** the equal-N audit (`outputs/generalization.md`) gives
-  gap = test - train <= 0 for 13/15 cells -> no overfitting; test ~0.01-0.02 below val flags the
-  historical test-selection's mild optimism (val-select now fixed in the trainer).
+FSQ has no learned centroids that require a reset. Its fixed lattice does not guarantee full occupancy.
 
-## 7.5 Pending (extends this section)
-- **DONE -- the full matrix:** the codes/step x vocab sweep is complete and seeded (sec. 7.2); the old
-  pre-manifest 0.0266 / 0.0382 numbers are superseded by the manifest-logged cells.
-- **DONE -- codebook health:** perplexity/usage for all 15 cells, sec. 7.2a.
-- **DONE -- downstream gen-FID** (FSQ-tokens vs RVQ-tokens generator, transformer backbone, full test
-  split): measured at 18 epochs (2026-09-20, RVQ ahead) and re-measured at a converged 60 epochs
-  (2026-09-21, direction reversed, FSQ ahead) -- sec. 7.4. The apparent 18-epoch anomaly is resolved:
-  it was undertraining, not a real property of the RVQ token stream.
-- **Generalization gap:** run `scripts/evaluation/eval_generalization.py` -> train/val/test columns into sec. 7.2.
-- **Multi-seed** on both the tokenizer matrix and the downstream gen-FID comparison (now at 60 epochs),
-  to make either claim airtight against single-seed noise.
+For FSQ-1024, perplexity is 577-589 and usage is 73-74%. These values show that a substantial part of the lattice remains unused.
 
-## 7.6 Where each number lives (reproducibility)
-- **Every sec. 7.2 cell:** `artifacts/outputs/runs/tokenizer/<stem>/metrics.jsonl` (config + git + seed +
-  versions manifest, per-epoch + final test recon-FID). E.g. fsq_g8_v1024 = 0.0170 at
-  `*tokenizer_fsq_g8_v1024/`; rvq_l8_1024 = 0.0221 at `*tokenizer_rvq_l8_1024/`.
-- The pre-manifest 0.0266 / 0.0382 (old STATUS.md) are **superseded** by the seeded matrix.
+Tokenizer evaluation has three separate axes:
 
-> **Bottom line:** the designs from Lessons 5-6 are confirmed by the seeded matrix -- FSQ delivers
-> **uniformly better** reconstruction (every matched cell; best cell beats MoMask) with a fixed grid
-> and **none** of RVQ's codebook machinery. That dominance-at-lower-complexity, on HumanML3D-263 with a
-> citable evaluator, is Contribution A.
+- Reconstruction quality.
+- Code usage and perplexity.
+- Performance of the downstream generator.
+
+Section 7.4 describes the limits of the earlier downstream comparison.
+
+### 7.3 What the design predicts and what the values show
+
+The FSQ design removes learned centroids and their update rules. The historical runs report `commit 0.0000` throughout.
+
+This result agrees with the absence of an FSQ commitment loss. It does not establish full lattice use or the absence of overfitting.
+
+The matched-512 results show lower historical recon-FID for FSQ at each code budget. Examples include 6x512 at 0.0305 < 0.0342 and 8x512 at 0.0196 < 0.0277.
+
+These comparisons use the same vocabulary size. A larger vocabulary therefore does not explain these particular differences.
+
+The historical RVQ runs use dead-code reset and report small, stable commitment values. The best recorded RVQ recon-FID is 0.0221 at 8x1024.
+
+At this configuration, RVQ perplexity is 543 and usage is 67%. FSQ reports 577 and 73% at the same vocabulary.
+
+These measurements describe the earlier RVQ implementation. They do not validate the corrected baseline.
+
+The historical reconstruction advantage is about 2% at 4x512. At 8x1024, FSQ gives 0.0170 versus RVQ at 0.0221, a reduction of about 23%.
+
+The fixed FSQ lattice removes RVQ codebook updates and resets. The measured reconstruction order remains historical until corrected RVQ runs are available.
+
+### 7.4 Honest caveats (state these in the paper)
+
+The best historical RVQ result is 0.0221 at 8x1024. Its matched 6x512 result is 0.0342.
+
+Both exceed MoMask's tuned RVQ reference of 0.019, which uses more compute. The shared encoder, decoder, and budget do not remove the historical RVQ correctness problems.
+
+The earlier FSQ-versus-MoMask qualification remains:
+
+> the FSQ-beats-MoMask
+> cell (8x1024 = 0.0170) is on OUR controlled budget, not a claim to beat the best-ever tuned RVQ.
+
+Recon-FID measures reconstruction, not generation. It describes the decoder output from encoded real motions. A generator must also predict suitable tokens from text.
+
+The earlier downstream comparison is recorded in `doc\notes\FEEDBACK.md`, in the 2026-09-20/21 updates.
+
+At 18 epochs, the recorded test FID is 0.832 for RVQ and 3.30 for FSQ. RVQ has the lower value.
+
+The earlier report describes both 60-epoch runs as converged. Their recorded FID values reverse the order: FSQ has 0.132 and RVQ has 0.294.
+
+The report describes R@1 as statistically tied, at 0.395 for FSQ and 0.392 for RVQ. Both epoch budgets use a single seed.
+
+These are earlier-protocol measurements. They do not establish the final downstream order or prove that undertraining alone explains the reversal.
+
+The evaluation protocol later changes in these ways:
+
+- Commit `a3d4cc6` changes the caption and motion sample pairs.
+- Commit `d84903c` generates motions independently for each evaluation repetition.
+- The earlier repeated evaluations reuse one generation and resample captions and batches.
+
+The earlier downstream comparison uses a transformer backbone and its earlier test population. Evaluator follow-up and corrected-baseline reruns remain outstanding.
+
+The earlier results appear in section 4.4a of the dissertation draft. They require the same historical-protocol qualification there.
+
+The tokenizer matrix also uses one seed, 2026, per configuration. It has no variance bars.
+
+The equal-N generalization audit already exists. Its nonpositive gaps do not prove the absence of overfitting. The trainer now selects checkpoints on validation data.
+
+### 7.5 Pending (extends this section)
+
+The completed historical work includes:
+
+- The full seeded tokenizer matrix in section 7.2.
+- The perplexity and usage measurements in section 7.2a.
+- The downstream measurements at 18 and 60 epochs in section 7.4.
+- The equal-N audit in `artifacts\outputs\generalization.md`.
+
+The manifest-logged matrix supersedes the earlier pre-manifest values 0.0266 / 0.0382.
+
+The downstream measurements are complete as historical records. The corrected comparison remains pending.
+
+The remaining work is:
+
+1. Train and evaluate the corrected RVQ baseline.
+2. Resolve the reconstruction population protocol.
+3. Repeat the downstream comparison with the corrected evaluator and independent generation repetitions.
+4. Repeat both tokenizer and downstream comparisons with multiple seeds.
+5. Report uncertainty before a general superiority claim.
+
+The existing audit uses `scripts/evaluation/eval_generalization.py`. It already provides the train, validation, and test columns; the audit is not pending.
+
+### 7.6 Where each number lives (reproducibility)
+
+The section 7.2 records are in `artifacts/outputs/runs/tokenizer/<stem>/metrics.jsonl`.
+
+The FSQ example is fsq_g8_v1024 = 0.0170 at `*tokenizer_fsq_g8_v1024/`. The RVQ example is rvq_l8_1024 = 0.0221 at `*tokenizer_rvq_l8_1024/`.
+
+The run records include manifests and metric logs. They do not establish complete provenance for every configuration.
+
+The best FSQ manifest has `git_commit: "unknown"`. Its last metric record contains recon-FID but has no explicit `split` or `final` marker.
+
+The replication record provides additional evidence for the frozen FSQ 8x1024 tokenizer. The 2026-11-02 entry in `doc\notes\module_ledger.csv` reports:
+
+- Seed 2026 and CUDA.
+- 2,189 scored clips, after three exclusions for short clips.
+- Recon-FID 0.016963, compared with the recorded 0.0170.
+- MPJPE 106.9 mm.
+- Feature L2 0.587.
+
+The MPJPE uses global joint positions without alignment. The replicated recon-FID is within 1e-4 of the recorded value.
+
+Precision is part of the reproduction protocol. The 2026-10-30 audit compares TF32 with `highest` on 730 validation clips.
+
+TF32 changes 347 of 204,104 token indices, or 0.17%, across 268 clips. Two evaluations at `highest` produce no index changes.
+
+Use `precision: highest` to reproduce the historical numbers. Record the precision with each new measurement and token pack.
+
+The pre-manifest 0.0266 / 0.0382 values in the old STATUS.md are superseded by the seeded matrix.
+
+Contribution A has measured support for the fixed-lattice FSQ design and its historical reconstruction results. Superiority over corrected RVQ remains unverified.

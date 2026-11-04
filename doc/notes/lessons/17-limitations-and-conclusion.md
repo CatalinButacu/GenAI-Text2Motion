@@ -1,88 +1,177 @@
 # Lesson 17 -- Limitations, scope, and conclusion
 
-> The closing bookend. It consolidates every honesty caveat scattered through Lessons 1-16 into one
-> place, separates **what is established now** from **what is pending**, and states the contribution
-> at its true scope. A committee rewards a precise limitations section; over-claiming is the failure
-> mode it punishes. All claims here are grounded in the lessons they summarise.
+> This lesson collects the limitations from Lessons 1-16. It separates established facts from historical results and work that remains incomplete. Each claim has a defined scope.
 
 ## 17.0 Established vs pending
 
 ```mermaid
 flowchart LR
-  subgraph DONE["established now (seeded, held-out)"]
-    A1["A: FSQ Pareto-dominates strong-RVQ at matched bits, HML3D-263 test"]
+  subgraph DONE["established now (seed 2026, held-out)"]
+    A1["A: FSQ 8x1024 reconstruction replicated: recon-FID 0.016963"]
     A2["B: bounded O(1) state + stream==batch parity (test-proven)"]
-    A3["harness: GT row reproduces published (R@1 0.514 vs 0.511)"]
-    A4["B: 34M twin, converged 60ep -- SSM leads on every metric measured, incl. FID"]
-    A5["A: downstream gen-FID A/B, converged 60ep -- FSQ ahead on all three axes measured"]
-    A6["B: 100-epoch robustness check -- SSM unchanged, transformer regresses; SSM lead widens"]
+    A3["harness: real test motion gives the published row: R@3 0.799 vs 0.797"]
+    A4["B: long streams: restart policy B keeps R@3 0.47-0.69 over 300 s; without restart Mamba falls to 0.09"]
   end
-  subgraph PEND["pending"]
-    P2["B: 100M-scale twin (not currently planned, see sec. 17.3)"]
-    P4["multi-seed variance bars"]
+  subgraph PEND["pending (historical scores are not a controlled result)"]
+    P1["A: corrected strong-RVQ retraining, then the matched comparison and gen-FID A/B"]
+    P2["B: final twins from zero: reference initialization, embedding-only dropout"]
+    P3["evaluator fixes: seeds derived from 2026, official 4648-sample list"]
+    P4["B: causal test of the state-range explanation"]
+    P5["B: 100M-scale twin (not currently planned, see sec. 17.3)"]
   end
 ```
 
+The diagram separates structural evidence from claims that require new experiments. Section 17.6 contains all numerical results.
+
 ## 17.1 What is established now
 
-- **Contribution A (proven, seeded, held-out):** at matched bits/step on HumanML3D-263 **test**, the
-  Grouped-FSQ tokenizer has lower recon-FID than a strong EMA+reset RVQ at every cell **and** carries 0
-  codebook parameters -> Pareto-dominance (Lessons 7, 7.0a). Best FSQ reaches the MoMask reconstruction
-  ceiling (~0.019-0.020) at 8 codes/step.
-- **Contribution B (structural part, proven):** the SSM backbone has horizon-independent state and
-  `step`==`forward` parity (`test_parity_mamba`), so the $O(1)$ memory / $O(L)$ compute asymptotics are
-  facts about the architecture (Lessons 12-13), not experimental hopes.
-- **Contribution B (quality part, measured at the 34M pilot scale, converged and robustness-checked):**
-  the controlled twin table (Lesson 19, Table 1) is complete on the full 2189-clip test split at a
-  converged 60-epoch budget -- the SSM **leads the transformer on every metric measured**, including
-  FID (0.121 vs 0.132), reversing an earlier 18-epoch reading that had shown the transformer ahead on
-  FID. A further 40-epoch extension (100 total) leaves the SSM's checkpoint and result unchanged, while
-  the transformer's val-selected checkpoint at 100 epochs generalizes worse to test than at 60 --
-  widening the SSM's lead rather than closing it (sec. 17.2).
-- **Downstream tokenizer A/B (done, converged):** an FSQ-token generator beats an RVQ-token generator
-  end-to-end at a converged 60-epoch budget (FID 0.132 vs 0.294, R@1 statistically tied) -- FSQ leads
-  on all three axes now measured: reconstruction, codebook health, and downstream generation
-  (Lesson 7.4).
-- **Harness validity:** the GT row reproduces published metrics (Lesson 14), so the evaluator/data
-  wiring is correct before any model row is trusted.
+### Contribution A: the tokenizer
+
+Grouped-FSQ represents motion with discrete codes and has no codebook parameters. The tokenizer uses the HumanML3D-263 representation.
+
+The reconstruction result has a separate replication. This replication supports the FSQ result itself.
+
+The historical RVQ comparison does not establish controlled superiority. The RVQ runs contain defects in these parts:
+
+- The encoder and the codebook use mismatched EMA states.
+- The code assignment order contains a defect.
+- The default quantizer dropout previously causes a crash.
+
+A corrected RVQ baseline needs a new run. Lessons 7 and 7.0a describe the historical matrix.
+
+### Contribution B: the generator structure
+
+The SSM backbone has a recurrent state whose size does not depend on the sequence length. The tests establish `step`==`forward` parity through `test_parity_mamba`.
+
+The architecture therefore has $O(1)$ memory and $O(L)$ compute for token generation. Lessons 12-13 explain these properties.
+
+These properties do not establish stable text alignment over an unrestricted stream. A fixed state size limits memory; it does not limit state values or preserve caption relevance.
+
+### Contribution B: the service policy
+
+The service retains policy B for both twins. This policy periodically resets the backbone and restores a bounded context from recent tokens.
+
+The policy bounds both the Mamba state and the transformer history. Without this policy, the transformer reaches its learned-position limit.
+
+The structural comparison with a transformer cache that grows with the sequence length describes a different execution policy. It does not describe the deployed twins.
+
+### The decoder and the viewer
+
+The decoder keeps bounded left context and future lookahead. It decodes overlapping windows and emits only the frames that belong to the current output chunk.
+
+The first output requires `chunk_tokens + lookahead` tokens, unless the stream ends earlier. The final flush emits the remaining frames.
+
+The interactive SMPL-X mesh viewer exists. It recovers joints from HumanML3D-263 features and analytically solves the SMPL-X pose from those joints.
+
+The display interpolates rotations between pose samples. Offline montage and GIF export also exist. These exports do not establish complete MP4 export.
+
+### The evaluator
+
+The evaluator reuses the frozen Guo matcher. This reuse preserves the matcher feature space.
+
+It does not establish an identical evaluation protocol. The current evaluator creates caption-aligned motion pieces and excludes mirror IDs.
+
+The current protocol also retains these differences:
+
+- Diversity uses fixed random draws with seed 0.
+- MultiModality uses its current caption selection and pair procedure.
+- The Guo random length cut is absent.
+
+The official sample-list correction and seeds derived from 2026 remain drafts. The code does not apply these corrections.
 
 ## 17.2 What is pending (do not over-claim)
 
-- **The 34M controlled twin is now converged and robustness-checked (sec. 17.1), not merely
-  re-verified.** Extending both twins a further 40 epochs (100 total) found no improvement for either:
-  the Mamba's best-by-val checkpoint stayed at epoch 30 throughout, and the transformer's val-selected
-  epoch-100 checkpoint scored worse on the full test split than its epoch-60 one, despite a better
-  validation score -- read as the data-constrained regime (sec. 17.3, dissertation sec. 6.1) rather
-  than an optimization failure, since training loss decreased smoothly for both models the entire time.
-  The **100M-scale** twin remains unmeasured entirely, and is not currently planned (sec. 17.3).
-- **Streaming benchmark (DONE):** measured on 100M twins (`eval.streaming_bench`) -- Mamba state
-  2.68 MB flat at every horizon vs transformer KV growing 76.7 MB @ 1024 -> 303 MB @ 4096 -> 605 MB @
-  8192 (O(L), ~225x at 8192); the bounded-memory claim is empirically confirmed (Lesson 13.5). Latency
-  crosses over near L ~ 6500 -- reported as a corroborating trend since the longest horizons are near
-  the 4 GB test card's memory limit; the memory result carries no such caveat.
-- **Downstream tokenizer A/B (DONE, converged):** an FSQ-token generator beats an RVQ-token generator
-  end-to-end at a converged 60-epoch budget (FID 0.132 vs 0.294, R@1 statistically tied) -- FSQ leads
-  on all three axes now measured.
-- **Generalization audit (DONE):** `outputs/generalization.md` -- gap = test - train <= 0 for 13/15
-  cells -> no overfitting; FSQ dominance holds equal-N (Lesson 7.2).
-- **Single seed:** no variance bars yet; the dominance in Lesson 7.0a is at one seed.
+### Corrected generator comparisons
+
+The historical twin runs do not establish convergence or a controlled quality lead. Resume froze the evaluated EMA weights.
+
+A later epoch label therefore does not prove that the evaluated model contains later weights. A smooth decrease in the training loss does not resolve this defect.
+
+The historical runs also contain other confounds:
+
+- The model initialization contains defects.
+- The backbone dropout differs between the twins.
+- The crop choices remain fixed in data workers.
+- Resume affects the evaluated EMA weights.
+
+The final twins must train from zero with the reference initialization and the shared embedding-only dropout policy. Resume from an old checkpoint mixes experimental conditions.
+
+The 100M-scale quality comparison remains unmeasured. It is not currently planned.
+
+### Corrected tokenizer comparisons
+
+The downstream FSQ/RVQ comparison remains historical. Corrected RVQ training must precede a controlled claim about reconstruction or downstream generation.
+
+The historical generalization audit remains available at `outputs/generalization.md`. Its equal-$N$ comparisons address sample-count differences.
+
+Those comparisons do not correct defects in the baseline. They also do not establish the absence of overfit across all conditions.
+
+### Multiple seeds
+
+The historical matrix uses one seed. Multiple independent training seeds and variance estimates remain incomplete.
+
+A separate FSQ replication does not replace a comparison across training seeds.
+
+### The complete service benchmark
+
+The existing benchmark measures the models alone. It does not measure the complete service or its restart policy.
+
+A service benchmark must include these components:
+
+- The periodic backbone reset.
+- The tokenizer decoder.
+- The synchronous transport.
+- The SMPL-X pose solution.
+- The display and playback waits.
+
+The service sends chunks synchronously. The studio can wait for playback and for space in the pose-solution queue.
+
+The drop-oldest queue helper therefore does not guarantee nonblocking transport through the complete system.
 
 ## 17.3 Scope and constraints (deliberate boundaries)
 
-- **Compute:** a 4 GB local GPU caps local scale; the 100M-parameter twin has not been pursued, and is
-  not currently planned even with more compute -- the 100-epoch robustness check (sec. 17.1) found that
-  more training on the current data budget helps neither twin, and dissertation sec. 6.1's
-  entropy-budget analysis argues more *capacity* on the same fixed data would push further into the
-  same over-parameterised regime, not away from it. The tokenizer matrix and the 34M controlled twin
-  are therefore the measured contributions, with more/more-diverse fine-tune data -- not scale -- left
-  as the effective future lever.
-- **Representation:** the citable track is **body-only HumanML3D-263**; whole-body SMPL-X 168 (hands)
-  and face are **deferred** (ADR 0001) -- a demo target, not a citable-FID claim.
-- **Demo:** the producer pipeline is implemented; the aitviewer SMPL-X mesh render is Phase 5
-  (Lesson 15.4) -- engineering, not a research risk.
-- **Baseline honesty:** our strong-RVQ is intentionally a *fair* baseline (shared enc/dec/budget), not
-  MoMask's heavily-tuned RVQ (0.019). We claim a controlled FSQ>RVQ result, **not** "beats the best-ever
-  RVQ" (Lesson 7.4).
+### Compute and capacity
+
+A local GPU limits the feasible model size. The tokenizer matrix and the pilot twin runs form the historical experimental scope.
+
+The longer historical runs do not establish a data-constrained regime. The resume defect prevents that conclusion.
+
+Dissertation sec. 6.1 gives an entropy-budget argument about model capacity and a fixed dataset. This argument remains a hypothesis for the current experiments.
+
+The evidence does not establish that more capacity cannot help. It also does not establish that more data is the only effective future option.
+
+The 100M-scale quality comparison remains outside the current plan. More data and more varied data remain possible future options.
+
+### Representation
+
+The citable track uses body-only HumanML3D-263. Whole-body SMPL-X 168, hands, and face remain deferred under ADR 0001.
+
+The SMPL-X mesh display does not change this scope. A body pose derived from recovered joints is not a whole-body generation result.
+
+### Demo scope
+
+The producer pipeline and the interactive mesh viewer exist. Lesson 15.4 describes the viewer.
+
+The current modules are:
+
+- `src\text2motion\generation\decoder.py`
+- `src\text2motion\studio\viewer.py`
+- `src\text2motion\evaluation\metrics.py`
+- `src\text2motion\evaluation\evaluator.py`
+- `src\text2motion\evaluation\benchmark.py`
+
+The demo remains a separate engineering component. Its transport and display limitations require explicit checks.
+
+### Baseline scope
+
+The strong-RVQ baseline shares the encoder, decoder, and experimental budget with FSQ. This design intends a controlled comparison.
+
+The historical defects prevent a verified fairness claim. Corrected RVQ training must establish the intended comparison.
+
+MoMask uses a separately tuned RVQ. A controlled comparison with the project baseline does not establish superiority over every RVQ tokenizer.
+
+### Concurrent work
+
 - **Concurrent work:** AnyMo (2026) uses a similar Residual-FSQ tokenizer but on a different dataset
   with no released code or HumanML3D FID; our framing is tightened accordingly (Lesson 16.1).
 
@@ -90,29 +179,143 @@ flowchart LR
 
 | Threat | Mitigation (status) |
 |---|---|
-| selection leak onto test (tokenizer) | switched to val-select / test-once (done in trainer) |
-| FID is sample-size biased | equal-$N$ across splits in the generalization audit (Lesson 7) |
-| single-seed point estimates | multi-seed variance bars (planned) |
-| mirror-map indices not pinned to code | verify against regeneration code (Lesson 4a caveat) |
-| window-boundary artifacts in streaming decode | overlap-add refinement (Lesson 15.2; not on the claim path) |
+| Selection of a tokenizer through test results | The trainer selects through validation and evaluates the test split once. |
+| FID bias from different sample counts | The generalization audit uses equal-$N$ samples across splits (Lesson 7). |
+| Estimates from one seed | Multiple training seeds and variance estimates remain planned. |
+| Unsupported joint counts in the mirror map | Tests establish mirror involution for 22 and 52 joints. Inputs with 25-51 joints remain unsupported. |
+| Artifacts at decoder window boundaries | The decoder uses bounded left context and future lookahead, then crops each output window (Lesson 15.2). |
+| Text alignment degrades during a long stream | The service retains periodic reset policy B for both twins. |
+| Display interpolation changes motion geometry | The display requires separate jerk and bone-length checks. The evaluator does not use these display frames. |
+| Historical RVQ defects | A corrected RVQ baseline requires a new run before a superiority claim. |
+| Historical twin confounds | Both final twins require new runs with reference initialization and embedding-only dropout. |
+| Evaluation protocol differs from the reference | The sample-list and seed corrections remain drafted, not applied. |
+| A model benchmark differs from the service | Report model-only results separately from service results under policy B. |
+
+The decoder context reduces boundary errors. It does not establish that every emitted frame equals a full-sequence decode at the start or end of a stream.
+
+The mirror tests establish behavior for the supported layouts. They do not make every intermediate joint count valid.
+
+The display has its own validity limits. A visually smooth sequence can still contain excessive jerk or changes in bone length.
 
 ## 17.5 Conclusion
 
-This thesis makes two contributions, each at a precise, defended scope. **(A)** A Grouped-FSQ motion
-tokenizer that, in a controlled rate-distortion experiment on HumanML3D-263, **Pareto-dominates** a
-strong RVQ baseline -- lower distortion at every matched rate with zero codebook parameters -- and
-whose advantage carries through to downstream generation at a converged epoch budget. **(B)** The
-first **token-autoregressive S6/Mamba** motion generator, whose bounded recurrent state gives $O(1)$
-streaming memory against the transformer twin's growing KV-cache -- a structurally proven efficiency
-advantage, measured at the 34M pilot scale to **lead the transformer on every quality metric measured**
-once both are converged, a lead confirmed rather than eroded by a further 40-epoch robustness check.
-Quality at 100M scale remains open, and is not currently planned (sec. 17.3). Both are measured on the
-field's own unmodified evaluator, so the numbers are comparable, and the open items above are stated
-plainly rather than hidden.
+This thesis studies two contributions within a defined scope.
 
-> **Bottom line:** the established results are the FSQ dominance plus its downstream confirmation (A),
-> and the bounded-state structure plus a converged, robustness-checked quality lead over the
-> transformer twin (B); pending is B's scale-up to 100M (not currently planned) and multi-seed variance
-> bars throughout. The contribution is the *controlled, citable* pairing of a better tokenizer with the
-> first discrete causal-SSM streaming generator -- and the honesty about exactly which claims are
-> evidenced today.
+Contribution A is a Grouped-FSQ motion tokenizer for HumanML3D-263. It has no codebook parameters, and its reconstruction result has a separate replication.
+
+Controlled superiority over strong-RVQ remains unverified. The historical baseline defects also limit the downstream FSQ/RVQ claim.
+
+Contribution B is the first **token-autoregressive S6/Mamba** motion generator. Its recurrent structure gives $O(1)$ memory for token generation.
+
+The deployed transformer also has bounded history under policy B. The service therefore requires a comparison that includes the reset cost for both twins.
+
+The long-stream evidence separates memory size from semantic stability. The retained policy restores recent context and the text prefix at each reset.
+
+The historical pilot scores do not establish a converged quality lead. Corrected runs must establish that comparison.
+
+The evaluator reuses the field's frozen matcher, but the current protocol retains differences. The historical scores require explicit protocol and checkpoint qualifications.
+
+The thesis pairs a discrete tokenizer with the first discrete causal-SSM streaming generator. The supported claims concern replicated FSQ reconstruction and bounded recurrent structure.
+
+The quality comparison, corrected RVQ comparison, and multiple-seed evidence remain incomplete. Quality at the larger scale remains outside the current plan.
+
+## 17.6 Results and their limits
+
+### FSQ reconstruction and the historical baseline
+
+The FSQ 8-code result was 0.0170 recon-FID. A separate test replication gives 0.016963 across 2189 clips, with 3 clips excluded as too short.
+
+The replication uses seed 2026. It also records MPJPE of 106.9 mm and feature L2 of 0.587.
+
+The MPJPE uses global positions without alignment. These two reconstruction measures are first records, not comparisons with a published baseline.
+
+The MoMask reference remains approximately 0.019-0.020 recon-FID, with 0.019 as the separately tuned RVQ reference. The FSQ result uses 8 codes per step.
+
+FSQ has 0 codebook parameters. The historical matrix reports lower reconstruction FID at every matched-rate cell.
+
+The historical generalization audit records test-minus-train gaps at or below zero in 13/15 cells. It also reports FSQ superiority with equal sample counts.
+
+The RVQ defects prevent these historical comparisons from establishing controlled Pareto dominance. They require corrected RVQ training.
+
+### Historical generator scores
+
+The historical pilot uses approximately 34M parameters. The reported 60-epoch twin scores give Mamba FID 0.121 and transformer FID 0.132.
+
+An earlier 18-epoch comparison places the transformer ahead on FID. These records describe different historical checkpoints; they do not establish a verified convergence trend.
+
+The nominal Mamba “e60” result evaluates a 30-epoch model. The transformer “e100” result evaluates weights from its resume point.
+
+The nominal extension adds 40 epochs, for 100 total. Frozen evaluated EMA weights invalidate the conclusion that this extension proves robustness or a wider Mamba lead.
+
+The historical downstream comparison gives FSQ-token generation FID 0.132 and RVQ-token generation FID 0.294. It reports a statistical tie for R@1.
+
+This comparison does not establish converged downstream superiority. It retains the RVQ defects and the historical generator confounds.
+
+The historical generation population contains 2189 clips. It is not the current caption-aligned evaluation population.
+
+The tokenizer reconstruction count of 2189 remains valid. The drafted official generation list contains 4648 samples, but the evaluator does not apply that correction.
+
+### Ground-truth checks and protocol limits
+
+The historical ground-truth row reports R@1 0.514 against the published 0.511. This agreement checks part of the evaluator pipeline.
+
+It does not prove protocol identity. The latest ground-truth check gives these results:
+
+- R@3 is 0.799 against the published 0.797.
+- MM-Dist is 2.964.
+- Diversity is 9.505.
+
+The evaluator still removes mirror IDs. Diversity uses seed 0, and the Guo random length cut remains absent.
+
+MultiModality uses the first captions and unseeded generation. It draws ten pairs per caption with replacement, with pair seed 0.
+
+Self-pairs are possible. The seed changes derived from 2026 and the official sample-list correction remain drafted.
+
+Current repetitions regenerate motion and report a mean with a 95% confidence half-width. The half-width is 1.96 times the standard deviation divided by the square root of the repetition count.
+
+The historical “20-rep” results reuse one generated population. MultiModality is a separate calculation that runs once.
+
+These differences prevent the ground-truth agreement from establishing direct comparability for every historical model score.
+
+### Historical model-only benchmark
+
+The local GPU has 4 GB of memory. The historical benchmark uses 100M twins and reports these state sizes:
+
+- Mamba state remains 2.68 MB at every measured horizon.
+- Transformer KV state reaches 76.7 MB at 1024 tokens.
+- Transformer KV state reaches 303 MB at 4096 tokens.
+- Transformer KV state reaches 605 MB at 8192 tokens.
+
+The final horizon gives an approximate 225-fold state-size ratio. These values remain historical model-only measurements.
+
+The benchmark enlarges the transformer position capacity. It omits the service restart policy and the other service components.
+
+The historical latency crossover occurs near L ~ 6500. The longest horizons approach the local GPU memory limit, so this trend requires caution.
+
+The state measurements do not establish a deployed crossover. Policy B bounds both deployed histories.
+
+Kernel availability has changed since the historical benchmark. The CUDA graph comparison also remains asymmetric.
+
+### Long-stream semantic stability
+
+The supplied measurement dated 2026-11-03 uses 32 prompts, streams of 300 seconds, and seed 2026.
+
+Without restart, Mamba R@3 falls from 0.72 to 0.09 at 60 seconds. The state RMS grows by 3-5 times, with a peak of 13 times.
+
+Policy B resets both twins every 8 tokens and restores up to 16 context tokens.
+
+Mamba under policy B maintains R@3 between 0.47 and 0.69, with flat state RMS. The transformer under policy B achieves R@3 between 0.63 and 0.66.
+
+Per-step text alone gives R@3 0.13. It does not resolve the observed long-stream failure.
+
+These results support the retained reset policy for both twins. They do not establish unrestricted semantic stability from bounded memory alone.
+
+### Display artifacts
+
+The display check uses interpolation factor 6 across 2189 test clips. Whole-clip and chunk outputs agree, and the foot-slide check passes.
+
+Linear joint interpolation raises the median jerk p95 from 109 to 2413 m/s³. It shortens bones by more than 2% in 885 clips.
+
+The tokenizer output alone has median bone-length error p95 of 4.6% against the reference motion.
+
+These findings concern display frames. They do not change the evaluator scores.
