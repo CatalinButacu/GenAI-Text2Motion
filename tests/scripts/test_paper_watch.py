@@ -72,3 +72,11 @@ def test_a_paper_seen_before_or_found_twice_appears_once(monkeypatch):
     old = watch.Paper("2401.00001", "B", "", "", "2024-01-01", "arXiv")
     fresh = watch.unseen_papers([first, again, old], frozenset({"2401.00001"}))
     assert fresh == [first]
+
+
+def test_a_rate_limit_waits_at_least_as_long_as_the_server_asks(monkeypatch):
+    watch = __watch_module(monkeypatch)
+    asked = watch.urllib.error.HTTPError("u", 429, "busy", {"Retry-After": "31"}, None)
+    silent = watch.urllib.error.HTTPError("u", 429, "busy", {}, None)
+    assert watch.retry_wait_seconds(asked, 0) == 32.0
+    assert watch.retry_wait_seconds(silent, 1) == 2 * watch.RETRY_WAIT_SECONDS

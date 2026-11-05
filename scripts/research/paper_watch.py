@@ -36,7 +36,7 @@ CITED_PAPERS = MappingProxyType(
 )
 USER_AGENT = "thesis-paper-watch/1.0"
 RETRY_STATUS = 429
-RETRY_COUNT = 3
+RETRY_COUNT = 5
 RETRY_WAIT_SECONDS = 10.0
 ARXIV_WAIT_SECONDS = 3.0
 ARXIV_VERSION = re.compile(r"v\d+$")
@@ -89,8 +89,16 @@ def fetch_text(url: str) -> str:
                 raise
             if attempt == RETRY_COUNT - 1:
                 raise
-            time.sleep(RETRY_WAIT_SECONDS * (attempt + 1))
+            time.sleep(retry_wait_seconds(error, attempt))
     raise RuntimeError(f"no response from {url}")
+
+
+def retry_wait_seconds(error: urllib.error.HTTPError, attempt: int) -> float:
+    backoff = RETRY_WAIT_SECONDS * (attempt + 1)
+    header = error.headers.get("Retry-After") if error.headers else None
+    if header is None or not header.strip().isdigit():
+        return backoff
+    return max(backoff, float(header) + 1.0)
 
 
 def arxiv_query_url(term: str, max_results: int) -> str:
