@@ -1,0 +1,137 @@
+run,backbone,epoch,train_ce_clean,val_ce,ce_gap,val_fid,val_r1
+sweep w256 (20 ep),transformer,1,6.3672,6.362,-0.0053,,
+sweep w256 (20 ep),transformer,2,6.0156,6.0131,-0.0025,2.5356,0.306
+sweep w256 (20 ep),transformer,3,5.7313,5.7403,0.009,,
+sweep w256 (20 ep),transformer,4,5.5399,5.5641,0.0242,1.111,0.352
+sweep w256 (20 ep),transformer,5,5.37,5.4124,0.0423,,
+sweep w256 (20 ep),transformer,6,5.2209,5.2863,0.0654,0.9756,0.387
+sweep w256 (20 ep),transformer,7,5.087,5.1784,0.0913,,
+sweep w256 (20 ep),transformer,8,4.9704,5.0904,0.12,1.0713,0.401
+sweep w256 (20 ep),transformer,9,4.8784,5.0206,0.1422,,
+sweep w256 (20 ep),transformer,10,4.7985,4.9638,0.1653,0.7331,0.436
+sweep w256 (20 ep),transformer,11,4.7316,4.9191,0.1875,,
+sweep w256 (20 ep),transformer,12,4.6771,4.8839,0.2067,0.6344,0.452
+sweep w256 (20 ep),transformer,13,4.6326,4.8567,0.2241,,
+sweep w256 (20 ep),transformer,14,4.5951,4.8332,0.2381,0.5323,0.47
+sweep w256 (20 ep),transformer,15,4.5662,4.8192,0.2531,,
+sweep w256 (20 ep),transformer,16,4.5464,4.8096,0.2633,0.505,0.49
+sweep w256 (20 ep),transformer,17,4.5313,4.8017,0.2704,,
+sweep w256 (20 ep),transformer,18,4.5216,4.7973,0.2757,0.5209,0.487
+sweep w256 (20 ep),transformer,19,4.5163,4.7947,0.2784,,
+sweep w256 (20 ep),transformer,20,4.5137,4.7934,0.2796,0.45,0.502
+sweep w256 (20 ep),mamba,1,6.4649,6.4659,0.001,,
+sweep w256 (20 ep),mamba,2,6.0258,6.0309,0.0052,3.032,0.23
+sweep w256 (20 ep),mamba,3,5.6365,5.6595,0.023,,
+sweep w256 (20 ep),mamba,4,5.3303,5.3829,0.0525,1.4279,0.37
+sweep w256 (20 ep),mamba,5,5.0906,5.1798,0.0892,,
+sweep w256 (20 ep),mamba,6,4.9102,5.038,0.1278,1.2608,0.416
+sweep w256 (20 ep),mamba,7,4.7677,4.929,0.1612,,
+sweep w256 (20 ep),mamba,8,4.6542,4.8484,0.1942,0.8983,0.419
+sweep w256 (20 ep),mamba,9,4.5665,4.7884,0.2219,,
+sweep w256 (20 ep),mamba,10,4.4938,4.7419,0.2481,0.966,0.449
+sweep w256 (20 ep),mamba,11,4.435,4.7073,0.2723,,
+sweep w256 (20 ep),mamba,12,4.3862,4.6813,0.2951,0.8365,0.474
+sweep w256 (20 ep),mamba,13,4.3489,4.664,0.3151,,
+sweep w256 (20 ep),mamba,14,4.3181,4.6503,0.3322,0.7843,0.5
+sweep w256 (20 ep),mamba,15,4.2941,4.6399,0.3457,,
+sweep w256 (20 ep),mamba,16,4.2751,4.6333,0.3582,0.6005,0.495
+sweep w256 (20 ep),mamba,17,4.2631,4.629,0.3659,,
+sweep w256 (20 ep),mamba,18,4.2555,4.6266,0.3711,0.5796,0.47
+sweep w256 (20 ep),mamba,19,4.2509,4.6253,0.3744,,
+sweep w256 (20 ep),mamba,20,4.2487,4.6243,0.3756,0.6363,0.498
+sweep w320 (20 ep),transformer,1,6.3405,6.3305,-0.01,,
+sweep w320 (20 ep),transformer,2,5.9614,5.9552,-0.0061,2.3839,0.275
+sweep w320 (20 ep),transformer,3,5.7036,5.7179,0.0142,,
+sweep w320 (20 ep),transformer,4,5.5044,5.5413,0.0369,1.4016,0.36
+sweep w320 (20 ep),transformer,5,5.3285,5.3889,0.0604,,
+sweep w320 (20 ep),transformer,6,5.1769,5.2659,0.089,1.3726,0.368
+sweep w320 (20 ep),transformer,7,5.0435,5.1603,0.1168,,
+sweep w320 (20 ep),transformer,8,4.9259,5.0728,0.1469,1.0023,0.405
+sweep w320 (20 ep),transformer,9,4.823,5.0019,0.1788,,
+sweep w320 (20 ep),transformer,10,4.7378,4.9429,0.2051,0.81,0.438
+sweep w320 (20 ep),transformer,11,4.6653,4.8962,0.2309,,
+sweep w320 (20 ep),transformer,12,4.6043,4.8597,0.2554,0.7945,0.467
+sweep w320 (20 ep),transformer,13,4.5563,4.8358,0.2795,,
+sweep w320 (20 ep),transformer,14,4.5158,4.8166,0.3009,0.773,0.482
+sweep w320 (20 ep),transformer,15,4.4854,4.8011,0.3157,,
+sweep w320 (20 ep),transformer,16,4.4611,4.7909,0.3298,0.4948,0.495
+sweep w320 (20 ep),transformer,17,4.446,4.7858,0.3398,,
+sweep w320 (20 ep),transformer,18,4.4355,4.7831,0.3476,0.561,0.487
+sweep w320 (20 ep),transformer,19,4.4288,4.7794,0.3506,,
+sweep w320 (20 ep),transformer,20,4.426,4.7785,0.3524,0.5336,0.475
+sweep w320 (20 ep),mamba,1,6.4272,6.4286,0.0014,,
+sweep w320 (20 ep),mamba,2,5.9087,5.9177,0.009,1.58,0.26
+sweep w320 (20 ep),mamba,3,5.4736,5.5114,0.0378,,
+sweep w320 (20 ep),mamba,4,5.1391,5.2233,0.0843,1.1725,0.391
+sweep w320 (20 ep),mamba,5,4.9,5.0314,0.1314,,
+sweep w320 (20 ep),mamba,6,4.7173,4.8959,0.1786,0.9364,0.423
+sweep w320 (20 ep),mamba,7,4.5755,4.7957,0.2202,,
+sweep w320 (20 ep),mamba,8,4.4636,4.7271,0.2634,0.6168,0.433
+sweep w320 (20 ep),mamba,9,4.3737,4.6781,0.3043,,
+sweep w320 (20 ep),mamba,10,4.3005,4.6432,0.3426,0.5369,0.48
+sweep w320 (20 ep),mamba,11,4.2388,4.6156,0.3768,,
+sweep w320 (20 ep),mamba,12,4.1879,4.5953,0.4074,0.467,0.493
+sweep w320 (20 ep),mamba,13,4.1457,4.5838,0.438,,
+sweep w320 (20 ep),mamba,14,4.1109,4.5746,0.4637,0.507,0.48
+sweep w320 (20 ep),mamba,15,4.0821,4.5667,0.4846,,
+sweep w320 (20 ep),mamba,16,4.0614,4.5631,0.5016,0.3989,0.497
+sweep w320 (20 ep),mamba,17,4.0483,4.5631,0.5149,,
+sweep w320 (20 ep),mamba,18,4.0386,4.5616,0.523,0.3778,0.515
+sweep w320 (20 ep),mamba,19,4.0326,4.5602,0.5277,,
+sweep w320 (20 ep),mamba,20,4.0299,4.5599,0.5301,0.3062,0.525
+pair 1 w320 (CE stop),transformer,1,6.3405,6.3305,-0.01,,
+pair 1 w320 (CE stop),transformer,2,5.9606,5.9545,-0.0061,2.3169,0.276
+pair 1 w320 (CE stop),transformer,3,5.7,5.7149,0.0149,,
+pair 1 w320 (CE stop),transformer,4,5.4967,5.5342,0.0376,1.4298,0.35
+pair 1 w320 (CE stop),transformer,5,5.3156,5.3773,0.0616,,
+pair 1 w320 (CE stop),transformer,6,5.1575,5.2488,0.0913,1.4684,0.35
+pair 1 w320 (CE stop),transformer,7,5.0138,5.1355,0.1217,,
+pair 1 w320 (CE stop),transformer,8,4.8842,5.0385,0.1543,0.9716,0.434
+pair 1 w320 (CE stop),transformer,9,4.7706,4.9588,0.1882,,
+pair 1 w320 (CE stop),transformer,10,4.6723,4.889,0.2167,0.8258,0.464
+pair 1 w320 (CE stop),transformer,11,4.5855,4.8328,0.2474,,
+pair 1 w320 (CE stop),transformer,12,4.5094,4.7879,0.2785,0.7627,0.447
+pair 1 w320 (CE stop),transformer,13,4.445,4.7553,0.3103,,
+pair 1 w320 (CE stop),transformer,14,4.3839,4.725,0.3411,0.7359,0.474
+pair 1 w320 (CE stop),transformer,15,4.328,4.6967,0.3686,,
+pair 1 w320 (CE stop),transformer,16,4.2738,4.6748,0.401,0.3378,0.49
+pair 1 w320 (CE stop),transformer,17,4.2313,4.6571,0.4259,,
+pair 1 w320 (CE stop),transformer,18,4.19,4.643,0.453,0.4066,0.51
+pair 1 w320 (CE stop),transformer,19,4.1472,4.6268,0.4796,,
+pair 1 w320 (CE stop),transformer,20,4.1114,4.6194,0.508,0.4982,0.502
+pair 1 w320 (CE stop),transformer,21,4.0766,4.6089,0.5323,,
+pair 1 w320 (CE stop),transformer,22,4.0462,4.6006,0.5543,0.4248,0.495
+pair 1 w320 (CE stop),transformer,23,4.0137,4.5979,0.5842,,
+pair 1 w320 (CE stop),transformer,24,3.9837,4.5912,0.6075,0.3192,0.5
+pair 1 w320 (CE stop),transformer,25,3.9542,4.5893,0.6351,,
+pair 1 w320 (CE stop),transformer,26,3.929,4.5857,0.6567,0.3624,0.502
+pair 1 w320 (CE stop),transformer,27,3.9037,4.5856,0.6819,,
+pair 1 w320 (CE stop),transformer,28,3.8781,4.5818,0.7036,0.3168,0.503
+pair 1 w320 (CE stop),transformer,29,3.8558,4.5806,0.7248,,
+pair 1 w320 (CE stop),transformer,30,3.834,4.5824,0.7484,0.2719,0.51
+pair 1 w320 (CE stop),transformer,31,3.8138,4.5863,0.7725,,
+pair 1 w320 (CE stop),transformer,32,3.7937,4.5847,0.7911,0.2848,0.51
+pair 1 w320 (CE stop),mamba,1,6.4263,6.4277,0.0014,,
+pair 1 w320 (CE stop),mamba,2,5.907,5.9151,0.0081,2.066,0.265
+pair 1 w320 (CE stop),mamba,3,5.4717,5.5093,0.0376,,
+pair 1 w320 (CE stop),mamba,4,5.1315,5.2169,0.0855,0.9766,0.4
+pair 1 w320 (CE stop),mamba,5,4.8836,5.0166,0.133,,
+pair 1 w320 (CE stop),mamba,6,4.6936,4.8741,0.1806,0.8663,0.439
+pair 1 w320 (CE stop),mamba,7,4.5442,4.7689,0.2246,,
+pair 1 w320 (CE stop),mamba,8,4.4269,4.6961,0.2691,0.7342,0.456
+pair 1 w320 (CE stop),mamba,9,4.3326,4.6408,0.3082,,
+pair 1 w320 (CE stop),mamba,10,4.2532,4.6005,0.3474,0.7364,0.465
+pair 1 w320 (CE stop),mamba,11,4.1828,4.5694,0.3866,,
+pair 1 w320 (CE stop),mamba,12,4.1222,4.5438,0.4216,0.501,0.498
+pair 1 w320 (CE stop),mamba,13,4.0657,4.5278,0.4621,,
+pair 1 w320 (CE stop),mamba,14,4.0134,4.5132,0.4998,0.589,0.487
+pair 1 w320 (CE stop),mamba,15,3.966,4.502,0.536,,
+pair 1 w320 (CE stop),mamba,16,3.9214,4.4917,0.5704,0.5044,0.5
+pair 1 w320 (CE stop),mamba,17,3.8831,4.4842,0.6011,,
+pair 1 w320 (CE stop),mamba,18,3.8456,4.4796,0.634,0.4306,0.513
+pair 1 w320 (CE stop),mamba,19,3.8102,4.4776,0.6674,,
+pair 1 w320 (CE stop),mamba,20,3.7765,4.4771,0.7005,0.3407,0.5
+pair 1 w320 (CE stop),mamba,21,3.7466,4.4755,0.7289,,
+pair 1 w320 (CE stop),mamba,22,3.7137,4.4783,0.7646,0.353,0.488
+pair 1 w320 (CE stop),mamba,23,3.6859,4.4765,0.7906,,
+pair 1 w320 (CE stop),mamba,24,3.658,4.476,0.818,0.3159,0.502
