@@ -12,7 +12,7 @@ from dataclasses import replace
 
 import torch
 
-from text2motion.app.bootstrap import resolve_device, seed_everything
+from text2motion.app.bootstrap import apply_precision, resolve_device, seed_everything
 from text2motion.app.config import load_config
 from text2motion.generation.contracts import Backbone
 from text2motion.generation.nn_model import GeneratorModelSpec
@@ -466,6 +466,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     config = load_config(args.config)
+    apply_precision(config.precision)
     args.tokenizer_ckpt = args.tokenizer_ckpt or str(config.paths.tokenizer_checkpoint)
     if args.probe == "demo":
         args.ckpt = args.ckpt or str(config.paths.generator_checkpoint(args.backbone))
