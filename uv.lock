@@ -1809,6 +1809,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "matplotlib" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "rope" },
@@ -1829,6 +1830,7 @@ requires-dist = [
     { name = "alembic", marker = "extra == 'tracking'", specifier = ">=1.20.0" },
     { name = "jsonargparse", specifier = ">=4" },
     { name = "matplotlib", specifier = ">=3.11.2" },
+    { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.11.2" },
     { name = "mlflow-skinny", marker = "extra == 'tracking'", specifier = ">=3.17.0" },
     { name = "numpy" },
     { name = "pandas" },

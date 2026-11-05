@@ -23,7 +23,13 @@ dependencies = [
 [project.optional-dependencies]
 prep = ["pyarrow"]
 tracking = ["mlflow-skinny>=3.17.0", "sqlalchemy>=2.1.4", "alembic>=1.20.0"]
-dev = ["ruff", "pytest", "rope", "pyright"]
+dev = [
+    "ruff",
+    "pytest",
+    "rope",
+    "pyright",
+    "matplotlib>=3.11.2",
+]
 
 [project.scripts]
 text2motion = "text2motion.app.cli:main"
