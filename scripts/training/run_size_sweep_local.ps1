@@ -1,5 +1,6 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_size_sweep_local.ps1
-param([double]$BudgetHoursPerRun = 6, [int]$StaleMinutes = 45, [int]$Epochs = 20, [int]$ValCePatience = 3)
+# powershell -ExecutionPolicy Bypass -File scripts/training/run_size_sweep_local.ps1 -Widths 320 -Epochs 60 -Tag p1
+param([double]$BudgetHoursPerRun = 6, [int]$StaleMinutes = 45, [int]$Epochs = 20, [int]$ValCePatience = 3,
+    [string[]]$Widths = @("256", "320", "384", "448", "512"), [string]$Tag = "sweep")
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
@@ -20,13 +21,13 @@ function Invoke-SweepGate([string]$width, [string]$backbone) {
 }
 
 function Invoke-SweepRun([string]$width, [string]$backbone) {
-    $name = "generator_${backbone}_w${width}_sweep.pt"
+    $name = "generator_${backbone}_w${width}_${Tag}.pt"
     $resume = "artifacts/checkpoints/generator/$([IO.Path]::GetFileNameWithoutExtension($name))_last.pt"
     if (Test-Path $resume) {
         Write-Host "SKIP run $backbone w$width ($resume exists; a sweep run is never resumed)"
         return 0
     }
-    return Invoke-TrainingStep -Tag "sweep_${backbone}_w$width" -LogFile "artifacts/outputs/size_sweep_${backbone}_w$width.log" `
+    return Invoke-TrainingStep -Tag "${Tag}_${backbone}_w$width" -LogFile "artifacts/outputs/${Tag}_${backbone}_w$width.log" `
         -MaxHours $BudgetHoursPerRun -StaleMinutes $StaleMinutes -Arguments @(
             "-m", "text2motion.app.cli", "train-generator", "--config", "configs/generator/size_sweep/width_$width.yaml",
             "--backbone", $backbone, "--tokenizer_ckpt", $tokenizer,
@@ -38,7 +39,7 @@ function Invoke-SweepRun([string]$width, [string]$backbone) {
 }
 
 $codes = @()
-foreach ($width in @("256", "320", "384", "448", "512")) {
+foreach ($width in $Widths) {
     foreach ($backbone in @("transformer", "mamba")) {
         $code = Invoke-SweepGate $width $backbone
         $codes += $code
@@ -55,6 +56,6 @@ foreach ($width in @("256", "320", "384", "448", "512")) {
     }
 }
 
-if (-not (Write-DoneMarker -Path "artifacts/outputs/SIZE_SWEEP_DONE.txt" -ExitCodes $codes)) {
+if (-not (Write-DoneMarker -Path "artifacts/outputs/$($Tag.ToUpper())_DONE.txt" -ExitCodes $codes)) {
     exit 1
 }
