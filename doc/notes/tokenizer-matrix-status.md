@@ -1,6 +1,6 @@
 # Tokenizer matrix -- status note (2026-06-17)
 
-Reconstruction-FID on the HumanML3D-263 val split (2189 clips), seed 2026, 500 epochs,
+Reconstruction-FID on the HumanML3D-263 test split (2189 clips; the June 2026 trainer scored test, see the run manifests), seed 2026, 500 epochs,
 batch 128, eval every 25. Lower is better. Each cell traces to `outputs/sweep_<name>.log`
 and `checkpoints/<name>.pt`.
 
