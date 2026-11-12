@@ -22,6 +22,7 @@ from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import (
     FEATURES_DIR,
     RARE_VERB_MIN_CLIPS,
+    RARE_VERB_POWER,
     TEXTS_DIR,
     base_clip_ids,
     caption_verbs,
@@ -215,7 +216,7 @@ class CaptionedMotionDataset(Dataset):
             min((counts[verb] for verb in caption_verbs(a) if verb in counts), default=common)
             for a in annotations
         ]
-        weights = 1.0 / np.asarray(rarest, dtype=np.float64)
+        weights = np.asarray(rarest, dtype=np.float64) ** -RARE_VERB_POWER
         return weights / weights.sum()
 
     def __crop_to_max_frames(self, feat: np.ndarray, rng: np.random.RandomState) -> np.ndarray:

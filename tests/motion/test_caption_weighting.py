@@ -26,7 +26,7 @@ def __write_clips(root: Path, kick_clips: int, split: Split = Split.TRAIN) -> No
     (root / TEXTS_DIR).mkdir()
     np.save(root / MEAN_FILE, np.zeros(DIM, np.float32))
     np.save(root / STD_FILE, np.ones(DIM, np.float32))
-    names = [f"C{index}" for index in range(10)]
+    names = [f"C{index}" for index in range(20)]
     for index, name in enumerate(names):
         np.save(root / FEATURES_DIR / f"{name}.npy", np.zeros((60, DIM), np.float32))
         lines = [WALK, KICK] if index < kick_clips else [WALK, WALK]
@@ -46,7 +46,7 @@ def test_rare_verb_weighting_prefers_the_caption_with_the_rarer_verb(tmp_path):
     __write_clips(tmp_path, kick_clips=5)
     dataset = CaptionedMotionDataset(tmp_path, RARE, Split.TRAIN, seed=2026)
 
-    assert dataset.verb_clip_counts == {"walk": 10, "kick": 5}
+    assert dataset.verb_clip_counts == {"walk": 20, "kick": 5}
     weights = dataset.caption_weights(parse_text_file(tmp_path / TEXTS_DIR / "C0.txt"))
     np.testing.assert_allclose(weights, [1 / 3, 2 / 3])
     assert abs(__kick_share(dataset, 600) - 2 / 3) < 0.06

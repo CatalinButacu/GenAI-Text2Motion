@@ -25,6 +25,7 @@ CLIP_LENGTHS_FILE = "clip_lengths.json"
 RESUME_VERSION = 2
 FAILURE_DUMP_FILE = "failure_dump.pt"
 RARE_VERB_MIN_CLIPS = 5
+RARE_VERB_POWER = 0.5
 NOT_ACTION_VERBS = frozenset(
     {"be", "have", "do", "seem", "appear", "begin", "start", "continue", "try", "use"}
 )
