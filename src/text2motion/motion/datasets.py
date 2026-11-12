@@ -10,6 +10,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from text2motion.motion.contracts import (
+    CaptionWeighting,
     MotionBatch,
     MotionClip,
     MotionDataConfig,
@@ -20,8 +21,10 @@ from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import (
     FEATURES_DIR,
+    RARE_VERB_MIN_CLIPS,
     TEXTS_DIR,
     base_clip_ids,
+    caption_verbs,
     clip_frame_counts,
     parse_text_file,
 )
@@ -72,6 +75,29 @@ class CaptionedMotionDataset(Dataset):
                 f"{len(uncaptioned)} clips of split {split!r} have no caption that covers "
                 f"{self._min_len} frames (first: {uncaptioned[:5]}); remove them from the split list"
             )
+        self._verb_clip_counts: dict[str, int] | None = None
+        if data.caption_weighting == CaptionWeighting.RARE_VERB and self._train:
+            self._verb_clip_counts = self.__verb_clip_counts()
+
+    def __verb_clip_counts(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for clip_id in self._ids:
+            if clip_id.startswith("M"):
+                continue
+            annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
+            for verb in frozenset().union(*(caption_verbs(a) for a in annotations)):
+                counts[verb] = counts.get(verb, 0) + 1
+        kept = {verb: n for verb, n in counts.items() if n >= RARE_VERB_MIN_CLIPS}
+        if not kept:
+            raise ValueError(
+                f"rare_verb caption weighting needs a verb in at least {RARE_VERB_MIN_CLIPS} "
+                "train clips; no verb has that many"
+            )
+        return kept
+
+    @property
+    def verb_clip_counts(self) -> dict[str, int] | None:
+        return None if self._verb_clip_counts is None else dict(self._verb_clip_counts)
 
     @property
     def clip_ids(self) -> list[str]:
@@ -172,8 +198,25 @@ class CaptionedMotionDataset(Dataset):
         usable = self.__usable_annotations(annotations, feat.shape[0])
         if not usable:
             raise ValueError("no caption of this clip covers a segment of the minimum length")
-        annotation, segment = usable[rng.randint(len(usable))]
+        annotation, segment = usable[self.__caption_index([a for a, _ in usable], rng)]
         return annotation, feat if segment is None else feat[segment[0] : segment[1]]
+
+    def __caption_index(self, annotations: list[TextAnnotation], rng: np.random.RandomState) -> int:
+        if self._verb_clip_counts is None:
+            return rng.randint(len(annotations))
+        return int(rng.choice(len(annotations), p=self.caption_weights(annotations)))
+
+    def caption_weights(self, annotations: list[TextAnnotation]) -> np.ndarray:
+        counts = self._verb_clip_counts
+        if counts is None:
+            return np.full(len(annotations), 1.0 / len(annotations))
+        common = max(counts.values())
+        rarest = [
+            min((counts[verb] for verb in caption_verbs(a) if verb in counts), default=common)
+            for a in annotations
+        ]
+        weights = 1.0 / np.asarray(rarest, dtype=np.float64)
+        return weights / weights.sum()
 
     def __crop_to_max_frames(self, feat: np.ndarray, rng: np.random.RandomState) -> np.ndarray:
         overflow = feat.shape[0] - self._max_len

@@ -38,6 +38,14 @@ class PreparationStage(StrEnum):
 
 
 ############################################################
+#       CaptionWeighting
+############################################################
+class CaptionWeighting(StrEnum):
+    UNIFORM = "uniform"
+    RARE_VERB = "rare_verb"
+
+
+############################################################
 #       MotionDataConfig
 ############################################################
 @dataclass(frozen=True)
@@ -45,6 +53,7 @@ class MotionDataConfig:
     track: RepresentationTrack = RepresentationTrack.HML3D_263
     sources: tuple[MotionSource, ...] = (MotionSource.HUMANML3D,)
     mirror_augment: bool = True
+    caption_weighting: CaptionWeighting = CaptionWeighting.UNIFORM
     max_motion_len: int = 196
     min_motion_len: int = 40
 

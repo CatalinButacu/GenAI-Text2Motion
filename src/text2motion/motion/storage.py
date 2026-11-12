@@ -24,6 +24,11 @@ STATS_PROVENANCE_FILE = "stats_provenance.json"
 CLIP_LENGTHS_FILE = "clip_lengths.json"
 RESUME_VERSION = 2
 FAILURE_DUMP_FILE = "failure_dump.pt"
+RARE_VERB_MIN_CLIPS = 5
+NOT_ACTION_VERBS = frozenset(
+    {"be", "have", "do", "seem", "appear", "begin", "start", "continue", "try", "use"}
+)
+TAGGER_ERROR_VERBS = frozenset({"left", "side", "back", "clockwise", "swinge", "outstretche"})
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +156,15 @@ def is_legacy_resume(state: dict[str, Any], path: Path, kind: str, accept_legacy
             "pass --accept_legacy_resume to load it anyway"
         )
     return True
+
+
+def caption_verbs(annotation: TextAnnotation) -> frozenset[str]:
+    verbs = set()
+    for token in annotation.tokens:
+        word, _, tag = token.rpartition("/")
+        if tag == "VERB" and word:
+            verbs.add(word.lower())
+    return frozenset(verbs) - NOT_ACTION_VERBS - TAGGER_ERROR_VERBS
 
 
 def parse_text_file(path: Path) -> list[TextAnnotation]:
