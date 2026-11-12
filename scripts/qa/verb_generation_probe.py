@@ -144,6 +144,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbs", type=int, default=100)
     parser.add_argument("--samples", type=int, default=SAMPLES)
+    parser.add_argument("--transformer_ckpt", default=dict(GENERATORS)[Backbone.TRANSFORMER])
+    parser.add_argument("--mamba_ckpt", default=dict(GENERATORS)[Backbone.MAMBA])
     parser.add_argument(
         "--out", type=Path, default=Path("doc/paper/pics/verb_generation_validation.csv")
     )
@@ -172,7 +174,11 @@ def main() -> None:
         rows[verb]["real_top5_low"], rows[verb]["real_top5_high"] = top5_interval(
             top5, len(real[verb])
         )
-    for backbone, checkpoint in GENERATORS:
+    checkpoints = {
+        Backbone.TRANSFORMER: arguments.transformer_ckpt,
+        Backbone.MAMBA: arguments.mamba_ckpt,
+    }
+    for backbone, checkpoint in checkpoints.items():
         pipeline = app.load_text_to_motion_generator(
             backbone, checkpoint, tokenizer, tokenizer_checkpoint=TOKENIZER
         ).eval()
