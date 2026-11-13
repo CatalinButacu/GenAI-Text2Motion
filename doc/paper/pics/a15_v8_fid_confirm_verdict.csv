@@ -1,0 +1,6 @@
+backbone,weights,fid_gain_a_minus_b,limit_2_pooled_sd,pass,role
+transformer,ema,0.506,0.098,yes,rule
+mamba,ema,0.185,0.051,yes,rule
+transformer,raw,0.065,0.163,no,side report
+mamba,raw,0.356,0.057,yes,side report
+both,ema,,,PASS,

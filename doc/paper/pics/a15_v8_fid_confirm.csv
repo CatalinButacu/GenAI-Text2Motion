@@ -1,0 +1,9 @@
+backbone,weights,arm,checkpoint,clips,runs,fid_mean,fid_sd,r_top1_mean,r_top1_sd,diversity
+transformer,ema,A_uniform,generator_transformer_w320_a15_uniform.pt,765,20,1.112,0.040,0.332,0.007,9.435
+transformer,ema,B_motionclass,generator_transformer_w320_a15_motionclass.pt,765,20,0.606,0.028,0.366,0.006,9.400
+mamba,ema,A_uniform,generator_mamba_w320_a15_uniform.pt,765,20,0.451,0.023,0.428,0.006,9.705
+mamba,ema,B_motionclass,generator_mamba_w320_a15_motionclass.pt,765,20,0.266,0.011,0.428,0.006,9.461
+transformer,raw,A_uniform,generator_transformer_w320_a15_uniform_last.pt,765,20,1.602,0.059,0.313,0.006,9.282
+transformer,raw,B_motionclass,generator_transformer_w320_a15_motionclass_last.pt,765,20,1.537,0.056,0.335,0.005,9.011
+mamba,raw,A_uniform,generator_mamba_w320_a15_uniform_last.pt,765,20,0.669,0.025,0.410,0.006,9.759
+mamba,raw,B_motionclass,generator_mamba_w320_a15_motionclass_last.pt,765,20,0.313,0.014,0.419,0.004,9.321
