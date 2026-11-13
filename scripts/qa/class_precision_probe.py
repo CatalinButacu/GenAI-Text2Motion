@@ -10,6 +10,8 @@ import numpy as np
 import torch
 
 from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.evaluation.contracts import EvaluationSample, GenerationEvaluationSet
+from text2motion.evaluation.evaluator import chosen_caption_index
 from text2motion.evaluation.metrics import own_caption_ranks
 from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.contracts import Split
@@ -38,21 +40,44 @@ def sample_classes(caption_tokens: list[list[str]], classes: dict[str, int]) -> 
     return frozenset(found)
 
 
+def reference_set(samples: list[EvaluationSample], run: int) -> GenerationEvaluationSet:
+    chosen = [chosen_caption_index(sample, run) for sample in samples]
+    return GenerationEvaluationSet(
+        sample_ids=[sample.sample_id for sample in samples],
+        reference=[sample.reference for sample in samples],
+        generated=[sample.reference for sample in samples],
+        token_lists=[
+            [sample.caption_tokens[index]] for sample, index in zip(samples, chosen, strict=True)
+        ],
+        captions=[sample.captions[index] for sample, index in zip(samples, chosen, strict=True)],
+        requested=len(samples),
+        dropped={},
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
-    parser.add_argument("--backbone", type=Backbone, required=True)
-    parser.add_argument("--ckpt", required=True)
+    parser.add_argument("--backbone", type=Backbone)
+    parser.add_argument("--ckpt")
+    parser.add_argument("--reference", action="store_true")
+    parser.add_argument("--device")
     parser.add_argument("--reps", type=int, default=10)
     parser.add_argument("--out", type=Path, required=True)
     arguments = parser.parse_args()
 
-    app = ApplicationBootstrap.from_config(arguments.config, seed=SEED)
-    tokenizer = app.load_tokenizer(TOKENIZER)
+    if not arguments.reference and (arguments.backbone is None or arguments.ckpt is None):
+        parser.error("a generator probe needs --backbone and --ckpt; real clips need --reference")
+    app = ApplicationBootstrap.from_config(arguments.config, device=arguments.device, seed=SEED)
     evaluator = app.create_humanml3d_generation_evaluator()
-    generator = app.load_text_to_motion_generator(
-        arguments.backbone, arguments.ckpt, tokenizer, tokenizer_checkpoint=TOKENIZER
-    ).eval()
+    generator = None
+    if not arguments.reference:
+        generator = app.load_text_to_motion_generator(
+            arguments.backbone,
+            arguments.ckpt,
+            app.load_tokenizer(TOKENIZER),
+            tokenizer_checkpoint=TOKENIZER,
+        ).eval()
     classes = verb_classes(CLASS_MAP, CLASS_COLUMN)
     samples, _ = evaluator.evaluation_samples(Split.VALIDATION, None)
     labels = {
@@ -64,8 +89,12 @@ def main() -> None:
     scored: dict[str, int] = defaultdict(int)
     sample_ids: list[str] = []
     for run in range(arguments.reps):
-        split = evaluator.generate_evaluation_set(
-            generator, Split.VALIDATION, None, SAMPLING, BATCH, run=run
+        split = (
+            reference_set(samples, run)
+            if generator is None
+            else evaluator.generate_evaluation_set(
+                generator, Split.VALIDATION, None, SAMPLING, BATCH, run=run
+            )
         )
         if run and split.sample_ids != sample_ids:
             raise RuntimeError(f"generation run {run} scored a different sample set than run 0")
