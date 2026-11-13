@@ -1,0 +1,7 @@
+backbone,clip_set,clips,runs,fid,fid_ci95,r_top1,r_top1_ci95,r_top3,matching_distance,diversity
+transformer,full,765,20,0.168,0.011,0.494,0.006,0.786,3.041,9.399
+transformer,capture_disjoint,510,20,0.238,0.014,0.505,0.010,0.804,2.907,9.578
+transformer,size_matched_random,527,20,0.202,0.013,0.491,0.009,0.787,3.034,9.596
+mamba,full,765,20,0.177,0.009,0.508,0.008,0.806,2.940,9.643
+mamba,capture_disjoint,510,20,0.252,0.014,0.515,0.007,0.823,2.828,9.751
+mamba,size_matched_random,527,20,0.206,0.013,0.503,0.009,0.796,2.975,9.782
