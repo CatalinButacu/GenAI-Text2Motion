@@ -122,3 +122,15 @@ def test_a_run_with_a_different_sample_set_stops_the_evaluation(monkeypatch):
 
     with pytest.raises(RuntimeError, match="different sample set"):
         evaluator.run_generation_evaluation_protocol(cast(TextToMotionGenerator, None), protocol)
+
+
+def test_the_test_split_keeps_the_mirrored_clips_like_the_official_loader(tmp_path):
+    (tmp_path / "test.txt").write_text("000001\nM000001\n000002\n", encoding="utf-8")
+    (tmp_path / "val.txt").write_text("000003\nM000003\n", encoding="utf-8")
+    resources = SimpleNamespace(motion_dataset_dir=tmp_path)
+
+    test_ids = GuoEvaluationResources.clip_ids(cast(GuoEvaluationResources, resources), "test")
+    val_ids = GuoEvaluationResources.clip_ids(cast(GuoEvaluationResources, resources), "val")
+
+    assert test_ids == ["000001", "M000001", "000002"]
+    assert val_ids == ["000003"]
