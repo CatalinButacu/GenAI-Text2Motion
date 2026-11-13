@@ -1,0 +1,4 @@
+backbone,small_class_delta,ci95_low,ci95_high,r1_pass,fid_ratio_b_over_a,fid_pass,cell_pass
+transformer,0.0551,0.0279,0.0845,yes,0.515,yes,yes
+mamba,0.0251,-0.0067,0.0554,no,0.638,yes,no
+both,,,,,,,FAIL (rule needs both twins)

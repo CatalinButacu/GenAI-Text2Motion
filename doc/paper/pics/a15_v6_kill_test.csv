@@ -1,0 +1,5 @@
+backbone,arm,run_dir,epoch,val_fid,val_r_top1,small_class_r1,class7_run,class4_jump,class9_kick,class8_throw,class5_sit
+transformer,A_uniform,20261112T193045Z_generator_transformer,6,1.2083,0.3257,0.3750,0.508,0.382,0.382,0.258,0.345
+transformer,B_motionclass,20261113T173956Z_generator_transformer,6,0.6217,0.3701,0.4300,0.617,0.489,0.398,0.278,0.368
+mamba,A_uniform,20261112T202035Z_generator_mamba,6,0.4410,0.4342,0.4804,0.701,0.488,0.471,0.315,0.427
+mamba,B_motionclass,20261113T181908Z_generator_mamba,6,0.2816,0.4309,0.5052,0.680,0.564,0.471,0.341,0.470
