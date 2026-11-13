@@ -90,6 +90,8 @@ class CaptionedMotionDataset(Dataset):
                 raise ValueError("motion_class clip weighting needs the motion_classes verb map")
             clip_classes = self.__clip_classes(read_motion_classes(data.motion_classes))
             self._clip_weights = self.__motion_class_weights(clip_classes)
+        if data.clip_weighting == ClipWeighting.UNIFORM_REPLACEMENT and self._train:
+            self._clip_weights = np.ones(len(self._ids), dtype=np.float64)
 
     def __clip_classes(self, classes: dict[str, int]) -> list[frozenset[int]]:
         found = []

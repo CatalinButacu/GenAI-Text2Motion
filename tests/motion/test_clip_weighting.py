@@ -97,6 +97,21 @@ def test_a_clip_without_a_class_verb_gets_the_largest_class_weight(tmp_path):
     np.testing.assert_allclose(weights[-1], (CLIPS - 1) ** -0.5)
 
 
+def test_uniform_replacement_draws_every_clip_alike_with_replacement(tmp_path):
+    __write_clips(tmp_path)
+    config = MotionDataConfig(
+        mirror_augment=False, clip_weighting=ClipWeighting.UNIFORM_REPLACEMENT
+    )
+    module = MotionDataModule(tmp_path, config, seed=2026)
+    sampler = module.captioned_batch_loader(Split.TRAIN, 4).sampler
+
+    draws = [index for _ in range(300) for index in sampler]
+    kick_share = np.mean([index < KICK_CLIPS for index in draws])
+    assert abs(kick_share - KICK_CLIPS / CLIPS) < 0.03
+    assert len(list(sampler)) == CLIPS
+    assert len(set(sampler)) < CLIPS
+
+
 def test_motion_class_weighting_without_a_class_verb_stops(tmp_path):
     classes = __write_clips(tmp_path)
     classes.write_text(f"verb,{MOTION_CLASS_COLUMN}\njump,0\n", encoding="utf-8")
