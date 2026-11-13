@@ -1,0 +1,307 @@
+verb,kind,source,group_members,ratio,joins
+balance,positive,agreed,regain steady,1.0046,True
+balance,negative,random,feel touch,1.3308,False
+regain,positive,agreed,balance steady,1.1814,False
+regain,negative,random,drop release,2.1973,False
+steady,positive,agreed,balance regain,1.1962,False
+steady,negative,random,rise stand,1.2271,False
+bend,positive,agreed,stoop,0.8874,True
+bend,negative,random,glance look stare watch,0.9682,True
+stoop,positive,agreed,bend,1.1108,False
+stoop,negative,random,place put set,1.2813,False
+applaud,positive,agreed,clap,1.1665,False
+applaud,negative,random,jab punch uppercut,3.9940,False
+clap,positive,agreed,applaud,0.7157,True
+clap,negative,random,rise stand,2.1693,False
+breakdance,positive,agreed,dance moonwalk waltz,1.5880,False
+breakdance,negative,random,glance look stare watch,3.5638,False
+dance,positive,agreed,breakdance moonwalk waltz,1.0865,True
+dance,negative,random,cast pitch throw toss,2.3863,False
+moonwalk,positive,agreed,breakdance dance waltz,1.5560,False
+moonwalk,negative,random,swe swing swinge,1.6713,False
+waltz,positive,agreed,breakdance dance moonwalk,1.2866,False
+waltz,negative,random,stagger stumble trip,4.8674,False
+drop,positive,agreed,release,0.9008,True
+drop,negative,random,pivot reverse rotate swivel turn,1.3290,False
+release,positive,agreed,drop,1.0397,True
+release,negative,random,stagger stumble trip,1.8853,False
+excercise,positive,agreed,exercise,0.9956,True
+excercise,negative,random,drop release,1.1040,False
+exercise,positive,agreed,excercise,1.0259,True
+exercise,negative,random,feel touch,1.1761,False
+direct,positive,agreed,express gesture motion signal,0.9849,True
+direct,negative,random,rise stand,1.7631,False
+express,positive,agreed,direct gesture motion signal,0.7759,True
+express,negative,random,applaud clap,1.7598,False
+gesture,positive,agreed,direct express motion signal,0.9176,True
+gesture,negative,random,hop jump leap,2.6840,False
+motion,positive,agreed,direct express gesture signal,1.0202,True
+motion,negative,random,drop release,1.0953,True
+signal,positive,agreed,direct express gesture motion,1.0552,True
+signal,negative,random,waive wave,1.1642,False
+clutch,positive,agreed,grab grasp,0.9943,True
+clutch,negative,random,stagger stumble trip,1.3150,False
+grab,positive,agreed,clutch grasp,1.1875,False
+grab,negative,random,pivot reverse rotate swivel turn,1.4646,False
+grasp,positive,agreed,clutch grab,1.0384,True
+grasp,negative,random,rise stand,1.1945,False
+hop,positive,agreed,jump leap,1.3146,False
+hop,negative,random,spin twirl,3.3976,False
+jump,positive,agreed,hop leap,0.9955,True
+jump,negative,random,rock sway,2.9137,False
+leap,positive,agreed,hop jump,0.9054,True
+leap,negative,random,breakdance dance moonwalk waltz,2.0070,False
+glance,positive,agreed,look stare watch,1.1600,False
+glance,negative,random,elevate lift raise uplift,1.3883,False
+look,positive,agreed,glance stare watch,1.1256,False
+look,negative,random,rise stand,1.0418,True
+stare,positive,agreed,glance look watch,0.9656,True
+stare,negative,random,cast pitch throw toss,1.4007,False
+watch,positive,agreed,glance look stare,1.2380,False
+watch,negative,random,rise stand,1.4139,False
+jab,positive,agreed,punch uppercut,1.1002,False
+jab,negative,random,place put set,3.1065,False
+punch,positive,agreed,jab uppercut,0.8262,True
+punch,negative,random,place put set,2.8376,False
+uppercut,positive,agreed,jab punch,1.8153,False
+uppercut,negative,random,glance look stare watch,6.5379,False
+push,positive,agreed,shove,1.1265,False
+push,negative,random,drop release,1.3908,False
+shove,positive,agreed,push,1.5306,False
+shove,negative,random,clutch grab grasp,2.1748,False
+place,positive,agreed,put set,1.1711,False
+place,negative,random,breakdance dance moonwalk waltz,2.5510,False
+put,positive,agreed,place set,1.2255,False
+put,negative,random,direct express gesture motion signal,0.9891,True
+set,positive,agreed,place put,0.9792,True
+set,negative,random,feel touch,1.0518,True
+elevate,positive,agreed,lift raise uplift,1.3183,False
+elevate,negative,random,dash hurry job jog run rush sprint,2.2024,False
+lift,positive,agreed,elevate raise uplift,1.1936,False
+lift,negative,random,applaud clap,1.1846,False
+raise,positive,agreed,elevate lift uplift,0.9318,True
+raise,negative,random,push shove,1.3086,False
+uplift,positive,agreed,elevate lift raise,0.7614,True
+uplift,negative,random,clutch grab grasp,0.8510,True
+dash,positive,agreed,hurry job jog run rush sprint,1.1022,False
+dash,negative,random,rise stand,1.6042,False
+hurry,positive,agreed,dash job jog run rush sprint,0.9987,True
+hurry,negative,random,cast pitch throw toss,3.3938,False
+job,positive,agreed,dash hurry jog run rush sprint,1.0225,True
+job,negative,random,balance regain steady,2.1439,False
+jog,positive,agreed,dash hurry job run rush sprint,1.1349,False
+jog,negative,random,place put set,3.9009,False
+run,positive,agreed,dash hurry job jog rush sprint,0.9612,True
+run,negative,random,place put set,3.0742,False
+rush,positive,agreed,dash hurry job jog run sprint,0.9221,True
+rush,negative,random,waive wave,1.4976,False
+sprint,positive,agreed,dash hurry job jog run rush,1.0212,True
+sprint,negative,random,glance look stare watch,3.0135,False
+seat,positive,agreed,sit,1.6448,False
+seat,negative,random,drop release,3.8268,False
+sit,positive,agreed,seat,1.4498,False
+sit,negative,random,excercise exercise,3.3510,False
+spin,positive,agreed,twirl,1.0107,True
+spin,negative,random,place put set,2.2830,False
+twirl,positive,agreed,spin,0.9749,True
+twirl,negative,random,hop jump leap,1.5331,False
+rise,positive,agreed,stand,1.2865,False
+rise,negative,random,push shove,1.4758,False
+stand,positive,agreed,rise,1.2416,False
+stand,negative,random,hop jump leap,1.7760,False
+extend,positive,agreed,streche stretch,1.0752,True
+extend,negative,random,waive wave,1.2225,False
+streche,positive,agreed,extend stretch,0.9611,True
+streche,negative,random,excercise exercise,1.1206,False
+stretch,positive,agreed,extend streche,0.9464,True
+stretch,negative,random,pace saunter stride stroll strut swagger tiptoe wale walk,1.9319,False
+stagger,positive,agreed,stumble trip,0.9549,True
+stagger,negative,random,feel touch,1.8459,False
+stumble,positive,agreed,stagger trip,1.0392,True
+stumble,negative,random,pace saunter stride stroll strut swagger tiptoe wale walk,1.2238,False
+trip,positive,agreed,stagger stumble,1.0785,True
+trip,negative,random,swe swing swinge,1.8373,False
+rock,positive,agreed,sway,1.1383,False
+rock,negative,random,dash hurry job jog run rush sprint,2.4528,False
+sway,positive,agreed,rock,1.0133,True
+sway,negative,random,spin twirl,1.2889,False
+swe,positive,agreed,swing swinge,1.2010,False
+swe,negative,random,excercise exercise,1.1642,False
+swing,positive,agreed,swe swinge,1.4156,False
+swing,negative,random,glance look stare watch,1.3468,False
+swinge,positive,agreed,swe swing,1.1353,False
+swinge,negative,random,place put set,1.2955,False
+cast,positive,agreed,pitch throw toss,1.2449,False
+cast,negative,random,pace saunter stride stroll strut swagger tiptoe wale walk,5.0239,False
+pitch,positive,agreed,cast throw toss,1.0952,True
+pitch,negative,random,swe swing swinge,1.9916,False
+throw,positive,agreed,cast pitch toss,1.0125,True
+throw,negative,random,seat sit,3.7977,False
+toss,positive,agreed,cast pitch throw,0.9674,True
+toss,negative,random,spin twirl,1.6722,False
+feel,positive,agreed,touch,0.9502,True
+feel,negative,random,push shove,1.3901,False
+touch,positive,agreed,feel,0.9998,True
+touch,negative,random,push shove,1.2388,False
+pivot,positive,agreed,reverse rotate swivel turn,1.1392,False
+pivot,negative,random,balance regain steady,1.2320,False
+reverse,positive,agreed,pivot rotate swivel turn,0.8868,True
+reverse,negative,random,hop jump leap,1.1550,False
+rotate,positive,agreed,pivot reverse swivel turn,1.2257,False
+rotate,negative,random,push shove,1.3799,False
+swivel,positive,agreed,pivot reverse rotate turn,1.0254,True
+swivel,negative,random,extend streche stretch,0.8201,True
+turn,positive,agreed,pivot reverse rotate swivel,1.3665,False
+turn,negative,random,push shove,1.3522,False
+pace,positive,agreed,saunter stride stroll strut swagger tiptoe wale walk,1.7872,False
+pace,negative,random,hop jump leap,3.6882,False
+saunter,positive,agreed,pace stride stroll strut swagger tiptoe wale walk,1.4185,False
+saunter,negative,random,applaud clap,3.1427,False
+stride,positive,agreed,pace saunter stroll strut swagger tiptoe wale walk,1.1708,False
+stride,negative,random,clutch grab grasp,2.1206,False
+stroll,positive,agreed,pace saunter stride strut swagger tiptoe wale walk,0.8619,True
+stroll,negative,random,applaud clap,2.4647,False
+strut,positive,agreed,pace saunter stride stroll swagger tiptoe wale walk,0.9599,True
+strut,negative,random,extend streche stretch,2.3190,False
+swagger,positive,agreed,pace saunter stride stroll strut tiptoe wale walk,1.1028,False
+swagger,negative,random,push shove,1.5378,False
+tiptoe,positive,agreed,pace saunter stride stroll strut swagger wale walk,0.8753,True
+tiptoe,negative,random,direct express gesture motion signal,2.2958,False
+wale,positive,agreed,pace saunter stride stroll strut swagger tiptoe walk,0.8966,True
+wale,negative,random,dash hurry job jog run rush sprint,1.3533,False
+walk,positive,agreed,pace saunter stride stroll strut swagger tiptoe wale,1.0415,True
+walk,negative,random,elevate lift raise uplift,1.6781,False
+waive,positive,agreed,wave,0.7934,True
+waive,negative,random,place put set,1.0240,True
+wave,positive,agreed,waive,1.1622,False
+wave,negative,random,seat sit,2.6301,False
+go,split,verb_labels_data,approach come descend drift enter follow leave move proceed return shift travel,1.0151,True
+go,split,verb_labels_eval,approach come enter follow leave proceed retrace return travel wander,0.9711,True
+return,split,verb_labels_data,approach come descend drift enter follow go leave move proceed shift travel,1.1079,False
+return,split,verb_labels_eval,approach come enter follow go leave proceed retrace travel wander,1.1290,False
+face,split,verb_labels_eval,pivot reverse rotate swivel turn,1.1203,False
+come,split,verb_labels_data,approach descend drift enter follow go leave move proceed return shift travel,1.0382,True
+come,split,verb_labels_eval,approach enter follow go leave proceed retrace return travel wander,1.0297,True
+fall,split,verb_labels_data,lose reel stagger stumble trip,1.0289,True
+rub,split,verb_labels_data,brush feel itch pat pet scratch stroke tap touch,1.0366,True
+shuffle,split,verb_labels_data,creep limp march pace retrace saunter sidestep sneak strafe stride stroll strut swagger tiptoe veer wale walk wander,1.3278,False
+scratch,split,verb_labels_data,brush feel itch pat pet rub stroke tap touch,2.0435,False
+hit,split,verb_labels_data,bang bat chop knock slam slap smack strike swat,1.1610,False
+hit,split,verb_labels_eval,bat jab punch smack strike swat uppercut,0.8930,True
+hunch,split,verb_labels_data,bend stoop,0.9674,True
+hunch,split,verb_labels_eval,slouch,1.0061,True
+proceed,split,verb_labels_data,approach come descend drift enter follow go leave move return shift travel,1.0027,True
+proceed,split,verb_labels_eval,approach come enter follow go leave retrace return travel wander,1.0243,True
+sidestep,split,verb_labels_data,creep limp march pace retrace saunter shuffle sneak strafe stride stroll strut swagger tiptoe veer wale walk wander,2.0205,False
+sidestep,split,verb_labels_eval,strafe,1.0728,True
+warm,split,verb_labels_data,excercise exercise,1.0365,True
+shift,split,verb_labels_data,approach come descend drift enter follow go leave move proceed return travel,1.0469,True
+wash,split,verb_labels_data,clean dust scrub wipe,1.0637,True
+follow,split,verb_labels_data,approach come descend drift enter go leave move proceed return shift travel,1.0326,True
+follow,split,verb_labels_eval,approach come enter go leave proceed retrace return travel wander,1.0311,True
+check,split,verb_labels_data,examine glance inspect look search stare watch,1.6288,False
+pretend,split,verb_labels_data,emulate imitate mime mimic simulate,0.9718,True
+pretend,split,verb_labels_eval,emulate fake imitate mime mimic simulate,0.9581,True
+point,split,verb_labels_data,indicate,1.9404,False
+point,split,verb_labels_eval,direct express gesture indicate motion signal,1.2569,False
+clean,split,verb_labels_data,dust scrub wash wipe,0.9001,True
+skip,split,verb_labels_data,hop jump leap,1.2386,False
+box,split,verb_labels_data,jab punch uppercut,1.0186,True
+box,split,verb_labels_eval,fight,1.8870,False
+lay,split,verb_labels_data,lie,0.9291,True
+lay,split,verb_labels_eval,lie,0.9291,True
+wiggle,split,verb_labels_data,bob jiggle rock shimmy sway wobble,1.1071,False
+wiggle,split,verb_labels_eval,jiggle,1.1685,False
+drag,split,verb_labels_eval,pull,1.6607,False
+clasp,split,verb_labels_eval,clutch grab grasp,1.1939,False
+tap,split,verb_labels_data,brush feel itch pat pet rub scratch stroke touch,0.9314,True
+straighten,split,verb_labels_data,extend retract streche stretch,0.9587,True
+carry,split,verb_labels_data,bring transfer,1.3759,False
+limp,split,verb_labels_data,creep march pace retrace saunter shuffle sidestep sneak strafe stride stroll strut swagger tiptoe veer wale walk wander,1.0560,True
+curve,split,verb_labels_eval,bend double stoop,5.9950,False
+brush,split,verb_labels_data,feel itch pat pet rub scratch stroke tap touch,0.9897,True
+fight,split,verb_labels_eval,box,0.9916,True
+imitate,split,verb_labels_data,emulate mime mimic pretend simulate,1.1768,False
+imitate,split,verb_labels_eval,emulate fake mime mimic pretend simulate,1.2502,False
+pat,split,verb_labels_data,brush feel itch pet rub scratch stroke tap touch,0.9559,True
+swat,split,verb_labels_data,bang bat chop hit knock slam slap smack strike,1.0210,True
+swat,split,verb_labels_eval,bat hit jab punch smack strike uppercut,0.9757,True
+wind,split,verb_labels_data,twist,2.3105,False
+lie,split,verb_labels_data,lay,1.7432,False
+lie,split,verb_labels_eval,lay,1.7432,False
+march,split,verb_labels_data,creep limp pace retrace saunter shuffle sidestep sneak strafe stride stroll strut swagger tiptoe veer wale walk wander,1.0373,True
+leave,split,verb_labels_data,approach come descend drift enter follow go move proceed return shift travel,1.0879,True
+leave,split,verb_labels_eval,approach come enter follow go proceed retrace return travel wander,1.1345,False
+shoot,split,verb_labels_data,cast pitch throw toss,0.8104,True
+knock,split,verb_labels_data,bang bat chop hit slam slap smack strike swat,1.4818,False
+sneak,split,verb_labels_data,creep limp march pace retrace saunter shuffle sidestep strafe stride stroll strut swagger tiptoe veer wale walk wander,1.2493,False
+wobble,split,verb_labels_data,bob jiggle rock shimmy sway wiggle,1.1661,False
+slap,split,verb_labels_data,bang bat chop hit knock slam smack strike swat,0.8960,True
+recover,split,verb_labels_data,balance regain steady,1.6063,False
+veer,split,verb_labels_data,creep limp march pace retrace saunter shuffle sidestep sneak strafe stride stroll strut swagger tiptoe wale walk wander,1.7406,False
+thrust,split,verb_labels_data,push shove,1.2142,False
+strike,split,verb_labels_data,bang bat chop hit knock slam slap smack swat,0.9817,True
+strike,split,verb_labels_eval,bat hit jab punch smack swat uppercut,0.8723,True
+scrub,split,verb_labels_data,clean dust wash wipe,1.2543,False
+pet,split,verb_labels_data,brush feel itch pat rub scratch stroke tap touch,1.8145,False
+mimic,split,verb_labels_data,emulate imitate mime pretend simulate,1.0158,True
+mimic,split,verb_labels_eval,emulate fake imitate mime pretend simulate,1.0515,True
+creep,split,verb_labels_data,limp march pace retrace saunter shuffle sidestep sneak strafe stride stroll strut swagger tiptoe veer wale walk wander,1.0779,True
+strafe,split,verb_labels_data,creep limp march pace retrace saunter shuffle sidestep sneak stride stroll strut swagger tiptoe veer wale walk wander,1.8089,False
+strafe,split,verb_labels_eval,sidestep,1.0401,True
+duck,split,verb_labels_data,crouch,1.1923,False
+transfer,split,verb_labels_data,bring carry,1.6052,False
+remove,split,verb_labels_data,retrieve take,2.5521,False
+stroke,split,verb_labels_data,brush feel itch pat pet rub scratch tap touch,1.1567,False
+slam,split,verb_labels_data,bang bat chop hit knock slap smack strike swat,1.0420,True
+replace,split,verb_labels_data,place put set,1.5607,False
+chop,split,verb_labels_data,bang bat hit knock slam slap smack strike swat,1.1577,False
+receive,split,verb_labels_data,catch,1.0182,True
+slouch,split,verb_labels_data,lean,0.9304,True
+slouch,split,verb_labels_eval,hunch,1.0183,True
+grip,split,verb_labels_data,clutch grab grasp,0.9766,True
+angle,split,verb_labels_eval,tilt,1.2898,False
+reel,split,verb_labels_data,fall lose stagger stumble trip,2.2312,False
+descend,split,verb_labels_data,approach come drift enter follow go leave move proceed return shift travel,2.7386,False
+bob,split,verb_labels_data,jiggle rock shimmy sway wiggle wobble,1.0483,True
+shield,split,verb_labels_data,block defend protect,1.2843,False
+fake,split,verb_labels_eval,emulate imitate mime mimic pretend simulate,1.6645,False
+indicate,split,verb_labels_data,point,1.2292,False
+indicate,split,verb_labels_eval,direct express gesture motion point signal,1.1165,False
+protect,split,verb_labels_data,block defend shield,0.8079,True
+position,split,verb_labels_eval,place put set,1.0755,True
+approach,split,verb_labels_data,come descend drift enter follow go leave move proceed return shift travel,1.1384,False
+approach,split,verb_labels_eval,come enter follow go leave proceed retrace return travel wander,1.1648,False
+enter,split,verb_labels_data,approach come descend drift follow go leave move proceed return shift travel,1.0898,True
+enter,split,verb_labels_eval,approach come follow go leave proceed retrace return travel wander,1.0147,True
+retract,split,verb_labels_data,extend straighten streche stretch,1.0275,True
+drift,split,verb_labels_data,approach come descend enter follow go leave move proceed return shift travel,1.4058,False
+shimmy,split,verb_labels_data,bob jiggle rock sway wiggle wobble,0.9436,True
+smack,split,verb_labels_data,bang bat chop hit knock slam slap strike swat,1.2243,False
+smack,split,verb_labels_eval,bat hit jab punch strike swat uppercut,0.8308,True
+simulate,split,verb_labels_data,emulate imitate mime mimic pretend,1.0559,True
+simulate,split,verb_labels_eval,emulate fake imitate mime mimic pretend,0.9906,True
+retrace,split,verb_labels_data,creep limp march pace saunter shuffle sidestep sneak strafe stride stroll strut swagger tiptoe veer wale walk wander,2.1348,False
+retrace,split,verb_labels_eval,approach come enter follow go leave proceed return travel wander,3.1863,False
+travel,split,verb_labels_data,approach come descend drift enter follow go leave move proceed return shift,1.8990,False
+travel,split,verb_labels_eval,approach come enter follow go leave proceed retrace return wander,1.9822,False
+mime,split,verb_labels_data,emulate imitate mimic pretend simulate,0.8751,True
+mime,split,verb_labels_eval,emulate fake imitate mimic pretend simulate,0.8373,True
+speed,split,verb_labels_data,dash hurry job jog run rush sprint,1.3551,False
+bang,split,verb_labels_data,bat chop hit knock slam slap smack strike swat,0.6247,True
+retrieve,split,verb_labels_data,remove take,1.5176,False
+retrieve,split,verb_labels_eval,pick,1.1013,False
+emulate,split,verb_labels_data,imitate mime mimic pretend simulate,0.8559,True
+emulate,split,verb_labels_eval,fake imitate mime mimic pretend simulate,0.8486,True
+wander,split,verb_labels_data,creep limp march pace retrace saunter shuffle sidestep sneak strafe stride stroll strut swagger tiptoe veer wale walk,1.0016,True
+wander,split,verb_labels_eval,approach come enter follow go leave proceed retrace return travel,1.5254,False
+bat,split,verb_labels_data,bang chop hit knock slam slap smack strike swat,1.1420,False
+bat,split,verb_labels_eval,hit jab punch smack strike swat uppercut,0.9402,True
+widen,split,verb_labels_eval,spread,1.0088,True
+defend,split,verb_labels_data,block protect shield,1.3324,False
+conduct,split,verb_labels_data,demonstrate direct express gesture motion signal,0.7463,True
+jiggle,split,verb_labels_data,bob rock shimmy sway wiggle wobble,0.8029,True
+jiggle,split,verb_labels_eval,wiggle,0.8344,True
+dust,split,verb_labels_data,clean scrub wash wipe,0.9334,True
+demonstrate,split,verb_labels_data,conduct direct express gesture motion signal,1.3243,False
+demonstrate,split,verb_labels_eval,preform,1.3864,False
