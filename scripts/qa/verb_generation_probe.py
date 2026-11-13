@@ -130,10 +130,10 @@ def top5_interval(rate: float, count: int) -> tuple[float, float]:
 
 
 def generated_motions(pipeline, resources, verb: str, samples: int) -> list[np.ndarray]:
-    seeds = [SEED + index for index in range(samples)]
+    torch.manual_seed(SEED)
     with torch.no_grad():
         batch = pipeline.generate_batch(
-            [f"a person {third_person(verb)}"] * samples, TOKEN_STEPS, SAMPLING, seeds=seeds
+            [f"a person {third_person(verb)}"] * samples, TOKEN_STEPS, SAMPLING
         )
     if batch is None:
         raise RuntimeError(f"the generator returned no clip for {verb!r}")
