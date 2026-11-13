@@ -1,5 +1,6 @@
 group,train_clips,rare,members
-singe,5,True,singe
+defend,5,True,defend
+conduct,5,True,conduct
 arc,5,True,arc
 flick,5,True,flick
 recoil,5,True,recoil
@@ -9,20 +10,23 @@ wring,5,True,wring
 float,5,True,float
 skate,5,True,skate
 palm,5,True,palm
+dust,5,True,dust
 load,5,True,load
+demonstrate,5,True,demonstrate
 drum,5,True,drum
 break,6,True,break
 steer,6,True,steer
 unfold,6,True,unfold
+retrieve,6,True,retrieve
 slump,6,True,slump
 serve,6,True,serve
 lock,6,True,lock
 join,6,True,join
-preform,6,True,preform
 screw,6,True,screw
 attack,6,True,attack
 cock,6,True,cock
 ring,6,True,ring
+widen,6,True,widen
 launch,6,True,launch
 yawn,6,True,yawn
 manipulate,6,True,manipulate
@@ -33,34 +37,54 @@ type,7,True,type
 ride,7,True,ride
 arch,7,True,arch
 propel,7,True,propel
+speed,7,True,speed
+bang,7,True,bang
 scoop,8,True,scoop
 shiver,8,True,shiver
 retract,8,True,retract
 drift,8,True,drift
 cartwheel,8,True,cartwheel
+shimmy,8,True,shimmy
 tip,8,True,tip
 cheer,8,True,cheer
 dip,8,True,dip
 unzip,8,True,unzip
 row,8,True,row
+protect,9,True,protect
 cradle,9,True,cradle
 wrap,9,True,wrap
+position,9,True,position
 twitch,9,True,twitch
 tuck,10,True,tuck
 plant,10,True,plant
 bump,10,True,bump
 dial,10,True,dial
 startle,10,True,startle
+reel,10,True,reel
 descend,10,True,descend
 hug,10,True,hug
+bob,10,True,bob
 fly,10,True,fly
+shield,10,True,shield
+fake,10,True,fake
 fix,11,True,fix
 slouch,11,True,slouch
 pray,11,True,pray
+grip,11,True,grip
 cough,11,True,cough
+angle,11,True,angle
 dangle,11,True,dangle
 guide,11,True,guide
+chop,12,True,chop
+receive,12,True,receive
 write,12,True,write
+transfer,13,True,transfer
+remove,13,True,remove
+stroke,13,True,stroke
+slam,13,True,slam
+replace,13,True,replace
+retrace,14,True,retrace wander
+duck,14,True,duck
 unscrew,14,True,unscrew
 cut,15,True,cut
 loosen,15,True,loosen
@@ -68,7 +92,9 @@ wake,15,True,wake
 stick,16,True,stick
 jerk,16,True,jerk
 salute,16,True,salute
+creep,16,True,creep
 dig,17,True,dig
+pet,17,True,pet
 flip,17,True,flip
 cup,17,True,cup
 brace,18,True,brace
@@ -79,35 +105,56 @@ shrug,21,True,shrug
 uncross,21,True,uncross
 dribble,21,True,dribble
 strum,21,True,strum
+scrub,22,True,scrub
 greet,23,True,greet
+thrust,24,True,thrust
+block,24,True,block
 stomp,24,True,stomp
 tie,24,True,tie
 curl,24,True,curl
 pass,25,True,pass
 veer,25,True,veer
 sweep,25,True,sweep
+wobble,27,True,wobble
 circle,27,True,circle
+slap,27,True,slap
 pump,27,True,pump
+recover,27,True,recover
+knock,28,True,knock
 dry,28,True,dry
 struggle,28,True,struggle
+sneak,28,True,sneak
 draw,29,True,draw
+shoot,29,True,shoot
+march,30,True,march
+pat,32,True,pat
+wind,32,True,wind
 drive,35,True,drive
 adjust,35,True,adjust
 cover,35,True,cover
 press,36,True,press
+fight,39,True,fight
 swim,39,True,swim
+brush,40,True,brush
 support,40,True,support
 switch,41,True,switch
 mix,41,True,mix
+limp,42,True,limp
 flex,42,True,flex
+curve,42,True,curve
 practice,43,True,practice
-block,46,True,block defend protect shield
+straighten,43,True,straighten
+carry,43,True,carry
+tap,46,True,tap
 dodge,47,True,dodge
 fold,47,True,fold
+clasp,47,True,clasp
 stir,47,True,stir
 lunge,49,True,lunge
 pose,50,True,pose
+drag,50,True,drag
 give,55,True,give
+box,55,True,box
 hang,55,True,hang
 land,55,True,land
 wiggle,56,True,jiggle wiggle
@@ -116,72 +163,81 @@ bow,57,True,bow
 flap,60,True,flap
 exercise,60,True,excercise exercise
 roll,60,True,roll
+skip,63,True,skip
 eat,65,True,eat
 lay,66,True,lay lie
+clean,67,True,clean
+tilt,69,True,tilt
 pour,70,True,pour
 alternate,71,True,alternate
+check,72,True,check
 slide,75,True,slide
+wash,76,True,wash
 point,78,True,indicate point
-tilt,80,True,angle tilt
 shift,83,True,shift
 bounce,87,True,bounce
 warm,87,True,warm
-box,88,True,box fight
+hunch,91,True,hunch
 rest,95,True,rest
 sidestep,103,True,sidestep strafe
 crawl,109,True,crawl
 kneel,111,True,kneel
+scratch,111,True,scratch
+shuffle,114,True,shuffle
+rub,117,True,rub
+wipe,119,True,wipe
 open,119,True,open
+twist,123,True,twist
 drink,125,True,drink
 climb,126,True,climb
+fall,131,True,fall
+spread,134,True,spread
 clap,136,True,applaud clap
-spread,140,True,spread widen
-pretend,147,True,emulate fake imitate mime mimic pretend simulate
-twist,155,False,twist wind
+pretend,137,True,emulate imitate mime mimic pretend simulate
+pull,137,True,pull
+catch,151,False,catch
+gesture,152,False,direct express gesture motion signal
 punch,156,False,jab punch uppercut
 play,159,False,play
-catch,160,False,catch receive
-gesture,162,False,conduct demonstrate direct express gesture motion signal
-pull,182,False,drag pull
+hit,167,False,bat hit smack strike swat
+crouch,190,False,crouch
 spin,194,False,spin twirl
-crouch,201,False,crouch duck
-hit,239,False,bang bat chop hit knock slam slap smack strike swat
-wipe,245,False,clean dust scrub wash wipe
 cross,247,False,cross
+balance,254,False,balance regain steady
+sway,265,False,rock sway
 shake,268,False,shake
-balance,279,False,balance recover regain steady
+touch,289,False,feel itch touch
+stumble,289,False,lose stagger stumble trip
 drop,289,False,drop release
 dance,298,False,breakdance dance moonwalk waltz
-sway,307,False,bob rock shimmy sway wobble
+face,322,False,face
 kick,353,False,kick
+push,356,False,push shove
 squat,357,False,squat
-push,378,False,push shove thrust
-stumble,390,False,fall lose reel stagger stumble trip
-grab,442,False,clasp clutch grab grasp grip
+grab,388,False,clutch grab grasp
 reach,483,False,reach
 lean,496,False,lean
+bring,496,False,bring
 get,513,False,get
-bring,552,False,bring carry transfer
 wave,556,False,waive wave
 lower,557,False,lower
-throw,596,False,cast pitch shoot throw toss
-touch,605,False,brush feel itch pat pet rub scratch stroke tap touch
+throw,581,False,cast pitch throw toss
 swing,667,False,swe swing swinge
 pick,672,False,pick
+look,680,False,examine glance inspect look search stare watch
 sit,685,False,seat sit
-look,708,False,check examine glance inspect look search stare watch
-stretch,783,False,extend straighten streche stretch
-run,795,False,dash hurry job jog run rush speed sprint
+stretch,750,False,extend streche stretch
+run,791,False,dash hurry job jog run rush sprint
 stop,804,False,stop
-jump,939,False,hop jump leap skip
-bend,1023,False,bend curve double hunch stoop
+jump,898,False,hop jump leap
+bend,915,False,bend double stoop
 step,1143,False,step
 hold,1183,False,hold
-go,1225,False,approach come enter follow go leave proceed retrace return travel wander
-put,1554,False,place position put replace set
-take,1632,False,remove retrieve take
+go,1211,False,approach come enter follow go leave proceed return travel
+put,1542,False,place put set
+take,1615,False,take
+turn,1911,False,pivot reverse rotate swivel turn
 move,2068,False,move
-turn,2094,False,face pivot reverse rotate swivel turn
 raise,2391,False,elevate lift raise uplift
 stand,2707,False,rise stand
-walk,4584,False,creep limp march pace saunter shuffle sneak stride stroll strut swagger tiptoe wale walk
+walk,4491,False,pace saunter stride stroll strut swagger tiptoe wale walk
