@@ -46,6 +46,14 @@ class CaptionWeighting(StrEnum):
 
 
 ############################################################
+#       ClipWeighting
+############################################################
+class ClipWeighting(StrEnum):
+    UNIFORM = "uniform"
+    MOTION_CLASS = "motion_class"
+
+
+############################################################
 #       MotionDataConfig
 ############################################################
 @dataclass(frozen=True)
@@ -54,6 +62,8 @@ class MotionDataConfig:
     sources: tuple[MotionSource, ...] = (MotionSource.HUMANML3D,)
     mirror_augment: bool = True
     caption_weighting: CaptionWeighting = CaptionWeighting.UNIFORM
+    clip_weighting: ClipWeighting = ClipWeighting.UNIFORM
+    motion_classes: Path | None = None
     max_motion_len: int = 196
     min_motion_len: int = 40
 
@@ -65,6 +75,8 @@ class MotionDataConfig:
             )
         if not self.sources:
             raise ValueError("the data config needs at least one motion source")
+        if self.clip_weighting is ClipWeighting.MOTION_CLASS and self.motion_classes is None:
+            raise ValueError("motion_class clip weighting needs the motion_classes verb map")
 
 
 ############################################################

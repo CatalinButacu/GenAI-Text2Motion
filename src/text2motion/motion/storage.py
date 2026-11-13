@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import logging
@@ -26,6 +27,9 @@ RESUME_VERSION = 2
 FAILURE_DUMP_FILE = "failure_dump.pt"
 RARE_VERB_MIN_CLIPS = 5
 RARE_VERB_POWER = 0.5
+MOTION_CLASS_COLUMN = "class_10"
+MOTION_CLASS_POWER = 0.5
+NO_MOTION_CLASS = -1
 NOT_ACTION_VERBS = frozenset(
     {"be", "have", "do", "seem", "appear", "begin", "start", "continue", "try", "use"}
 )
@@ -157,6 +161,14 @@ def is_legacy_resume(state: dict[str, Any], path: Path, kind: str, accept_legacy
             "pass --accept_legacy_resume to load it anyway"
         )
     return True
+
+
+def read_motion_classes(path: Path) -> dict[str, int]:
+    with Path(path).open(encoding="utf-8", newline="") as handle:
+        classes = {row["verb"]: int(row[MOTION_CLASS_COLUMN]) for row in csv.DictReader(handle)}
+    if not classes:
+        raise ValueError(f"the motion class map {path} has no verb")
+    return classes
 
 
 def caption_verbs(annotation: TextAnnotation) -> frozenset[str]:

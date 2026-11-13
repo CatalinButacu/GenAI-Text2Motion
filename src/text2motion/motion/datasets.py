@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from collections.abc import Sized
 from multiprocessing import RawValue
 from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 
 from text2motion.motion.contracts import (
     CaptionWeighting,
+    ClipWeighting,
     MotionBatch,
     MotionClip,
     MotionDataConfig,
@@ -21,6 +23,8 @@ from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import (
     FEATURES_DIR,
+    MOTION_CLASS_POWER,
+    NO_MOTION_CLASS,
     RARE_VERB_MIN_CLIPS,
     RARE_VERB_POWER,
     TEXTS_DIR,
@@ -28,6 +32,7 @@ from text2motion.motion.storage import (
     caption_verbs,
     clip_frame_counts,
     parse_text_file,
+    read_motion_classes,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,6 +84,31 @@ class CaptionedMotionDataset(Dataset):
         self._verb_clip_counts: dict[str, int] | None = None
         if data.caption_weighting == CaptionWeighting.RARE_VERB and self._train:
             self._verb_clip_counts = self.__verb_clip_counts()
+        self._clip_weights: np.ndarray | None = None
+        if data.clip_weighting == ClipWeighting.MOTION_CLASS and self._train:
+            if data.motion_classes is None:
+                raise ValueError("motion_class clip weighting needs the motion_classes verb map")
+            clip_classes = self.__clip_classes(read_motion_classes(data.motion_classes))
+            self._clip_weights = self.__motion_class_weights(clip_classes)
+
+    def __clip_classes(self, classes: dict[str, int]) -> list[frozenset[int]]:
+        found = []
+        for clip_id in self._ids:
+            annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
+            verbs = frozenset().union(*(caption_verbs(a) for a in annotations))
+            labels = frozenset(classes[verb] for verb in verbs if verb in classes)
+            found.append(labels or frozenset({NO_MOTION_CLASS}))
+        return found
+
+    @staticmethod
+    def __motion_class_weights(clip_classes: list[frozenset[int]]) -> np.ndarray:
+        sizes = Counter(label for labels in clip_classes for label in labels)
+        labelled = [size for label, size in sizes.items() if label != NO_MOTION_CLASS]
+        if not labelled:
+            raise ValueError("no train clip has a verb of the motion class map")
+        sizes[NO_MOTION_CLASS] = max(labelled)
+        rarest = [min(sizes[label] for label in labels) for labels in clip_classes]
+        return np.asarray(rarest, dtype=np.float64) ** -MOTION_CLASS_POWER
 
     def __verb_clip_counts(self) -> dict[str, int]:
         counts: dict[str, int] = {}
@@ -99,6 +129,10 @@ class CaptionedMotionDataset(Dataset):
     @property
     def verb_clip_counts(self) -> dict[str, int] | None:
         return None if self._verb_clip_counts is None else dict(self._verb_clip_counts)
+
+    @property
+    def clip_weights(self) -> np.ndarray | None:
+        return None if self._clip_weights is None else self._clip_weights.copy()
 
     @property
     def clip_ids(self) -> list[str]:
@@ -417,16 +451,29 @@ class MotionDataModule:
         num_workers: int = 0,
     ) -> DataLoader:
         split = Split(split)
+        dataset = self.captioned_dataset(split)
+        shuffled = (split == Split.TRAIN) if shuffle is None else shuffle
+        weights = dataset.clip_weights if shuffled else None
+        sampler = None if weights is None else self.__weighted_sampler(weights)
         return DataLoader(
-            self.captioned_dataset(split),
+            dataset,
             batch_size=batch_size,
-            shuffle=(split == Split.TRAIN) if shuffle is None else shuffle,
+            shuffle=shuffled and sampler is None,
+            sampler=sampler,
             num_workers=num_workers,
             collate_fn=collate_motion_clips,
             drop_last=(split == Split.TRAIN),
             pin_memory=True,
             persistent_workers=num_workers > 0,
             prefetch_factor=2 if num_workers > 0 else None,
+        )
+
+    def __weighted_sampler(self, weights: np.ndarray) -> WeightedRandomSampler:
+        return WeightedRandomSampler(
+            weights.tolist(),
+            num_samples=len(weights),
+            replacement=True,
+            generator=torch.Generator().manual_seed(self.seed),
         )
 
     def window_batch_loader(
