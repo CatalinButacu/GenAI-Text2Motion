@@ -257,16 +257,9 @@ def write_agreement(path: Path, trees: dict[tuple[str, str], list[dict]]) -> Non
             writer.writerow([count, *(f"{value:.4f}" for value in row)])
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--min_clips", type=int, default=50)
-    parser.add_argument("--out", type=Path, default=Path("doc/notes"))
-    parser.add_argument("--pick", type=int, default=0)
-    arguments = parser.parse_args()
-
-    app = ApplicationBootstrap.from_config(CONFIG, seed=SEED)
-    evaluator = app.create_humanml3d_generation_evaluator()
-    resources = evaluator.resources
+def verb_clip_embeddings(
+    evaluator,
+) -> tuple[list[str], list[frozenset[str]], dict[str, np.ndarray]]:
     verbs = action_verbs()
     groups = clip_groups({verb: verb for verb in verbs})
     clip_ids = sorted(frozenset().union(*groups.values()))
@@ -279,10 +272,26 @@ def main() -> None:
     print(
         f"clips {len(clip_ids)}, embedded {len(embedded)}, dropped {len(clip_ids) - len(embedded)}"
     )
+    return kept, [verb_clips[verb] for verb in kept], embedded
 
-    clip_sets = [verb_clips[verb] for verb in kept]
+
+def motion_points(clip_sets: list[frozenset[str]], embedded: dict[str, np.ndarray]) -> np.ndarray:
+    return np.stack([np.mean([embedded[clip] for clip in clips], axis=0) for clips in clip_sets])
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--min_clips", type=int, default=50)
+    parser.add_argument("--out", type=Path, default=Path("doc/notes"))
+    parser.add_argument("--pick", type=int, default=0)
+    arguments = parser.parse_args()
+
+    app = ApplicationBootstrap.from_config(CONFIG, seed=SEED)
+    evaluator = app.create_humanml3d_generation_evaluator()
+    resources = evaluator.resources
+    kept, clip_sets, embedded = verb_clip_embeddings(evaluator)
     weights = np.array([len(clips) for clips in clip_sets], dtype=float)
-    motion = np.stack([np.mean([embedded[clip] for clip in clips], axis=0) for clips in clip_sets])
+    motion = motion_points(clip_sets, embedded)
     text = compute_guo_text_embeddings(
         resources.text_embedder,
         [

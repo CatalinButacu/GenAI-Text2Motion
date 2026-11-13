@@ -1,0 +1,411 @@
+level,class,name,clips,single_class_clips,recall,verbs
+5,0,walk/turn,6614,1754,0.9892,walk turn take step stop push come stumble balance fall climb shuffle pace sidestep follow slide avoid drag lose stagger regain limp curve trip march sneak wobble recover veer stomp strut stride saunter jerk tiptoe creep strafe wake shove stare angle bump startle descend enter stroll drift retrace glance wander rush swagger
+5,1,stand/move,7922,797,0.9322,stand move hold bend look throw lean stretch go return kick swing face extend dance shake cross sway rotate spin play catch punch pull spread twist hit rest hunch proceed bounce warm shift alternate pretend eat skip flap roll bow box hang exercise wiggle pose lunge dodge tap rock pivot practice straighten toss switch support fight imitate swim drive seat swat wind steady leave draw shoot struggle circle slap pump grasp feel sweep thrust block tie twirl strike shrug dribble search swivel flail dig flip stick stoop elevate mimic loosen duck jab slam waltz pitch chop reverse receive grip dangle guide tuck plant reel bob fly fake indicate protect position approach clutch twitch shiver retract cartwheel shimmy smack tip simulate cheer travel dip cast row mime arch breakdance propel bang break steer emulate slump serve attack inspect bat ring widen launch juggle cower gather dash defend uplift conduct jiggle arc uppercut flick recoil express moonwalk double celebrate wring float skate dust load demonstrate itch drum
+5,2,raise/put,4955,363,0.8678,raise put lift pick lower wave bring reach place grab drop touch set clap drink wipe open rub scratch gesture wash check pour point tilt clean give fold clasp stir carry flex mix brush press adjust cover pat knock dry pass curl greet scrub close motion uncross release strum swipe signal pet cup salute cut direct unscrew transfer remove stroke replace watch write fix slouch pray cough dial hug examine shield cradle wrap scoop unzip type ride applaud unfold retrieve lock join screw cock yawn manipulate sneeze palm
+5,3,jump/run,1459,234,0.9872,jump run jog hop land sprint leap speed hurry
+5,4,sit/get,1414,26,0.8846,sit get squat crouch kneel crawl lay rise lie brace
+10,0,walk/turn,5210,1012,0.9872,walk turn stop climb pace limp curve march sneak veer strut stride saunter tiptoe creep descend stroll drift retrace wander swagger
+10,1,stand/move,7133,321,0.8660,stand move hold bend look lean stretch go return face extend shake cross sway rotate pull spread twist rest hunch proceed warm shift pretend eat flap roll bow hang exercise wiggle pose tap rock straighten support imitate swim drive seat steady leave struggle circle grasp feel sweep tie shrug search swivel dig flip stick stoop elevate mimic loosen duck reverse grip dangle guide tuck bob fly indicate approach clutch twitch shiver shimmy tip cheer dip mime arch bang steer slump inspect ring cower uplift jiggle double celebrate dust itch
+10,2,raise/put,4256,250,0.8800,raise put lift lower wave bring drop touch clap drink open rub scratch gesture check point give fold clasp flex brush press adjust cover pat curl close motion uncross release strum swipe signal cup salute direct unscrew remove watch write fix slouch pray cough dial hug examine shield cradle wrap scoop unzip type ride applaud unfold lock join cock yawn manipulate sneeze palm
+10,3,take/step,3432,117,0.8376,take step push come stumble balance fall shuffle sidestep follow slide avoid drag lose stagger regain trip wobble recover stomp jerk strafe wake shove stare angle bump startle enter glance rush
+10,4,jump/hop,886,132,0.9773,jump hop land leap speed
+10,5,sit/get,1414,26,0.8846,sit get squat crouch kneel crawl lay rise lie brace
+10,6,pick/reach,1807,14,0.2857,pick reach place grab set wipe wash pour tilt clean stir carry mix knock dry pass greet scrub pet cut transfer stroke replace retrieve screw
+10,7,run/jog,650,97,0.9897,run jog sprint hurry
+10,8,throw/swing,1411,89,0.9101,throw swing play catch punch hit box dodge pivot practice toss swat wind draw shoot slap pump block strike jab slam pitch chop receive reel fake protect position retract smack simulate travel cast row emulate serve attack bat juggle gather defend conduct arc uppercut recoil express wring float load demonstrate drum
+10,9,kick/dance,1141,54,0.9259,kick dance spin bounce alternate skip lunge switch fight thrust twirl dribble flail waltz plant cartwheel breakdance propel break widen launch dash flick moonwalk skate
+15,0,walk/stop,4725,731,0.9863,walk stop climb limp curve march sneak veer strut stride saunter tiptoe creep descend stroll drift wander
+15,1,stand/bend,3745,43,0.6047,stand bend lean cross rest eat bow pose straighten drive seat struggle tie elevate twitch arch steer slump inspect cower dust
+15,2,move/hold,4570,38,0.3421,move hold look go return face sway hunch proceed shift hang support steady leave circle grasp sweep search swivel stoop duck reverse grip dangle guide indicate approach clutch tip dip ring double itch
+15,3,raise/put,3729,93,0.8172,raise put lift lower bring drop touch clap fold clasp flex brush press adjust pat curl close motion uncross release cup fix slouch pray hug examine cradle wrap scoop type ride applaud unfold lock join yawn
+15,4,turn/pace,1738,4,nan,turn pace retrace swagger
+15,5,take/step,3432,117,0.8632,take step push come stumble balance fall shuffle sidestep follow slide avoid drag lose stagger regain trip wobble recover stomp jerk strafe wake shove stare angle bump startle enter glance rush
+15,6,jump/hop,886,132,0.9773,jump hop land leap speed
+15,7,sit/get,1414,26,0.9231,sit get squat crouch kneel crawl lay rise lie brace
+15,8,pick/reach,1807,14,0.5714,pick reach place grab set wipe wash pour tilt clean stir carry mix knock dry pass greet scrub pet cut transfer stroke replace retrieve screw
+15,9,run/jog,650,97,0.9897,run jog sprint hurry
+15,10,throw/swing,1411,89,0.9326,throw swing play catch punch hit box dodge pivot practice toss swat wind draw shoot slap pump block strike jab slam pitch chop receive reel fake protect position retract smack simulate travel cast row emulate serve attack bat juggle gather defend conduct arc uppercut recoil express wring float load demonstrate drum
+15,11,wave/rub,1311,65,0.7385,wave drink open rub scratch gesture check point give cover strum swipe signal salute direct unscrew remove watch write cough dial shield unzip cock manipulate sneeze palm
+15,12,stretch/extend,1881,40,0.7000,stretch extend shake rotate pull spread twist warm pretend flap roll exercise wiggle tap rock imitate swim feel shrug dig flip stick mimic loosen tuck bob fly shiver shimmy cheer mime bang uplift jiggle celebrate
+15,13,kick,350,27,0.9630,kick
+15,14,dance/spin,848,22,0.7727,dance spin bounce alternate skip lunge switch fight thrust twirl dribble flail waltz plant cartwheel breakdance propel break widen launch dash flick moonwalk skate
+20,0,walk/stop,4712,718,0.9903,walk stop limp curve march sneak veer strut stride saunter tiptoe creep stroll drift wander
+20,1,stand/bend,3745,43,0.6977,stand bend lean cross rest eat bow pose straighten drive seat struggle tie elevate twitch arch steer slump inspect cower dust
+20,2,move/hold,3517,26,0.2692,move hold look shift hang leave grasp sweep grip tip ring itch
+20,3,raise/lift,2997,64,0.7656,raise lift lower bring drop clap fold clasp flex pat curl motion uncross release cup pray hug cradle wrap type ride applaud unfold lock yawn
+20,4,turn/pace,1738,4,nan,turn pace retrace swagger
+20,5,take/step,2866,62,0.8065,take step come stumble avoid drag lose stagger trip wobble recover wake shove angle bump enter glance rush
+20,6,put/touch,1450,3,nan,put touch brush press adjust close fix slouch examine scoop join
+20,7,jump/hop,886,132,0.9848,jump hop land leap speed
+20,8,sit/get,1414,26,0.9231,sit get squat crouch kneel crawl lay rise lie brace
+20,9,pick/reach,1807,14,0.5714,pick reach place grab set wipe wash pour tilt clean stir carry mix knock dry pass greet scrub pet cut transfer stroke replace retrieve screw
+20,10,run/jog,650,97,0.9897,run jog sprint hurry
+20,11,throw/punch,647,34,0.9118,throw punch box practice wind shoot jab pitch fake defend uppercut demonstrate
+20,12,wave/rub,1311,65,0.8615,wave drink open rub scratch gesture check point give cover strum swipe signal salute direct unscrew remove watch write cough dial shield unzip cock manipulate sneeze palm
+20,13,stretch/extend,1881,40,0.7250,stretch extend shake rotate pull spread twist warm pretend flap roll exercise wiggle tap rock imitate swim feel shrug dig flip stick mimic loosen tuck bob fly shiver shimmy cheer mime bang uplift jiggle celebrate
+20,14,go/return,1604,3,nan,go return face sway hunch proceed support steady circle search swivel stoop duck reverse dangle guide indicate approach clutch dip double
+20,15,kick,350,27,1.0000,kick
+20,16,swing/play,1014,18,0.5000,swing play catch hit dodge pivot toss swat draw slap pump block strike slam chop receive reel protect position retract smack simulate travel cast row emulate serve attack bat juggle gather conduct arc recoil express wring float load drum
+20,17,push/balance,991,17,0.2353,push balance fall shuffle sidestep follow slide regain stomp jerk strafe stare startle
+20,18,dance/spin,848,22,0.8182,dance spin bounce alternate skip lunge switch fight thrust twirl dribble flail waltz plant cartwheel breakdance propel break widen launch dash flick moonwalk skate
+20,19,climb/descend,133,1,nan,climb descend
+30,0,walk/limp,4477,561,0.9929,walk limp curve march sneak veer strut saunter tiptoe creep stroll wander
+30,1,stand/pose,2649,13,0.4615,stand pose straighten
+30,2,move/hold,3517,26,0.2308,move hold look shift hang leave grasp sweep grip tip ring itch
+30,3,raise/lift,2895,43,0.6977,raise lift lower bring drop clasp flex pat curl motion release cup pray hug cradle wrap type ride lock yawn
+30,4,turn/pace,1738,4,nan,turn pace retrace swagger
+30,5,take/step,2866,62,0.8548,take step come stumble avoid drag lose stagger trip wobble recover wake shove angle bump enter glance rush
+30,6,put/touch,1450,3,nan,put touch brush press adjust close fix slouch examine scoop join
+30,7,bend/lean,1292,14,0.6429,bend lean bow struggle slump inspect
+30,8,stop/stride,814,3,nan,stop stride drift
+30,9,jump/hop,886,132,0.9848,jump hop land leap speed
+30,10,sit/kneel,777,3,nan,sit kneel lay lie
+30,11,pick/set,1050,8,0.6250,pick set wipe wash pour tilt clean stir mix dry scrub pet transfer stroke replace screw
+30,12,run/jog,650,97,0.9897,run jog sprint hurry
+30,13,throw/punch,647,34,0.9412,throw punch box practice wind shoot jab pitch fake defend uppercut demonstrate
+30,14,wave/strum,577,44,0.9545,wave strum signal direct shield cock
+30,15,get/crawl,544,6,1.0000,get crawl
+30,16,reach/place,1158,3,nan,reach place grab carry knock pass greet cut retrieve
+30,17,stretch/extend,1116,27,0.7037,stretch extend spread warm flap exercise wiggle rock swim shrug loosen tuck shimmy cheer jiggle celebrate
+30,18,go/return,1604,3,nan,go return face sway hunch proceed support steady circle search swivel stoop duck reverse dangle guide indicate approach clutch dip double
+30,19,squat/crouch,508,1,nan,squat crouch rise brace
+30,20,kick,350,27,1.0000,kick
+30,21,swing/play,1014,18,0.6667,swing play catch hit dodge pivot toss swat draw slap pump block strike slam chop receive reel protect position retract smack simulate travel cast row emulate serve attack bat juggle gather conduct arc recoil express wring float load drum
+30,22,push/balance,991,17,0.2941,push balance fall shuffle sidestep follow slide regain stomp jerk strafe stare startle
+30,23,dance/spin,616,22,0.8182,dance spin skip fight twirl dribble flail waltz cartwheel breakdance break launch dash moonwalk skate
+30,24,shake/rotate,959,6,0.0000,shake rotate pull twist pretend roll tap imitate feel dig flip stick mimic bob fly shiver mime bang uplift
+30,25,cross/rest,500,1,nan,cross rest eat drive seat tie elevate twitch arch steer cower dust
+30,26,clap/fold,198,12,0.7500,clap fold uncross applaud unfold
+30,27,climb/descend,133,1,nan,climb descend
+30,28,rub/drink,795,15,0.5333,drink open rub scratch gesture check point give cover swipe salute unscrew remove watch write cough dial unzip manipulate sneeze palm
+30,29,bounce/alternate,276,0,nan,bounce alternate lunge switch thrust plant propel widen flick
+40,0,walk/limp,4477,561,0.9929,walk limp curve march sneak veer strut saunter tiptoe creep stroll wander
+40,1,stand/pose,2649,13,0.6154,stand pose straighten
+40,2,move/shift,2083,16,0.3125,move shift sweep
+40,3,raise/lift,2895,43,0.7442,raise lift lower bring drop clasp flex pat curl motion release cup pray hug cradle wrap type ride lock yawn
+40,4,turn/pace,1738,4,nan,turn pace retrace swagger
+40,5,take/step,2630,59,0.9153,take step stumble avoid drag lose trip wobble recover shove glance
+40,6,hold/look,1780,6,0.1667,hold look hang leave grasp grip tip ring itch
+40,7,put/touch,1450,3,nan,put touch brush press adjust close fix slouch examine scoop join
+40,8,bend/lean,1292,14,0.6429,bend lean bow struggle slump inspect
+40,9,stop/stride,814,3,nan,stop stride drift
+40,10,jump/hop,886,132,0.9848,jump hop land leap speed
+40,11,sit/kneel,777,3,nan,sit kneel lay lie
+40,12,pick/set,865,1,nan,pick set pour clean mix dry pet transfer replace
+40,13,run/jog,650,97,0.9897,run jog sprint hurry
+40,14,throw/punch,647,34,0.9706,throw punch box practice wind shoot jab pitch fake defend uppercut demonstrate
+40,15,wave/strum,577,44,0.9545,wave strum signal direct shield cock
+40,16,get,506,0,nan,get
+40,17,reach/place,1158,3,nan,reach place grab carry knock pass greet cut retrieve
+40,18,stretch/extend,1116,27,0.7778,stretch extend spread warm flap exercise wiggle rock swim shrug loosen tuck shimmy cheer jiggle celebrate
+40,19,go/hunch,645,1,nan,go hunch support steady search stoop dangle guide approach
+40,20,squat/crouch,508,1,nan,squat crouch rise brace
+40,21,return/face,1033,2,nan,return face sway proceed circle swivel duck reverse indicate clutch dip double
+40,22,kick,350,27,1.0000,kick
+40,23,swing/catch,762,9,0.6667,swing catch hit dodge pivot draw pump block strike protect position retract travel emulate attack arc recoil float load
+40,24,push/balance,643,9,0.5556,push balance fall regain stomp
+40,25,dance/fight,382,14,1.0000,dance fight twirl dribble flail waltz breakdance launch
+40,26,shake/rotate,959,6,0.0000,shake rotate pull twist pretend roll tap imitate feel dig flip stick mimic bob fly shiver mime bang uplift
+40,27,come/stagger,345,1,nan,come stagger wake angle bump enter rush
+40,28,cross/rest,500,1,nan,cross rest eat drive seat tie elevate twitch arch steer cower dust
+40,29,spin/skip,258,8,0.3750,spin skip cartwheel break dash moonwalk skate
+40,30,play/toss,349,6,0.6667,play toss swat slap slam chop receive reel smack simulate cast row serve bat juggle gather conduct express wring drum
+40,31,clap/applaud,133,12,0.7500,clap applaud
+40,32,climb/descend,133,1,nan,climb descend
+40,33,drink/scratch,288,7,0.5714,drink scratch check
+40,34,wipe/wash,321,5,0.8000,wipe wash tilt stir scrub stroke screw
+40,35,rub/open,570,4,nan,open rub gesture point give cover swipe salute unscrew remove watch write cough dial unzip manipulate sneeze palm
+40,36,shuffle/sidestep,375,6,0.0000,shuffle sidestep follow slide jerk strafe stare startle
+40,37,crawl,109,4,nan,crawl
+40,38,bounce/alternate,276,0,nan,bounce alternate lunge switch thrust plant propel widen flick
+40,39,fold/uncross,65,0,nan,fold uncross unfold
+50,0,walk/limp,4471,530,0.9925,walk limp march sneak tiptoe creep wander
+50,1,stand/pose,2649,13,0.5385,stand pose straighten
+50,2,move/shift,2083,16,0.3750,move shift sweep
+50,3,raise/bring,2057,8,0.0000,raise bring clasp flex pat motion cup cradle wrap type ride lock
+50,4,turn/swagger,1671,4,nan,turn swagger
+50,5,take/step,2430,52,0.8654,take step drag wobble
+50,6,hold/grasp,1172,3,nan,hold grasp grip
+50,7,put/touch,1450,3,nan,put touch brush press adjust close fix slouch examine scoop join
+50,8,lift/lower,1571,11,0.9091,lift lower drop curl release pray hug yawn
+50,9,bend/lean,1292,14,0.6429,bend lean bow struggle slump inspect
+50,10,stop/stride,814,3,nan,stop stride drift
+50,11,jump/hop,886,132,0.9848,jump hop land leap speed
+50,12,sit/kneel,777,3,nan,sit kneel lay lie
+50,13,pick/set,865,1,nan,pick set pour clean mix dry pet transfer replace
+50,14,run/jog,650,97,0.9897,run jog sprint hurry
+50,15,look/hang,723,2,nan,look hang leave tip ring itch
+50,16,throw/punch,647,34,0.9706,throw punch box practice wind shoot jab pitch fake defend uppercut demonstrate
+50,17,wave/strum,577,44,0.9545,wave strum signal direct shield cock
+50,18,get,506,0,nan,get
+50,19,reach/grab,844,3,nan,reach grab carry knock pass greet cut retrieve
+50,20,stretch/extend,868,15,0.4667,stretch extend flap wiggle rock shrug tuck cheer celebrate
+50,21,go/hunch,645,1,nan,go hunch support steady search stoop dangle guide approach
+50,22,place,404,0,nan,place
+50,23,squat/crouch,508,1,nan,squat crouch rise brace
+50,24,return/face,1033,2,nan,return face sway proceed circle swivel duck reverse indicate clutch dip double
+50,25,kick,350,27,0.9630,kick
+50,26,swing/catch,762,9,0.4444,swing catch hit dodge pivot draw pump block strike protect position retract travel emulate attack arc recoil float load
+50,27,push/balance,643,9,0.4444,push balance fall regain stomp
+50,28,dance/fight,382,14,0.8571,dance fight twirl dribble flail waltz breakdance launch
+50,29,shake/pull,570,4,nan,shake pull pretend tap feel dig stick mimic shiver bang uplift
+50,30,come/stagger,345,1,nan,come stagger wake angle bump enter rush
+50,31,cross/rest,357,1,nan,cross rest elevate arch dust
+50,32,rotate/twist,425,2,nan,rotate twist roll imitate flip bob fly mime
+50,33,stumble/avoid,341,1,nan,stumble avoid lose trip recover shove glance
+50,34,spin/skip,258,8,0.3750,spin skip cartwheel break dash moonwalk skate
+50,35,play/toss,349,6,0.6667,play toss swat slap slam chop receive reel smack simulate cast row serve bat juggle gather conduct express wring drum
+50,36,clap/applaud,133,12,0.8333,clap applaud
+50,37,spread/warm,312,10,0.9000,spread warm exercise swim loosen shimmy jiggle
+50,38,climb/descend,133,1,nan,climb descend
+50,39,drink/scratch,288,7,0.8571,drink scratch check
+50,40,wipe/wash,321,5,0.8000,wipe wash tilt stir scrub stroke screw
+50,41,rub/open,570,4,nan,open rub gesture point give cover swipe salute unscrew remove watch write cough dial unzip manipulate sneeze palm
+50,42,shuffle/slide,291,3,nan,shuffle follow slide jerk stare startle
+50,43,pace/retrace,120,0,nan,pace retrace
+50,44,crawl,109,4,nan,crawl
+50,45,sidestep/strafe,103,1,nan,sidestep strafe
+50,46,bounce/alternate,276,0,nan,bounce alternate lunge switch thrust plant propel widen flick
+50,47,eat/seat,149,0,nan,eat drive seat tie twitch steer cower
+50,48,fold/uncross,65,0,nan,fold uncross unfold
+50,49,curve/veer,105,0,nan,curve veer strut saunter stroll
+60,0,walk/limp,4471,530,0.9925,walk limp march sneak tiptoe creep wander
+60,1,stand/pose,2649,13,0.5385,stand pose straighten
+60,2,move/shift,2083,16,0.3750,move shift sweep
+60,3,raise/bring,2057,8,0.1250,raise bring clasp flex pat motion cup cradle wrap type ride lock
+60,4,turn/swagger,1671,4,nan,turn swagger
+60,5,take/wobble,1606,18,0.7778,take wobble
+60,6,hold/grasp,1172,3,nan,hold grasp grip
+60,7,step/drag,1174,3,nan,step drag
+60,8,put/brush,1210,2,nan,put brush press close fix examine join
+60,9,lift/curl,953,11,0.9091,lift curl
+60,10,bend/lean,1292,14,0.6429,bend lean bow struggle slump inspect
+60,11,stop/stride,814,3,nan,stop stride drift
+60,12,jump/hop,886,132,0.9848,jump hop land leap speed
+60,13,sit/kneel,777,3,nan,sit kneel lay lie
+60,14,pick/set,865,1,nan,pick set pour clean mix dry pet transfer replace
+60,15,run/jog,650,97,0.9897,run jog sprint hurry
+60,16,look/hang,723,2,nan,look hang leave tip ring itch
+60,17,lower/drop,804,0,nan,lower drop release pray hug yawn
+60,18,throw/punch,647,34,0.9706,throw punch box practice wind shoot jab pitch fake defend uppercut demonstrate
+60,19,wave/strum,577,44,0.9545,wave strum signal direct shield cock
+60,20,get,506,0,nan,get
+60,21,reach/grab,776,1,nan,reach grab knock greet
+60,22,stretch/extend,868,15,0.5333,stretch extend flap wiggle rock shrug tuck cheer celebrate
+60,23,go/hunch,555,1,nan,go hunch search stoop
+60,24,place,404,0,nan,place
+60,25,squat,319,0,nan,squat
+60,26,return/face,819,1,nan,return face proceed circle swivel duck reverse indicate clutch dip double
+60,27,kick,350,27,0.9630,kick
+60,28,swing/catch,675,9,0.5556,swing catch hit draw pump block strike position travel emulate arc recoil float load
+60,29,push/balance,643,9,0.4444,push balance fall regain stomp
+60,30,dance/fight,382,14,0.8571,dance fight twirl dribble flail waltz breakdance launch
+60,31,shake/pull,570,4,nan,shake pull pretend tap feel dig stick mimic shiver bang uplift
+60,32,touch/adjust,309,1,nan,touch adjust slouch scoop
+60,33,come/stagger,345,1,nan,come stagger wake angle bump enter rush
+60,34,cross/rest,357,1,nan,cross rest elevate arch dust
+60,35,sway,226,1,nan,sway
+60,36,rotate/twist,425,2,nan,rotate twist roll imitate flip bob fly mime
+60,37,stumble/avoid,341,1,nan,stumble avoid lose trip recover shove glance
+60,38,crouch/rise,231,0,nan,crouch rise brace
+60,39,spin,171,5,0.6000,spin
+60,40,play/toss,349,6,0.6667,play toss swat slap slam chop receive reel smack simulate cast row serve bat juggle gather conduct express wring drum
+60,41,clap/applaud,133,12,0.8333,clap applaud
+60,42,spread/warm,312,10,0.9000,spread warm exercise swim loosen shimmy jiggle
+60,43,climb/descend,133,1,nan,climb descend
+60,44,drink/scratch,288,7,0.8571,drink scratch check
+60,45,wipe/wash,321,5,0.8000,wipe wash tilt stir scrub stroke screw
+60,46,rub/open,280,1,nan,open rub unscrew remove cough dial manipulate sneeze
+60,47,shuffle/slide,291,3,nan,shuffle follow slide jerk stare startle
+60,48,pace/retrace,120,0,nan,pace retrace
+60,49,crawl,109,4,nan,crawl
+60,50,gesture/point,309,3,nan,gesture point give cover swipe salute watch write unzip palm
+60,51,sidestep/strafe,103,1,nan,sidestep strafe
+60,52,bounce/alternate,276,0,nan,bounce alternate lunge switch thrust plant propel widen flick
+60,53,eat/seat,149,0,nan,eat drive seat tie twitch steer cower
+60,54,skip/cartwheel,91,3,nan,skip cartwheel break dash moonwalk skate
+60,55,dodge/pivot,106,0,nan,dodge pivot protect retract attack
+60,56,fold/uncross,65,0,nan,fold uncross unfold
+60,57,carry/pass,89,2,nan,carry pass cut retrieve
+60,58,curve/veer,105,0,nan,curve veer strut saunter stroll
+60,59,support/steady,97,0,nan,support steady dangle guide approach
+80,0,walk/wander,4444,519,0.9923,walk wander
+80,1,stand/pose,2649,13,0.4615,stand pose straighten
+80,2,move/shift,2083,16,0.4375,move shift sweep
+80,3,raise,1611,5,0.0000,raise
+80,4,turn/swagger,1671,4,nan,turn swagger
+80,5,take/wobble,1606,18,0.7778,take wobble
+80,6,hold/grasp,1172,3,nan,hold grasp grip
+80,7,step/drag,1174,3,nan,step drag
+80,8,put/brush,1210,2,nan,put brush press close fix examine join
+80,9,lift/curl,953,11,0.8182,lift curl
+80,10,bend/struggle,881,3,nan,bend struggle
+80,11,stop/stride,814,3,nan,stop stride drift
+80,12,jump/land,787,95,0.9895,jump land
+80,13,sit/lay,679,2,nan,sit lay
+80,14,pick/pet,688,0,nan,pick pet replace
+80,15,run/sprint,538,18,0.6667,run sprint hurry
+80,16,look/hang,723,2,nan,look hang leave tip ring itch
+80,17,lower/drop,804,0,nan,lower drop release pray hug yawn
+80,18,throw/wind,523,22,0.9545,throw wind shoot jab pitch
+80,19,wave/strum,577,44,0.9545,wave strum signal direct shield cock
+80,20,get,506,0,nan,get
+80,21,lean/bow,523,6,0.5000,lean bow slump inspect
+80,22,bring/clasp,641,1,nan,bring clasp flex pat motion cup cradle wrap type ride lock
+80,23,reach/grab,776,1,nan,reach grab knock greet
+80,24,stretch/flap,583,14,0.5000,stretch flap wiggle shrug tuck cheer celebrate
+80,25,go,437,1,nan,go
+80,26,jog,360,23,0.9130,jog
+80,27,place,404,0,nan,place
+80,28,squat,319,0,nan,squat
+80,29,return/proceed,489,1,nan,return proceed swivel duck indicate clutch dip double
+80,30,kick,350,27,1.0000,kick
+80,31,swing/draw,443,6,0.5000,swing draw pump block strike position emulate arc float load
+80,32,push/fall,423,4,nan,push fall
+80,33,face/circle,354,0,nan,face circle reverse
+80,34,extend/rock,330,1,nan,extend rock
+80,35,dance/fight,382,14,0.7857,dance fight twirl dribble flail waltz breakdance launch
+80,36,shake/pull,570,4,nan,shake pull pretend tap feel dig stick mimic shiver bang uplift
+80,37,touch/adjust,309,1,nan,touch adjust slouch scoop
+80,38,come/stagger,345,1,nan,come stagger wake angle bump enter rush
+80,39,cross,246,1,nan,cross
+80,40,hop/leap,258,11,0.4545,hop leap speed
+80,41,sway,226,1,nan,sway
+80,42,rotate/twist,425,2,nan,rotate twist roll imitate flip bob fly mime
+80,43,stumble/avoid,341,1,nan,stumble avoid lose trip recover shove glance
+80,44,crouch/rise,231,0,nan,crouch rise brace
+80,45,balance,183,2,nan,balance
+80,46,set/pour,355,1,nan,set pour clean mix dry transfer
+80,47,spin,171,5,0.6000,spin
+80,48,play/toss,349,6,0.6667,play toss swat slap slam chop receive reel smack simulate cast row serve bat juggle gather conduct express wring drum
+80,49,catch/hit,259,1,nan,catch hit travel recoil
+80,50,punch/practice,185,4,nan,punch box practice fake defend uppercut demonstrate
+80,51,clap/applaud,133,12,0.9167,clap applaud
+80,52,spread/jiggle,136,0,nan,spread jiggle
+80,53,climb/descend,133,1,nan,climb descend
+80,54,drink/scratch,288,7,0.8571,drink scratch check
+80,55,wipe/wash,321,5,0.8000,wipe wash tilt stir scrub stroke screw
+80,56,rub/open,280,1,nan,open rub unscrew remove cough dial manipulate sneeze
+80,57,shuffle,113,3,nan,shuffle
+80,58,pace/retrace,120,0,nan,pace retrace
+80,59,kneel/lie,141,1,nan,kneel lie
+80,60,crawl,109,4,nan,crawl
+80,61,gesture/point,309,3,nan,gesture point give cover swipe salute watch write unzip palm
+80,62,rest/elevate,116,0,nan,rest elevate arch dust
+80,63,hunch/search,122,0,nan,hunch search stoop
+80,64,sidestep/strafe,103,1,nan,sidestep strafe
+80,65,bounce/propel,96,0,nan,bounce propel widen
+80,66,warm/loosen,92,1,nan,warm loosen shimmy
+80,67,slide/follow,182,0,nan,follow slide jerk stare startle
+80,68,alternate/lunge,184,0,nan,alternate lunge switch thrust plant flick
+80,69,eat,57,0,nan,eat
+80,70,skip/cartwheel,91,3,nan,skip cartwheel break dash moonwalk skate
+80,71,exercise/swim,90,9,1.0000,exercise swim
+80,72,dodge/pivot,106,0,nan,dodge pivot protect retract attack
+80,73,fold/uncross,65,0,nan,fold uncross unfold
+80,74,carry/pass,89,2,nan,carry pass cut retrieve
+80,75,regain/stomp,66,3,nan,regain stomp
+80,76,limp/march,126,3,nan,limp march sneak tiptoe creep
+80,77,curve/veer,105,0,nan,curve veer strut saunter stroll
+80,78,support/steady,97,0,nan,support steady dangle guide approach
+80,79,seat/drive,101,0,nan,drive seat tie twitch steer cower
+100,0,walk/wander,4444,519,0.9923,walk wander
+100,1,stand,2596,11,0.6364,stand
+100,2,move/shift,2083,16,0.4375,move shift sweep
+100,3,raise,1611,5,0.0000,raise
+100,4,turn/swagger,1671,4,nan,turn swagger
+100,5,take/wobble,1606,18,0.8889,take wobble
+100,6,hold/grasp,1172,3,nan,hold grasp grip
+100,7,step/drag,1174,3,nan,step drag
+100,8,put/fix,1126,2,nan,put fix join
+100,9,lift/curl,953,11,0.9091,lift curl
+100,10,bend/struggle,881,3,nan,bend struggle
+100,11,stop/stride,814,3,nan,stop stride drift
+100,12,jump/land,787,95,0.9895,jump land
+100,13,sit/lay,679,2,nan,sit lay
+100,14,pick/pet,688,0,nan,pick pet replace
+100,15,run/sprint,538,18,0.4444,run sprint hurry
+100,16,look/hang,723,2,nan,look hang leave tip ring itch
+100,17,lower/drop,804,0,nan,lower drop release pray hug yawn
+100,18,throw/wind,523,22,0.8636,throw wind shoot jab pitch
+100,19,wave/shield,537,42,0.9762,wave shield cock
+100,20,get,506,0,nan,get
+100,21,lean/slump,471,2,nan,lean slump
+100,22,bring/clasp,568,1,nan,bring clasp flex cradle ride lock
+100,23,reach/grab,776,1,nan,reach grab knock greet
+100,24,stretch/wiggle,534,11,0.4545,stretch wiggle shrug tuck cheer
+100,25,go,437,1,nan,go
+100,26,jog,360,23,0.8696,jog
+100,27,place,404,0,nan,place
+100,28,squat,319,0,nan,squat
+100,29,return,345,1,nan,return
+100,30,kick,350,27,0.9630,kick
+100,31,swing/strike,353,6,0.5000,swing strike float
+100,32,push/fall,423,4,nan,push fall
+100,33,face/circle,354,0,nan,face circle reverse
+100,34,extend/rock,330,1,nan,extend rock
+100,35,dance/launch,287,13,0.9231,dance launch
+100,36,shake/pull,421,3,nan,shake pull feel stick uplift
+100,37,touch/adjust,309,1,nan,touch adjust slouch scoop
+100,38,come/enter,268,1,nan,come enter rush
+100,39,cross,246,1,nan,cross
+100,40,hop/leap,258,11,0.5455,hop leap speed
+100,41,sway,226,1,nan,sway
+100,42,rotate/twist,425,2,nan,rotate twist roll imitate flip bob fly mime
+100,43,stumble/avoid,250,0,nan,stumble avoid glance
+100,44,crouch/rise,231,0,nan,crouch rise brace
+100,45,balance,183,2,nan,balance
+100,46,set/clean,281,0,nan,set clean dry transfer
+100,47,spin,171,5,0.6000,spin
+100,48,play/slam,203,6,0.6667,play slam receive row conduct express wring drum
+100,49,catch/travel,158,0,nan,catch travel recoil
+100,50,punch/practice,185,4,nan,punch box practice fake defend uppercut demonstrate
+100,51,clap/applaud,133,12,0.9167,clap applaud
+100,52,spread/jiggle,136,0,nan,spread jiggle
+100,53,climb/descend,133,1,nan,climb descend
+100,54,drink/scratch,220,7,0.8571,drink scratch
+100,55,wipe/wash,321,5,1.0000,wipe wash tilt stir scrub stroke screw
+100,56,rub/open,280,1,nan,open rub unscrew remove cough dial manipulate sneeze
+100,57,shuffle,113,3,nan,shuffle
+100,58,pace/retrace,120,0,nan,pace retrace
+100,59,kneel/lie,141,1,nan,kneel lie
+100,60,hit,103,1,nan,hit
+100,61,crawl,109,4,nan,crawl
+100,62,gesture/give,219,2,nan,gesture give cover swipe salute palm
+100,63,rest/elevate,116,0,nan,rest elevate arch dust
+100,64,hunch/search,122,0,nan,hunch search stoop
+100,65,proceed/swivel,149,0,nan,proceed swivel duck indicate clutch dip double
+100,66,sidestep/strafe,103,1,nan,sidestep strafe
+100,67,bounce/propel,96,0,nan,bounce propel widen
+100,68,warm/loosen,92,1,nan,warm loosen shimmy
+100,69,slide/follow,182,0,nan,follow slide jerk stare startle
+100,70,check,71,0,nan,check
+100,71,alternate/lunge,184,0,nan,alternate lunge switch thrust plant flick
+100,72,pretend/tap,155,1,nan,pretend tap dig mimic shiver bang
+100,73,pour/mix,91,1,nan,pour mix
+100,74,point/watch,96,1,nan,point watch write unzip
+100,75,eat,57,0,nan,eat
+100,76,skip/cartwheel,91,3,nan,skip cartwheel break dash moonwalk skate
+100,77,flap/celebrate,63,3,nan,flap celebrate
+100,78,bow/inspect,62,3,nan,bow inspect
+100,79,exercise/swim,90,9,1.0000,exercise swim
+100,80,pose/straighten,92,1,nan,pose straighten
+100,81,dodge/pivot,106,0,nan,dodge pivot protect retract attack
+100,82,fold/uncross,65,0,nan,fold uncross unfold
+100,83,lose/shove,58,0,nan,lose shove
+100,84,stagger/wake,78,0,nan,stagger wake angle bump
+100,85,carry/pass,89,2,nan,carry pass cut retrieve
+100,86,regain/stomp,66,3,nan,regain stomp
+100,87,limp/march,72,1,nan,limp march
+100,88,curve/veer,105,0,nan,curve veer strut saunter stroll
+100,89,trip/recover,68,0,nan,trip recover
+100,90,toss/swat,158,0,nan,toss swat slap chop reel smack simulate cast serve bat juggle gather
+100,91,brush/press,105,0,nan,brush press close examine
+100,92,support/steady,97,0,nan,support steady dangle guide approach
+100,93,fight/flail,60,1,nan,fight flail breakdance
+100,94,seat/drive,101,0,nan,drive seat tie twitch steer cower
+100,95,pat/motion,83,0,nan,pat motion cup wrap type
+100,96,draw/block,94,0,nan,draw pump block position emulate arc load
+100,97,sneak/tiptoe,54,2,nan,sneak tiptoe creep
+100,98,twirl/dribble,55,0,nan,twirl dribble waltz
+100,99,strum/signal,52,1,nan,strum signal direct
