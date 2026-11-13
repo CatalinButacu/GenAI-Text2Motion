@@ -81,7 +81,7 @@ def __evaluator(monkeypatch, ids_of_run) -> tuple[HumanMl3dGenerationEvaluator, 
     reference = [np.random.default_rng(index).normal(size=(1, 8)) for index in range(CLIPS)]
     calls: list[int] = []
 
-    def generate(generator, split, max_clips, sampling, batch_size=1, run=0):
+    def generate(generator, split, max_clips, sampling, batch_size=1, run=0, clip_list=None):
         calls.append(run)
         rng = np.random.default_rng(100 + run)
         return GenerationEvaluationSet(
@@ -134,3 +134,21 @@ def test_the_test_split_keeps_the_mirrored_clips_like_the_official_loader(tmp_pa
 
     assert test_ids == ["000001", "M000001", "000002"]
     assert val_ids == ["000003"]
+
+
+def test_a_clip_list_keeps_only_the_listed_clips_and_stops_on_an_unknown_id(tmp_path):
+    resources = SimpleNamespace(
+        clip_ids=lambda split: ["A", "B", "C"],
+        tokenizer_downsample_factor=4,
+        annotation_dir=tmp_path,
+        motion_dataset_dir=tmp_path,
+    )
+    evaluator = HumanMl3dGenerationEvaluator(cast(GuoEvaluationResources, resources))
+
+    _, every = evaluator.evaluation_samples("test", None)
+    _, listed = evaluator.evaluation_samples("test", None, ("C", "A"))
+
+    assert every["missing_files"] == 3
+    assert listed["missing_files"] == 2
+    with pytest.raises(ValueError, match="1 listed clips are not in the test split"):
+        evaluator.evaluation_samples("test", None, ("A", "Z"))

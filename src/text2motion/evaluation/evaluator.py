@@ -81,13 +81,25 @@ class HumanMl3dGenerationEvaluator:
             pieces.append((f"{clip_id}#{index}", segment, [item]))
         return pieces
 
+    def __listed_ids(self, split: Split | str, clip_list: tuple[str, ...] | None) -> list[str]:
+        ids = self.resources.clip_ids(split)
+        if clip_list is None:
+            return ids
+        unknown = sorted(set(clip_list) - set(ids))
+        if unknown:
+            raise ValueError(
+                f"{len(unknown)} listed clips are not in the {split} split: {unknown[:5]}"
+            )
+        kept = set(clip_list)
+        return [clip_id for clip_id in ids if clip_id in kept]
+
     def evaluation_samples(
-        self, split: Split | str, max_clips: int | None
+        self, split: Split | str, max_clips: int | None, clip_list: tuple[str, ...] | None = None
     ) -> tuple[list[EvaluationSample], dict[str, int]]:
         downsample = self.resources.tokenizer_downsample_factor
         dropped = {"missing_files": 0, "not_finite": 0, "out_of_length": 0, "no_caption": 0}
         samples: list[EvaluationSample] = []
-        for clip_id in self.resources.clip_ids(split)[:max_clips]:
+        for clip_id in self.__listed_ids(split, clip_list)[:max_clips]:
             text_path = self.resources.annotation_dir / f"{clip_id}.txt"
             vec_path = self.resources.motion_dataset_dir / FEATURES_DIR / f"{clip_id}.npy"
             if not text_path.is_file() or not vec_path.is_file():
@@ -129,9 +141,10 @@ class HumanMl3dGenerationEvaluator:
         sampling: SamplingConfig,
         batch_size: int = 1,
         run: int = 0,
+        clip_list: tuple[str, ...] | None = None,
     ) -> GenerationEvaluationSet:
         generator.eval()
-        samples, dropped = self.evaluation_samples(split, max_clips)
+        samples, dropped = self.evaluation_samples(split, max_clips, clip_list)
         chosen = [chosen_caption_index(sample, run) for sample in samples]
         generated: list[np.ndarray | None] = [None] * len(samples)
 
@@ -245,6 +258,7 @@ class HumanMl3dGenerationEvaluator:
             request.max_clips,
             request.sampling,
             request.batch_size,
+            clip_list=request.clip_list,
         )
         if sum(split.dropped.values()):
             logger.warning(
@@ -265,6 +279,7 @@ class HumanMl3dGenerationEvaluator:
                 request.sampling,
                 request.batch_size,
                 run=run,
+                clip_list=request.clip_list,
             )
             if repeated.sample_ids != split.sample_ids:
                 raise RuntimeError(f"generation run {run} scored a different sample set than run 0")

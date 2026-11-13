@@ -29,6 +29,7 @@ from text2motion.evaluation.contracts import (
 )
 from text2motion.generation.contracts import Backbone, BackboneChoice, SamplingConfig
 from text2motion.generation.decoder import StreamingMotionDecoder
+from text2motion.motion.storage import listed_clip_ids
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,7 @@ def run_evaluate(app: ApplicationContext, args: EvaluateRequest) -> None:
         bootstrap=args.bootstrap,
         reps=args.reps,
         batch_size=args.eval_batch_size,
+        clip_list=None if args.clip_list is None else tuple(listed_clip_ids(args.clip_list)),
     )
     run_dir = start_run(
         f"evaluate_{args.split.value}", app.config, app.config.paths.logs_dir, args.model_dump()

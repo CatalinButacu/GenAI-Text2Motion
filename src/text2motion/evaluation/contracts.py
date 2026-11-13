@@ -37,6 +37,7 @@ class GenerationEvaluationProtocol:
     bootstrap: int = 200
     reps: int = 20
     batch_size: int = 32
+    clip_list: tuple[str, ...] | None = None
 
 
 ############################################################
@@ -191,6 +192,10 @@ class EvaluateRequest(DefaultConfigRequest):
     ckpt: Path | None = Field(
         default=None,
         description="generator checkpoint path; used only when one backbone is selected",
+    )
+    clip_list: Path | None = Field(
+        default=None,
+        description="file with one clip id per line; only these clips of the split are scored",
     )
     tokenizer_ckpt: Path | None = Field(
         default=None, description="frozen tokenizer checkpoint; default from the config"
