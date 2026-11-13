@@ -1,0 +1,96 @@
+verb,choice,reason
+go,2,generic forward travel
+return,2,go back along a route
+face,2,turn to orient
+come,2,move toward a destination
+fall,1,loss of balance
+rub,1,repeated contact motion
+shuffle,1,short dragging gait
+scratch,1,repeated surface contact
+hit,1,general striking action
+hunch,1,bend forward
+proceed,2,continue traveling
+sidestep,2,lateral step
+warm,0,warming is not exercise
+shift,0,position change not travel
+wash,1,cleaning motion
+follow,2,move behind another
+check,1,inspect or examine
+pretend,2,act as if; mimic
+point,1,specific indication gesture
+clean,1,removing dirt
+skip,1,hopping gait
+box,2,boxing is fighting
+lay,1,same action synonym
+wiggle,2,small irregular motion
+drag,2,pull along a surface
+clasp,2,hold tightly
+tap,1,brief contact
+straighten,1,extend into alignment
+carry,1,transport an object
+limp,1,uneven walking gait
+curve,2,bend into a curve
+brush,1,light repeated contact
+fight,2,boxing is combat
+imitate,2,copying an action
+pat,1,light repeated touch
+swat,1,quick striking motion
+wind,1,twisting motion
+lie,1,same action synonym
+march,1,rhythmic walking gait
+leave,2,move away
+shoot,1,throw or launch
+knock,1,striking a surface
+sneak,1,stealthy locomotion
+wobble,1,unsteady side-to-side motion
+slap,1,open-hand strike
+recover,1,regain balance
+veer,0,direction change not gait
+thrust,1,push forcefully
+strike,1,general impact action
+scrub,1,vigorous cleaning motion
+pet,1,gentle repeated touch
+mimic,2,copying an action
+creep,1,slow locomotion
+strafe,2,sideways movement
+duck,1,lower body quickly
+transfer,1,move from one place
+remove,1,take away
+stroke,1,smooth repeated contact
+slam,1,forceful impact
+replace,1,put something back
+chop,1,downward striking motion
+receive,1,catch an incoming object
+slouch,2,rounded forward posture
+grip,1,hold firmly
+angle,2,tilt into a direction
+reel,1,stagger after impact
+descend,0,downward travel differs
+bob,1,small repeated vertical motion
+shield,1,block and protect
+fake,2,pretend or imitate
+indicate,1,point to signal
+protect,1,block or shield
+position,2,place in a position
+approach,2,move closer
+enter,2,move into a place
+retract,0,opposite of extending
+drift,0,passive motion differs
+shimmy,1,small rhythmic body motion
+simulate,2,act out or imitate
+retrace,2,travel back over route
+travel,2,general locomotion
+mime,2,act out an action
+speed,1,rapid running
+bang,1,forceful impact
+retrieve,1,take back or recover
+emulate,2,copy an action
+wander,2,travel without fixed direction
+bat,1,hit with an object
+widen,2,spread apart
+defend,1,block an attack
+conduct,1,direct with gestures
+jiggle,2,small rapid movement
+dust,1,remove dust
+demonstrate,1,show with actions
+smack,1,orchestrator decision: open-hand strike

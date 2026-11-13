@@ -12,6 +12,7 @@ from text2motion.motion.storage import base_clip_ids, parse_text_file
 ROOT = Path("data/HumanML3D_official")
 INVENTORY = Path("doc/notes/verb_inventory.csv")
 LABELS = (Path("doc/notes/verb_labels_data.csv"), Path("doc/notes/verb_labels_eval.csv"))
+TIEBREAK = Path("doc/notes/verb_labels_tiebreak.csv")
 ACTION = "action"
 TYPO = "typo"
 RARE_CLIPS = 150
@@ -87,11 +88,32 @@ def merged_labels(verbs: list[str]) -> dict[str, tuple[str, str, str]]:
     return merged
 
 
+def resolved_keys(merged: dict[str, tuple[str, str, str]]) -> dict[str, str]:
+    choices = {
+        row["verb"]: row["choice"] for row in csv.DictReader(TIEBREAK.open(encoding="utf-8"))
+    }
+    agreed_keys = {key for _, key, source in merged.values() if source != "split" and key}
+    keys = {}
+    for verb, (_, key, source) in merged.items():
+        if not key:
+            continue
+        if source != "split":
+            keys[verb] = key
+            continue
+        if verb not in choices:
+            raise ValueError(f"{verb}: a disputed verb has no choice in {TIEBREAK}")
+        if choices[verb] == "0":
+            keys[verb] = f"alone:{verb}"
+            continue
+        label = key.split("|")[int(choices[verb]) - 1]
+        keys[verb] = label if label in agreed_keys else f"worker{choices[verb]}:{label}"
+    return keys
+
+
 def named_groups(merged: dict[str, tuple[str, str, str]], clips: Counter) -> dict[str, str]:
     members: dict[str, list[str]] = defaultdict(list)
-    for verb, (_, key, _) in merged.items():
-        if key:
-            members[key].append(verb)
+    for verb, key in resolved_keys(merged).items():
+        members[key].append(verb)
     names = {}
     for verbs in members.values():
         actions = [verb for verb in verbs if merged[verb][0] == ACTION] or verbs
