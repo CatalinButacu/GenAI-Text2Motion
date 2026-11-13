@@ -1,0 +1,10 @@
+backbone,arm,fid_mean,fid_sd,r_top1_mean,r_top1_sd
+transformer,A_uniform,1.112,0.04,0.332,0.007
+transformer,B_motionclass,0.606,0.028,0.366,0.006
+transformer,C_replacement,1.062,0.038,0.361,0.004
+transformer,verdict,C-B 0.456 vs 0.094,A-C 0.050 vs 0.110,CLASS WEIGHTS,
+mamba,A_uniform,0.451,0.023,0.428,0.006
+mamba,B_motionclass,0.266,0.011,0.428,0.006
+mamba,C_replacement,0.73,0.034,0.43,0.006
+mamba,verdict,C-B 0.464 vs 0.071,A-C -0.279 vs 0.082,CLASS WEIGHTS,
+both,verdict,,,CLASS WEIGHTS,
