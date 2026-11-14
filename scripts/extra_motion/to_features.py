@@ -38,7 +38,7 @@ def __to_20_fps(joints: np.ndarray, sos: np.ndarray, fps: int) -> np.ndarray:
     smooth = sosfiltfilt(sos, joints.astype(np.float64), axis=0)
     if fps % TARGET_FPS == 0:
         return smooth[:: fps // TARGET_FPS]
-    return resample_poly(smooth, TARGET_FPS, fps, axis=0)
+    return resample_poly(smooth, TARGET_FPS, fps, axis=0, padtype="line")
 
 
 def __feet_forward(features: np.ndarray) -> bool:

@@ -11,5 +11,7 @@ text vs motion left leg,left ankle higher in 93% of 30 'lift the left leg' phase
 text vs motion right leg,right ankle higher in 58% of 26 'lift the right leg' phases (median +12 cm),,consistent but weak
 sample converted,376 clips (200 random seed 2026 + all 190 jump clips) -> 320 with at least 40 frames at 20 fps (0.38 h),scripts/extra_motion/to_features.py humman,
 feet forward share,0.997,,ok
-normalized |z| median ric,0.78 (no-jump clips),HumanML3D val 0.33,different pose range
-normalized |z| p99 vel,8.39 (no-jump clips),HumanML3D val 4.60,velocity outliers: jitter or fast moves; not checked
+normalized |z| median ric,0.48 no-jump / 0.51 jump (after the edge fix),HumanML3D val 0.33,wider pose range (exercise poses)
+normalized |z| p99 vel,2.66 no-jump / 4.85 jump (after the edge fix),HumanML3D val 4.60,in range
+resample edge error,zero padding of resample_poly gave the speed peak at an end frame (4 of 4 top outliers); padtype=line fixes it (end-frame peaks 1% of clips),stick-figure sheets of the top 4 before and after,fixed
+top 4 velocity outliers after the fix,squat jumps with an arm swing; smooth peaks of 6-7.5 m/s over several frames,stick-figure sheet,real motion; no jitter seen
