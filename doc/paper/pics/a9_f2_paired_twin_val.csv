@@ -1,0 +1,4 @@
+metric,transformer,mamba,difference_or_test
+fid_run0_paired_diff_ci95,0.1442,0.1516,"T-M -0.0063 [-0.1020,+0.0918]"
+r1_ci95,"0.4715 [0.4348,0.5095]","0.5000 [0.4646,0.5367]",McNemar p 0.18
+clips,765,765,val

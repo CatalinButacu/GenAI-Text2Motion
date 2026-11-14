@@ -16,7 +16,6 @@ from text2motion.app.run_log import log_metrics, start_run
 from text2motion.evaluation.contracts import GenerationEvaluationSet
 from text2motion.evaluation.embeddings import compute_guo_text_embeddings
 from text2motion.evaluation.metrics import (
-    bootstrap_fid,
     fid,
     motion_statistics,
     own_caption_ranks,
@@ -78,11 +77,9 @@ def write_paper_table(path: Path, report: dict) -> None:
         writer.writerow(["metric", "transformer", "mamba", "difference_or_test"])
         writer.writerow(
             [
-                "fid_ci95",
-                f"{fid_rows['transformer']['fid']:.4f} [{fid_rows['transformer']['fid_ci_lo']:.4f},"
-                f"{fid_rows['transformer']['fid_ci_hi']:.4f}]",
-                f"{fid_rows['mamba']['fid']:.4f} [{fid_rows['mamba']['fid_ci_lo']:.4f},"
-                f"{fid_rows['mamba']['fid_ci_hi']:.4f}]",
+                "fid_run0_paired_diff_ci95",
+                f"{fid_rows['transformer']['fid']:.4f}",
+                f"{fid_rows['mamba']['fid']:.4f}",
                 f"T-M {difference['delta_mean']:+.4f} "
                 f"[{difference['delta_ci_lo']:+.4f},{difference['delta_ci_hi']:+.4f}]",
             ]
@@ -194,14 +191,8 @@ def main() -> None:
     }
 
     fid_rows = {
-        "transformer": {
-            "fid": fid(reference, transformer_motion),
-            **bootstrap_fid(reference, transformer_motion, args.resamples, SEED),
-        },
-        "mamba": {
-            "fid": fid(reference, mamba_motion),
-            **bootstrap_fid(reference, mamba_motion, args.resamples, SEED),
-        },
+        "transformer": {"fid": fid(reference, transformer_motion)},
+        "mamba": {"fid": fid(reference, mamba_motion)},
     }
     rank_rows = {
         "transformer": rank_one_interval(transformer_hit, args.resamples),
