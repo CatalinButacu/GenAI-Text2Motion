@@ -1,0 +1,8 @@
+backbone,arm,fid_mean,fid_sd,r_top1_mean,r_top1_sd
+transformer,G4,0.168,0.011,0.494,0.0
+transformer,B_full,0.168,0.011,0.504,0.006
+transformer,verdict,G4-B 0.000 vs 0.031,R@1 +0.010,FAIL,
+mamba,G4,0.177,0.009,0.508,0.0
+mamba,B_full,0.159,0.007,0.495,0.007
+mamba,verdict,G4-B 0.018 vs 0.023,R@1 -0.013,FAIL,
+both,verdict,,,FAIL,

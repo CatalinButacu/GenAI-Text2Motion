@@ -1,0 +1,14 @@
+backbone,row,clips,g4_or_delta,b_or_ci95,verdict
+transformer,class_7,32,0.7398,0.7284,
+transformer,class_4,59,0.6120,0.6276,
+transformer,class_9,74,0.5786,0.5620,
+transformer,class_8,90,0.3864,0.4144,
+transformer,class_5,106,0.4870,0.5048,
+transformer,small_classes_B_minus_G4,765,+0.0067,"[-0.0277,+0.0379]",FAIL
+mamba,class_7,32,0.7561,0.7299,
+mamba,class_4,59,0.6429,0.6515,
+mamba,class_9,74,0.5819,0.5719,
+mamba,class_8,90,0.3981,0.4124,
+mamba,class_5,106,0.5175,0.4888,
+mamba,small_classes_B_minus_G4,765,-0.0084,"[-0.0349,+0.0180]",FAIL
+both,verdict,,,,FAIL
