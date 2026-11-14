@@ -1,0 +1,15 @@
+check,value,reference,verdict
+download data.zip sha256,52618fd7...c460072 (224 MB),Hugging Face LFS oid,match
+licence,S-Lab License 1.0 non-commercial,data/extra_motion/humman_mogen/LICENSE,research use allowed
+clips total / unmirrored,6264 / 3132,file names r* are mirrors,our loader mirrors so 3132 are new
+actions / subjects,160 / 179,file names,
+unique overall sentences,340 of 14014,annotations 'all' field,very low text variety
+frame rate,30 fps; gravity fit on 816 flight phases median 31.8 IQR 30.4-36.1,HuMMan paper arXiv:2204.13686 says 30 FPS,confirmed
+up axis,z-up source; proper rotation (x z -y) to y-up,src/text2motion/motion/amass.py:299 uses a mirror swap,376 of 376 clips y-up
+left-right chirality,-0.95,HumanML3D joints -0.98,match (the AMASS swap gives +0.95 = mirror)
+text vs motion left leg,left ankle higher in 93% of 30 'lift the left leg' phases (median +49 cm),,consistent
+text vs motion right leg,right ankle higher in 58% of 26 'lift the right leg' phases (median +12 cm),,consistent but weak
+sample converted,376 clips (200 random seed 2026 + all 190 jump clips) -> 320 with at least 40 frames at 20 fps (0.38 h),scripts/extra_motion/to_features.py humman,
+feet forward share,0.997,,ok
+normalized |z| median ric,0.78 (no-jump clips),HumanML3D val 0.33,different pose range
+normalized |z| p99 vel,8.39 (no-jump clips),HumanML3D val 4.60,velocity outliers: jitter or fast moves; not checked
