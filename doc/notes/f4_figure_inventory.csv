@@ -1,15 +1,15 @@
 label,location,shows,model_now,reads_generator,proposed_action,new_source
 tab:tok_matrix,04_chapter.tex:55,tokenizer reconstruction FID,tokenizers,no,keep,-
 tab:tok_health,04_chapter.tex:89,tokenizer perplexity and usage,tokenizers,no,keep,-
-tab:tok_downstream,04_chapter.tex:113,test FID of generators per token stream,old pilot generators,yes,label historical,-
+tab:tok_downstream,04_chapter.tex:113,test FID of generators per token stream,old pilot generators,yes,remove (owner 2026-11-15: replace all),-
 tab:twin_config,05_chapter.tex:76,the two generators,34M pair,yes,regenerate,configs/generator/a7/width_320_step50.yaml
 tab:twin_results,05_chapter.tex:123,test quality 20 runs 2189 clips,34M pair,yes,regenerate,artifacts/outputs/a9_f2_test_eval_{transformer;mamba}.err (4648 clips)
 tab:twin_paired,05_chapter.tex:151,paired twin tests 2189 clips,34M pair,yes,regenerate,doc/paper/pics/a9_f2_paired_twin_test.csv
-tab:twin_100,05_chapter.tex:181,test FID at 60 and 100 epochs,34M pair,yes,label historical,-
-tab:prior_ablation,05_chapter.tex:206,AMASS prior effect,pilot,yes,label historical,-
-tab:prior_holdout,05_chapter.tex:222,prior cross-entropy,priors,yes,label historical,-
-tab:dyn_test,05_chapter.tex:262,dynamics fine-tune test,34M pair,yes,label historical,-
-tab:dyn_natural,05_chapter.tex:278,plausibility 64 clips,34M pair,yes,regenerate from F2 jerk/accel/skate or label historical,doc/paper/pics/a9_f2_paired_twin_test.csv
+tab:twin_100,05_chapter.tex:181,test FID at 60 and 100 epochs,34M pair,yes,remove (owner 2026-11-15: replace all),-
+tab:prior_ablation,05_chapter.tex:206,AMASS prior effect,pilot,yes,remove (owner 2026-11-15: replace all),-
+tab:prior_holdout,05_chapter.tex:222,prior cross-entropy,priors,yes,remove (owner 2026-11-15: replace all),-
+tab:dyn_test,05_chapter.tex:262,dynamics fine-tune test,34M pair,yes,remove (owner 2026-11-15: replace all),-
+tab:dyn_natural,05_chapter.tex:278,plausibility 64 clips,34M pair,yes,regenerate from F2 jerk/accel/skate,doc/paper/pics/a9_f2_paired_twin_test.csv
 fig:modules,06_chapter.tex:23,module diagram,code,no,keep,-
 fig:streaming,06_chapter.tex:45,state size and latency vs horizon,final100m config,yes,regenerate,doc/paper/pics/a9_f3_streaming_bench.csv
 tab:stream_state,06_chapter.tex:51,state at three horizons,final100m config,yes,regenerate,doc/paper/pics/a9_f3_streaming_bench.csv
