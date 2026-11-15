@@ -32,9 +32,9 @@ We keep this contract fixed for one reason: the evaluator of \secref{sec:protoco
 \section{Datasets, Splits and Preprocessing}
 \label{sec:protocol_data}
 
-\paragraph{HumanML3D.} The captioned corpus has about $28.6$ hours of motion with several text descriptions per clip. We use the official train, validation and test splits. Clips shorter than 40 frames are dropped and clips are cropped to at most 196 frames. With left--right mirror augmentation, the training set has $22{,}418$ clips. The test split used for every reported generation result has $2189$ clips.
+\paragraph{HumanML3D.} The captioned corpus has about $28.6$ hours of motion with several text descriptions per clip. We use the official train, validation and test splits. Clips shorter than 40 frames are dropped and clips are cropped to at most 196 frames. With left--right mirror augmentation, the training set has $22{,}418$ clips. The generation results of \chapref{chap:generator} score $4648$ test segments: the official test list with its mirrored entries, cut into segments as in the reference code of Guo et al.~\cite{guo2022humanml3d}. The earlier protocol of this project used the $2189$ test clips without mirrors.
 
-\paragraph{AMASS.} AMASS~\cite{mahmood2019amass} is a large collection of motion capture without captions. We convert it to the same 263-dimensional representation by running the SMPL-X body model~\cite{pavlakos2019smplx} forward, keeping the first 22 joints and retargeting them to the HumanML3D skeleton. This yields $13{,}249$ sequences ($40.6$ hours). It is used only for the unconditional pretraining of \chapref{chap:generator}. The body model differs from the one used to build the original HumanML3D; the retargeting step to a uniform skeleton removes most of that difference, and the tokenizer's reconstruction FID on HumanML3D is the check that the pipeline is consistent.
+\paragraph{AMASS.} AMASS~\cite{mahmood2019amass} is a large collection of motion capture without captions. We convert it to the same 263-dimensional representation by running the SMPL-X body model~\cite{pavlakos2019smplx} forward, keeping the first 22 joints and retargeting them to the HumanML3D skeleton. This yields $13{,}249$ sequences ($40.6$ hours). Earlier generators of the project used it for unconditional pretraining; the final generators of \chapref{chap:generator} do not use it. The body model differs from the one used to build the original HumanML3D; the retargeting step to a uniform skeleton removes most of that difference, and the tokenizer's reconstruction FID on HumanML3D is the check that the pipeline is consistent.
 
 \section{Evaluation Metrics and the Guo Evaluator}
 \label{sec:protocol_metrics}
@@ -58,7 +58,7 @@ Lower is better. The estimate is biased by sample size, so FID values are compar
 
 For the tokenizer we report \emph{reconstruction FID}: \eqref{eq:fid} between real motions and the same motions after encoding and decoding.
 
-\paragraph{Harness check.} Running real test motions through our harness gives R@1 $= 0.514$, against the published $0.511$~\cite{guo2022humanml3d}. This confirms that the evaluator, the statistics and the data loading agree with the reference.
+\paragraph{Harness check.} Running the 2189 real test clips through our harness gives R@1 $= 0.514$, against the published $0.511$~\cite{guo2022humanml3d}. This confirms that the evaluator, the statistics and the data loading agree with the reference.
 
 \section{Model Selection and Reporting Protocol}
 \label{sec:protocol_selection}
