@@ -28,6 +28,7 @@ from text2motion.motion.storage import (
     RARE_VERB_MIN_CLIPS,
     RARE_VERB_POWER,
     TEXTS_DIR,
+    VERB_BALANCE_MIN_CLIPS,
     base_clip_ids,
     caption_verbs,
     clip_frame_counts,
@@ -92,15 +93,42 @@ class CaptionedMotionDataset(Dataset):
             self._clip_weights = self.__motion_class_weights(clip_classes)
         if data.clip_weighting == ClipWeighting.UNIFORM_REPLACEMENT and self._train:
             self._clip_weights = np.ones(len(self._ids), dtype=np.float64)
+        if data.clip_weighting == ClipWeighting.VERB and self._train:
+            self._clip_weights = self.__verb_balance_weights(self.__clip_verbs())
 
-    def __clip_classes(self, classes: dict[str, int]) -> list[frozenset[int]]:
+    def __clip_verbs(self) -> list[frozenset[str]]:
         found = []
         for clip_id in self._ids:
             annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
-            verbs = frozenset().union(*(caption_verbs(a) for a in annotations))
+            found.append(frozenset().union(*(caption_verbs(a) for a in annotations)))
+        return found
+
+    def __clip_classes(self, classes: dict[str, int]) -> list[frozenset[int]]:
+        found = []
+        for verbs in self.__clip_verbs():
             labels = frozenset(classes[verb] for verb in verbs if verb in classes)
             found.append(labels or frozenset({NO_MOTION_CLASS}))
         return found
+
+    def __verb_balance_weights(self, clip_verbs: list[frozenset[str]]) -> np.ndarray:
+        counts = Counter(
+            verb
+            for clip_id, verbs in zip(self._ids, clip_verbs, strict=True)
+            if not clip_id.startswith("M")
+            for verb in verbs
+        )
+        kept = {verb: n for verb, n in counts.items() if n >= VERB_BALANCE_MIN_CLIPS}
+        if not kept:
+            raise ValueError(
+                f"verb clip weighting needs a verb in at least {VERB_BALANCE_MIN_CLIPS} "
+                "train clips; no verb has that many"
+            )
+        largest_verb_weight = 1.0 / max(kept.values())
+        weights = [
+            sum(1.0 / kept[verb] for verb in verbs if verb in kept) or largest_verb_weight
+            for verbs in clip_verbs
+        ]
+        return np.asarray(weights, dtype=np.float64)
 
     @staticmethod
     def __motion_class_weights(clip_classes: list[frozenset[int]]) -> np.ndarray:

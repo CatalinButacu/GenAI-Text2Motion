@@ -52,6 +52,7 @@ class ClipWeighting(StrEnum):
     UNIFORM = "uniform"
     MOTION_CLASS = "motion_class"
     UNIFORM_REPLACEMENT = "uniform_replacement"
+    VERB = "verb"
 
 
 ############################################################

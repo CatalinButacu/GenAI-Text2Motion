@@ -133,3 +133,71 @@ def test_yaml_values_select_motion_class_weighting():
 
     assert data.clip_weighting is ClipWeighting.MOTION_CLASS
     assert Path(data.motion_classes or "") == Path("doc/paper/pics/verb_cluster_map.csv")
+
+
+def __write_verb_clips(root: Path) -> None:
+    (root / FEATURES_DIR).mkdir()
+    (root / TEXTS_DIR).mkdir()
+    np.save(root / MEAN_FILE, np.zeros(DIM, np.float32))
+    np.save(root / STD_FILE, np.ones(DIM, np.float32))
+    wait = "a person waits#a/DET person/NOUN wait/VERB#0.0#0.0"
+    captions = [WALK] * VERB_WALK_CLIPS + [KICK] * VERB_KICK_CLIPS + [wait]
+    names = [f"V{index}" for index in range(len(captions))]
+    for name, caption in zip(names, captions, strict=True):
+        np.save(root / FEATURES_DIR / f"{name}.npy", np.zeros((60, DIM), np.float32))
+        (root / TEXTS_DIR / f"{name}.txt").write_text(caption + "\n", encoding="utf-8")
+    (root / SPLIT_FILES[Split.TRAIN]).write_text("\n".join(names) + "\n", encoding="utf-8")
+
+
+VERB_WALK_CLIPS = 30
+VERB_KICK_CLIPS = 20
+VERB_CONFIG = MotionDataConfig(mirror_augment=False, clip_weighting=ClipWeighting.VERB)
+
+
+def test_each_frequent_verb_gets_the_same_total_weight(tmp_path):
+    __write_verb_clips(tmp_path)
+    weights = CaptionedMotionDataset(tmp_path, VERB_CONFIG, seed=2026).clip_weights
+
+    assert weights is not None
+    walk = weights[:VERB_WALK_CLIPS]
+    kick = weights[VERB_WALK_CLIPS : VERB_WALK_CLIPS + VERB_KICK_CLIPS]
+    np.testing.assert_allclose(walk.sum(), 1.0)
+    np.testing.assert_allclose(kick.sum(), 1.0)
+
+
+def test_a_clip_without_a_frequent_verb_gets_the_largest_verb_weight(tmp_path):
+    __write_verb_clips(tmp_path)
+    weights = CaptionedMotionDataset(tmp_path, VERB_CONFIG, seed=2026).clip_weights
+
+    assert weights is not None
+    np.testing.assert_allclose(weights[-1], 1.0 / VERB_WALK_CLIPS)
+
+
+def test_the_verb_loader_draws_walk_and_kick_alike(tmp_path):
+    __write_verb_clips(tmp_path)
+    module = MotionDataModule(tmp_path, VERB_CONFIG, seed=2026)
+    sampler = module.captioned_batch_loader(Split.TRAIN, 4).sampler
+
+    draws = [index for _ in range(300) for index in sampler]
+    kick_share = np.mean(
+        [VERB_WALK_CLIPS <= index < VERB_WALK_CLIPS + VERB_KICK_CLIPS for index in draws]
+    )
+    expected = 1.0 / (2.0 + 1.0 / VERB_WALK_CLIPS)
+    assert abs(kick_share - expected) < 0.03
+    assert len(list(sampler)) == VERB_WALK_CLIPS + VERB_KICK_CLIPS + 1
+
+
+def test_verb_weighting_without_a_frequent_verb_stops(tmp_path):
+    __write_clips(tmp_path)
+    (tmp_path / TEXTS_DIR / "C19.txt").write_text(
+        "a person#a/DET person/NOUN#0.0#0.0\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="verb clip weighting needs a verb"):
+        CaptionedMotionDataset(tmp_path, VERB_CONFIG, seed=2026)
+
+
+def test_yaml_value_selects_verb_weighting():
+    data = from_mapping(MotionDataConfig, {"clip_weighting": "verb"})
+
+    assert data.clip_weighting is ClipWeighting.VERB
