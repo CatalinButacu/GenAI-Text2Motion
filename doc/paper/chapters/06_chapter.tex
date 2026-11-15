@@ -103,45 +103,41 @@ At $r = 4$ the streamed motion is identical to the whole-sequence decode that pr
 \section{Training Cost versus Inference Cost}
 \label{sec:stream_cost}
 
-The state-space generator is much slower to train than the transformer in our implementation. This section measures the difference and shows that most of it does not carry over to inference.
+The state-space generator is slower than the transformer in training and at inference. This section measures both costs.
 
 \begin{table}[H]
 \centering
-\caption{Measured cost of the two 34M generators on the 4~GB GPU. Inference is for a 120-frame clip (30 steps) with the sampling settings of \tabref{tab:twin_config}.}
+\caption{Measured cost of the two generators of \chapref{chap:generator} on the 4~GB GPU. Training uses the compiled scan kernel and no gradient checkpointing. Inference is one stream with the full state, for a 120-frame clip (30 steps) with the sampling settings of \tabref{tab:twin_config}, without the motion decoder; each value is the slowest of 5 repetitions after one warm-up.}
 \label{tab:cost}
 \begin{tabular}{lrrr}
 \toprule
  & Transformer & State-space & Ratio \\
 \midrule
-Training, per epoch & 7.4 min & 66.5 min & $9.0\times$ \\
-Training, 60 epochs & 7.4 h & 66.5 h & $9.0\times$ \\
-Training, 100 epochs & 12.3 h & 110.8 h & $9.0\times$ \\
+Training, per epoch & 7.1 min & 9.6 min & $1.4\times$ \\
+Training, 60 epochs & 7.1 h & 9.6 h & $1.4\times$ \\
+Training, to the stop rule & 7.1 h (60 epochs) & 6.5 h (41 epochs) & -- \\
 \midrule
-Inference, per step & 9.4 ms & 20.0 ms & $2.1\times$ \\
-Inference, whole clip & 307 ms & 629 ms & $2.0\times$ \\
-Speed relative to 20 fps playback & $19.5\times$ & $9.6\times$ & -- \\
+Inference, per step & 8.3 ms & 17.9 ms & $2.2\times$ \\
+Inference, whole clip & 249 ms & 537 ms & $2.2\times$ \\
+Speed relative to 20 fps playback & $24\times$ & $11\times$ & -- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The training gap is $9.0\times$ and the inference gap is $2.1\times$. They differ because the training gap is a product of three factors, of which only one survives at inference.
+The two gaps have different causes.
+\begin{itemize}
+\item In training, the compiled kernel computes the scan of each state-space layer over the whole sequence in one pass. The gap is $1.4\times$, less than the ratio of the layer counts (15 against 8, $1.9\times$).
+\item At inference, each step of a state-space layer runs in plain PyTorch as a sequence of small operations. The gap is $2.2\times$, a little more than the ratio of the layer counts.
+\end{itemize}
 
-\begin{enumerate}
-\item \emph{Gradient checkpointing} recomputes each block's forward pass during the backward pass. Inference has no backward pass.
-\item \emph{The parallel scan} runs over the whole sequence in about $\log_2 49 \approx 6$ rounds, each materialising full-sequence tensors. The step path processes one token and never does this.
-\item \emph{The layer count}, 15 against 8, applies in both regimes.
-\end{enumerate}
-
-The inference gap of $2.1\times$ agrees with the factor of two observed independently in \secref{sec:stream_state} on different models. Both generators produce motion many times faster than it is played back, so the slower one is still comfortably real-time.
-
-The training cost is a property of an implementation without the compiled kernel on a small GPU. It is a practical limitation of this work, since it restricted the number of runs we could afford, but it is not inherited by a deployed model.
+The inference gap agrees with the latency panel of \figref{fig:streaming}. Both generators produce motion many times faster than it is played back, so the slower one is still real-time. A fused step kernel would lower the inference cost of the state-space generator; our build does not have one.
 
 \section{Behaviour Beyond the Trained Length}
 \label{sec:stream_long}
 
 The result of \secref{sec:stream_state} is about memory. It does not say that the motion stays good when the stream is long. Both generators were trained on clips of at most 49 latent tokens (196 frames). This section measures what happens after that length.
 
-\paragraph{Setup.} We generated 196 tokens (39 seconds) for 32 test captions with each of the two 34M generators, with the sampling settings of \tabref{tab:twin_config} and the same random numbers for every policy. Each stream was cut into four segments of 49 tokens. For each segment we computed the distance between the motion and its caption in the evaluator space of \secref{sec:protocol_metrics} (lower is better), and the foot sliding of \secref{sec:gen_dynamics}. The first segment has the length of a training clip. The later segments are continuations, which the evaluator did not see in its own training, so their absolute values are not comparable with \tabref{tab:twin_results}. The comparison between policies at the same segment is valid.
+\paragraph{Setup.} We generated 343 tokens (68.6 seconds) for 32 validation captions with each of the two generators of \chapref{chap:generator}, with the sampling settings of \tabref{tab:twin_config} and the same random numbers for every policy. Each stream was cut into seven segments of 49 tokens. For each segment we computed the distance between the motion and its caption in the evaluator space of \secref{sec:protocol_metrics} (lower is better), the retrieval of the correct caption among the 32, and the foot sliding of \tabref{tab:twin_paired}. The first segment has the length of a training clip. The later segments are continuations, which the evaluator did not see in its own training, so their absolute values are not comparable with \tabref{tab:twin_results}. The comparison between policies at the same segment is valid.
 
 \paragraph{Memory policies.} A policy says what the generator remembers.
 \begin{itemize}
@@ -151,29 +147,33 @@ The result of \secref{sec:stream_state} is about memory. It does not say that th
 
 \begin{table}[H]
 \centering
-\caption{Distance between motion and caption for four consecutive segments of 49 tokens, and the cost per token. Segment 1 has the length of a training clip. 32 captions, one sample each.}
+\caption{Distance between motion and caption for seven consecutive segments of 49 tokens (9.8 seconds each), and the wall time per token step for a batch of 4 streams, decoder included. Segment 1 has the length of a training clip. 32 validation captions, one sample each.}
 \label{tab:long_stream}
-\begin{tabular}{llrrrrr}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{llrrrrrrrr}
 \toprule
-Generator & Policy & Seg. 1 & Seg. 2 & Seg. 3 & Seg. 4 & ms per token \\
+Generator & Policy & Seg. 1 & Seg. 2 & Seg. 3 & Seg. 4 & Seg. 5 & Seg. 6 & Seg. 7 & ms per step \\
 \midrule
-State-space & full state & 2.95 & 6.91 & 8.45 & 8.41 & 18 \\
-State-space & reset every 32, keep 16 & 3.00 & 3.67 & 3.46 & 3.78 & 27 \\
-State-space & reset every 8, keep 16 & 2.99 & 2.97 & 3.11 & 3.11 & 47 \\
-State-space & reset every 1, keep 16 & 2.94 & 3.29 & 3.25 & 3.23 & 276 \\
-State-space & reset every 1, keep 47 & 2.95 & 4.50 & 5.50 & 5.20 & 771 \\
+State-space & full state & 3.28 & 7.41 & 8.38 & 8.45 & 8.59 & 8.65 & 8.50 & 17 \\
+State-space & reset every 32, keep 16 & 3.12 & 4.04 & 4.01 & 4.39 & 3.65 & 4.00 & 4.48 & 26 \\
+State-space & reset every 8, keep 16 & 3.16 & 3.48 & 3.74 & 3.29 & 3.89 & 4.11 & 3.70 & 47 \\
+State-space & reset every 1, keep 16 & 2.94 & 3.19 & 3.59 & 3.78 & 3.63 & 3.39 & 3.59 & 258 \\
+State-space & reset every 1, keep 47 & 3.27 & 4.55 & 4.15 & 4.51 & 4.91 & 5.21 & 4.88 & 700 \\
 \midrule
-Transformer & reset every 32, keep 16 & 2.82 & 3.46 & 3.49 & 3.30 & 11 \\
-Transformer & reset every 8, keep 16 & 2.85 & 3.03 & 3.10 & 2.82 & 12 \\
-Transformer & reset every 1, keep 16 & 2.73 & 3.14 & 2.98 & 3.18 & 33 \\
-Transformer & reset every 1, keep 47 & 2.73 & 3.73 & 4.47 & 4.54 & 89 \\
+Transformer & reset every 32, keep 16 & 3.04 & 3.93 & 3.98 & 3.72 & 3.72 & 3.55 & 3.96 & 9 \\
+Transformer & reset every 8, keep 16 & 3.18 & 3.63 & 3.45 & 3.80 & 3.76 & 3.76 & 3.74 & 10 \\
+Transformer & reset every 1, keep 16 & 2.85 & 3.05 & 3.68 & 3.58 & 3.63 & 3.24 & 3.34 & 21 \\
+Transformer & reset every 1, keep 47 & 2.87 & 4.53 & 4.60 & 4.39 & 4.45 & 4.46 & 4.78 & 44 \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
-\paragraph{The full state fails after the trained length.} With the full recurrent state, the state-space generator is as good as any policy in the first segment. In the second segment the distance to the caption rises from $2.95$ to $6.91$, and it stays above $8$ afterwards. Retrieval of the correct caption among the 32 falls from $81\%$ to about $22\%$ at rank three. Foot sliding rises from $0.31$ to $0.90$~m/s. The state has a constant size at any length, but its content is valid only for the lengths that training covered.
+\paragraph{The full state fails after the trained length.} With the full recurrent state, the distance of the state-space generator in the first segment ($3.28$) is close to that of the reset policies ($2.94$ to $3.27$). In the second segment the distance rises to $7.41$, and it stays above $8.3$ afterwards. Retrieval of the correct caption at rank one falls from $0.34$ to $0.09$, and to $0.03$ or less from the fourth segment; at rank three it falls from $0.78$ to $0.12$ in the last segment. Foot sliding rises from $0.30$ to $0.59$~m/s. The state has a constant size at any length, but its content is valid only for the lengths that training covered.
 
-\paragraph{A short memory restores the quality.} When the state is rebuilt from the last 16 tokens, the later segments stay close to the first one for both generators. Rebuilding every 8 tokens is better than every 32 tokens (for the state-space model, $2.97$ to $3.11$ against $3.46$ to $3.78$) and still runs faster than playback, which needs one token every 200~ms. A long kept context is worse than a short one: with 47 kept tokens the generator is always near the end of a training clip, where clips come to rest, and the motion fades.
+\paragraph{A short memory restores the quality.} When the state is rebuilt from the last 16 tokens, the later segments stay close to the first one for both generators. With a reset every 8 tokens, the mean distance of segments 2 to 7 is $3.70$ for the state-space generator and $3.69$ for the transformer, against $3.16$ and $3.18$ in segment 1, and foot sliding stays between $0.22$ and $0.30$~m/s. A reset every 8 tokens is better than every 32 tokens ($3.70$ against $4.09$ for the state-space generator, $3.69$ against $3.81$ for the transformer). A reset after every token gives $3.53$ and $3.42$, which is close to a reset every 8 tokens, at five times the cost for the state-space generator. A long kept context is worse than a short one: with 47 kept tokens the mean distance is $4.70$ and $4.54$, because the generator is always near the end of a training clip, where clips come to rest, and the motion fades.
+
+\paragraph{Cost of a reset.} Playback needs one token every 200~ms. With a reset every 8 tokens, one stream alone takes $50$~ms per token for the state-space generator and $10$~ms for the transformer, so both are faster than playback. The reset costs the state-space generator three times its full-state step ($17$~ms), because it rebuilds the state by a replay of the kept tokens, one step at a time. The transformer processes the kept tokens in one parallel pass. A parallel rebuild for the state-space generator is possible with the scan of training, but this thesis did not build it.
 
 \paragraph{Consequence for the memory claim.} Under any reset policy the generator holds at most $k + n$ tokens, so the transformer's cache is bounded as well. In the configuration that gives good long motion today, both generators have bounded memory, and the transformer is the faster one. The advantage of the state-space model in \tabref{tab:stream_state} becomes a practical advantage only for a model whose state stays valid at long lengths. That needs training on sequences longer than the clips of HumanML3D, which this thesis did not do. The numbers of this section come from 32 captions and one sample each, so they show the direction of the effect and not its exact size.
 
@@ -228,7 +228,7 @@ The pipeline is integrated into an interactive viewer in which a prompt is typed
 
 \paragraph{Pacing.} The generator produces frames faster than they are displayed (\tabref{tab:cost}). Without control, an indefinite stream overruns the display buffer, and the body-fitting stage falls behind. The viewer therefore accepts a new chunk only while the stream is at most 120 frames ahead of the playhead, and lets the transport's back-pressure slow the service down. With this rule the service generates 20 frames per second for 20 frames per second of playback.
 
-\paragraph{Display rate.} Motion at 20 frames per second shown on a 60~Hz display is held for three refreshes per frame, which looks uneven although the motion itself is as smooth as the data (\secref{sec:gen_dynamics}). The viewer interpolates the streamed joints by a factor of three. The interpolation is causal and ends on each source frame, so it adds no latency.
+\paragraph{Display rate.} Motion at 20 frames per second shown on a 60~Hz display is held for three refreshes per frame, which looks uneven although the motion itself is as smooth as the data (\tabref{tab:twin_paired}). The viewer interpolates the streamed joints by a factor of three. The interpolation is causal and ends on each source frame, so it adds no latency.
 
 \paragraph{Verification.} The viewer is tested by scripted sessions that drive the real window through its input handlers and assert invariants on every frame, in addition to the unit tests of the pipeline. These tests found and fixed several concurrency defects, among them stale chunks of a cancelled generation leaking into the next one.
 
