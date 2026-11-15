@@ -31,6 +31,7 @@ MOTION_CLASS_COLUMN = "class_10"
 MOTION_CLASS_POWER = 0.5
 NO_MOTION_CLASS = -1
 VERB_BALANCE_MIN_CLIPS = 20
+NO_VERB_GROUP = ""
 NOT_ACTION_VERBS = frozenset(
     {"be", "have", "do", "seem", "appear", "begin", "start", "continue", "try", "use"}
 )

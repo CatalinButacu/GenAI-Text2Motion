@@ -49,7 +49,7 @@ def epoch_metrics(backbone: str, tag: str) -> dict[str, float]:
     return curve[STOP_EPOCH]
 
 
-def twin_row(backbone: str, uniform_csv: Path, rareverb_csv: Path) -> dict[str, object]:
+def twin_row(backbone: str, uniform_csv: Path, rareverb_csv: Path, arm: str) -> dict[str, object]:
     uniform_rates = rare_verb_rates(uniform_csv, backbone)
     rareverb_rates = rare_verb_rates(rareverb_csv, backbone)
     if uniform_rates.keys() != rareverb_rates.keys():
@@ -58,24 +58,25 @@ def twin_row(backbone: str, uniform_csv: Path, rareverb_csv: Path) -> dict[str, 
     differences = np.array([rareverb_rates[verb] - uniform_rates[verb] for verb in verbs])
     low, high = paired_interval(differences)
     uniform = epoch_metrics(backbone, UNIFORM)
-    rareverb = epoch_metrics(backbone, RAREVERB)
+    rareverb = epoch_metrics(backbone, arm)
     verb_pass = low > 0.0
     fid_pass = rareverb["fid"] <= FID_RATIO * uniform["fid"]
     r1_pass = rareverb["r_top1"] >= uniform["r_top1"] - R1_MARGIN
     return {
+        "arm": arm,
         "backbone": backbone,
         "rare_verbs": len(verbs),
         "uniform_rare_top5": float(np.mean([uniform_rates[verb] for verb in verbs])),
-        "rareverb_rare_top5": float(np.mean([rareverb_rates[verb] for verb in verbs])),
+        "arm_rare_top5": float(np.mean([rareverb_rates[verb] for verb in verbs])),
         "difference": float(differences.mean()),
         "difference_low": low,
         "difference_high": high,
         "uniform_fid": uniform["fid"],
-        "rareverb_fid": rareverb["fid"],
+        "arm_fid": rareverb["fid"],
         "uniform_r1": uniform["r_top1"],
-        "rareverb_r1": rareverb["r_top1"],
+        "arm_r1": rareverb["r_top1"],
         "uniform_val_ce": uniform.get("val_ce", float("nan")),
-        "rareverb_val_ce": rareverb.get("val_ce", float("nan")),
+        "arm_val_ce": rareverb.get("val_ce", float("nan")),
         "verb_pass": verb_pass,
         "fid_pass": fid_pass,
         "r1_pass": r1_pass,
@@ -87,16 +88,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--uniform", type=Path, required=True)
     parser.add_argument("--rareverb", type=Path, required=True)
+    parser.add_argument("--arm", default=RAREVERB)
     parser.add_argument("--out", type=Path, default=Path("doc/paper/pics/a15_v3_kill_test.csv"))
     arguments = parser.parse_args()
-    rows = [twin_row(backbone, arguments.uniform, arguments.rareverb) for backbone in BACKBONES]
+    rows = [
+        twin_row(backbone, arguments.uniform, arguments.rareverb, arguments.arm)
+        for backbone in BACKBONES
+    ]
     with arguments.out.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
     for row in rows:
         print(row)
-    print(f"A15 V3 option B: {'PASS' if all(row['pass'] for row in rows) else 'FAIL'}")
+    print(f"A15 {arguments.arm}: {'PASS' if all(row['pass'] for row in rows) else 'FAIL'}")
 
 
 if __name__ == "__main__":

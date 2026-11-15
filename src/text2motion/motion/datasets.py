@@ -25,6 +25,7 @@ from text2motion.motion.storage import (
     FEATURES_DIR,
     MOTION_CLASS_POWER,
     NO_MOTION_CLASS,
+    NO_VERB_GROUP,
     RARE_VERB_MIN_CLIPS,
     RARE_VERB_POWER,
     TEXTS_DIR,
@@ -84,7 +85,10 @@ class CaptionedMotionDataset(Dataset):
             )
         self._verb_clip_counts: dict[str, int] | None = None
         if data.caption_weighting == CaptionWeighting.RARE_VERB and self._train:
-            self._verb_clip_counts = self.__verb_clip_counts()
+            self._verb_clip_counts = self.__verb_clip_counts(
+                RARE_VERB_MIN_CLIPS, "rare_verb caption"
+            )
+        self._verb_group_sizes: dict[str, int] | None = None
         self._clip_weights: np.ndarray | None = None
         if data.clip_weighting == ClipWeighting.MOTION_CLASS and self._train:
             if data.motion_classes is None:
@@ -94,7 +98,11 @@ class CaptionedMotionDataset(Dataset):
         if data.clip_weighting == ClipWeighting.UNIFORM_REPLACEMENT and self._train:
             self._clip_weights = np.ones(len(self._ids), dtype=np.float64)
         if data.clip_weighting == ClipWeighting.VERB and self._train:
-            self._clip_weights = self.__verb_balance_weights(self.__clip_verbs())
+            balance_counts = self.__verb_clip_counts(VERB_BALANCE_MIN_CLIPS, "verb clip")
+            self._verb_clip_counts = balance_counts
+            caption_groups = self.__caption_groups(balance_counts)
+            self._verb_group_sizes = self.__verb_group_sizes(caption_groups)
+            self._clip_weights = self.__verb_group_weights(caption_groups, self._verb_group_sizes)
 
     def __clip_verbs(self) -> list[frozenset[str]]:
         found = []
@@ -110,24 +118,30 @@ class CaptionedMotionDataset(Dataset):
             found.append(labels or frozenset({NO_MOTION_CLASS}))
         return found
 
-    def __verb_balance_weights(self, clip_verbs: list[frozenset[str]]) -> np.ndarray:
-        counts = Counter(
-            verb
-            for clip_id, verbs in zip(self._ids, clip_verbs, strict=True)
-            if not clip_id.startswith("M")
-            for verb in verbs
-        )
-        kept = {verb: n for verb, n in counts.items() if n >= VERB_BALANCE_MIN_CLIPS}
-        if not kept:
-            raise ValueError(
-                f"verb clip weighting needs a verb in at least {VERB_BALANCE_MIN_CLIPS} "
-                "train clips; no verb has that many"
-            )
-        largest_verb_weight = 1.0 / max(kept.values())
-        weights = [
-            sum(1.0 / kept[verb] for verb in verbs if verb in kept) or largest_verb_weight
-            for verbs in clip_verbs
-        ]
+    @staticmethod
+    def __rarest_verb(annotation: TextAnnotation, counts: dict[str, int]) -> str:
+        kept = [verb for verb in caption_verbs(annotation) if verb in counts]
+        return min(kept, key=lambda verb: (counts[verb], verb), default=NO_VERB_GROUP)
+
+    def __caption_groups(self, counts: dict[str, int]) -> list[list[str]]:
+        lengths = clip_frame_counts(self._vec_dir, self._ids)
+        groups = []
+        for clip_id in self._ids:
+            annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
+            usable = self.__usable_annotations(annotations, lengths[clip_id])
+            groups.append([self.__rarest_verb(annotation, counts) for annotation, _ in usable])
+        return groups
+
+    @staticmethod
+    def __verb_group_sizes(caption_groups: list[list[str]]) -> dict[str, int]:
+        sizes = Counter(group for groups in caption_groups for group in groups)
+        verb_sizes = [size for group, size in sizes.items() if group != NO_VERB_GROUP]
+        sizes[NO_VERB_GROUP] = max(verb_sizes)
+        return dict(sizes)
+
+    @staticmethod
+    def __verb_group_weights(caption_groups: list[list[str]], sizes: dict[str, int]) -> np.ndarray:
+        weights = [sum(1.0 / sizes[group] for group in groups) for groups in caption_groups]
         return np.asarray(weights, dtype=np.float64)
 
     @staticmethod
@@ -140,7 +154,7 @@ class CaptionedMotionDataset(Dataset):
         rarest = [min(sizes[label] for label in labels) for labels in clip_classes]
         return np.asarray(rarest, dtype=np.float64) ** -MOTION_CLASS_POWER
 
-    def __verb_clip_counts(self) -> dict[str, int]:
+    def __verb_clip_counts(self, min_clips: int, weighting: str) -> dict[str, int]:
         counts: dict[str, int] = {}
         for clip_id in self._ids:
             if clip_id.startswith("M"):
@@ -148,10 +162,10 @@ class CaptionedMotionDataset(Dataset):
             annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
             for verb in frozenset().union(*(caption_verbs(a) for a in annotations)):
                 counts[verb] = counts.get(verb, 0) + 1
-        kept = {verb: n for verb, n in counts.items() if n >= RARE_VERB_MIN_CLIPS}
+        kept = {verb: n for verb, n in counts.items() if n >= min_clips}
         if not kept:
             raise ValueError(
-                f"rare_verb caption weighting needs a verb in at least {RARE_VERB_MIN_CLIPS} "
+                f"{weighting} weighting needs a verb in at least {min_clips} "
                 "train clips; no verb has that many"
             )
         return kept
@@ -275,6 +289,11 @@ class CaptionedMotionDataset(Dataset):
         counts = self._verb_clip_counts
         if counts is None:
             return np.full(len(annotations), 1.0 / len(annotations))
+        sizes = self._verb_group_sizes
+        if sizes is not None:
+            groups = [self.__rarest_verb(annotation, counts) for annotation in annotations]
+            weights = np.asarray([1.0 / sizes[group] for group in groups], dtype=np.float64)
+            return weights / weights.sum()
         common = max(counts.values())
         rarest = [
             min((counts[verb] for verb in caption_verbs(a) if verb in counts), default=common)

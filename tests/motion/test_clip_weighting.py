@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from text2motion.app.config import from_mapping
-from text2motion.motion.contracts import ClipWeighting, MotionDataConfig, Split
+from text2motion.motion.contracts import CaptionWeighting, ClipWeighting, MotionDataConfig, Split
 from text2motion.motion.datasets import CaptionedMotionDataset, MotionDataModule
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import (
@@ -14,6 +14,7 @@ from text2motion.motion.storage import (
     SPLIT_FILES,
     STD_FILE,
     TEXTS_DIR,
+    parse_text_file,
 )
 
 WALK = "a person walks#a/DET person/NOUN walk/VERB#0.0#0.0"
@@ -135,56 +136,72 @@ def test_yaml_values_select_motion_class_weighting():
     assert Path(data.motion_classes or "") == Path("doc/paper/pics/verb_cluster_map.csv")
 
 
+WALK_KICK = "a person walks and kicks#a/DET person/NOUN walk/VERB and/CCONJ kick/VERB#0.0#0.0"
+WAIT = "a person waits#a/DET person/NOUN wait/VERB#0.0#0.0"
+WALK_ONLY_CLIPS = 30
+MIXED_CLIPS = 20
+WALK_GROUP = WALK_ONLY_CLIPS + MIXED_CLIPS
+KICK_GROUP = MIXED_CLIPS
+VERB_CONFIG = MotionDataConfig(mirror_augment=False, clip_weighting=ClipWeighting.VERB)
+
+
 def __write_verb_clips(root: Path) -> None:
     (root / FEATURES_DIR).mkdir()
     (root / TEXTS_DIR).mkdir()
     np.save(root / MEAN_FILE, np.zeros(DIM, np.float32))
     np.save(root / STD_FILE, np.ones(DIM, np.float32))
-    wait = "a person waits#a/DET person/NOUN wait/VERB#0.0#0.0"
-    captions = [WALK] * VERB_WALK_CLIPS + [KICK] * VERB_KICK_CLIPS + [wait]
+    captions = [[WALK]] * WALK_ONLY_CLIPS + [[WALK, WALK_KICK]] * MIXED_CLIPS + [[WAIT]]
     names = [f"V{index}" for index in range(len(captions))]
-    for name, caption in zip(names, captions, strict=True):
+    for name, lines in zip(names, captions, strict=True):
         np.save(root / FEATURES_DIR / f"{name}.npy", np.zeros((60, DIM), np.float32))
-        (root / TEXTS_DIR / f"{name}.txt").write_text(caption + "\n", encoding="utf-8")
+        (root / TEXTS_DIR / f"{name}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     (root / SPLIT_FILES[Split.TRAIN]).write_text("\n".join(names) + "\n", encoding="utf-8")
 
 
-VERB_WALK_CLIPS = 30
-VERB_KICK_CLIPS = 20
-VERB_CONFIG = MotionDataConfig(mirror_augment=False, clip_weighting=ClipWeighting.VERB)
-
-
-def test_each_frequent_verb_gets_the_same_total_weight(tmp_path):
+def test_each_verb_group_gets_the_same_total_weight(tmp_path):
     __write_verb_clips(tmp_path)
     weights = CaptionedMotionDataset(tmp_path, VERB_CONFIG, seed=2026).clip_weights
 
     assert weights is not None
-    walk = weights[:VERB_WALK_CLIPS]
-    kick = weights[VERB_WALK_CLIPS : VERB_WALK_CLIPS + VERB_KICK_CLIPS]
-    np.testing.assert_allclose(walk.sum(), 1.0)
-    np.testing.assert_allclose(kick.sum(), 1.0)
+    np.testing.assert_allclose(weights[:WALK_ONLY_CLIPS], 1.0 / WALK_GROUP)
+    mixed = weights[WALK_ONLY_CLIPS : WALK_ONLY_CLIPS + MIXED_CLIPS]
+    np.testing.assert_allclose(mixed, 1.0 / WALK_GROUP + 1.0 / KICK_GROUP)
+    np.testing.assert_allclose(weights[:-1].sum(), 2.0)
 
 
-def test_a_clip_without_a_frequent_verb_gets_the_largest_verb_weight(tmp_path):
+def test_a_caption_counts_for_its_rarest_verb_only(tmp_path):
+    __write_verb_clips(tmp_path)
+    dataset = CaptionedMotionDataset(tmp_path, VERB_CONFIG, seed=2026)
+    annotations = parse_text_file(tmp_path / TEXTS_DIR / f"V{WALK_ONLY_CLIPS}.txt")
+
+    walk_share, kick_share = dataset.caption_weights(annotations)
+    expected = (1.0 / KICK_GROUP) / (1.0 / KICK_GROUP + 1.0 / WALK_GROUP)
+    np.testing.assert_allclose(kick_share, expected)
+    np.testing.assert_allclose(walk_share + kick_share, 1.0)
+
+
+def test_a_caption_without_a_frequent_verb_gets_the_largest_group_weight(tmp_path):
     __write_verb_clips(tmp_path)
     weights = CaptionedMotionDataset(tmp_path, VERB_CONFIG, seed=2026).clip_weights
 
     assert weights is not None
-    np.testing.assert_allclose(weights[-1], 1.0 / VERB_WALK_CLIPS)
+    np.testing.assert_allclose(weights[-1], 1.0 / WALK_GROUP)
 
 
-def test_the_verb_loader_draws_walk_and_kick_alike(tmp_path):
+def test_the_verb_loader_shows_kick_captions_as_often_as_walk_captions(tmp_path):
     __write_verb_clips(tmp_path)
     module = MotionDataModule(tmp_path, VERB_CONFIG, seed=2026)
-    sampler = module.captioned_batch_loader(Split.TRAIN, 4).sampler
+    loader = module.captioned_batch_loader(Split.TRAIN, 51)
+    dataset = loader.dataset
+    assert isinstance(dataset, CaptionedMotionDataset)
 
-    draws = [index for _ in range(300) for index in sampler]
-    kick_share = np.mean(
-        [VERB_WALK_CLIPS <= index < VERB_WALK_CLIPS + VERB_KICK_CLIPS for index in draws]
-    )
-    expected = 1.0 / (2.0 + 1.0 / VERB_WALK_CLIPS)
-    assert abs(kick_share - expected) < 0.03
-    assert len(list(sampler)) == VERB_WALK_CLIPS + VERB_KICK_CLIPS + 1
+    captions = []
+    for epoch in range(60):
+        dataset.set_epoch(epoch)
+        captions += [caption for batch in loader for caption in batch.captions]
+    kick_share = np.mean([caption == "a person walks and kicks" for caption in captions])
+    assert abs(kick_share - 1.0 / (2.0 + 1.0 / WALK_GROUP)) < 0.03
+    assert len(list(loader.sampler)) == WALK_ONLY_CLIPS + MIXED_CLIPS + 1
 
 
 def test_verb_weighting_without_a_frequent_verb_stops(tmp_path):
@@ -195,6 +212,13 @@ def test_verb_weighting_without_a_frequent_verb_stops(tmp_path):
 
     with pytest.raises(ValueError, match="verb clip weighting needs a verb"):
         CaptionedMotionDataset(tmp_path, VERB_CONFIG, seed=2026)
+
+
+def test_verb_weighting_refuses_rare_verb_captions():
+    with pytest.raises(ValueError, match="picks its own caption"):
+        MotionDataConfig(
+            clip_weighting=ClipWeighting.VERB, caption_weighting=CaptionWeighting.RARE_VERB
+        )
 
 
 def test_yaml_value_selects_verb_weighting():

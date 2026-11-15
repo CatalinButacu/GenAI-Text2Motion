@@ -79,6 +79,11 @@ class MotionDataConfig:
             raise ValueError("the data config needs at least one motion source")
         if self.clip_weighting is ClipWeighting.MOTION_CLASS and self.motion_classes is None:
             raise ValueError("motion_class clip weighting needs the motion_classes verb map")
+        if (
+            self.clip_weighting is ClipWeighting.VERB
+            and self.caption_weighting is CaptionWeighting.RARE_VERB
+        ):
+            raise ValueError("verb clip weighting picks its own caption; use uniform captions")
 
 
 ############################################################
