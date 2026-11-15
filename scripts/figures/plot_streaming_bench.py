@@ -62,7 +62,9 @@ def main() -> None:
     ax_mem.legend()
     ax_mem.grid(alpha=0.3)
 
-    ax_lat.set_title("Per-step latency vs horizon\n(Mamba eager: no CUDA scan kernel on Windows)")
+    ax_lat.set_title(
+        "Per-step latency vs horizon\n(Mamba step in plain PyTorch; the scan kernel is for training only)"
+    )
     ax_lat.set_xlabel("streaming horizon (tokens)")
     ax_lat.set_ylabel("median ms / step")
     ax_lat.set_ylim(bottom=0)

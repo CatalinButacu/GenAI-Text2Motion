@@ -36,12 +36,12 @@ M_{\mathrm{SSM}}(L) = N\,d_{\mathrm{in}}\,(n + k - 1) \quad \text{values},
 \end{equation}
 independent of $L$. Each step costs $O(1)$ and $L$ steps cost $O(L)$.
 
-\paragraph{Measurement.} We stepped both generators to a horizon of $L = 8192$ tokens and recorded the exact size of the state and the median latency per step. Since both quantities are properties of the architecture and not of the weights, this benchmark uses the larger, 100M-parameter configurations of the two architectures (12 and 23 layers) with untrained weights, which makes the gap easier to see. \figref{fig:streaming} and \tabref{tab:stream_state} give the result.
+\paragraph{Measurement.} We stepped both generators to a horizon of $L = 8192$ tokens and recorded the exact size of the state and the median latency per step. Since both quantities are properties of the architecture and not of the weights, this benchmark uses the architectures of the final pair of \chapref{chap:generator} (8 and 15 layers, width 320) with untrained weights. For the transformer, the learned position table is extended to the longest horizon; the trained transformer has only 97 positions. \figref{fig:streaming} and \tabref{tab:stream_state} give the result.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=\singlelongfigure]{\pics/streaming.png}
-\caption{State size (left) and median per-step latency (right) against streaming horizon, single stream, 32-bit floats, 4~GB GPU. The state-space model runs without its compiled scan kernel. The two models have random weights: this is a model-only measurement of the backbone step, without the text encoder, sampling, decoding, transport or display.}
+\caption{State size (left) and median per-step latency (right) against streaming horizon, single stream, 32-bit state, 4~GB GPU. The state-space step runs in plain PyTorch; the compiled scan kernel is used only for the parallel training pass. The two models have random weights: this is a model-only measurement of the backbone step, without the text encoder, sampling, decoding, transport or display.}
 \label{fig:streaming}
 \end{figure}
 
@@ -53,18 +53,18 @@ independent of $L$. Each step costs $O(1)$ and $L$ steps cost $O(L)$.
 \toprule
 Horizon $L$ (tokens) & Transformer cache (MB) & State-space state (MB) & Ratio \\
 \midrule
-1024 & 76.7 & 2.68 & $29\times$ \\
-4096 & 303.2 & 2.68 & $113\times$ \\
-8192 & 605.2 & 2.68 & $225\times$ \\
+1024 & 21.0 & 0.73 & $29\times$ \\
+4096 & 83.9 & 0.73 & $115\times$ \\
+8192 & 167.8 & 0.73 & $230\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The state of the state-space model is $2.68$~MB at every horizon. The transformer's cache grows linearly and reaches $605$~MB at $L = 8192$. Both measurements agree with the formulas above. For the state-space model, $N = 23$, $d_{\mathrm{in}} = 1536$, $n = 16$ and $k = 4$ give $23 \cdot 1536 \cdot 19 = 671{,}232$ values, which is $2.68$~MB at four bytes each. For the transformer, $N = 12$ and $d = 768$ give $2 \cdot 12 \cdot 768 \cdot 8192 \approx 1.51 \cdot 10^{8}$ values, which is $604$~MB; the remaining megabyte is the text prefix. This result does not depend on hardware, numerical precision or implementation details, because it follows from the two recurrences.
+The state of the state-space model is $0.73$~MB at every horizon. The transformer's cache grows linearly and reaches $168$~MB at $L = 8192$. Both measurements agree with the formulas above. For the state-space model, $N = 15$, $d_{\mathrm{in}} = 640$, $n = 16$ and $k = 4$ give $15 \cdot 640 \cdot 19 = 182{,}400$ values, which is $0.73$~MB at four bytes each. For the transformer, $N = 8$ and $d = 320$ give $2 \cdot 8 \cdot 320 \cdot 8192 = 41{,}943{,}040$ values, which is $167.77$~MB; the remaining $0.02$~MB is the text prefix. This result does not depend on hardware, numerical precision or implementation details, because it follows from the two recurrences.
 
-\paragraph{Latency.} The transformer's per-step latency is flat at about $12$~ms while its linear projections dominate, then rises as attention over the cache takes over: $16.5$~ms at $L = 4096$ and $23.6$~ms at $L = 6144$. The state-space model stays at about $26$~ms throughout. The curves cross near $L \approx 6500$.
+\paragraph{Latency.} The transformer's per-step latency is flat at about $7$ to $8$~ms while its linear projections dominate, then rises as attention over the cache takes over: $9.1$~ms at $L = 4096$, $12.3$~ms at $L = 6144$ and $15.5$~ms at $L = 8192$. The state-space model stays at about $15.7$~ms throughout. The curves meet at $L \approx 8192$.
 
-Two caveats apply to the latency panel and not to the memory panel. First, our state-space layer runs in plain PyTorch, because the compiled selective-scan kernel of the reference implementation is not available on the test machine; this costs a roughly constant factor of two per step. Second, beyond $L \approx 6000$ the transformer's latency jumps to $230$~ms, more than the linear trend predicts, because the cache approaches the memory limit of the 4~GB GPU. The magnitudes at the longest horizons are therefore indicative. The trend, growth for the transformer and a flat line for the state-space model, is what the analysis predicts.
+One caveat applies to the latency panel and not to the memory panel. The single step of the state-space layer runs in plain PyTorch: the compiled kernel computes the parallel scan of training, and our step path does not use a fused step kernel. A fused step could lower the flat line and move the point where the curves meet to a shorter horizon. The trend, growth for the transformer and a flat line for the state-space model, is what the analysis predicts. The peak GPU memory stays below $0.3$~GB at all horizons, so the memory limit of the GPU does not affect these numbers.
 
 At the lengths of HumanML3D clips, which are at most 49 latent steps, the transformer is the faster of the two (\secref{sec:stream_cost}). The advantage of the bounded state appears for long or open-ended generation.
 
@@ -190,18 +190,18 @@ We built 96 sequences of three test captions (288 clips, fixed seed). Each seque
  & & \multicolumn{3}{c}{R@1} & \multicolumn{3}{c}{Distance} \\
 Generator & Text & Act. 1 & Act. 2 & Act. 3 & Act. 1 & Act. 2 & Act. 3 \\
 \midrule
-State-space & joined caption & 0.198 & 0.135 & 0.125 & 6.30 & 7.07 & 7.95 \\
-State-space & list of actions & 0.458 & 0.417 & 0.479 & 2.77 & 3.53 & 3.66 \\
+State-space & joined caption & 0.271 & 0.104 & 0.135 & 5.86 & 7.03 & 7.46 \\
+State-space & list of actions & 0.542 & 0.354 & 0.396 & 2.81 & 4.10 & 4.11 \\
 \midrule
-Transformer & joined caption & 0.240 & 0.104 & 0.094 & 6.25 & 7.19 & 7.62 \\
-Transformer & list of actions & 0.448 & 0.427 & 0.521 & 2.89 & 3.54 & 3.32 \\
+Transformer & joined caption & 0.260 & 0.083 & 0.094 & 5.84 & 7.02 & 7.36 \\
+Transformer & list of actions & 0.573 & 0.365 & 0.406 & 2.69 & 4.44 & 4.20 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-With the list of actions, the second and the third action have the text match of a single clip: the two generators reach R@1 of $0.418$ and $0.395$ on single clips in \tabref{tab:twin_results}, and $0.417$ to $0.521$ here, 10 and 19 seconds after the start of the stream. Foot sliding stays between $0.26$ and $0.29$~m/s for all three actions. The joined caption fails from the first action. The generators never saw such a caption in training, so this row is a weak baseline: it shows that the list of actions works, and not how a model trained on joined captions would do. With 96 sequences, the $95\%$ bootstrap interval of each R@1 value of the list of actions is about $\pm 0.10$ (for the state-space generator, $[0.32, 0.51]$ for the second action and $[0.38, 0.58]$ for the third). The difference to the joined caption is larger than this uncertainty for every action and both generators: the exact McNemar test on the rank-one results gives $p \le 0.003$, and the Wilcoxon signed-rank test on the distances gives $p < 10^{-11}$. The two generators give the same picture.
+With the list of actions, the first action has the text match of a single clip ($0.54$ and $0.57$, against $0.50$ in \tabref{tab:twin_results}). The second and the third action, 10 and 19 seconds after the start of the stream, keep $70\%$ to $80\%$ of it (R@1 $0.354$ to $0.406$). Foot sliding stays between $0.25$ and $0.33$~m/s for all three actions. The joined caption has half of this text match at the first action ($0.27$ and $0.26$) and falls to $0.08$ to $0.14$ after it. The generators never saw such a caption in training, so this row is a weak baseline: it shows that the list of actions works, and not how a model trained on joined captions would do. With 96 sequences, the $95\%$ bootstrap interval of each R@1 value of the list of actions is about $\pm 0.10$ (for the state-space generator, $[0.26, 0.45]$ for the second action and $[0.30, 0.50]$ for the third). The difference to the joined caption is larger than this uncertainty for every action and both generators: the exact McNemar test on the rank-one results gives $p \le 3 \cdot 10^{-4}$, and the Wilcoxon signed-rank test on the distances gives $p < 10^{-11}$. The two generators give the same picture.
 
-\paragraph{The boundary between two actions.} No sequence has a jump of the root at a boundary. The motion is rougher there: in a window of one second around a boundary, the mean joint acceleration is $0.91$~cm/frame$^2$ for the state-space generator and $0.97$ for the transformer, against $0.61$ and $0.62$ in the middle of an action. More kept tokens make the boundary smoother, and make the change to the new action slower (\tabref{tab:boundary}). With 32 kept tokens the boundary of the state-space generator is as smooth as the middle of an action ($0.59$), and the distance of the second action to its caption rises from $3.53$ to $4.29$. The number of kept tokens is therefore a control between a smooth change and a fast change of action.
+\paragraph{The boundary between two actions.} The motion is rougher at a boundary: in a window of one second around a boundary, the mean joint acceleration is $0.80$~cm/frame$^2$ for the state-space generator and $0.90$ for the transformer, against $0.67$ and $0.69$ in the middle of an action. The state-space generator also has 9 jumps of the root, a root step of more than $0.25$~m in one frame, in its 192 boundary windows; the transformer has none, and no middle window of either generator has one. More kept tokens make the boundary smoother and make the change to the new action slower (\tabref{tab:boundary}). With 32 kept tokens the boundary of both generators is as smooth as the middle of an action ($0.69$ and $0.64$), the state-space generator has 3 root jumps, and the distance of the second action to its caption rises from $4.10$ to $4.77$ (state-space) and from $4.44$ to $5.00$ (transformer). The number of kept tokens is therefore a control between a smooth change and a fast change of action.
 
 \begin{table}[H]
 \centering
@@ -212,9 +212,9 @@ With the list of actions, the second and the third action have the text match of
  & \multicolumn{2}{c}{State-space} & \multicolumn{2}{c}{Transformer} \\
 Kept tokens & Boundary accel. & Distance, act. 2 & Boundary accel. & Distance, act. 2 \\
 \midrule
-16 & 0.91 & 3.53 & 0.97 & 3.54 \\
-24 & 0.74 & 4.11 & 0.86 & 3.62 \\
-32 & 0.59 & 4.29 & 0.82 & 4.08 \\
+16 & 0.80 & 4.10 & 0.90 & 4.44 \\
+24 & 0.73 & 4.44 & 0.79 & 4.72 \\
+32 & 0.69 & 4.77 & 0.64 & 5.00 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -236,9 +236,9 @@ The pipeline is integrated into an interactive viewer in which a prompt is typed
 \label{sec:stream_threats}
 
 \begin{itemize}
-\item \textbf{Latency magnitudes.} The latency panel of \figref{fig:streaming} was measured without the compiled scan kernel and on a GPU near its memory limit at long horizons. The memory panel is exact.
-\item \textbf{Benchmark configuration.} The state benchmark uses 100M-parameter architectures with untrained weights. State size and step cost do not depend on the weights, but the absolute megabytes are those of the larger configuration, not of the 34M models of \chapref{chap:generator}.
+\item \textbf{Latency magnitudes.} The latency panel of \figref{fig:streaming} was measured with the state-space step in plain PyTorch. The memory panel is exact.
+\item \textbf{Benchmark configuration.} The state benchmark uses the architectures of the final pair with untrained weights and, for the transformer, an extended position table. State size and step cost do not depend on the weights.
 \item \textbf{Fixed delay.} Exact streamed decoding needs $0.8$~s of lookahead. The system is real-time in throughput but not zero-latency.
-\item \textbf{Position embeddings.} The transformer twin uses a learned position table of 96 entries, so the trained 34M transformer has no learned positions beyond that length. This is a second way in which it is bound to a horizon, and it means long-horizon quality could not be compared directly between the two trained models.
+\item \textbf{Position embeddings.} The transformer twin uses a learned position table of 96 entries, so the trained transformer has no learned positions beyond that length. This is a second way in which it is bound to a horizon, and it means long-horizon quality could not be compared directly between the two trained models.
 \item \textbf{Long-horizon quality.} \secref{sec:stream_long} shows that the full recurrent state does not give usable motion after the trained length of 196 frames. Long streams need a reset policy, and under a reset policy the memory of both generators is bounded. That experiment uses 32 captions and one sample each.
 \end{itemize}
