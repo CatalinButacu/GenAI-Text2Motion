@@ -28,17 +28,15 @@ State-space sequence models, in particular the selective-scan model Mamba~\cite{
 \begin{enumerate}
 \item \textbf{A Grouped-FSQ motion tokenizer} (\chapref{chap:tokenizer}). A tokenizer based on finite scalar quantization~\cite{mentzer2023fsq} with a grouped-residual structure. It has no learned codebook and therefore none of the machinery a codebook needs (exponential moving averages, commitment loss, dead-code resets). It is compared with a strong residual vector-quantization baseline at matched bit-rate, on reconstruction, on codebook usage and on the quality of a generator trained on its tokens.
 
-\item \textbf{A token-autoregressive state-space generator} (\chapref{chap:generator}). A discrete, causal, next-token Mamba generator for text-to-motion, evaluated against a transformer twin with the same parameter count, tokenizer, data, seed and budget. The two differ only in the sequence mixer, so a difference in quality can be attributed to the mixer. This is a controlled study of a mechanism, not a competition on scale.
+\item \textbf{A token-autoregressive state-space generator} (\chapref{chap:generator}). A discrete, causal, next-token Mamba generator for text-to-motion, evaluated against a transformer twin with nearly the same parameter count ($15.55$M and $15.30$M) and the same tokenizer, data, seed and training recipe. The two differ only in the sequence mixer, so a difference in quality can be attributed to the mixer. This is a controlled study of a mechanism, not a competition on scale.
 
 \item \textbf{A bounded-memory streaming system} (\chapref{chap:streaming}). A measurement of recurrent state and per-step latency against horizon for both generators, a measurement of the tokenizer decoder's receptive field with the lookahead that makes streamed decoding exact, and an interactive viewer driven by the streaming decoder.
 \end{enumerate}
 
-A supporting result, reported as an ablation in \chapref{chap:generator}, is that pretraining the generator on unlabeled motion before the captioned fine-tune improves it.
-
 \section{Scope and Non-Goals}
 \label{sec:intro_scope}
 
-We do not claim to surpass MoMask~\cite{guo2024momask} in absolute FID, and we do not compete on scale with models trained on million-clip corpora~\cite{wang2024beingm0,zhang2024lmm,fan2025motionmillion}. All training was done on one GPU with 4~GB of memory, which fixes the model scale at about $34$M parameters.
+We do not claim to surpass MoMask~\cite{guo2024momask} in absolute FID, and we do not compete on scale with models trained on million-clip corpora~\cite{wang2024beingm0,zhang2024lmm,fan2025motionmillion}. All training was done on one GPU with 4~GB of memory; the final generators have about $15$M parameters each.
 
 The quantitative track uses the 22-joint body of HumanML3D-263. Whole-body motion with hands is shown only qualitatively through the viewer of \chapref{chap:streaming}. Facial motion is out of scope.
 

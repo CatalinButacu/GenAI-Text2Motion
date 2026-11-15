@@ -20,20 +20,16 @@ Grouped-FSQ reconstructs better than a matched residual VQ at equal bit-rate. & 
 \addlinespace
 Its advantage carries over to generation. & Generator FID $0.132$ against $0.294$ at 60 epochs (\tabref{tab:tok_downstream}). & One seed; the order is reversed in an undertrained generator. \\
 \addlinespace
-A token-autoregressive state-space generator matches a parameter-matched causal transformer. & Ahead in point estimates on every metric (\tabref{tab:twin_results}); R-precision lead about three standard deviations of a repetition. & One seed; 34M parameters; the FID difference is within the bootstrap interval. \\
+A token-autoregressive state-space generator matches a parameter-matched causal transformer in text match. & Equal R@1 ($0.505$ against $0.500$, McNemar $p = 0.42$) and caption distance (Wilcoxon $p = 0.069$) on 4648 test segments (\tabref{tab:twin_results}, \tabref{tab:twin_paired}). & One seed; 15M parameters; the transformer has the lower FID (paired difference $-0.036$, $95\%$ interval $[-0.065, -0.011]$) and less foot sliding. \\
 \addlinespace
-The ordering does not depend on where training stops. & Unchanged at 100 epochs (\tabref{tab:twin_100}) and after the dynamics fine-tune (\tabref{tab:dyn_test}). & These checkpoints share one seed and are not independent. \\
-\addlinespace
-Its streaming state is constant. & $2.68$~MB at every horizon against $605$~MB at 8192 tokens (\tabref{tab:stream_state}); follows from the recurrence. & The state keeps its size, but its content is valid only up to the trained length (\tabref{tab:long_stream}); latency magnitudes are hardware-bound. \\
+Its streaming state is constant. & $0.73$~MB at every horizon against $168$~MB at 8192 tokens (\tabref{tab:stream_state}); follows from the recurrence. & The state keeps its size, but its content is valid only up to the trained length (\tabref{tab:long_stream}); the state-space step has no fused kernel. \\
 \addlinespace
 Streamed decoding can be made exact. & Zero error at a lookahead of four latent steps (\tabref{tab:lookahead}). & Costs a fixed delay of $0.8$~s. \\
-\addlinespace
-Unconditional pretraining on unlabeled motion helps. & Three-fold FID reduction in a pilot ablation (\tabref{tab:prior_ablation}). & Pilot configuration and small validation sample; relative effect only. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The expectation we set out to test was that a fixed-size state would cost quality relative to attention. In our controlled comparison it did not. We do not conclude that state-space models are better generators of motion in general; one seed at one scale cannot support that. We conclude that the bounded-state design is a viable basis for streaming text-to-motion, and that its constant memory comes at no measured loss of quality at this scale.
+The expectation we set out to test was that a fixed-size state would cost quality relative to attention. In our controlled comparison it cost a small amount: the text match was equal, and FID and foot sliding were slightly worse. One seed at one scale cannot support a general statement about state-space models of motion. We conclude that the bounded-state design is a viable basis for streaming text-to-motion: at this scale, its constant memory costs no text match and a small, measured part of the distribution quality.
 
 \section{Future Work}
 \label{sec:conc_future}
@@ -42,11 +38,10 @@ In order of what would most strengthen or extend the results:
 
 \begin{enumerate}
 \item \textbf{More seeds.} Repeating the matched pair with two or three further seeds would turn the ordering of \tabref{tab:twin_results} from an observation into an estimate with a spread.
-\item \textbf{More distinct motion.} \secref{sec:disc_data} identifies data, not epochs or parameters, as the binding constraint. The cheapest step is to tokenize the $14.4$ hours of our AMASS conversion that the full-window rule excluded from pretraining.
-\item \textbf{A batch-matched prior.} Training the two unconditional priors with the same batch size would remove the one known asymmetry of the comparison.
+\item \textbf{More distinct motion.} \secref{sec:disc_data} identifies data, not epochs or parameters, as the binding constraint. The cheapest step is to use the $40.6$ hours of our AMASS conversion, which the final generators do not use, for unconditional pretraining.
 \item \textbf{A causal tokenizer decoder.} A decoder without right context would remove the $0.8$~s lookahead of \secref{sec:stream_decoder}. Its effect on reconstruction FID would have to be measured against \tabref{tab:tok_matrix}.
 \item \textbf{Training for long streams.} The full recurrent state fails after the trained length (\tabref{tab:long_stream}). Training on sequences longer than ten seconds, for example on concatenated clips with a caption for each part, is what would turn the constant memory of the state-space model into a practical advantage.
-\item \textbf{The compiled scan kernel.} Running the state-space model with its kernel on a larger GPU would give the latency comparison without the two caveats of \secref{sec:stream_state} and would make further seeds affordable.
-\item \textbf{Contact-aware generation.} Foot sliding remains well above that of real motion. Stronger constraints than the two loss terms of \secref{sec:gen_dynamics} are needed.
+\item \textbf{A fused step and a parallel rebuild.} The step of the state-space layer runs in plain PyTorch (\secref{sec:stream_state}), and a reset rebuilds the state one token at a time (\secref{sec:stream_long}). A fused step kernel and a rebuild with the parallel scan would lower the inference cost of the state-space generator.
+\item \textbf{Contact-aware generation.} Foot sliding remains well above that of real motion (\tabref{tab:twin_paired}). The final generators have no loss term for foot contact; contact constraints are needed.
 \item \textbf{Whole-body motion.} Extending the representation and tokenizer to hands.
 \end{enumerate}
