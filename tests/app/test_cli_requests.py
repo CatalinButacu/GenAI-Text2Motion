@@ -142,6 +142,10 @@ def test_every_command_parses_its_defaults_or_asks_for_required_flags():
         assert parse_request(command, required.get(command, [])) is not None
 
 
+def fail(app, request):
+    raise RuntimeError("boom")
+
+
 @pytest.mark.parametrize("failure_logs", [True, False])
 def test_a_failed_command_is_logged_only_when_failure_logs_is_on(
     tmp_path, monkeypatch, caplog, failure_logs
@@ -152,10 +156,11 @@ def test_a_failed_command_is_logged_only_when_failure_logs_is_on(
         encoding="utf-8",
     )
 
-    def fail(app, request):
-        raise RuntimeError("boom")
-
-    failing = cli.Command(BenchmarkRequest, fail, "always fails")
+    failing = cli.Command(
+        "text2motion.app.cli_requests:BenchmarkRequest",
+        "tests.app.test_cli_requests:fail",
+        "always fails",
+    )
     monkeypatch.setattr(cli, "COMMANDS", MappingProxyType({**cli.COMMANDS, "benchmark": failing}))
     monkeypatch.setattr(cli, "configure_logging", lambda level: None)
 
