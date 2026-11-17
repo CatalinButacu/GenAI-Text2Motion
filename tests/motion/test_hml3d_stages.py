@@ -22,7 +22,7 @@ def __layout(tmp_path, monkeypatch):
     np.save(layout.joints / "000021.npy", np.zeros((40, 22, 3), np.float32))
     np.save(layout.joints / "000022.npy", np.zeros((BROKEN_FRAMES, 22, 3), np.float32))
     monkeypatch.setattr(preparation, "target_offsets", lambda reference: None)
-    monkeypatch.setattr(preparation, "feature_params", lambda offsets: None)
+    monkeypatch.setattr(preparation, "feature_params", lambda offsets, fps: None)
     monkeypatch.setattr(preparation, "encode_joints", __fake_encode)
     monkeypatch.setattr(
         preparation,

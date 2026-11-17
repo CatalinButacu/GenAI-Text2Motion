@@ -138,7 +138,9 @@ def target_offsets(reference_joints: np.ndarray) -> torch.Tensor:
     return skeleton.get_offsets_joints(example[0])
 
 
-def feature_params(offsets: torch.Tensor) -> FeatureParams:
+def feature_params(offsets: torch.Tensor, fps: int = FPS) -> FeatureParams:
+    if fps <= 0:
+        raise ValueError(f"fps must be positive, got {fps}")
     return FeatureParams(
         raw_offsets=RAW_OFFSETS,
         chains=KINEMATIC_CHAINS,
@@ -148,7 +150,7 @@ def feature_params(offsets: torch.Tensor) -> FeatureParams:
         right_feet=_RIGHT_FEET,
         leg_joints=_LEG_JOINTS,
         joint_count=JOINTS,
-        foot_velocity_threshold=_FOOT_VELOCITY_THRESHOLD,
+        foot_velocity_threshold=_FOOT_VELOCITY_THRESHOLD * (FPS / fps) ** 2,
     )
 
 

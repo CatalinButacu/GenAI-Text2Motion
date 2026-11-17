@@ -45,7 +45,7 @@ def test_a_valid_scaler_round_trips(tmp_path):
 
 def test_fitted_stats_with_a_zero_std_are_not_written(tmp_path, monkeypatch):
     zero_std = (np.zeros(3, np.float32), np.zeros(3, np.float32))
-    monkeypatch.setattr(normalization, "load_clips", lambda vec_dir, names: [np.zeros((4, 3))])
+    np.save(tmp_path / "000001.npy", np.zeros((4, 3), np.float32))
     monkeypatch.setattr(normalization, "normalization_stats", lambda clips, joints: zero_std)
 
     with pytest.raises(ValueError, match="zero or negative"):

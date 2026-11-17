@@ -36,7 +36,7 @@ def __layout(tmp_path, monkeypatch, heldout=frozenset()):
     index_csv = tmp_path / "index.csv"
     index_csv.write_text("source_path,new_name\n", encoding="utf-8")
     monkeypatch.setattr(preparation, "target_offsets", lambda reference: None)
-    monkeypatch.setattr(preparation, "feature_params", lambda offsets: None)
+    monkeypatch.setattr(preparation, "feature_params", lambda offsets, fps: None)
     monkeypatch.setattr(preparation, "encode_joints", __fake_encode)
     monkeypatch.setattr(preparation, "heldout_feature_names", lambda *args: set(heldout))
     request = PreparationRequest(out_dir=dataset, index_csv=index_csv)

@@ -78,3 +78,63 @@ def test_item_rng_does_not_depend_on_call_order():
     forward = [item_rng(2026, 3, i).randint(0, 10_000) for i in range(20)]
     backward = [item_rng(2026, 3, i).randint(0, 10_000) for i in reversed(range(20))][::-1]
     assert forward == backward
+
+
+def test_foot_contact_limit_keeps_the_same_speed_at_60_fps():
+    import torch
+
+    from text2motion.motion.representation import feature_params
+
+    offsets = torch.zeros(JOINTS, 3)
+    at_20 = feature_params(offsets).foot_velocity_threshold
+    at_60 = feature_params(offsets, 60).foot_velocity_threshold
+    assert at_60 == pytest.approx(at_20 / 9)
+    with pytest.raises(ValueError, match="positive"):
+        feature_params(offsets, 0)
+
+
+def test_index_frames_scale_to_a_multiple_of_20_fps_only():
+    from text2motion.motion.preparation import index_frame_scale
+
+    assert index_frame_scale(20) == 1
+    assert index_frame_scale(60) == 3
+    with pytest.raises(ValueError, match="fps=30"):
+        index_frame_scale(30)
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [((0.0, 0.0, -1.0), (0.0, 0.0, 1.0)), ((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0))],
+)
+def test_qbetween_turns_a_vector_onto_its_exact_opposite(start, end):
+    import torch
+
+    from text2motion.motion.geometry import qbetween, qrot
+
+    v0 = torch.tensor([start])
+    v1 = torch.tensor([end])
+    q = qbetween(v0, v1)
+    assert torch.isfinite(q).all()
+    assert torch.allclose(qrot(q, v0), v1, atol=1e-6)
+
+
+def test_qbetween_is_unchanged_for_vectors_that_are_not_opposite():
+    import torch
+
+    from text2motion.motion.geometry import qbetween, qrot
+
+    v0 = torch.tensor([[0.0068, 0.0, -0.99998], [0.6, 0.0, 0.8]])
+    v1 = torch.tensor([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]])
+    rotated = qrot(qbetween(v0, v1), v0 / v0.norm(dim=-1, keepdim=True))
+    assert torch.allclose(rotated, v1, atol=1e-4)
+
+
+def test_normalization_stats_streamed_equals_one_concatenated_array():
+    rng = np.random.default_rng(2026)
+    clips = [rng.normal(3.0, 2.0, (frames, DIM)).astype(np.float32) for frames in (7, 40, 1, 123)]
+    mean, std = normalization_stats(iter(clips), JOINTS)
+    data = np.concatenate(clips, axis=0).astype(np.float64)
+    ric_end = 4 + (JOINTS - 1) * 3
+    assert np.allclose(mean, data.mean(axis=0), atol=1e-5)
+    assert np.isclose(std[0], data.std(axis=0)[0], atol=1e-5)
+    assert np.isclose(std[4], data.std(axis=0)[4:ric_end].mean(), atol=1e-5)

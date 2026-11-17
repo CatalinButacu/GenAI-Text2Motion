@@ -123,7 +123,18 @@ def qbetween(v0: torch.Tensor, v1: torch.Tensor) -> torch.Tensor:
     w = torch.sqrt((v0**2).sum(dim=-1, keepdim=True) * (v1**2).sum(dim=-1, keepdim=True)) + (
         v0 * v1
     ).sum(dim=-1, keepdim=True)
-    return qnormalize(torch.cat([w, v], dim=-1))
+    q = torch.cat([w, v], dim=-1)
+    opposite = (q == 0).all(dim=-1, keepdim=True)
+    return qnormalize(torch.where(opposite, __half_turn(v0), q))
+
+
+def __half_turn(v0: torch.Tensor) -> torch.Tensor:
+    x_axis = torch.tensor([1.0, 0.0, 0.0], dtype=v0.dtype, device=v0.device).expand_as(v0)
+    y_axis = torch.tensor([0.0, 1.0, 0.0], dtype=v0.dtype, device=v0.device).expand_as(v0)
+    axis = torch.cross(v0, x_axis, dim=-1)
+    parallel_to_x = (axis == 0).all(dim=-1, keepdim=True)
+    axis = torch.where(parallel_to_x, torch.cross(v0, y_axis, dim=-1), axis)
+    return torch.cat([torch.zeros_like(axis[..., :1]), axis], dim=-1)
 
 
 def qbetween_np(v0: np.ndarray, v1: np.ndarray) -> np.ndarray:

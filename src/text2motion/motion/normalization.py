@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -93,13 +94,28 @@ class MotionScaler:
         return torch.as_tensor(array, device=like.device, dtype=like.dtype)
 
 
-def load_clips(vec_dir: Path, names: list[str]) -> list[np.ndarray]:
-    unique = sorted(set(names))
+def __require_clip_files(vec_dir: Path, unique: list[str]) -> None:
     missing = [name for name in unique if not (vec_dir / f"{name}.npy").is_file()]
     if missing:
         raise FileNotFoundError(
             f"{len(missing)} train clips have no feature file under {vec_dir}: {missing[:10]}"
         )
+
+
+def __checked_clip(vec_dir: Path, name: str) -> np.ndarray:
+    clip = np.load(vec_dir / f"{name}.npy")
+    if clip.ndim != 2 or clip.shape[0] == 0 or not np.isfinite(clip).all():
+        raise ValueError(f"train clip {name} is empty, not 2-D, or holds NaN or Inf")
+    return clip
+
+
+def __streamed_clips(vec_dir: Path, unique: list[str]) -> Iterator[np.ndarray]:
+    return (__checked_clip(vec_dir, name) for name in unique)
+
+
+def load_clips(vec_dir: Path, names: list[str]) -> list[np.ndarray]:
+    unique = sorted(set(names))
+    __require_clip_files(vec_dir, unique)
     clips = [np.load(vec_dir / f"{name}.npy") for name in unique]
     malformed = [
         name
@@ -113,13 +129,30 @@ def load_clips(vec_dir: Path, names: list[str]) -> list[np.ndarray]:
     return clips
 
 
-def normalization_stats(clips: list[np.ndarray], joint_count: int) -> tuple[np.ndarray, np.ndarray]:
-    if not clips:
+def normalization_stats(
+    clips: Iterable[np.ndarray], joint_count: int
+) -> tuple[np.ndarray, np.ndarray]:
+    count = 0
+    mean = np.zeros(0)
+    squares = np.zeros(0)
+    for clip in clips:
+        data = np.asarray(clip, dtype=np.float64)
+        frames = data.shape[0]
+        clip_mean = data.mean(axis=0)
+        clip_squares = ((data - clip_mean) ** 2).sum(axis=0)
+        if count == 0:
+            count, mean, squares = frames, clip_mean, clip_squares
+            continue
+        total = count + frames
+        delta = clip_mean - mean
+        mean = mean + delta * frames / total
+        squares = squares + clip_squares + delta**2 * count * frames / total
+        count = total
+    if count == 0:
         raise ValueError("normalization_stats received no clips")
 
-    data = np.concatenate(clips, axis=0)
-    mean = data.mean(axis=0)
-    std = data.std(axis=0)
+    mean = mean.astype(np.float32)
+    std = np.sqrt(squares / count).astype(np.float32)
 
     expected_dim = 8 + (joint_count - 1) * 9 + joint_count * 3
     if std.shape[-1] != expected_dim:
@@ -148,8 +181,10 @@ def normalization_stats(clips: list[np.ndarray], joint_count: int) -> tuple[np.n
 def fit_train_stats(
     vec_dir: Path, train_names: list[str], out_dir: Path, joint_count: int
 ) -> tuple[np.ndarray, np.ndarray]:
-    clips = load_clips(vec_dir, train_names)
-    mean, std = normalization_stats(clips, joint_count)
+    unique = sorted(set(train_names))
+    __require_clip_files(vec_dir, unique)
+    mean, std = normalization_stats(__streamed_clips(vec_dir, unique), joint_count)
+    frame_counts = [np.load(vec_dir / f"{name}.npy", mmap_mode="r").shape[0] for name in unique]
 
     mean_path = out_dir / MEAN_FILE
     provenance = {
@@ -157,8 +192,8 @@ def fit_train_stats(
         "source_dir": str(vec_dir),
         "split": Split.TRAIN.value,
         "requested_clips": len(set(train_names)),
-        "used_clips": len(clips),
-        "frames": int(sum(clip.shape[0] for clip in clips)),
+        "used_clips": len(unique),
+        "frames": int(sum(frame_counts)),
         "joints_num": joint_count,
         "overwrote_existing": mean_path.is_file(),
     }
@@ -168,5 +203,5 @@ def fit_train_stats(
     atomic_numpy_save(std, out_dir / STD_FILE)
     provenance_path = out_dir / STATS_PROVENANCE_FILE
     provenance_path.write_text(json.dumps(provenance, indent=2), encoding="utf-8")
-    logger.info(f"Mean/Std saved from {len(clips)} train clips -> {provenance_path}")
+    logger.info(f"Mean/Std saved from {len(unique)} train clips -> {provenance_path}")
     return mean, std

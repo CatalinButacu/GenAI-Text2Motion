@@ -81,10 +81,15 @@ def checked_release_motion(name: str, motion) -> np.ndarray:
 
 
 def check_hml3d_fps(fps: int) -> None:
-    if fps != _HML3D_FPS:
+    if fps <= 0 or fps % _HML3D_FPS != 0:
         raise ValueError(
-            f"the HumanML3D index frames and feature constants are {_HML3D_FPS} fps; got fps={fps}"
+            f"the HumanML3D index frames are {_HML3D_FPS} fps; need a multiple, got fps={fps}"
         )
+
+
+def index_frame_scale(fps: int) -> int:
+    check_hml3d_fps(fps)
+    return fps // _HML3D_FPS
 
 
 def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
@@ -253,6 +258,7 @@ def build_indexed_joint_clips(
     if request.index_csv is None:
         raise ValueError("index_csv must be set for stage 'index'")
     fps = request.fps
+    scale = index_frame_scale(fps)
     import pandas as pd
 
     index_file = pd.read_csv(request.index_csv)
@@ -264,11 +270,11 @@ def build_indexed_joint_clips(
     for i in tqdm(range(index_file.shape[0]), desc="index->joints"):
         source_path = index_file.loc[i]["source_path"]
         new_name = index_file.loc[i]["new_name"]
-        start_frame = int(index_file.loc[i]["start_frame"])
-        end_frame = int(index_file.loc[i]["end_frame"])
+        start_frame = int(index_file.loc[i]["start_frame"]) * scale
+        end_frame = int(index_file.loc[i]["end_frame"]) * scale
 
         load_path = resolve_pose_path(source_path, pose_root)
-        if load_path is None:
+        if load_path is None or ("humanact12" in source_path and scale != 1):
             missing.append(str(new_name))
             continue
         data = np.load(load_path)
@@ -328,7 +334,7 @@ def encode_joint_clips_to_hml3d263(
     ref_path = __reference_joints_path(layout.joints)
     reference = np.load(ref_path)[:, :joint_count]
     reference = reference.reshape(len(reference), -1, 3)
-    params = feature_params(target_offsets(reference))
+    params = feature_params(target_offsets(reference), request.fps)
 
     source_list = sorted(p.name for p in layout.joints.glob(NPY_FILES))
     frame_num = 0
@@ -536,7 +542,7 @@ def build_amass_pretraining_corpus(
     reference_path = __reference_joints_path(regen_dir / "joints")
     joint_count = request.joint_count
     reference = np.load(reference_path)[:, :joint_count].reshape(-1, joint_count, 3)
-    params = feature_params(target_offsets(reference))
+    params = feature_params(target_offsets(reference), request.fps)
 
     pose_recipe = complete_pose_recipe(pose_root)
     recipe = corpus_recipe(request, index_csv, reference_path, pose_recipe, min_frames)
