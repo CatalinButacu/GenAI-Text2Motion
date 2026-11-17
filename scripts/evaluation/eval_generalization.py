@@ -8,7 +8,7 @@ import torch
 
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.motion.contracts import Split
-from text2motion.tokenization.metrics import evaluate_tokenizer_reconstruction
+from text2motion.tokenization.metrics import ReconstructionSetup, evaluate_tokenizer_reconstruction
 
 _CHECKPOINT_CONFIGS = MappingProxyType(
     {
@@ -58,15 +58,17 @@ def run(args: argparse.Namespace) -> None:
         fids = {
             sp: evaluate_tokenizer_reconstruction(
                 module,
-                repository.root,
-                repository.load_scaler(),
-                max_frames=app.config.data.max_motion_len,
+                ReconstructionSetup(
+                    root=repository.root,
+                    scaler=repository.load_scaler(),
+                    max_frames=app.config.data.max_motion_len,
+                    device=device,
+                    max_clips=args.clips,
+                    split=sp,
+                    shuffle_seed=2026,
+                    reconstruction_fid_scorer=evaluator.calculate_reconstruction_fid,
+                ),
                 downsample=app.config.tokenizer.downsample,
-                device=device,
-                max_clips=args.clips,
-                split=sp,
-                shuffle_seed=2026,
-                reconstruction_fid_scorer=evaluator.calculate_reconstruction_fid,
             )["recon_fid"]
             for sp in _SPLITS
         }

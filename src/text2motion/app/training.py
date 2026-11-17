@@ -57,7 +57,7 @@ from text2motion.tokenization.corpus import (
     check_pack_precision,
     read_pack_identity,
 )
-from text2motion.tokenization.metrics import evaluate_tokenizer_reconstruction
+from text2motion.tokenization.metrics import ReconstructionSetup, evaluate_tokenizer_reconstruction
 from text2motion.tokenization.trainer import (
     TokenizerTrainer,
     train_tokenizer,
@@ -161,14 +161,16 @@ def run_train_tokenizer(
     def evaluate(split: Split) -> dict[str, float]:
         return evaluate_tokenizer_reconstruction(
             module,
-            repository.root,
-            scaler,
-            max_frames=config.data.max_motion_len,
+            ReconstructionSetup(
+                root=repository.root,
+                scaler=scaler,
+                max_frames=config.data.max_motion_len,
+                device=app.device,
+                max_clips=args.max_eval_clips,
+                split=split,
+                reconstruction_fid_scorer=evaluator.calculate_reconstruction_fid,
+            ),
             downsample=config.tokenizer.downsample,
-            device=app.device,
-            max_clips=args.max_eval_clips,
-            split=split,
-            reconstruction_fid_scorer=evaluator.calculate_reconstruction_fid,
         )
 
     name = args.ckpt_name or f"tokenizer_{args.tokenizer.value}.pt"

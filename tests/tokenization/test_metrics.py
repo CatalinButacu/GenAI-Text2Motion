@@ -7,7 +7,7 @@ from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import FEATURES_DIR, SPLIT_FILES
 from text2motion.tokenization.contracts import TokenizerReconstruction
-from text2motion.tokenization.metrics import evaluate_tokenizer_reconstruction
+from text2motion.tokenization.metrics import ReconstructionSetup, evaluate_tokenizer_reconstruction
 from text2motion.tokenization.nn_model import TokenizerNetwork
 
 
@@ -45,11 +45,13 @@ def test_a_perfect_reconstruction_scores_zero_and_skips_short_clips(tmp_path):
 
     metrics = evaluate_tokenizer_reconstruction(
         IdentityTokenizer(),
-        tmp_path,
-        scaler,
-        max_frames=30,
-        split=Split.VALIDATION,
-        reconstruction_fid_scorer=count_clips,
+        ReconstructionSetup(
+            root=tmp_path,
+            scaler=scaler,
+            max_frames=30,
+            split=Split.VALIDATION,
+            reconstruction_fid_scorer=count_clips,
+        ),
     )
     assert metrics["clips"] == 2
     assert metrics["mpjpe_mm"] == pytest.approx(0.0, abs=1e-6)
@@ -62,7 +64,10 @@ def test_a_listed_clip_without_a_feature_file_raises(tmp_path):
     scaler = dataset(tmp_path, {"000001": 40}, "000001\n000009\n")
     with pytest.raises(FileNotFoundError, match="000009"):
         evaluate_tokenizer_reconstruction(
-            IdentityTokenizer(), tmp_path, scaler, max_frames=30, split=Split.VALIDATION
+            IdentityTokenizer(),
+            ReconstructionSetup(
+                root=tmp_path, scaler=scaler, max_frames=30, split=Split.VALIDATION
+            ),
         )
 
 
@@ -81,7 +86,8 @@ def test_an_evaluation_without_a_usable_clip_raises(tmp_path, clips, listed, set
     arguments = {"max_frames": 30, **settings}
     with pytest.raises(ValueError, match="usable frames"):
         evaluate_tokenizer_reconstruction(
-            IdentityTokenizer(), tmp_path, scaler, split=Split.VALIDATION, **arguments
+            IdentityTokenizer(),
+            ReconstructionSetup(root=tmp_path, scaler=scaler, split=Split.VALIDATION, **arguments),
         )
 
 
@@ -93,5 +99,8 @@ def test_a_clip_with_nan_features_raises_with_its_name(tmp_path):
     np.save(path, features)
     with pytest.raises(ValueError, match="000002"):
         evaluate_tokenizer_reconstruction(
-            IdentityTokenizer(), tmp_path, scaler, max_frames=30, split=Split.VALIDATION
+            IdentityTokenizer(),
+            ReconstructionSetup(
+                root=tmp_path, scaler=scaler, max_frames=30, split=Split.VALIDATION
+            ),
         )

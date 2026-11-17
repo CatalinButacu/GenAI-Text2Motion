@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -30,20 +31,27 @@ def select_reconstruction_evaluation_clip_ids(
     return ids[:max_clips]
 
 
+############################################################
+#       ReconstructionSetup
+############################################################
+@dataclass(frozen=True)
+class ReconstructionSetup:
+    root: Path
+    scaler: MotionScaler
+    max_frames: int
+    split: Split | str
+    joint_count: int = JOINTS
+    device: str = "cpu"
+    max_clips: int | None = None
+    shuffle_seed: int | None = None
+    reconstruction_fid_scorer: ReconstructionFidScorer | None = None
+
+
 @torch.no_grad()
 def evaluate_tokenizer_reconstruction(
     module: TokenizerNetwork,
-    root: Path,
-    scaler: MotionScaler,
-    max_frames: int,
+    setup: ReconstructionSetup,
     downsample: int | None = None,
-    joint_count: int = JOINTS,
-    device: str = "cpu",
-    max_clips: int | None = None,
-    *,
-    split: Split | str,
-    shuffle_seed: int | None = None,
-    reconstruction_fid_scorer: ReconstructionFidScorer | None = None,
 ) -> dict[str, float]:
     if downsample is not None and downsample != module.downsample:
         raise ValueError(
@@ -52,41 +60,19 @@ def evaluate_tokenizer_reconstruction(
     was_training = module.training
     module.eval()
     try:
-        return reconstruction_metrics(
-            module,
-            root,
-            scaler,
-            max_frames,
-            module.downsample,
-            joint_count,
-            device,
-            max_clips,
-            split=split,
-            shuffle_seed=shuffle_seed,
-            reconstruction_fid_scorer=reconstruction_fid_scorer,
-        )
+        return reconstruction_metrics(module, setup)
     finally:
         module.train(was_training)
 
 
 def reconstruction_metrics(
     module: TokenizerNetwork,
-    root: Path,
-    scaler: MotionScaler,
-    max_frames: int,
-    downsample: int,
-    joint_count: int,
-    device: str,
-    max_clips: int | None,
-    *,
-    split: Split | str,
-    shuffle_seed: int | None = None,
-    reconstruction_fid_scorer: ReconstructionFidScorer | None = None,
+    setup: ReconstructionSetup,
 ) -> dict[str, float]:
     ids = select_reconstruction_evaluation_clip_ids(
-        root, split, max_clips=max_clips, shuffle_seed=shuffle_seed
+        setup.root, setup.split, max_clips=setup.max_clips, shuffle_seed=setup.shuffle_seed
     )
-    feature_paths = [root / FEATURES_DIR / f"{clip_id}.npy" for clip_id in ids]
+    feature_paths = [setup.root / FEATURES_DIR / f"{clip_id}.npy" for clip_id in ids]
     check_no_missing_files("feature", [str(path) for path in feature_paths if not path.is_file()])
 
     clips_by_length: dict[int, list[np.ndarray]] = {}
@@ -96,16 +82,16 @@ def reconstruction_metrics(
         if not np.isfinite(features).all():
             non_finite.append(path.stem)
             continue
-        length = (min(features.shape[0], max_frames) // downsample) * downsample
-        if length < 2 * downsample:
+        length = (min(features.shape[0], setup.max_frames) // module.downsample) * module.downsample
+        if length < 2 * module.downsample:
             continue
         clips_by_length.setdefault(length, []).append(features[:length])
     if non_finite:
         raise ValueError(f"{len(non_finite)} clips hold NaN or Inf values: {non_finite[:20]}")
     if not clips_by_length:
         raise ValueError(
-            f"no clip of split {split} has {2 * downsample} usable frames "
-            f"(clips listed: {len(ids)}, max_frames: {max_frames}); the metrics would be NaN"
+            f"no clip of split {setup.split} has {2 * module.downsample} usable frames "
+            f"(clips listed: {len(ids)}, max_frames: {setup.max_frames}); the metrics would be NaN"
         )
 
     batches = [
@@ -120,7 +106,7 @@ def reconstruction_metrics(
 
     for batch in batches:
         reference = np.stack(batch)
-        normalized = torch.from_numpy(scaler.normalize(reference)).to(device)
+        normalized = torch.from_numpy(setup.scaler.normalize(reference)).to(setup.device)
         reconstruction_normalized = module(normalized)[0].cpu().numpy()
         if reconstruction_normalized.shape != normalized.shape:
             raise ValueError(
@@ -129,15 +115,15 @@ def reconstruction_metrics(
             )
         if not np.isfinite(reconstruction_normalized).all():
             raise ValueError("the reconstruction holds NaN or Inf values")
-        reconstruction = np.asarray(scaler.denormalize(reconstruction_normalized), np.float32)
+        reconstruction = np.asarray(setup.scaler.denormalize(reconstruction_normalized), np.float32)
 
         reference_features.extend(reference)
         reconstructed_features.extend(reconstruction)
         feature_error = np.sqrt(((reference - reconstruction) ** 2).sum(-1)).mean(-1)
         feature_distances.extend(feature_error.tolist())
 
-        reference_joints = recover_from_ric(torch.from_numpy(reference), joint_count)
-        reconstructed_joints = recover_from_ric(torch.from_numpy(reconstruction), joint_count)
+        reference_joints = recover_from_ric(torch.from_numpy(reference), setup.joint_count)
+        reconstructed_joints = recover_from_ric(torch.from_numpy(reconstruction), setup.joint_count)
         joint_offsets = (reference_joints - reconstructed_joints).numpy()
         joint_errors.extend(np.sqrt((joint_offsets**2).sum(-1)).mean((-2, -1)).tolist())
 
@@ -147,8 +133,10 @@ def reconstruction_metrics(
         "feature_l2": float(np.mean(feature_distances)),
     }
 
-    if reconstruction_fid_scorer is not None:
-        metrics["recon_fid"] = reconstruction_fid_scorer(reference_features, reconstructed_features)
+    if setup.reconstruction_fid_scorer is not None:
+        metrics["recon_fid"] = setup.reconstruction_fid_scorer(
+            reference_features, reconstructed_features
+        )
         if not np.isfinite(metrics["recon_fid"]):
             raise ValueError(f"the reconstruction FID is not finite: {metrics['recon_fid']}")
 

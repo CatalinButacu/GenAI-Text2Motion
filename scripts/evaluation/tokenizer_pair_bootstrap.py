@@ -12,7 +12,7 @@ import torch
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.evaluation.metrics import paired_fid_delta
 from text2motion.motion.contracts import Split
-from text2motion.tokenization.metrics import evaluate_tokenizer_reconstruction
+from text2motion.tokenization.metrics import ReconstructionSetup, evaluate_tokenizer_reconstruction
 
 SEED = 2026
 CONFIGS = MappingProxyType(
@@ -66,13 +66,15 @@ def reconstruction_embeddings(
     scorer = CapturingScorer(evaluator)
     metrics = evaluate_tokenizer_reconstruction(
         module,
-        repository.root,
-        repository.load_scaler(),
-        max_frames=app.config.data.max_motion_len,
-        device=app.device,
-        split=split,
-        shuffle_seed=SEED,
-        reconstruction_fid_scorer=scorer,
+        ReconstructionSetup(
+            root=repository.root,
+            scaler=repository.load_scaler(),
+            max_frames=app.config.data.max_motion_len,
+            device=app.device,
+            split=split,
+            shuffle_seed=SEED,
+            reconstruction_fid_scorer=scorer,
+        ),
     )
     reference = evaluator.compute_motion_embeddings(scorer.reference)
     reconstruction = evaluator.compute_motion_embeddings(scorer.reconstruction)

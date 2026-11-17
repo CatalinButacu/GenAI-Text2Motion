@@ -19,7 +19,7 @@ from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.storage import FEATURES_DIR, base_clip_ids
 from text2motion.tokenization.contracts import TokenizerReconstruction
-from text2motion.tokenization.metrics import evaluate_tokenizer_reconstruction
+from text2motion.tokenization.metrics import ReconstructionSetup, evaluate_tokenizer_reconstruction
 from text2motion.tokenization.nn_model import TokenizerNetwork
 
 TOKENIZER_CONFIG = "configs/tokenizer/fsq_g8_v1024.yaml"
@@ -296,13 +296,15 @@ def reconstruction_scores(
 ) -> dict[str, float]:
     return evaluate_tokenizer_reconstruction(
         module,
-        root,
-        scaler,
-        max_frames=app.config.data.max_motion_len,
-        device=device,
-        split=Split.VALIDATION,
-        shuffle_seed=SEED,
-        reconstruction_fid_scorer=evaluator.calculate_reconstruction_fid,
+        ReconstructionSetup(
+            root=root,
+            scaler=scaler,
+            max_frames=app.config.data.max_motion_len,
+            device=device,
+            split=Split.VALIDATION,
+            shuffle_seed=SEED,
+            reconstruction_fid_scorer=evaluator.calculate_reconstruction_fid,
+        ),
     )
 
 
