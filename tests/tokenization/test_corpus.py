@@ -31,7 +31,7 @@ def test_windows_cover_every_frame_with_an_end_aligned_last_window(frames, start
     assert window_starts(frames, 16, 16) == starts
 
 
-def __fake_tokenizer() -> FrozenMotionTokenizer:
+def fake_tokenizer() -> FrozenMotionTokenizer:
     def encode(clip):
         steps = clip.frame_count // 4
         return SimpleNamespace(indices=torch.zeros(steps, 2, dtype=torch.long), token_count=steps)
@@ -56,7 +56,7 @@ def test_the_pack_skips_excluded_clips_and_records_its_identity(tmp_path):
     scaler = cast(MotionScaler, SimpleNamespace(normalize=lambda feat: feat))
 
     summary = build_token_pack(
-        __fake_tokenizer(), scaler, request, {"heldout.npy"}, {"tokenizer_sha256": "abc"}
+        fake_tokenizer(), scaler, request, {"heldout.npy"}, {"tokenizer_sha256": "abc"}
     )
 
     with np.load(tmp_path / "pack.npz") as pack:
@@ -81,7 +81,7 @@ def test_pack_readers_count_only_clip_windows(tmp_path):
         stride=16,
     )
     scaler = cast(MotionScaler, SimpleNamespace(normalize=lambda feat: feat))
-    build_token_pack(__fake_tokenizer(), scaler, request, set(), {"tokenizer_sha256": "abc"})
+    build_token_pack(fake_tokenizer(), scaler, request, set(), {"tokenizer_sha256": "abc"})
     spec = importlib.util.spec_from_file_location(
         "scaling_budget", Path("scripts/benchmarks/scaling_budget.py")
     )
@@ -137,7 +137,7 @@ def test_a_pack_without_any_window_is_not_written(tmp_path, case):
     excluded = {"only.npy"} if case == "all_excluded" else set()
 
     with pytest.raises(ValueError, match="would be empty"):
-        build_token_pack(__fake_tokenizer(), scaler, request, excluded, {})
+        build_token_pack(fake_tokenizer(), scaler, request, excluded, {})
     assert not (tmp_path / "pack.npz").exists()
 
 

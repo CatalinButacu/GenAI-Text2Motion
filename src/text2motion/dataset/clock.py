@@ -49,18 +49,18 @@ class ClockRow:
         return record
 
 
-def __distances(joints: np.ndarray) -> np.ndarray:
+def distances(joints: np.ndarray) -> np.ndarray:
     return np.stack([np.linalg.norm(joints[:, a] - joints[:, b], axis=-1) for a, b in PAIRS], 1)
 
 
-def __correlation(ours: np.ndarray, official: np.ndarray) -> float:
+def correlation(ours: np.ndarray, official: np.ndarray) -> float:
     a = ours - ours.mean(axis=0)
     b = official - official.mean(axis=0)
     denominator = np.sqrt((a * a).sum() * (b * b).sum())
     return float((a * b).sum() / denominator) if denominator > 0 else float("nan")
 
 
-def __clip_score(
+def clip_score(
     pose: np.ndarray, official: np.ndarray, first_frame: int, stored_fps: int, pose_stride: int
 ) -> float:
     seconds = (first_frame + np.arange(official.shape[0])) / FPS
@@ -71,10 +71,10 @@ def __clip_score(
     flat = pose.reshape(pose.shape[0], -1)
     columns = [np.interp(positions, frames, flat[:, c]) for c in range(flat.shape[1])]
     resampled = np.stack(columns, 1).reshape(len(positions), -1, 3)
-    return __correlation(__distances(resampled), official)
+    return correlation(distances(resampled), official)
 
 
-def __file_row(source_path: str, scores: list[tuple[float, ...]], longest: int) -> ClockRow:
+def file_row(source_path: str, scores: list[tuple[float, ...]], longest: int) -> ClockRow:
     table = np.array(scores)
     means = np.nanmean(np.where(np.isnan(table), NO_SCORE, table), axis=0)
     order = np.argsort(means)[::-1]
@@ -91,7 +91,7 @@ def __file_row(source_path: str, scores: list[tuple[float, ...]], longest: int) 
     )
 
 
-def __folder(source_path: str) -> str:
+def folder(source_path: str) -> str:
     return source_path.rsplit("/", 1)[0]
 
 
@@ -99,10 +99,10 @@ def with_folder_rates(rows: list[ClockRow]) -> list[ClockRow]:
     rates: dict[str, set[int]] = defaultdict(set)
     for row in rows:
         if row.status == "ok":
-            rates[__folder(row.source_path)].add(row.stored_fps)
+            rates[folder(row.source_path)].add(row.stored_fps)
     updated = []
     for row in rows:
-        folder_rates = rates[__folder(row.source_path)]
+        folder_rates = rates[folder(row.source_path)]
         unscored = row.longest_official_frames < MIN_SCORED_FRAMES
         if unscored and len(folder_rates) == 1:
             row = replace(row, stored_fps=next(iter(folder_rates)), status="folder_rate")
@@ -121,15 +121,15 @@ def stored_fps_table(official_dir: Path, pose_root: Path, pose_stride: int) -> l
         pose_path = resolve_pose_path(source_path, pose_root)
         if "humanact12" in source_path or pose_path is None or not features_path.is_file():
             continue
-        official = __distances(feature_joints(np.load(features_path).astype(np.float32)))
+        official = distances(feature_joints(np.load(features_path).astype(np.float32)))
         pose = np.load(pose_path)
         first = head_trim_frames(source_path, FPS) + int(row["start_frame"])
         scores[source_path].append(
             tuple(
-                __clip_score(pose, official, first, fps, pose_stride)
+                clip_score(pose, official, first, fps, pose_stride)
                 for fps in STORED_FPS_HYPOTHESES
             )
         )
         longest[source_path] = max(longest[source_path], official.shape[0])
-    rows = [__file_row(path, scores[path], longest[path]) for path in sorted(scores)]
+    rows = [file_row(path, scores[path], longest[path]) for path in sorted(scores)]
     return with_folder_rates(rows)

@@ -64,14 +64,14 @@ CLOCKED_POSES = "pose_data_clocked"
 _HML3D_FPS = 20
 
 
-def __parquet_files(src: Path, split: str) -> list[Path]:
+def parquet_files(src: Path, split: str) -> list[Path]:
     matches = sorted(src.glob(f"**/{split}-*.parquet"))
     if not matches:
         matches = sorted(p for p in src.glob("**/*.parquet") if split in p.name)
     return matches
 
 
-def __parquet_module():
+def parquet_module():
     try:
         import pyarrow.parquet as pq
     except ImportError as exc:
@@ -103,7 +103,7 @@ def index_frame_scale(fps: int) -> int:
 
 
 def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
-    pq = __parquet_module()
+    pq = parquet_module()
 
     vec_dir = out_dir / FEATURES_DIR
     vec_dir.mkdir(parents=True, exist_ok=True)
@@ -111,7 +111,7 @@ def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
     seen: dict[str, str] = {}
 
     for split in Split:
-        files = __parquet_files(src, split)
+        files = parquet_files(src, split)
         if not files:
             raise FileNotFoundError(f"no parquet files for split {split!r} under {src}")
 
@@ -173,11 +173,11 @@ class Hml3dPreparationLayout:
             d.mkdir(parents=True, exist_ok=True)
 
 
-def __pose_path(src: Path, amass_root: Path, pose_root: Path) -> Path:
+def pose_path_for(src: Path, amass_root: Path, pose_root: Path) -> Path:
     return (pose_root / src.relative_to(amass_root)).with_suffix(".npy")
 
 
-def __same_pose(extracted: np.ndarray | None, saved: np.ndarray) -> bool:
+def same_pose(extracted: np.ndarray | None, saved: np.ndarray) -> bool:
     if extracted is None or extracted.shape != saved.shape:
         return False
     return bool(np.allclose(extracted, saved, rtol=0.0, atol=_ADOPT_TOLERANCE))
@@ -193,7 +193,7 @@ def adopt_pose_folder(
     manifest_path = pose_root / POSE_MANIFEST
     if manifest_path.is_file():
         raise ValueError(f"{manifest_path} exists; adoption is only for a folder without one")
-    pairs = [(src, __pose_path(src, amass_root, pose_root)) for src in npz_files]
+    pairs = [(src, pose_path_for(src, amass_root, pose_root)) for src in npz_files]
     pairs = [(src, saved) for src, saved in pairs if saved.is_file()]
     if not pairs:
         raise FileNotFoundError(f"{pose_root} has no pose files to adopt")
@@ -203,7 +203,7 @@ def adopt_pose_folder(
     mismatched = [
         saved.name
         for src, saved in sample
-        if not __same_pose(extractor.extract(src), np.load(saved))
+        if not same_pose(extractor.extract(src), np.load(saved))
     ]
     if mismatched:
         raise ValueError(
@@ -246,7 +246,7 @@ def extract_amass_to_y_up_joints(
 
     counts = {"written": 0, "reused": 0, "no_motion": 0}
     for src in tqdm(npz_files, desc="AMASS->pose"):
-        save_path = __pose_path(src, amass_root, pose_root)
+        save_path = pose_path_for(src, amass_root, pose_root)
         if save_path.is_file():
             counts["reused"] += 1
             continue
@@ -329,7 +329,7 @@ def build_indexed_joint_clips(
     logger.info(f"index->joints: wrote {written} clips")
 
 
-def __hml3d_features(source: np.ndarray, params, joint_count: int):
+def hml3d_features(source: np.ndarray, params, joint_count: int):
     data, _, _, _ = encode_joints(source, params)
     if not np.isfinite(data).all():
         raise ValueError("non-finite features")
@@ -341,7 +341,7 @@ def encode_joint_clips_to_hml3d263(
     request: PreparationRequest, layout: Hml3dPreparationLayout
 ) -> None:
     joint_count = request.joint_count
-    ref_path = __reference_joints_path(layout.joints)
+    ref_path = reference_joints_path(layout.joints)
     reference = np.load(ref_path)[:, :joint_count]
     reference = reference.reshape(len(reference), -1, 3)
     params = feature_params(target_offsets(reference), request.fps)
@@ -352,7 +352,7 @@ def encode_joint_clips_to_hml3d263(
     for source_file in tqdm(source_list, desc="joints->263"):
         source_data = np.load(layout.joints / source_file)[:, :joint_count]
         try:
-            data, recovered = __hml3d_features(source_data, params, joint_count)
+            data, recovered = hml3d_features(source_data, params, joint_count)
         except Exception as exc:
             failed.append(source_file)
             logger.warning(f"FAILED {source_file}: {exc}")
@@ -414,7 +414,7 @@ def source_fingerprint(path: Path) -> list[int]:
     return [stat.st_size, stat.st_mtime_ns]
 
 
-def __stored_fingerprints(manifest_path: Path) -> dict[str, list[int]]:
+def stored_fingerprints(manifest_path: Path) -> dict[str, list[int]]:
     if not manifest_path.is_file():
         return {}
     return json.loads(manifest_path.read_text(encoding="utf-8")).get("source_fingerprints", {})
@@ -446,7 +446,7 @@ def heldout_feature_names(index_csv: Path, out_dir: Path, pose_root: Path) -> se
     return names
 
 
-def __reference_joints_path(joints_dir: Path) -> Path:
+def reference_joints_path(joints_dir: Path) -> Path:
     preferred = joints_dir / f"{_REFERENCE_CLIP_ID}.npy"
     if not preferred.is_file():
         raise FileNotFoundError(
@@ -518,7 +518,7 @@ def write_manifest(
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
 
-def __corpus_features(
+def corpus_features(
     src: Path, pose_root: Path, request: PreparationRequest, params, min_frames: int
 ) -> np.ndarray | None:
     joints = np.load(src)[:, : request.joint_count]
@@ -549,7 +549,7 @@ def build_amass_pretraining_corpus(
         raise ValueError("index_csv must be set (the leakage guard needs the official index)")
     check_hml3d_fps(request.fps)
     index_csv = Path(request.index_csv)
-    reference_path = __reference_joints_path(regen_dir / "joints")
+    reference_path = reference_joints_path(regen_dir / "joints")
     joint_count = request.joint_count
     reference = np.load(reference_path)[:, :joint_count].reshape(-1, joint_count, 3)
     params = feature_params(target_offsets(reference), request.fps)
@@ -567,7 +567,7 @@ def build_amass_pretraining_corpus(
             f"{len(present)} heldout files are already in {vec_dir} (first: {present[:3]}); "
             "build into a new folder"
         )
-    previous_fingerprints = __stored_fingerprints(manifest_path)
+    previous_fingerprints = stored_fingerprints(manifest_path)
     sources = sorted(pose_root.rglob(NPY_FILES))
     if not sources:
         raise FileNotFoundError(f"no pose files under {pose_root}")
@@ -598,7 +598,7 @@ def build_amass_pretraining_corpus(
             counts["frames"] += int(np.load(save_path, mmap_mode="r").shape[0])
             continue
         try:
-            features = __corpus_features(src, pose_root, request, params, min_frames)
+            features = corpus_features(src, pose_root, request, params, min_frames)
         except Exception as exc:
             failed.append(name)
             logger.warning(f"FAILED {name}: {exc}")
@@ -680,7 +680,7 @@ def official_joints_at(official_dir: Path, name: str, fps: int) -> np.ndarray:
     return cubic_resample(feature_joints(features), _HML3D_FPS, fps)
 
 
-def __split_names(official_dir: Path) -> set[str]:
+def read_split_names(official_dir: Path) -> set[str]:
     return {
         line.strip().removeprefix("M")
         for split in OFFICIAL_SPLIT_FILES
@@ -692,7 +692,7 @@ def __split_names(official_dir: Path) -> set[str]:
 def fill_from_official(official_dir: Path, layout: Hml3dPreparationLayout, fps: int) -> int:
     manifest = json.loads((layout.out_dir / INDEX_MANIFEST).read_text(encoding="utf-8"))
     missing = [str(name).removesuffix(".npy") for name in manifest["missing_names"]]
-    listed = __split_names(official_dir)
+    listed = read_split_names(official_dir)
     names = [name for name in missing if name in listed]
     absent = [n for n in names if not (official_dir / "new_joint_vecs" / f"{n}.npy").is_file()]
     if absent:

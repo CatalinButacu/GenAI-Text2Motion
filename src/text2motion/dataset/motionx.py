@@ -20,7 +20,7 @@ def motionx_captions(zip_path: Path) -> dict[str, str]:
         }
 
 
-def __body_joints(points: np.ndarray, member: str) -> np.ndarray:
+def body_joints(points: np.ndarray, member: str) -> np.ndarray:
     if points.ndim != 3 or points.shape[1:] != (MOTIONX_POINTS, 3):
         expected = f"(frames, {MOTIONX_POINTS}, 3)"
         raise ValueError(f"{member}: expected {expected}, got {points.shape}")
@@ -35,4 +35,4 @@ def motionx_body_clips(zip_path: Path) -> Iterator[tuple[str, np.ndarray]]:
         members = sorted(member for member in archive.namelist() if member.endswith(".npy"))
         for member in members:
             points = np.load(io.BytesIO(archive.read(member)))
-            yield PurePosixPath(member).stem, __body_joints(points, member)
+            yield PurePosixPath(member).stem, body_joints(points, member)

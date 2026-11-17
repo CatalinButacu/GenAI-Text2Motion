@@ -7,14 +7,14 @@ from text2motion.motion.kinematics import Skeleton
 from text2motion.motion.representation import swap_left_right
 
 
-def __encoded(joints: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def encoded(joints: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     params = representation.feature_params(representation.target_offsets(joints))
     features, global_positions, _, _ = representation.encode_joints(joints, params)
     return features, global_positions
 
 
 def test_recovery_from_ric_reproduces_the_encoded_global_joints(synthetic_joints):
-    features, global_positions = __encoded(synthetic_joints)
+    features, global_positions = encoded(synthetic_joints)
 
     recovered = representation.recover_from_ric(torch.from_numpy(features).float(), 22)
 
@@ -23,7 +23,7 @@ def test_recovery_from_ric_reproduces_the_encoded_global_joints(synthetic_joints
 
 @pytest.mark.parametrize("chunk", [1, 3, 7, 16])
 def test_streamed_recovery_equals_whole_recovery(synthetic_joints, chunk):
-    features, _ = __encoded(synthetic_joints)
+    features, _ = encoded(synthetic_joints)
     whole = representation.recover_from_ric(torch.from_numpy(features).float(), 22).numpy()
     recovery = representation.StreamingSkeletonRecovery()
 
@@ -33,7 +33,7 @@ def test_streamed_recovery_equals_whole_recovery(synthetic_joints, chunk):
 
 
 def test_batched_rotation_recovery_equals_recovery_of_each_sequence(synthetic_joints):
-    features, global_positions = __encoded(synthetic_joints)
+    features, global_positions = encoded(synthetic_joints)
     skeleton = Skeleton(
         torch.tensor(representation.RAW_OFFSETS).float(), representation.KINEMATIC_CHAINS, "cpu"
     )

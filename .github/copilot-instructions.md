@@ -48,7 +48,7 @@
 
 ## Code rules
 - No comments, except the class separator box and the script command header.
-- Private functions start with two underscores.
+- Function names have no underscore prefix.
 - One objective per function. No `_and_` or `_or_` in a name.
 - At most 10 files per package.
 - No global mutable state.

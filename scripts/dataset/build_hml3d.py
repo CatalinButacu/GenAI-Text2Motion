@@ -20,14 +20,14 @@ CLOCK_CSV = PATHS.notes / "amass_clock_check.csv"
 STAGES = ("clock", "joints", "features", "all")
 
 
-def __arguments() -> argparse.Namespace:
+def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("stage", choices=STAGES)
     parser.add_argument("--fps", type=int, required=True)
     return parser.parse_args()
 
 
-def __write_clock_table(fps: int) -> None:
+def write_clock_table(fps: int) -> None:
     request = preparation_request(PATHS, fps)
     run_hml3d_preparation(request, PreparationStage.AMASS)
     pose_root = Hml3dPreparationLayout(request.out_dir).pose_data
@@ -44,10 +44,10 @@ def __write_clock_table(fps: int) -> None:
 
 
 def main() -> None:
-    arguments = __arguments()
+    arguments = parse_arguments()
     stage, fps = arguments.stage, arguments.fps
     if stage in ("clock", "all"):
-        __write_clock_table(fps)
+        write_clock_table(fps)
     if stage in ("joints", "all"):
         build_joint_clips(PATHS, CLOCK_CSV, fps)
     if stage in ("features", "all"):

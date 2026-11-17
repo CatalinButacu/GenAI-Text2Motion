@@ -61,7 +61,7 @@ def input_pins(paths: tuple[Path, ...]) -> dict[str, str]:
     return {path.as_posix(): sha256_file(path) for path in paths}
 
 
-def __tokenizer_network(
+def tokenizer_network(
     config_path: Path,
     kind: TokenizerKind,
     checkpoint: Path | None = None,
@@ -79,7 +79,7 @@ def __tokenizer_network(
     return network
 
 
-def __case_outputs(name: str, network: TokenizerNetwork) -> dict[str, torch.Tensor]:
+def case_outputs(name: str, network: TokenizerNetwork) -> dict[str, torch.Tensor]:
     results: dict[str, torch.Tensor] = {}
     torch.manual_seed(2026)
     motion = torch.randn(2, 64, 263)
@@ -106,19 +106,19 @@ def __case_outputs(name: str, network: TokenizerNetwork) -> dict[str, torch.Tens
 
 def tokenizer_outputs() -> dict[str, torch.Tensor]:
     cases = {
-        "fsq_g8": __tokenizer_network(FSQ_CONFIG, TokenizerKind.FINITE_SCALAR, FSQ_CHECKPOINT),
-        "rvq_l8": __tokenizer_network(RVQ_CONFIG, TokenizerKind.RESIDUAL_VECTOR, RVQ_CHECKPOINT),
-        "fsq_residual": __tokenizer_network(
+        "fsq_g8": tokenizer_network(FSQ_CONFIG, TokenizerKind.FINITE_SCALAR, FSQ_CHECKPOINT),
+        "rvq_l8": tokenizer_network(RVQ_CONFIG, TokenizerKind.RESIDUAL_VECTOR, RVQ_CHECKPOINT),
+        "fsq_residual": tokenizer_network(
             FSQ_CONFIG, TokenizerKind.FINITE_SCALAR, quantizer="residual"
         ),
     }
     results: dict[str, torch.Tensor] = {}
     for name, network in cases.items():
-        results |= __case_outputs(name, network)
+        results |= case_outputs(name, network)
     return results
 
 
-def __save_tokenizer_golden() -> None:
+def save_tokenizer_golden() -> None:
     outputs = {name: tensor_fingerprint(value) for name, value in tokenizer_outputs().items()}
     record = {
         "torch": torch.__version__,
@@ -150,7 +150,7 @@ def generator_metrics() -> dict[str, dict[str, float]]:
     return metrics
 
 
-def __save_generator_golden() -> None:
+def save_generator_golden() -> None:
     record = {
         "torch": torch.__version__,
         "inputs": input_pins(GENERATOR_INPUTS),
@@ -165,9 +165,9 @@ def main() -> None:
     parser.add_argument("command", choices=["save-tokenizer", "save-generator"])
     arguments = parser.parse_args()
     if arguments.command == "save-generator":
-        __save_generator_golden()
+        save_generator_golden()
         return
-    __save_tokenizer_golden()
+    save_tokenizer_golden()
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ KICK = "a person kicks#a/DET person/NOUN kick/VERB#0.0#0.0"
 RARE = MotionDataConfig(mirror_augment=False, caption_weighting=CaptionWeighting.RARE_VERB)
 
 
-def __write_clips(root: Path, kick_clips: int, split: Split = Split.TRAIN) -> None:
+def write_clips(root: Path, kick_clips: int, split: Split = Split.TRAIN) -> None:
     (root / FEATURES_DIR).mkdir()
     (root / TEXTS_DIR).mkdir()
     np.save(root / MEAN_FILE, np.zeros(DIM, np.float32))
@@ -34,7 +34,7 @@ def __write_clips(root: Path, kick_clips: int, split: Split = Split.TRAIN) -> No
     (root / SPLIT_FILES[split]).write_text("\n".join(names) + "\n", encoding="utf-8")
 
 
-def __kick_share(dataset: CaptionedMotionDataset, draws: int) -> float:
+def kick_share(dataset: CaptionedMotionDataset, draws: int) -> float:
     kicks = 0
     for epoch in range(draws):
         dataset.set_epoch(epoch)
@@ -43,34 +43,34 @@ def __kick_share(dataset: CaptionedMotionDataset, draws: int) -> float:
 
 
 def test_rare_verb_weighting_prefers_the_caption_with_the_rarer_verb(tmp_path):
-    __write_clips(tmp_path, kick_clips=5)
+    write_clips(tmp_path, kick_clips=5)
     dataset = CaptionedMotionDataset(tmp_path, RARE, Split.TRAIN, seed=2026)
 
     assert dataset.verb_clip_counts == {"walk": 20, "kick": 5}
     weights = dataset.caption_weights(parse_text_file(tmp_path / TEXTS_DIR / "C0.txt"))
     np.testing.assert_allclose(weights, [1 / 3, 2 / 3])
-    assert abs(__kick_share(dataset, 600) - 2 / 3) < 0.06
+    assert abs(kick_share(dataset, 600) - 2 / 3) < 0.06
 
 
 def test_uniform_weighting_keeps_the_even_pick(tmp_path):
-    __write_clips(tmp_path, kick_clips=5)
+    write_clips(tmp_path, kick_clips=5)
     dataset = CaptionedMotionDataset(
         tmp_path, MotionDataConfig(mirror_augment=False), Split.TRAIN, seed=2026
     )
 
     assert dataset.verb_clip_counts is None
-    assert abs(__kick_share(dataset, 600) - 1 / 2) < 0.06
+    assert abs(kick_share(dataset, 600) - 1 / 2) < 0.06
 
 
 def test_validation_split_ignores_rare_verb_weighting(tmp_path):
-    __write_clips(tmp_path, kick_clips=5, split=Split.VALIDATION)
+    write_clips(tmp_path, kick_clips=5, split=Split.VALIDATION)
     dataset = CaptionedMotionDataset(tmp_path, RARE, Split.VALIDATION, seed=2026)
 
     assert dataset.verb_clip_counts is None
 
 
 def test_rare_verb_weighting_without_a_frequent_verb_stops(tmp_path):
-    __write_clips(tmp_path, kick_clips=0)
+    write_clips(tmp_path, kick_clips=0)
     for path in (tmp_path / TEXTS_DIR).iterdir():
         path.write_text("a person#a/DET person/NOUN#0.0#0.0\n", encoding="utf-8")
 

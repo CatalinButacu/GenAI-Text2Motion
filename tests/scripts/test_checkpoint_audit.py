@@ -12,7 +12,7 @@ AUDIT_SCRIPT = Path("scripts/qa/checkpoint_audit.py")
 TOKENIZER_BLOCK = "tokenizer:\n  width: 64\n  num_quantizers: 2\n  fsq_levels: {levels}\n"
 
 
-def __audit_module(monkeypatch):
+def audit_module(monkeypatch):
     spec = importlib.util.spec_from_file_location("checkpoint_audit", AUDIT_SCRIPT)
     assert spec is not None
     assert spec.loader is not None
@@ -30,7 +30,7 @@ def __audit_module(monkeypatch):
 def test_the_audit_compares_the_saved_levels_with_the_yaml(
     tmp_path, monkeypatch, yaml_levels, result
 ):
-    audit = __audit_module(monkeypatch)
+    audit = audit_module(monkeypatch)
     monkeypatch.setattr(audit, "TOKENIZER_CONFIG_DIR", tmp_path)
     network = build_tokenizer_network(
         TokenizerConfig(width=64, num_quantizers=2, fsq_levels=(4, 4)), None

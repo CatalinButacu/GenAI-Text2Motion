@@ -23,7 +23,7 @@ CLIPS = 20
 KICK_CLIPS = 5
 
 
-def __write_clips(root: Path, split: Split = Split.TRAIN) -> Path:
+def write_clips(root: Path, split: Split = Split.TRAIN) -> Path:
     (root / FEATURES_DIR).mkdir()
     (root / TEXTS_DIR).mkdir()
     np.save(root / MEAN_FILE, np.zeros(DIM, np.float32))
@@ -39,14 +39,14 @@ def __write_clips(root: Path, split: Split = Split.TRAIN) -> Path:
     return classes
 
 
-def __config(classes: Path) -> MotionDataConfig:
+def weighted_config(classes: Path) -> MotionDataConfig:
     return MotionDataConfig(
         mirror_augment=False, clip_weighting=ClipWeighting.MOTION_CLASS, motion_classes=classes
     )
 
 
 def test_a_clip_weight_follows_its_rarest_motion_class(tmp_path):
-    dataset = CaptionedMotionDataset(tmp_path, __config(__write_clips(tmp_path)), seed=2026)
+    dataset = CaptionedMotionDataset(tmp_path, weighted_config(write_clips(tmp_path)), seed=2026)
 
     weights = dataset.clip_weights
     assert weights is not None
@@ -55,7 +55,7 @@ def test_a_clip_weight_follows_its_rarest_motion_class(tmp_path):
 
 
 def test_the_train_loader_draws_the_rare_class_more_often(tmp_path):
-    module = MotionDataModule(tmp_path, __config(__write_clips(tmp_path)), seed=2026)
+    module = MotionDataModule(tmp_path, weighted_config(write_clips(tmp_path)), seed=2026)
     sampler = module.captioned_batch_loader(Split.TRAIN, 4).sampler
 
     draws = [index for _ in range(300) for index in sampler]
@@ -66,32 +66,32 @@ def test_the_train_loader_draws_the_rare_class_more_often(tmp_path):
 
 
 def test_an_unshuffled_train_loader_keeps_every_clip_once(tmp_path):
-    module = MotionDataModule(tmp_path, __config(__write_clips(tmp_path)), seed=2026)
+    module = MotionDataModule(tmp_path, weighted_config(write_clips(tmp_path)), seed=2026)
     loader = module.captioned_batch_loader(Split.TRAIN, 4, shuffle=False)
 
     assert list(loader.sampler) == list(range(CLIPS))
 
 
 def test_validation_ignores_motion_class_weighting(tmp_path):
-    classes = __write_clips(tmp_path, split=Split.VALIDATION)
-    dataset = CaptionedMotionDataset(tmp_path, __config(classes), Split.VALIDATION, seed=2026)
+    classes = write_clips(tmp_path, split=Split.VALIDATION)
+    dataset = CaptionedMotionDataset(tmp_path, weighted_config(classes), Split.VALIDATION, seed=2026)
 
     assert dataset.clip_weights is None
 
 
 def test_uniform_weighting_has_no_clip_weights(tmp_path):
-    __write_clips(tmp_path)
+    write_clips(tmp_path)
     dataset = CaptionedMotionDataset(tmp_path, MotionDataConfig(mirror_augment=False), seed=2026)
 
     assert dataset.clip_weights is None
 
 
 def test_a_clip_without_a_class_verb_gets_the_largest_class_weight(tmp_path):
-    classes = __write_clips(tmp_path)
+    classes = write_clips(tmp_path)
     (tmp_path / TEXTS_DIR / "C19.txt").write_text(
         "a person#a/DET person/NOUN#0.0#0.0\n", encoding="utf-8"
     )
-    dataset = CaptionedMotionDataset(tmp_path, __config(classes), seed=2026)
+    dataset = CaptionedMotionDataset(tmp_path, weighted_config(classes), seed=2026)
 
     weights = dataset.clip_weights
     assert weights is not None
@@ -99,7 +99,7 @@ def test_a_clip_without_a_class_verb_gets_the_largest_class_weight(tmp_path):
 
 
 def test_uniform_replacement_draws_every_clip_alike_with_replacement(tmp_path):
-    __write_clips(tmp_path)
+    write_clips(tmp_path)
     config = MotionDataConfig(
         mirror_augment=False, clip_weighting=ClipWeighting.UNIFORM_REPLACEMENT
     )
@@ -114,11 +114,11 @@ def test_uniform_replacement_draws_every_clip_alike_with_replacement(tmp_path):
 
 
 def test_motion_class_weighting_without_a_class_verb_stops(tmp_path):
-    classes = __write_clips(tmp_path)
+    classes = write_clips(tmp_path)
     classes.write_text(f"verb,{MOTION_CLASS_COLUMN}\njump,0\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="no train clip has a verb"):
-        CaptionedMotionDataset(tmp_path, __config(classes), seed=2026)
+        CaptionedMotionDataset(tmp_path, weighted_config(classes), seed=2026)
 
 
 def test_motion_class_weighting_without_a_verb_map_stops():
@@ -145,7 +145,7 @@ KICK_GROUP = MIXED_CLIPS
 VERB_CONFIG = MotionDataConfig(mirror_augment=False, clip_weighting=ClipWeighting.VERB)
 
 
-def __write_verb_clips(root: Path) -> None:
+def write_verb_clips(root: Path) -> None:
     (root / FEATURES_DIR).mkdir()
     (root / TEXTS_DIR).mkdir()
     np.save(root / MEAN_FILE, np.zeros(DIM, np.float32))
@@ -159,7 +159,7 @@ def __write_verb_clips(root: Path) -> None:
 
 
 def test_each_verb_group_gets_the_same_total_weight(tmp_path):
-    __write_verb_clips(tmp_path)
+    write_verb_clips(tmp_path)
     weights = CaptionedMotionDataset(tmp_path, VERB_CONFIG, seed=2026).clip_weights
 
     assert weights is not None
@@ -170,7 +170,7 @@ def test_each_verb_group_gets_the_same_total_weight(tmp_path):
 
 
 def test_a_caption_counts_for_its_rarest_verb_only(tmp_path):
-    __write_verb_clips(tmp_path)
+    write_verb_clips(tmp_path)
     dataset = CaptionedMotionDataset(tmp_path, VERB_CONFIG, seed=2026)
     annotations = parse_text_file(tmp_path / TEXTS_DIR / f"V{WALK_ONLY_CLIPS}.txt")
 
@@ -181,7 +181,7 @@ def test_a_caption_counts_for_its_rarest_verb_only(tmp_path):
 
 
 def test_a_caption_without_a_frequent_verb_gets_the_largest_group_weight(tmp_path):
-    __write_verb_clips(tmp_path)
+    write_verb_clips(tmp_path)
     weights = CaptionedMotionDataset(tmp_path, VERB_CONFIG, seed=2026).clip_weights
 
     assert weights is not None
@@ -189,7 +189,7 @@ def test_a_caption_without_a_frequent_verb_gets_the_largest_group_weight(tmp_pat
 
 
 def test_the_verb_loader_shows_kick_captions_as_often_as_walk_captions(tmp_path):
-    __write_verb_clips(tmp_path)
+    write_verb_clips(tmp_path)
     module = MotionDataModule(tmp_path, VERB_CONFIG, seed=2026)
     loader = module.captioned_batch_loader(Split.TRAIN, 51)
     dataset = loader.dataset
@@ -205,7 +205,7 @@ def test_the_verb_loader_shows_kick_captions_as_often_as_walk_captions(tmp_path)
 
 
 def test_verb_weighting_without_a_frequent_verb_stops(tmp_path):
-    __write_clips(tmp_path)
+    write_clips(tmp_path)
     (tmp_path / TEXTS_DIR / "C19.txt").write_text(
         "a person#a/DET person/NOUN#0.0#0.0\n", encoding="utf-8"
     )

@@ -36,7 +36,7 @@ def streaming_state_size_bytes(state) -> int:
 
 
 @torch.no_grad()
-def __advance(
+def advance(
     generator: MotionTokenGenerator, tokens: torch.Tensor, state, text_vector: torch.Tensor
 ):
     embedded = generator.add_per_step_text(generator.embed_motion_tokens(tokens), text_vector)
@@ -62,7 +62,7 @@ def warm_up_streaming_generator(
         _, state = generator.backbone.step(prefix[:, position], state)
     tokens = torch.zeros(batch, cfg.num_codebooks, dtype=torch.long, device=device)
     for _ in range(steps):
-        tokens, state = __advance(generator, tokens, state, text_vector)
+        tokens, state = advance(generator, tokens, state, text_vector)
     if device == "cuda":
         torch.cuda.synchronize()
 
@@ -94,7 +94,7 @@ def benchmark_streaming_horizons(
         if cuda:
             torch.cuda.synchronize()
         t0 = time.perf_counter()
-        tokens, state = __advance(generator, tokens, state, text_vector)
+        tokens, state = advance(generator, tokens, state, text_vector)
         if cuda:
             torch.cuda.synchronize()
         step_ms.append((time.perf_counter() - t0) * 1000)
@@ -145,7 +145,7 @@ def benchmark_concurrent_streams(
             if cuda:
                 torch.cuda.synchronize()
             t0 = time.perf_counter()
-            tokens, state = __advance(generator, tokens, state, text_vector)
+            tokens, state = advance(generator, tokens, state, text_vector)
             if cuda:
                 torch.cuda.synchronize()
             step_ms.append((time.perf_counter() - t0) * 1000)

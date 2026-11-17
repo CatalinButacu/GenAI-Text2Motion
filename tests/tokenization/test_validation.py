@@ -29,7 +29,7 @@ RVQ = ResidualVectorQuantizationConfig(
 )
 
 
-def __frozen() -> FrozenMotionTokenizer:
+def frozen_tokenizer() -> FrozenMotionTokenizer:
     torch.manual_seed(2026)
     return FrozenMotionTokenizer(FiniteScalarQuantizationTokenizer(FSQ))
 
@@ -45,7 +45,7 @@ def test_fsq_levels_with_an_unreachable_end_digit_are_refused():
 
 
 def test_the_frozen_decoder_refuses_a_batch_and_a_wrong_frame_count():
-    frozen = __frozen()
+    frozen = frozen_tokenizer()
     with pytest.raises(ValueError, match="batch of 2"):
         frozen.decode(MotionTokens(indices=torch.zeros(2, 4, 2, dtype=torch.long), frame_count=16))
     with pytest.raises(ValueError, match="the tokens say 20"):
@@ -54,7 +54,7 @@ def test_the_frozen_decoder_refuses_a_batch_and_a_wrong_frame_count():
 
 def test_the_frozen_encoder_refuses_fewer_feature_rows_than_frames():
     with pytest.raises(ValueError, match="says 64 frames"):
-        __frozen().encode(MotionClip(features=torch.randn(20, 263), frame_count=64))
+        frozen_tokenizer().encode(MotionClip(features=torch.randn(20, 263), frame_count=64))
 
 
 @pytest.mark.parametrize(

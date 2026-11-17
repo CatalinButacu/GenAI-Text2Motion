@@ -25,7 +25,7 @@ class FakeExtractor:
         return np.full((4, 22, 3), len(src.stem) + FakeExtractor.offset, np.float32)
 
 
-def __layout(tmp_path, monkeypatch):
+def build_layout(tmp_path, monkeypatch):
     amass = tmp_path / "amass" / "ACCAD"
     amass.mkdir(parents=True)
     for clip in CLIPS:
@@ -42,24 +42,24 @@ def __layout(tmp_path, monkeypatch):
     return request, layout
 
 
-def __manifest(layout):
+def read_manifest(layout):
     path = layout.pose_data / preparation.POSE_MANIFEST
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def test_an_extraction_writes_a_complete_manifest(tmp_path, monkeypatch):
-    request, layout = __layout(tmp_path, monkeypatch)
+    request, layout = build_layout(tmp_path, monkeypatch)
 
     counts = preparation.extract_amass_to_y_up_joints(request, layout)
 
     assert counts == {"written": 3, "reused": 0, "no_motion": 0}
-    assert __manifest(layout)["complete"] is True
-    assert __manifest(layout)["recipe"]["fps"] == 20
+    assert read_manifest(layout)["complete"] is True
+    assert read_manifest(layout)["recipe"]["fps"] == 20
     assert not list(layout.pose_data.rglob("*.tmp"))
 
 
 def test_a_rerun_with_another_recipe_is_refused(tmp_path, monkeypatch):
-    request, layout = __layout(tmp_path, monkeypatch)
+    request, layout = build_layout(tmp_path, monkeypatch)
     preparation.extract_amass_to_y_up_joints(request, layout)
     FakeExtractor.fps = 30
 
@@ -67,36 +67,36 @@ def test_a_rerun_with_another_recipe_is_refused(tmp_path, monkeypatch):
         preparation.extract_amass_to_y_up_joints(request, layout)
 
 
-def __legacy_folder(request, layout):
+def legacy_folder(request, layout):
     preparation.extract_amass_to_y_up_joints(request, layout)
     (layout.pose_data / preparation.POSE_MANIFEST).unlink()
     FakeExtractor.calls = []
 
 
 def test_a_legacy_folder_is_refused_without_adoption(tmp_path, monkeypatch):
-    request, layout = __layout(tmp_path, monkeypatch)
-    __legacy_folder(request, layout)
+    request, layout = build_layout(tmp_path, monkeypatch)
+    legacy_folder(request, layout)
 
     with pytest.raises(ValueError, match="legacy folder"):
         preparation.extract_amass_to_y_up_joints(request, layout)
 
 
 def test_a_matching_legacy_folder_is_adopted_and_kept_on_reruns(tmp_path, monkeypatch):
-    request, layout = __layout(tmp_path, monkeypatch)
-    __legacy_folder(request, layout)
+    request, layout = build_layout(tmp_path, monkeypatch)
+    legacy_folder(request, layout)
 
     counts = preparation.extract_amass_to_y_up_joints(request, layout, adopt=True)
     preparation.extract_amass_to_y_up_joints(request, layout)
 
     assert counts["reused"] == 3
     assert sorted(FakeExtractor.calls) == sorted(CLIPS)
-    assert __manifest(layout)["complete"] is True
-    assert len(__manifest(layout)["adopted_sample"]) == 3
+    assert read_manifest(layout)["complete"] is True
+    assert len(read_manifest(layout)["adopted_sample"]) == 3
 
 
 def test_a_legacy_folder_that_differs_is_not_adopted(tmp_path, monkeypatch):
-    request, layout = __layout(tmp_path, monkeypatch)
-    __legacy_folder(request, layout)
+    request, layout = build_layout(tmp_path, monkeypatch)
+    legacy_folder(request, layout)
     FakeExtractor.offset = 1e-3
 
     with pytest.raises(ValueError, match="differ from a new extraction"):

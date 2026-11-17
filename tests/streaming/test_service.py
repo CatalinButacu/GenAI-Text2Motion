@@ -7,7 +7,7 @@ import numpy as np
 from text2motion.app.service import MotionInferenceClient, MotionStreamProtocol
 
 
-def __stub_server(server: socket.socket, script: str, chunks: list[np.ndarray]) -> None:
+def stub_server(server: socket.socket, script: str, chunks: list[np.ndarray]) -> None:
     conn, _ = server.accept()
     io = conn.makefile("rwb")
     MotionStreamProtocol.send_json(
@@ -39,17 +39,17 @@ def __stub_server(server: socket.socket, script: str, chunks: list[np.ndarray]) 
     server.close()
 
 
-def __start(script: str, chunks: list[np.ndarray]) -> int:
+def start(script: str, chunks: list[np.ndarray]) -> int:
     server = socket.create_server(("127.0.0.1", 0))
     port = server.getsockname()[1]
-    thread = threading.Thread(target=__stub_server, args=(server, script, chunks), daemon=True)
+    thread = threading.Thread(target=stub_server, args=(server, script, chunks), daemon=True)
     thread.start()
     return port
 
 
 def test_client_streams_chunks_and_done():
     chunks = [np.random.rand(4, 22, 3).astype(np.float32) for _ in range(3)]
-    port = __start("ok", chunks)
+    port = start("ok", chunks)
     client = MotionInferenceClient("127.0.0.1", port)
     assert client.hello["downsample"] == 4
     assert client.hello["trained_steps"] == 49
@@ -65,7 +65,7 @@ def test_client_streams_chunks_and_done():
 
 
 def test_client_raises_on_service_error():
-    port = __start("error", [])
+    port = start("error", [])
     client = MotionInferenceClient("127.0.0.1", port)
     try:
         list(client.generate("walk", steps=3, temperature=1.0, top_p=0.9, cfg_scale=1.0))
@@ -80,7 +80,7 @@ class _HelloOnlyPipeline:
         return {"type": "hello", "ckpt": "stub.pt", "backbone": "mamba"}
 
 
-def __serve_in_thread(pipeline) -> tuple[socket.socket, object, threading.Thread]:
+def serve_in_thread(pipeline) -> tuple[socket.socket, object, threading.Thread]:
     from text2motion.app.service import MotionInferenceServer
 
     server_side, client_side = socket.socketpair()
@@ -95,7 +95,7 @@ def __serve_in_thread(pipeline) -> tuple[socket.socket, object, threading.Thread
 
 
 def test_a_cancel_that_arrives_after_the_stream_ended_gets_no_reply():
-    client_side, io, thread = __serve_in_thread(_HelloOnlyPipeline())
+    client_side, io, thread = serve_in_thread(_HelloOnlyPipeline())
     assert MotionStreamProtocol.recv_json(io)["type"] == "hello"
     MotionStreamProtocol.send_json(io, {"cmd": "cancel"})
     MotionStreamProtocol.send_json(io, {"cmd": "shutdown"})
@@ -105,7 +105,7 @@ def test_a_cancel_that_arrives_after_the_stream_ended_gets_no_reply():
 
 
 def test_a_client_connecting_after_a_failed_load_gets_an_empty_hello():
-    client_side, io, thread = __serve_in_thread(None)
+    client_side, io, thread = serve_in_thread(None)
     hello = MotionStreamProtocol.recv_json(io)
     assert hello["type"] == "hello"
     assert hello["ckpt"] == ""
@@ -148,7 +148,7 @@ class _EndlessPipeline:
 
 
 def test_a_command_sent_mid_stream_cancels_the_stream_and_is_then_handled():
-    client_side, io, thread = __serve_in_thread(_EndlessPipeline())
+    client_side, io, thread = serve_in_thread(_EndlessPipeline())
     assert MotionStreamProtocol.recv_json(io)["type"] == "hello"
     MotionStreamProtocol.send_json(
         io,
@@ -181,7 +181,7 @@ def test_a_command_sent_mid_stream_cancels_the_stream_and_is_then_handled():
     client_side.close()
 
 
-def __abandon_server(server: socket.socket) -> None:
+def abandon_server(server: socket.socket) -> None:
     conn, _ = server.accept()
     io = conn.makefile("rwb")
     MotionStreamProtocol.send_json(io, {"type": "hello", "ckpt": "stub.pt", "backbone": "mamba"})
@@ -214,7 +214,7 @@ def __abandon_server(server: socket.socket) -> None:
 def test_a_client_that_stops_reading_early_leaves_the_connection_usable():
     server = socket.create_server(("127.0.0.1", 0))
     port = server.getsockname()[1]
-    threading.Thread(target=__abandon_server, args=(server,), daemon=True).start()
+    threading.Thread(target=abandon_server, args=(server,), daemon=True).start()
     client = MotionInferenceClient("127.0.0.1", port)
     client.sock.settimeout(5)
     stream = client.generate("walk", steps=0, temperature=1.0, top_p=0.9, cfg_scale=1.0)

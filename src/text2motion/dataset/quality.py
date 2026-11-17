@@ -58,23 +58,23 @@ def long_runs(mask: np.ndarray, min_frames: int) -> list[tuple[int, int]]:
     ]
 
 
-def __frames(seconds: float, fps: int) -> int:
+def frames(seconds: float, fps: int) -> int:
     return round(seconds * fps)
 
 
-def __hover_frames(
+def hover_frames(
     acceleration: np.ndarray, contact: np.ndarray, fps: int, limits: NewtonLimits
 ) -> np.ndarray:
     hover = np.zeros(len(contact), dtype=bool)
     gravity = np.array([0.0, -GRAVITY_M_PER_S2, 0.0])
     limit = limits.hover_fraction_of_g * GRAVITY_M_PER_S2
-    for start, end in long_runs(~contact, __frames(limits.min_flight_seconds, fps)):
+    for start, end in long_runs(~contact, frames(limits.min_flight_seconds, fps)):
         departure = np.linalg.norm(acceleration[start:end] - gravity, axis=1).mean()
         hover[start:end] = departure >= limit
     return hover
 
 
-def __whole_feet(touching: np.ndarray) -> np.ndarray:
+def whole_feet(touching: np.ndarray) -> np.ndarray:
     support = touching.copy()
     for ankle, toe in FEET:
         foot_down = touching[:, ankle] | touching[:, toe]
@@ -83,7 +83,7 @@ def __whole_feet(touching: np.ndarray) -> np.ndarray:
     return support
 
 
-def __unbalanced_frames(
+def unbalanced_frames(
     joints: np.ndarray,
     com: np.ndarray,
     acceleration: np.ndarray,
@@ -91,7 +91,7 @@ def __unbalanced_frames(
     fps: int,
     limits: NewtonLimits,
 ) -> np.ndarray:
-    support = __whole_feet(touching)
+    support = whole_feet(touching)
     plane = joints[..., list(GROUND_AXES)]
     margin = limits.support_margin_m
     low = np.where(support[..., None], plane, np.inf).min(axis=1) - margin
@@ -101,7 +101,7 @@ def __unbalanced_frames(
     still = np.linalg.norm(acceleration, axis=1) < limits.quasi_static_m_per_s2
     candidate = outside & still & touching.any(axis=1)
     unbalanced = np.zeros(len(candidate), dtype=bool)
-    for start, end in long_runs(candidate, __frames(limits.min_unbalanced_seconds, fps)):
+    for start, end in long_runs(candidate, frames(limits.min_unbalanced_seconds, fps)):
         unbalanced[start:end] = True
     return unbalanced
 
@@ -111,8 +111,8 @@ def newton_violations(joints: np.ndarray, fps: int, limits: NewtonLimits) -> New
     touching = heights < np.array(CONTACT_HEIGHT_M)
     com = centre_of_mass(joints)
     acceleration = np.gradient(np.gradient(com, axis=0), axis=0) * fps * fps
-    hover = __hover_frames(acceleration, touching.any(axis=1), fps, limits)
-    unbalanced = __unbalanced_frames(joints, com, acceleration, touching, fps, limits)
+    hover = hover_frames(acceleration, touching.any(axis=1), fps, limits)
+    unbalanced = unbalanced_frames(joints, com, acceleration, touching, fps, limits)
     return NewtonResult(float(hover.mean()), float(unbalanced.mean()))
 
 
@@ -124,7 +124,7 @@ def flight_accelerations(
     floor = np.percentile(feet, 2)
     centre = heights.mean(axis=1)
     accelerations = []
-    for start, end in long_runs(feet - floor > clearance_m, __frames(min_flight_seconds, fps)):
+    for start, end in long_runs(feet - floor > clearance_m, frames(min_flight_seconds, fps)):
         times = np.arange(end - start) / fps
         accelerations.append(2.0 * float(np.polyfit(times, centre[start:end], 2)[0]))
     return accelerations

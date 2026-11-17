@@ -11,7 +11,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def __git_commit() -> str:
+def git_commit() -> str:
     try:
         out = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True, timeout=10
@@ -22,13 +22,13 @@ def __git_commit() -> str:
         return "unknown"
 
 
-def __jsonable(value: Any) -> Any:
+def jsonable(value: Any) -> Any:
     if is_dataclass(value) and not isinstance(value, type):
-        return __jsonable(asdict(value))
+        return jsonable(asdict(value))
     if isinstance(value, dict):
-        return {str(k): __jsonable(v) for k, v in value.items()}
+        return {str(k): jsonable(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
-        return [__jsonable(v) for v in value]
+        return [jsonable(v) for v in value]
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, (str, int, float, bool)) or value is None:
@@ -39,7 +39,7 @@ def __jsonable(value: Any) -> Any:
 MLFLOW_RUN_ID_FILE = "mlflow_run_id"
 
 
-def __mlflow_module():
+def mlflow_module():
     try:
         import mlflow
     except ImportError as exc:
@@ -49,8 +49,8 @@ def __mlflow_module():
     return mlflow
 
 
-def __start_mlflow_run(run_dir: Path, logs_dir: Path, manifest: dict) -> None:
-    mlflow = __mlflow_module()
+def start_mlflow_run(run_dir: Path, logs_dir: Path, manifest: dict) -> None:
+    mlflow = mlflow_module()
     mlflow.set_tracking_uri(f"sqlite:///{(Path(logs_dir) / 'mlflow.db').resolve().as_posix()}")
     mlflow.set_experiment(manifest["name"])
     id_file = run_dir / MLFLOW_RUN_ID_FILE
@@ -60,8 +60,8 @@ def __start_mlflow_run(run_dir: Path, logs_dir: Path, manifest: dict) -> None:
     mlflow.log_params({key: str(value)[:500] for key, value in manifest["extra"].items()})
 
 
-def __log_mlflow_metrics(record: dict) -> None:
-    mlflow = __mlflow_module()
+def log_mlflow_metrics(record: dict) -> None:
+    mlflow = mlflow_module()
     numbers = {
         key: float(value)
         for key, value in record.items()
@@ -122,9 +122,9 @@ def start_run(
     manifest = {
         "name": name,
         "started_utc": stamp,
-        "git_commit": __git_commit(),
-        "config": __jsonable(cfg),
-        "extra": __jsonable(extra or {}),
+        "git_commit": git_commit(),
+        "config": jsonable(cfg),
+        "extra": jsonable(extra or {}),
         "versions": versions,
     }
 
@@ -138,7 +138,7 @@ def start_run(
         ensure_logging_configured()
         add_run_log_file(run_dir)
         if getattr(cfg, "mlflow_tracking", False):
-            __start_mlflow_run(run_dir, logs_dir, manifest)
+            start_mlflow_run(run_dir, logs_dir, manifest)
         logger.info(f"run directory {run_dir} (resumed, commit {manifest['git_commit'][:8]})")
         return run_dir
 
@@ -148,7 +148,7 @@ def start_run(
     ensure_logging_configured()
     add_run_log_file(run_dir)
     if getattr(cfg, "mlflow_tracking", False):
-        __start_mlflow_run(run_dir, logs_dir, manifest)
+        start_mlflow_run(run_dir, logs_dir, manifest)
     logger.info(f"run directory {run_dir} (commit {manifest['git_commit'][:8]})")
     logger.info(f"versions {versions}")
     return run_dir
@@ -157,12 +157,12 @@ def start_run(
 def log_metrics(run_dir: Path, record: dict) -> None:
     record = {
         "logged_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        **__jsonable(record),
+        **jsonable(record),
     }
     with (Path(run_dir) / "metrics.jsonl").open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record) + "\n")
     if (Path(run_dir) / MLFLOW_RUN_ID_FILE).exists():
-        __log_mlflow_metrics(record)
+        log_mlflow_metrics(record)
 
 
 LOG_FORMAT = "%(asctime)s %(levelname)-7s %(name)s | %(message)s"

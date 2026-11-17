@@ -5,7 +5,7 @@ from pathlib import Path
 FREEZE_SCRIPT = Path("scripts/maintenance/module_freeze.py")
 
 
-def __freeze_module(monkeypatch):
+def freeze_module(monkeypatch):
     spec = importlib.util.spec_from_file_location("module_freeze", FREEZE_SCRIPT)
     assert spec is not None
     assert spec.loader is not None
@@ -16,7 +16,7 @@ def __freeze_module(monkeypatch):
 
 
 def test_every_frozen_module_matches_its_freeze_hash(monkeypatch):
-    freeze = __freeze_module(monkeypatch)
+    freeze = freeze_module(monkeypatch)
 
     changed = {
         module: expected

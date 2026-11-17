@@ -80,7 +80,7 @@ The decoder crops overlapping windows; it does not use overlap-add. Boundary beh
 
 `run_producer` is an ordinary function in `generation\decoder.py`. It does not create a daemon thread. A caller can execute the function in a thread.
 
-The function passes each decoded chunk to `__put_drop_oldest`. With a bounded queue, the helper follows this sequence:
+The function passes each decoded chunk to `put_drop_oldest`. With a bounded queue, the helper follows this sequence:
 
 1. Attempt to insert the new chunk without a wait.
 2. Remove the oldest queued item if the queue is full.

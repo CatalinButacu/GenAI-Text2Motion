@@ -33,7 +33,7 @@ class AuditRow:
     detail: str
 
 
-def __stored_kind(state: dict[str, torch.Tensor]) -> TokenizerKind | None:
+def stored_tokenizer_kind(state: dict[str, torch.Tensor]) -> TokenizerKind | None:
     if any(name.endswith(".levels") for name in state):
         return TokenizerKind.FINITE_SCALAR
     if any(name.endswith(".embed") for name in state):
@@ -41,7 +41,7 @@ def __stored_kind(state: dict[str, torch.Tensor]) -> TokenizerKind | None:
     return None
 
 
-def __stored_levels(state: dict[str, torch.Tensor]) -> set[tuple[int, ...]]:
+def stored_levels(state: dict[str, torch.Tensor]) -> set[tuple[int, ...]]:
     return {
         tuple(int(level) for level in value.tolist())
         for name, value in state.items()
@@ -49,7 +49,7 @@ def __stored_levels(state: dict[str, torch.Tensor]) -> set[tuple[int, ...]]:
     }
 
 
-def __strict_load_error(config_path: Path, state: dict[str, torch.Tensor]) -> str | None:
+def strict_load_error(config_path: Path, state: dict[str, torch.Tensor]) -> str | None:
     config = load_config(config_path)
     network = build_tokenizer_network(config.tokenizer, config.rvq_baseline)
     try:
@@ -59,35 +59,35 @@ def __strict_load_error(config_path: Path, state: dict[str, torch.Tensor]) -> st
     return None
 
 
-def __tokenizer_mismatch(config_path: Path, state: dict[str, torch.Tensor]) -> str | None:
+def tokenizer_mismatch(config_path: Path, state: dict[str, torch.Tensor]) -> str | None:
     config = load_config(config_path).tokenizer
-    stored_kind = __stored_kind(state)
+    stored_kind = stored_tokenizer_kind(state)
     if stored_kind != config.kind:
         return f"the checkpoint holds {stored_kind}, the YAML says {config.kind}"
     if stored_kind is TokenizerKind.FINITE_SCALAR:
-        levels = __stored_levels(state)
+        levels = stored_levels(state)
         if levels != {tuple(config.fsq_levels)}:
             return f"the checkpoint levels are {sorted(levels)}, the YAML says {config.fsq_levels}"
-    return __strict_load_error(config_path, state)
+    return strict_load_error(config_path, state)
 
 
 def audit_tokenizer(checkpoint: Path) -> AuditRow:
     state = torch.load(checkpoint, map_location="cpu", weights_only=True)
     config_path = TOKENIZER_CONFIG_DIR / f"{checkpoint.stem}.yaml"
-    stored = f"{__stored_kind(state)} levels {sorted(__stored_levels(state))}"
+    stored = f"{stored_tokenizer_kind(state)} levels {sorted(stored_levels(state))}"
     if not config_path.is_file():
         return AuditRow(checkpoint.as_posix(), "NO_CONFIG", stored)
-    mismatch = __tokenizer_mismatch(config_path, state)
+    mismatch = tokenizer_mismatch(config_path, state)
     if mismatch is not None:
         return AuditRow(checkpoint.as_posix(), "MISMATCH", mismatch)
     return AuditRow(checkpoint.as_posix(), "OK", f"{stored}; {config_path.as_posix()}")
 
 
-def __tokenizer_names_by_hash() -> dict[str, str]:
+def tokenizer_names_by_hash() -> dict[str, str]:
     return {sha256_file(path): path.name for path in sorted(TOKENIZER_DIR.glob("*.pt"))}
 
 
-def __generator_format(payload: object) -> str:
+def generator_format(payload: object) -> str:
     if isinstance(payload, dict) and payload.get("format") == BUNDLE_FORMAT:
         return "bundle"
     if isinstance(payload, dict) and "generator" in payload:
@@ -97,7 +97,7 @@ def __generator_format(payload: object) -> str:
 
 def audit_generator(checkpoint: Path, tokenizer_names: dict[str, str]) -> AuditRow:
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
-    kind = __generator_format(payload)
+    kind = generator_format(payload)
     if kind != "bundle":
         return AuditRow(checkpoint.as_posix(), "LEGACY", f"{kind}: no config, no tokenizer check")
     bundle = GeneratorBundle.from_payload(payload)
@@ -111,7 +111,7 @@ def audit_generator(checkpoint: Path, tokenizer_names: dict[str, str]) -> AuditR
     return AuditRow(checkpoint.as_posix(), "OK", f"bundle; tokenizer {tokenizer}")
 
 
-def __spec_difference(
+def spec_difference(
     bundle: GeneratorBundle, config_path: Path, tokenizer_path: Path
 ) -> list[str]:
     app = ApplicationBootstrap.from_config(config_path, device="cpu")
@@ -135,14 +135,14 @@ def audit_demo_entry(entry: dict[str, str], defaults: dict[str, str]) -> AuditRo
     if not checkpoint.is_file():
         return AuditRow(label, "MISSING", checkpoint.as_posix())
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
-    kind = __generator_format(payload)
+    kind = generator_format(payload)
     if kind != "bundle":
         return AuditRow(
             label, "LEGACY", f"{checkpoint.name} is a {kind} file: live weights, no checks"
         )
     config_path = Path(entry.get("config", defaults["config"]))
     tokenizer_path = Path(entry.get("tokenizer_ckpt", defaults["tokenizer_ckpt"]))
-    differences = __spec_difference(
+    differences = spec_difference(
         GeneratorBundle.from_payload(payload), config_path, tokenizer_path
     )
     if differences:
@@ -152,7 +152,7 @@ def audit_demo_entry(entry: dict[str, str], defaults: dict[str, str]) -> AuditRo
 
 def audit_rows() -> list[AuditRow]:
     rows = [audit_tokenizer(path) for path in sorted(TOKENIZER_DIR.glob("*.pt"))]
-    tokenizer_names = __tokenizer_names_by_hash()
+    tokenizer_names = tokenizer_names_by_hash()
     rows += [audit_generator(path, tokenizer_names) for path in sorted(GENERATOR_DIR.glob("*.pt"))]
     registry = yaml.safe_load(DEMO_REGISTRY.read_text(encoding="utf-8"))
     rows += [audit_demo_entry(entry, registry["defaults"]) for entry in registry["models"]]

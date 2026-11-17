@@ -21,7 +21,7 @@ ARXIV_FEED = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-def __watch_module(monkeypatch):
+def watch_module(monkeypatch):
     spec = importlib.util.spec_from_file_location("paper_watch", WATCH_SCRIPT)
     assert spec is not None
     assert spec.loader is not None
@@ -32,7 +32,7 @@ def __watch_module(monkeypatch):
 
 
 def test_an_arxiv_entry_keeps_its_id_without_the_version(monkeypatch):
-    watch = __watch_module(monkeypatch)
+    watch = watch_module(monkeypatch)
     papers = watch.parse_arxiv_feed(ARXIV_FEED)
     assert len(papers) == 1
     assert papers[0].key == "2301.06052"
@@ -41,7 +41,7 @@ def test_an_arxiv_entry_keeps_its_id_without_the_version(monkeypatch):
 
 
 def test_an_openalex_record_gets_the_best_key_and_its_abstract_back(monkeypatch):
-    watch = __watch_module(monkeypatch)
+    watch = watch_module(monkeypatch)
     payload = {
         "results": [
             {
@@ -61,7 +61,7 @@ def test_an_openalex_record_gets_the_best_key_and_its_abstract_back(monkeypatch)
 
 
 def test_the_filter_needs_a_motion_word_and_a_topic_word(monkeypatch):
-    watch = __watch_module(monkeypatch)
+    watch = watch_module(monkeypatch)
     mamba = watch.Paper("1", "Motion Mamba", "", "", "", "arXiv")
     video = watch.Paper("2", "Video super-resolution", "text prompts", "", "", "arXiv")
     dance = watch.Paper("3", "Dance motion from music", "", "", "", "arXiv")
@@ -71,7 +71,7 @@ def test_the_filter_needs_a_motion_word_and_a_topic_word(monkeypatch):
 
 
 def test_a_paper_seen_before_or_found_twice_appears_once(monkeypatch):
-    watch = __watch_module(monkeypatch)
+    watch = watch_module(monkeypatch)
     first = watch.Paper("2501.00001", "A", "", "", "2025-01-01", "arXiv")
     again = watch.Paper("10.1145/x.y", "A:", "", "", "2025-01-01", "OpenAlex search")
     old = watch.Paper("2401.00001", "B", "", "", "2024-01-01", "arXiv")
@@ -80,7 +80,7 @@ def test_a_paper_seen_before_or_found_twice_appears_once(monkeypatch):
 
 
 def test_a_rate_limit_waits_at_least_as_long_as_the_server_asks(monkeypatch):
-    watch = __watch_module(monkeypatch)
+    watch = watch_module(monkeypatch)
     asked = watch.urllib.error.HTTPError("u", 429, "busy", {"Retry-After": "31"}, None)
     silent = watch.urllib.error.HTTPError("u", 429, "busy", {}, None)
     assert watch.retry_wait_seconds(asked, 0) == 32.0
@@ -88,7 +88,7 @@ def test_a_rate_limit_waits_at_least_as_long_as_the_server_asks(monkeypatch):
 
 
 def test_retry_after_http_date(monkeypatch):
-    watch = __watch_module(monkeypatch)
+    watch = watch_module(monkeypatch)
     now = datetime.datetime(2026, 11, 6, tzinfo=datetime.timezone.utc)
 
     class Clock(datetime.datetime):
@@ -103,14 +103,14 @@ def test_retry_after_http_date(monkeypatch):
 
 
 def test_invalid_retry_after_is_logged(monkeypatch, caplog):
-    watch = __watch_module(monkeypatch)
+    watch = watch_module(monkeypatch)
     error = watch.urllib.error.HTTPError("u", 429, "busy", {"Retry-After": "invalid"}, None)
     assert watch.retry_wait_seconds(error, 0) == watch.RETRY_WAIT_SECONDS
     assert "Invalid Retry-After" in caplog.text
 
 
 def test_rate_limit_recovers_without_logging_key(monkeypatch, caplog):
-    watch = __watch_module(monkeypatch)
+    watch = watch_module(monkeypatch)
     url = "https://api.openalex.org/works?api_key=SECRET"
     error = watch.urllib.error.HTTPError(url, 429, "busy", {"Retry-After": "31"}, None)
     response = MagicMock()
@@ -128,7 +128,7 @@ def test_rate_limit_recovers_without_logging_key(monkeypatch, caplog):
 
 
 def test_persistent_rate_limit_fails_loud(monkeypatch, caplog):
-    watch = __watch_module(monkeypatch)
+    watch = watch_module(monkeypatch)
     error = watch.urllib.error.HTTPError(
         "https://export.arxiv.org/api/query", 429, "busy", {}, None
     )
@@ -143,7 +143,7 @@ def test_persistent_rate_limit_fails_loud(monkeypatch, caplog):
 
 
 def test_non_rate_limit_is_not_retried(monkeypatch):
-    watch = __watch_module(monkeypatch)
+    watch = watch_module(monkeypatch)
     error = watch.urllib.error.HTTPError("https://example.org", 404, "missing", {}, None)
     fetch = Mock(side_effect=error)
     monkeypatch.setattr(watch.urllib.request, "urlopen", fetch)

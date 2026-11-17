@@ -53,7 +53,7 @@ def measure_decoder_context(
     return max(left_tokens, 0), max(right_tokens, 0)
 
 
-def __put_drop_oldest(out_queue: "queue_mod.Queue", item: object) -> None:
+def put_drop_oldest(out_queue: "queue_mod.Queue", item: object) -> None:
     try:
         out_queue.put_nowait(item)
 
@@ -104,7 +104,7 @@ class StreamingMotionDecoder:
         return self.tokenizer.decode(token_seq) * self.std + self.mean
 
     @torch.no_grad()
-    def __emit(self, history: deque, pending: list[torch.Tensor], emit_tokens: int) -> torch.Tensor:
+    def emit(self, history: deque, pending: list[torch.Tensor], emit_tokens: int) -> torch.Tensor:
         downsample = self.downsample
         past = list(history)
         window = torch.stack(past + pending, dim=1)
@@ -126,10 +126,10 @@ class StreamingMotionDecoder:
             pending.append(tokens)
 
             while len(pending) >= self.chunk_tokens + self.lookahead:
-                yield self.__emit(history, pending, self.chunk_tokens)
+                yield self.emit(history, pending, self.chunk_tokens)
 
         while pending:
-            yield self.__emit(history, pending, min(self.chunk_tokens, len(pending)))
+            yield self.emit(history, pending, min(self.chunk_tokens, len(pending)))
 
     @torch.no_grad()
     def stream(
@@ -174,9 +174,9 @@ def run_producer(
         cfg_scale=cfg_scale,
         stop_at_end=stop_at_end,
     ):
-        __put_drop_oldest(out_queue, chunk)
+        put_drop_oldest(out_queue, chunk)
 
-    __put_drop_oldest(out_queue, _END)
+    put_drop_oldest(out_queue, _END)
 
 
 def collect_stream(out_queue: "queue_mod.Queue") -> np.ndarray:

@@ -77,7 +77,7 @@ class CleanCrossEntropyProgress:
         return CleanCrossEntropyProgress(best=self.best, stale=self.stale + 1)
 
 
-def __restore_clean_ce(
+def restore_clean_ce(
     state: dict, completed_epochs: int, request: GeneratorTrainingRequest
 ) -> CleanCrossEntropyProgress:
     if request.fresh_selection or not request.val_ce_patience:
@@ -156,7 +156,7 @@ class ParameterPartition:
             raise RuntimeError("optimizer parameter partitions do not cover trainable parameters")
 
 
-def __undecayed_parameter_ids(module: nn.Module) -> set[int]:
+def undecayed_parameter_ids(module: nn.Module) -> set[int]:
     ids: set[int] = set()
     for submodule in module.modules():
         is_norm = isinstance(submodule, (nn.Embedding, *_NORM_TYPES))
@@ -169,7 +169,7 @@ def partition_parameters(
     module: nn.Module, only: list[nn.Parameter] | None = None
 ) -> ParameterPartition:
     allowed = None if only is None else {id(parameter) for parameter in only}
-    exempt = __undecayed_parameter_ids(module)
+    exempt = undecayed_parameter_ids(module)
     decay: list[nn.Parameter] = []
     no_decay: list[nn.Parameter] = []
     for name, parameter in module.named_parameters():
@@ -536,12 +536,12 @@ class GeneratorTrainer:
                 "horizon are not in it; they start fresh"
             )
             return state["epoch"] + 1, state["best_fid"], state.get("stale_evaluations", 0)
-        self.__load_weighter(state["weighter"])
+        self.load_weighter(state["weighter"])
         check_schedule_horizon(state["total_steps"], self.total_steps, extend_schedule)
         restore_rng_state(state["rng"])
         return state["epoch"] + 1, state["best_fid"], state["stale_evaluations"]
 
-    def __load_weighter(self, weighter_state: dict | None) -> None:
+    def load_weighter(self, weighter_state: dict | None) -> None:
         if (self.weighter is None) != (weighter_state is None):
             raise ValueError("the resume file and this run disagree on the uncertainty weighting")
         if self.weighter is not None and weighter_state is not None:
@@ -581,7 +581,7 @@ def train_generator(
         start_epoch, best_fid, stale_evaluations = trainer.load_resume_state(
             state, legacy, request.extend_schedule
         )
-        ce_progress = __restore_clean_ce(state, start_epoch, request)
+        ce_progress = restore_clean_ce(state, start_epoch, request)
         if request.fresh_selection:
             logger.info(
                 f"fresh selection: ignoring inherited best FID {best_fid:.4f} "
@@ -629,7 +629,7 @@ def train_generator(
         ce_progress = advance_clean_ce(
             trainer, ce_loaders, device, request.ce_batches, epoch, on_metrics, ce_progress
         )
-        __save_on_lower_val_ce(trainer, request, ce_progress, epoch, save_best)
+        save_on_lower_val_ce(trainer, request, ce_progress, epoch, save_best)
 
         due = (epoch + 1) % request.eval_every == 0 or epoch + 1 in (
             request.epochs,
@@ -650,10 +650,10 @@ def train_generator(
                 raise RuntimeError(
                     f"epoch {epoch + 1}: evaluation metrics not finite: {not_finite}"
                 )
-            if __is_eligible_improvement(metrics, best_fid, request):
+            if is_eligible_improvement(metrics, best_fid, request):
                 best_fid = metrics["fid"]
                 stale_evaluations = 0
-                __save_on_lower_fid(trainer, request, epoch, best_fid, save_best)
+                save_on_lower_fid(trainer, request, epoch, best_fid, save_best)
             else:
                 stale_evaluations += 1
 
@@ -673,7 +673,7 @@ def train_generator(
     return best_fid
 
 
-def __save_on_lower_val_ce(
+def save_on_lower_val_ce(
     trainer: GeneratorTrainer,
     request: GeneratorTrainingRequest,
     progress: CleanCrossEntropyProgress,
@@ -687,13 +687,13 @@ def __save_on_lower_val_ce(
     logger.info(f"  selected on clean validation CE {progress.best:.4f}")
 
 
-def __is_eligible_improvement(
+def is_eligible_improvement(
     metrics: dict[str, float], best_fid: float, request: GeneratorTrainingRequest
 ) -> bool:
     return metrics["fid"] < best_fid and metrics["r_top1"] >= request.save_r1_floor
 
 
-def __save_on_lower_fid(
+def save_on_lower_fid(
     trainer: GeneratorTrainer,
     request: GeneratorTrainingRequest,
     epoch: int,

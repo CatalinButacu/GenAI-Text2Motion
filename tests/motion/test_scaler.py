@@ -6,7 +6,7 @@ from text2motion.motion.normalization import MotionScaler, fit_train_stats
 from text2motion.motion.storage import MEAN_FILE, STD_FILE
 
 
-def __write_stats(folder, mean, std):
+def write_stats(folder, mean, std):
     np.save(folder / MEAN_FILE, np.asarray(mean, np.float32))
     np.save(folder / STD_FILE, np.asarray(std, np.float32))
 
@@ -22,21 +22,21 @@ def __write_stats(folder, mean, std):
     ids=["zero", "negative", "nan", "inf"],
 )
 def test_invalid_std_values_are_refused(tmp_path, std, message):
-    __write_stats(tmp_path, [0.0, 0.0, 0.0], std)
+    write_stats(tmp_path, [0.0, 0.0, 0.0], std)
 
     with pytest.raises(ValueError, match=message):
         MotionScaler.load(tmp_path)
 
 
 def test_a_two_dimensional_scaler_is_refused(tmp_path):
-    __write_stats(tmp_path, np.zeros((2, 3)), np.ones((2, 3)))
+    write_stats(tmp_path, np.zeros((2, 3)), np.ones((2, 3)))
 
     with pytest.raises(ValueError, match="1-D"):
         MotionScaler.load(tmp_path)
 
 
 def test_a_valid_scaler_round_trips(tmp_path):
-    __write_stats(tmp_path, [1.0, 2.0, 3.0], [0.5, 1.0, 2.0])
+    write_stats(tmp_path, [1.0, 2.0, 3.0], [0.5, 1.0, 2.0])
     scaler = MotionScaler.load(tmp_path, dim=3)
     features = np.array([[2.0, 4.0, 9.0]], np.float32)
 

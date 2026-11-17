@@ -12,13 +12,13 @@ from text2motion.motion.storage import FEATURES_DIR, SPLIT_FILES
 BROKEN_FRAMES = 30
 
 
-def __fake_encode(joints, params):
+def fake_encode(joints, params):
     if joints.shape[0] == BROKEN_FRAMES:
         raise ValueError("broken capture")
     return np.ones((joints.shape[0] - 1, 263), np.float32), None, None, None
 
 
-def __layout(tmp_path, monkeypatch, heldout=frozenset()):
+def build_layout(tmp_path, monkeypatch, heldout=frozenset()):
     regen = tmp_path / "regen"
     (regen / "joints").mkdir(parents=True)
     np.save(regen / "joints" / "000021.npy", np.zeros((5, 22, 3), np.float32))
@@ -37,22 +37,22 @@ def __layout(tmp_path, monkeypatch, heldout=frozenset()):
     index_csv.write_text("source_path,new_name\n", encoding="utf-8")
     monkeypatch.setattr(preparation, "target_offsets", lambda reference: None)
     monkeypatch.setattr(preparation, "feature_params", lambda offsets, fps: None)
-    monkeypatch.setattr(preparation, "encode_joints", __fake_encode)
+    monkeypatch.setattr(preparation, "encode_joints", fake_encode)
     monkeypatch.setattr(preparation, "heldout_feature_names", lambda *args: set(heldout))
     request = PreparationRequest(out_dir=dataset, index_csv=index_csv)
     return request, regen, tmp_path / "corpus"
 
 
-def __manifest(out_dir):
+def read_manifest(out_dir):
     return json.loads((out_dir / preparation.CORPUS_MANIFEST).read_text(encoding="utf-8"))
 
 
 def test_a_build_writes_a_complete_manifest_with_the_recipe(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
 
     summary = preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
 
-    manifest = __manifest(out_dir)
+    manifest = read_manifest(out_dir)
     assert summary["written"] == 2
     assert manifest["complete"] is True
     assert manifest["failed_names"] == []
@@ -62,7 +62,7 @@ def test_a_build_writes_a_complete_manifest_with_the_recipe(tmp_path, monkeypatc
 
 
 def test_a_rerun_counts_the_frames_of_reused_files(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
     first = preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
 
     second = preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
@@ -73,7 +73,7 @@ def test_a_rerun_counts_the_frames_of_reused_files(tmp_path, monkeypatch):
 
 
 def test_a_rerun_with_another_recipe_is_refused(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
     preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
 
     with pytest.raises(ValueError, match="min_frames"):
@@ -81,7 +81,7 @@ def test_a_rerun_with_another_recipe_is_refused(tmp_path, monkeypatch):
 
 
 def test_a_folder_with_features_and_no_manifest_is_refused(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
     (out_dir / FEATURES_DIR).mkdir(parents=True)
     np.save(out_dir / FEATURES_DIR / "ACCAD__walk_stageii.npy", np.zeros((3, 263), np.float32))
 
@@ -90,7 +90,7 @@ def test_a_folder_with_features_and_no_manifest_is_refused(tmp_path, monkeypatch
 
 
 def test_a_heldout_file_already_in_the_folder_stops_the_build(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
     preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
     monkeypatch.setattr(
         preparation, "heldout_feature_names", lambda *args: {"ACCAD__run_stageii.npy"}
@@ -101,7 +101,7 @@ def test_a_heldout_file_already_in_the_folder_stops_the_build(tmp_path, monkeypa
 
 
 def test_heldout_sources_are_skipped(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch, frozenset({"ACCAD__run_stageii.npy"}))
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch, frozenset({"ACCAD__run_stageii.npy"}))
 
     summary = preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
 
@@ -110,7 +110,7 @@ def test_heldout_sources_are_skipped(tmp_path, monkeypatch):
 
 
 def test_a_corpus_from_another_pose_recipe_is_refused(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
     preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
     preparation.write_manifest(
         regen / "pose_data" / preparation.POSE_MANIFEST, {"fps": 30}, {"complete": True}
@@ -121,7 +121,7 @@ def test_a_corpus_from_another_pose_recipe_is_refused(tmp_path, monkeypatch):
 
 
 def test_an_unfinished_pose_extraction_stops_the_corpus_build(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
     preparation.write_manifest(
         regen / "pose_data" / preparation.POSE_MANIFEST, {"fps": 20}, {"complete": False}
     )
@@ -131,20 +131,20 @@ def test_an_unfinished_pose_extraction_stops_the_corpus_build(tmp_path, monkeypa
 
 
 def test_failures_finish_the_build_then_raise_with_the_names(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
     np.save(regen / "pose_data" / "ACCAD" / "bad_stageii.npy", np.zeros((30, 22, 3)))
 
     with pytest.raises(RuntimeError, match="1 source files failed"):
         preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
 
-    manifest = __manifest(out_dir)
+    manifest = read_manifest(out_dir)
     assert manifest["complete"] is False
     assert manifest["failed_names"] == ["ACCAD__bad_stageii.npy"]
     assert manifest["written"] == 2
 
 
 def test_the_minimum_length_applies_to_the_encoded_frames(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
 
     summary = preparation.build_amass_pretraining_corpus(request, regen, out_dir, 40)
 
@@ -153,7 +153,7 @@ def test_the_minimum_length_applies_to_the_encoded_frames(tmp_path, monkeypatch)
 
 
 def test_a_reused_feature_with_a_changed_source_is_refused(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
     preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
     source = regen / "pose_data" / "ACCAD" / "walk_stageii.npy"
     stat = source.stat()
@@ -164,16 +164,16 @@ def test_a_reused_feature_with_a_changed_source_is_refused(tmp_path, monkeypatch
 
 
 def test_a_limited_build_is_not_complete(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
 
     preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10, limit=1)
 
-    assert __manifest(out_dir)["complete"] is False
-    assert __manifest(out_dir)["limit"] == 1
+    assert read_manifest(out_dir)["complete"] is False
+    assert read_manifest(out_dir)["limit"] == 1
 
 
 def test_a_missing_reference_clip_stops_the_build(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
     (regen / "joints" / "000021.npy").unlink()
 
     with pytest.raises(FileNotFoundError, match="000021"):
@@ -181,7 +181,7 @@ def test_a_missing_reference_clip_stops_the_build(tmp_path, monkeypatch):
 
 
 def test_another_fps_stops_the_build(tmp_path, monkeypatch):
-    request, regen, out_dir = __layout(tmp_path, monkeypatch)
+    request, regen, out_dir = build_layout(tmp_path, monkeypatch)
 
     with pytest.raises(ValueError, match="fps=30"):
         preparation.build_amass_pretraining_corpus(replace(request, fps=30), regen, out_dir, 10)

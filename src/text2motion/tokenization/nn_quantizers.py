@@ -289,14 +289,14 @@ class VectorQuantizer(Quantizer):
         self.register_buffer("cluster_size", torch.ones(codebook_size))
         self.register_buffer("embed_avg", embed.clone())
 
-    def __distances(self, flat_latents: torch.Tensor) -> torch.Tensor:
+    def distances(self, flat_latents: torch.Tensor) -> torch.Tensor:
         return (
             flat_latents.pow(2).sum(1, keepdim=True)
             - 2 * flat_latents @ self.embed.t()
             + self.embed.pow(2).sum(1)
         )
 
-    def __ema_update(self, flat_latents: torch.Tensor, assignments: torch.Tensor) -> None:
+    def ema_update(self, flat_latents: torch.Tensor, assignments: torch.Tensor) -> None:
         assignment_counts = assignments.sum(0)
         assigned_sum = assignments.t() @ flat_latents
         self.cluster_size.mul_(self.decay).add_(assignment_counts, alpha=1 - self.decay)
@@ -308,9 +308,9 @@ class VectorQuantizer(Quantizer):
             (self.cluster_size + smoothing) / (total + self.codebook_size * smoothing) * total
         )
         self.embed.copy_(self.embed_avg / smoothed.unsqueeze(1))
-        self.__reset_dead_codes(flat_latents)
+        self.reset_dead_codes(flat_latents)
 
-    def __reset_dead_codes(self, flat_latents: torch.Tensor) -> None:
+    def reset_dead_codes(self, flat_latents: torch.Tensor) -> None:
         dead = self.cluster_size < self.reset_threshold
         dead_count = int(dead.sum().item())
         if dead_count == 0:
@@ -324,12 +324,12 @@ class VectorQuantizer(Quantizer):
     def forward(self, latent: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             flat_latents = latent.reshape(-1, self.code_width)
-            indices = self.__distances(flat_latents).argmin(1)
+            indices = self.distances(flat_latents).argmin(1)
             assignments = F.one_hot(indices, self.codebook_size).type_as(flat_latents)
 
             quantized = (assignments @ self.embed).view_as(latent)
             if self.training:
-                self.__ema_update(flat_latents, assignments)
+                self.ema_update(flat_latents, assignments)
 
         commitment_loss = F.mse_loss(latent, quantized.detach())
         return quantized, indices.view(latent.shape[:-1]), commitment_loss

@@ -154,7 +154,7 @@ def feature_params(offsets: torch.Tensor, fps: int = FPS) -> FeatureParams:
     )
 
 
-def __uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarray:
+def uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarray:
     raw_offsets = torch.tensor(params.raw_offsets)
     target_offset = params.target_offsets
 
@@ -191,7 +191,7 @@ def encode_joints(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndar
     left_feet, right_feet = params.left_feet, params.right_feet
     raw_offsets = torch.tensor(params.raw_offsets)
 
-    positions = __uniform_skeleton(positions, params)
+    positions = uniform_skeleton(positions, params)
 
     floor_height = positions.min(axis=0).min(axis=0)[1]
     positions[:, :, 1] -= floor_height
@@ -296,7 +296,7 @@ def check_finite_features(data: torch.Tensor) -> None:
         raise ValueError("the motion features hold NaN or Inf values")
 
 
-def __recover_root(data: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def recover_root(data: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     rot_vel = data[..., 0]
     r_rot_ang = torch.zeros_like(rot_vel).to(data.device)
     r_rot_ang[..., 1:] = rot_vel[..., :-1]
@@ -318,7 +318,7 @@ def __recover_root(data: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 
 def recover_from_ric(data: torch.Tensor, joint_count: int) -> torch.Tensor:
     check_feature_width(data, joint_count)
-    r_rot_quat, r_pos = __recover_root(data)
+    r_rot_quat, r_pos = recover_root(data)
     positions = data[..., 4 : (joint_count - 1) * 3 + 4]
     positions = positions.view(positions.shape[:-1] + (-1, 3))
 
@@ -332,7 +332,7 @@ def recover_from_ric(data: torch.Tensor, joint_count: int) -> torch.Tensor:
 
 def recover_from_rot(data: torch.Tensor, joint_count: int, skeleton: Skeleton) -> torch.Tensor:
     check_feature_width(data, joint_count)
-    r_rot_quat, r_pos = __recover_root(data)
+    r_rot_quat, r_pos = recover_root(data)
 
     r_rot_cont6d = quaternion_to_cont6d(r_rot_quat)
 
@@ -368,7 +368,7 @@ class StreamingSkeletonRecovery:
         self.offset = np.zeros(2, dtype=np.float32)
 
     @staticmethod
-    def __yaw_quat(yaw: float, device: torch.device) -> torch.Tensor:
+    def yaw_quat(yaw: float, device: torch.device) -> torch.Tensor:
         quat = torch.zeros(4, dtype=torch.float32, device=device)
         quat[0] = math.cos(yaw)
         quat[2] = math.sin(yaw)
@@ -383,7 +383,7 @@ class StreamingSkeletonRecovery:
         check_finite_features(data)
         local = recover_from_ric(data, JOINTS)
 
-        carry = self.__yaw_quat(self.yaw, data.device).expand(local.shape[:-1] + (4,))
+        carry = self.yaw_quat(self.yaw, data.device).expand(local.shape[:-1] + (4,))
         placed = qrot(qinv(carry), local)
         placed[..., 0] += float(self.offset[0])
         placed[..., 2] += float(self.offset[1])
@@ -392,7 +392,7 @@ class StreamingSkeletonRecovery:
         step = torch.zeros(3, dtype=torch.float32, device=data.device)
         step[0] = data[-1, 1]
         step[2] = data[-1, 2]
-        step = qrot(qinv(self.__yaw_quat(yaw_next, data.device)), step)
+        step = qrot(qinv(self.yaw_quat(yaw_next, data.device)), step)
 
         root_last = placed[-1, 0]
         self.offset = np.array(

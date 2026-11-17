@@ -125,10 +125,10 @@ def qbetween(v0: torch.Tensor, v1: torch.Tensor) -> torch.Tensor:
     ).sum(dim=-1, keepdim=True)
     q = torch.cat([w, v], dim=-1)
     opposite = (q == 0).all(dim=-1, keepdim=True)
-    return qnormalize(torch.where(opposite, __half_turn(v0), q))
+    return qnormalize(torch.where(opposite, half_turn(v0), q))
 
 
-def __half_turn(v0: torch.Tensor) -> torch.Tensor:
+def half_turn(v0: torch.Tensor) -> torch.Tensor:
     x_axis = torch.tensor([1.0, 0.0, 0.0], dtype=v0.dtype, device=v0.device).expand_as(v0)
     y_axis = torch.tensor([0.0, 1.0, 0.0], dtype=v0.dtype, device=v0.device).expand_as(v0)
     axis = torch.cross(v0, x_axis, dim=-1)

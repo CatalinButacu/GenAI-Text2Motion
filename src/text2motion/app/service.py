@@ -141,9 +141,9 @@ class MotionInferenceClient:
                         raise RuntimeError(f"unexpected message {kind!r}; connection closed")
             finally:
                 if not finished:
-                    self.__abandon_stream(cancel_sent)
+                    self.abandon_stream(cancel_sent)
 
-    def __abandon_stream(self, cancel_sent: bool) -> None:
+    def abandon_stream(self, cancel_sent: bool) -> None:
         if not cancel_sent:
             MotionStreamProtocol.send_json(self.io, {"cmd": "cancel"})
         while True:
@@ -162,7 +162,7 @@ class MotionInferenceClient:
             self.sock.close()
 
 
-def __start_motion_server(
+def start_motion_server(
     config: str,
     ckpt: str,
     tokenizer_ckpt: str,
@@ -203,7 +203,7 @@ def __start_motion_server(
     logger.info(f"[service] spawned; loading the model (log: {log_path})...")
 
 
-def __await_motion_server(
+def await_motion_server(
     host: str, port: int, wait_seconds: int, log_path: str | Path
 ) -> MotionInferenceClient:
     deadline = time.time() + wait_seconds
@@ -252,10 +252,10 @@ def motion_service_client(
         client = MotionInferenceClient(host, port)
         logger.info(f"[service] reusing warm service ({client.hello.get('ckpt')})")
     except OSError:
-        __start_motion_server(
+        start_motion_server(
             config, ckpt, tokenizer_ckpt, backbone, host, port, log_path, service_config
         )
-        client = __await_motion_server(host, port, spawn_wait_seconds, log_path)
+        client = await_motion_server(host, port, spawn_wait_seconds, log_path)
     served_policy = client.hello.get("policy")
     if served_policy != policy:
         client.close()

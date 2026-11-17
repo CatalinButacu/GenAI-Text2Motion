@@ -57,9 +57,9 @@ class StreamingStudioViewer(Viewer):
         self.scene.background_color = config.appearance.sky_color
 
         self.panels.install()
-        self.__add_rest_pose()
+        self.add_rest_pose()
 
-    def __add_rest_pose(self) -> None:
+    def add_rest_pose(self) -> None:
         state = self.state
         if not state.model_dir:
             return
@@ -107,7 +107,7 @@ class StreamingStudioViewer(Viewer):
             log_action("key R")
             self.reload_settings()
 
-    def __advance_playhead(self, time) -> None:
+    def advance_playhead(self, time) -> None:
         if not self.run_animations or self.scene.n_frames == 0:
             return
         frames = int((time - self._last_frame_rendered_at) * self.playback_fps)
@@ -121,7 +121,7 @@ class StreamingStudioViewer(Viewer):
     def on_render(self, time, frame_time, export=False, transparent_background=False) -> None:
         self.generation.tick_live()
         self.scene_updater.consume()
-        self.__advance_playhead(time)
+        self.advance_playhead(time)
         self.scene_updater.hold_playhead_at_fitted_body()
         self.scene_updater.sync_display_nodes()
         self.scene_updater.update_follow_cam()

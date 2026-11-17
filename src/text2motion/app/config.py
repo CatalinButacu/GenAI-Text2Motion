@@ -190,7 +190,7 @@ def from_mapping(cls: type[_T], data: Mapping[str, Any]) -> _T:
 
 def load_service_config(path: str | Path) -> MotionServiceConfig:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-    return from_mapping(MotionServiceConfig, __with_environment("service", {"service": raw}))
+    return from_mapping(MotionServiceConfig, with_environment("service", {"service": raw}))
 
 
 def service_policy(service: MotionServiceConfig) -> dict[str, object]:
@@ -249,7 +249,7 @@ _ENVIRONMENT_OVERRIDES = MappingProxyType(
 )
 
 
-def __with_environment(section: str, raw: dict) -> dict:
+def with_environment(section: str, raw: dict) -> dict:
     values = dict(raw.get(section, {}))
     for key, names in _ENVIRONMENT_OVERRIDES[section].items():
         value = next((os.getenv(name) for name in names if os.getenv(name)), None)
@@ -258,7 +258,7 @@ def __with_environment(section: str, raw: dict) -> dict:
     return values
 
 
-def __check_representation_block(raw: dict, source: str | Path) -> None:
+def check_representation_block(raw: dict, source: str | Path) -> None:
     declared = raw.get("hml3d")
     if not declared:
         return
@@ -273,7 +273,7 @@ def __check_representation_block(raw: dict, source: str | Path) -> None:
             )
 
 
-def __training_values(raw: dict) -> dict:
+def training_values(raw: dict) -> dict:
     values = dict(raw.get("train", {}))
     if "loss_weights" in values:
         raise ValueError(
@@ -290,7 +290,7 @@ def __training_values(raw: dict) -> dict:
     return values
 
 
-def __check_root_keys(raw: dict, source: str | Path) -> None:
+def check_root_keys(raw: dict, source: str | Path) -> None:
     known = set(ApplicationConfig.__dataclass_fields__) | _LEGACY_ROOT_KEYS
     unknown = sorted(set(raw) - known)
     if not unknown:
@@ -304,12 +304,12 @@ def __check_root_keys(raw: dict, source: str | Path) -> None:
 
 def load_config(path: str | Path) -> ApplicationConfig:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-    __check_root_keys(raw, path)
-    __check_representation_block(raw, path)
+    check_root_keys(raw, path)
+    check_representation_block(raw, path)
     values = {key: raw[key] for key in ApplicationConfig.__dataclass_fields__ if key in raw}
-    values["paths"] = __with_environment("paths", raw)
-    values["service"] = __with_environment("service", raw)
-    values["train"] = __training_values(raw)
+    values["paths"] = with_environment("paths", raw)
+    values["service"] = with_environment("service", raw)
+    values["train"] = training_values(raw)
     config = from_mapping(ApplicationConfig, values)
     validate_config(config, path)
     return config

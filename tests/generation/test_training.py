@@ -164,7 +164,7 @@ def test_generator_step_with_a_nan_loss_raises_before_the_update():
         assert torch.equal(value, before[name])
 
 
-def __resumable_trainer(grad_accum: int = 1) -> GeneratorTrainer:
+def resumable_trainer(grad_accum: int = 1) -> GeneratorTrainer:
     torch.manual_seed(2026)
     config = GeneratorTrainingConfig(
         cfg_dropout=0.3,
@@ -179,7 +179,7 @@ def __resumable_trainer(grad_accum: int = 1) -> GeneratorTrainer:
     return trainer
 
 
-def __train_one_epoch(trainer: GeneratorTrainer, motion: torch.Tensor, text: torch.Tensor) -> None:
+def train_one_epoch(trainer: GeneratorTrainer, motion: torch.Tensor, text: torch.Tensor) -> None:
     for _ in range(2):
         trainer.train_step(motion, text)
     trainer.apply_pending_gradients()
@@ -190,14 +190,14 @@ def test_a_resumed_run_continues_like_an_uninterrupted_run(tmp_path):
     motion = torch.randn(2, 32, 263, generator=generator)
     text = torch.randn(2, GEN.d_text, generator=generator)
     path = tmp_path / "generator_last.pt"
-    uninterrupted = __resumable_trainer()
-    __train_one_epoch(uninterrupted, motion, text)
+    uninterrupted = resumable_trainer()
+    train_one_epoch(uninterrupted, motion, text)
     atomic_torch_save(uninterrupted.resume_state(0, 1.0, 0, None), path)
-    __train_one_epoch(uninterrupted, motion, text)
+    train_one_epoch(uninterrupted, motion, text)
 
-    resumed = __resumable_trainer()
+    resumed = resumable_trainer()
     resumed.load_resume_state(torch.load(path, weights_only=True), False, False)
-    __train_one_epoch(resumed, motion, text)
+    train_one_epoch(resumed, motion, text)
 
     resumed_weights = resumed.token_generator.state_dict()
     for name, value in uninterrupted.token_generator.state_dict().items():
@@ -223,7 +223,7 @@ def test_a_partial_accumulation_window_has_the_weight_of_a_full_window(monkeypat
             MotionTokenGenerator(GEN), FiniteScalarQuantizationTokenizer(TOK), config, downsample=4
         )
         monkeypatch.setattr(trainer.optimizer, "step", lambda: None)
-        __train_one_epoch(trainer, motion, text)
+        train_one_epoch(trainer, motion, text)
         trainers.append(trainer)
 
     full_window, partial_window = trainers
@@ -236,7 +236,7 @@ def test_a_partial_accumulation_window_has_the_weight_of_a_full_window(monkeypat
 
 
 def test_a_resume_state_with_pending_gradients_fails():
-    trainer = __resumable_trainer(grad_accum=2)
+    trainer = resumable_trainer(grad_accum=2)
     trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
 
     with pytest.raises(RuntimeError, match="pending gradients"):

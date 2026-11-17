@@ -379,7 +379,7 @@ INTERFACE_MODULE = "mamba_ssm.ops.selective_scan_interface"
 TRITON_MODULES = ("mamba_ssm.ops.triton", "mamba_ssm.ops.triton.layer_norm")
 
 
-def __register_package_without_triton() -> None:
+def register_package_without_triton() -> None:
     package_spec = importlib.util.find_spec("mamba_ssm")
     if package_spec is None or package_spec.origin is None:
         raise ModuleNotFoundError(
@@ -400,5 +400,5 @@ def __register_package_without_triton() -> None:
 
 def selective_scan_function() -> Callable:
     if INTERFACE_MODULE not in sys.modules and importlib.util.find_spec("triton") is None:
-        __register_package_without_triton()
+        register_package_without_triton()
     return importlib.import_module(INTERFACE_MODULE).selective_scan_fn

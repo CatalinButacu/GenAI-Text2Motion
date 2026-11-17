@@ -31,7 +31,7 @@ class SmplxAvatarController:
 
     def fit_single_chunk(self, joints: np.ndarray, n_frames_so_far: int, factor: int) -> None:
         try:
-            self.__fitted_chunk(joints, n_frames_so_far, factor)
+            self.fitted_chunk(joints, n_frames_so_far, factor)
         except Exception as exc:
             traceback.print_exc()
             self.state.status = (
@@ -39,7 +39,7 @@ class SmplxAvatarController:
                 f"{type(exc).__name__}: {exc}"
             )
 
-    def __body_model(self, frames: int, gender: str):
+    def body_model(self, frames: int, gender: str):
         model = self.state.smplx_fit.model_cache.get((frames, gender))
         if model is None:
             cfg = replace(self.state.config.fit, model_dir=self.state.model_dir, gender=gender)
@@ -47,7 +47,7 @@ class SmplxAvatarController:
             self.state.smplx_fit.model_cache[(frames, gender)] = model
         return model
 
-    def __display_rate_result(
+    def display_rate_result(
         self, res: SmplxFitResult, factor: int, gender: str
     ) -> SmplxFitResult:
         if factor == 1:
@@ -57,7 +57,7 @@ class SmplxAvatarController:
             buffers.fit_anchor, res.global_orient, res.body_pose, res.transl, factor
         )
         buffers.fit_anchor = (res.global_orient[-1], res.body_pose[-1], res.transl[-1])
-        model = self.__body_model(len(orient), gender)
+        model = self.body_model(len(orient), gender)
         dev = self.state.device if torch.cuda.is_available() else "cpu"
         with torch.no_grad():
             out = model(
@@ -76,20 +76,20 @@ class SmplxAvatarController:
             transl=transl,
         )
 
-    def __fitted_chunk(self, joints: np.ndarray, n_frames_so_far: int, factor: int) -> None:
+    def fitted_chunk(self, joints: np.ndarray, n_frames_so_far: int, factor: int) -> None:
         gender = self.state.gender
         frames = joints.shape[0]
         if self.state.device == "cuda":
             torch.cuda.empty_cache()
-        model = self.__body_model(frames, gender)
+        model = self.body_model(frames, gender)
         if self.state.stream_buffers.fit_is_stale():
             return
         res = solve_smplx_pose_from_joints(model, joints, self.state.device)
         self.state.stream_buffers.fit_progress = 1.0
-        display = self.__display_rate_result(res, factor, gender)
+        display = self.display_rate_result(res, factor, gender)
         display_frames = len(display.global_orient)
-        display_verts = self.__shaped_vertices(
-            self.__body_model(display_frames, gender), display, display_frames
+        display_verts = self.shaped_vertices(
+            self.body_model(display_frames, gender), display, display_frames
         )
         appended = self.state.stream_buffers.append_fitted_chunk(
             self.state.smplx_fit, display_verts, display.faces, display
@@ -103,7 +103,7 @@ class SmplxAvatarController:
             f"body fit {res.joint_err_cm:.1f} cm"
         )
 
-    def __shaped_vertices(self, model, res, t: int) -> np.ndarray:
+    def shaped_vertices(self, model, res, t: int) -> np.ndarray:
         user = self.state.user_betas
         if not user.any():
             return res.vertices
@@ -135,14 +135,14 @@ class SmplxAvatarController:
             self.state.smplx_fit.note = "body-fit choice applies to the next generation"
             return
         if not self.state.fit_body:
-            self.__show_skeleton_only()
+            self.show_skeleton_only()
             return
         if self.state.stream_buffers.accum_joints is None or self.state.smplx_fit.orient:
             self.schedule_remesh()
             return
-        self.__start_retrofit()
+        self.start_retrofit()
 
-    def __show_skeleton_only(self) -> None:
+    def show_skeleton_only(self) -> None:
         self.state.nodes.clear_body()
         self.state.nodes.clear_rest()
         joints = self.state.stream_buffers.accum_joints
@@ -153,7 +153,7 @@ class SmplxAvatarController:
         self.state.nodes.motion = node
         self.host.scene.add(node)
 
-    def __start_retrofit(self) -> None:
+    def start_retrofit(self) -> None:
         joints = self.state.stream_buffers.accum_joints
         source = self.state.stream_buffers.source_joints
         if joints is None or source is None or self.state.generating:
@@ -175,24 +175,24 @@ class SmplxAvatarController:
         self.state.status = "fitting SMPL-X to the generated motion..."
         self.state.stream_buffers.reset_fit_track(self.state.smplx_fit)
         threading.Thread(
-            target=self.__fit_existing_motion,
+            target=self.fit_existing_motion,
             args=(source[-frames - 1 :].copy(), frames),
             daemon=True,
         ).start()
 
-    def __anchor_pose(self, anchor: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        model = self.__body_model(len(anchor), self.state.gender)
+    def anchor_pose(self, anchor: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        model = self.body_model(len(anchor), self.state.gender)
         res = solve_smplx_pose_from_joints(model, anchor, self.state.device)
         return res.global_orient[-1], res.body_pose[-1], res.transl[-1]
 
-    def __fit_existing_motion(self, source: np.ndarray, frames: int) -> None:
+    def fit_existing_motion(self, source: np.ndarray, frames: int) -> None:
         factor = self.state.upsample
         window = max(1, self.schedule.retrofit_window // factor)
         anchor, motion = source[:-frames], source[-frames:]
         n_frames = 0
         try:
             if len(anchor):
-                self.state.stream_buffers.fit_anchor = self.__anchor_pose(anchor)
+                self.state.stream_buffers.fit_anchor = self.anchor_pose(anchor)
             for start in range(0, len(motion), window):
                 if self.state.stream_buffers.cancel:
                     break
@@ -213,26 +213,26 @@ class SmplxAvatarController:
         if self.state.smplx_fit.running:
             return
         self.state.smplx_fit.running = True
-        threading.Thread(target=self.__rebuild_avatar_mesh, daemon=True).start()
+        threading.Thread(target=self.rebuild_avatar_mesh, daemon=True).start()
 
-    def __rebuild_avatar_mesh(self) -> None:
+    def rebuild_avatar_mesh(self) -> None:
         fit = self.state.smplx_fit
         try:
             while fit.done_version != fit.version:
                 version = fit.version
-                self.__update_avatar_mesh()
+                self.update_avatar_mesh()
                 fit.done_version = version
         finally:
             fit.running = False
         if fit.done_version != fit.version:
             self.schedule_remesh()
 
-    def __update_avatar_mesh(self) -> None:
+    def update_avatar_mesh(self) -> None:
         gender = self.state.gender
         user_betas = self.state.user_betas.copy()
         try:
             self.state.smplx_fit.note = f"updating avatar ({gender})..."
-            pending = self.__avatar_mesh(gender, user_betas)
+            pending = self.avatar_mesh(gender, user_betas)
             with self.state.stream_buffers.lock:
                 self.state.stream_buffers.pending_remesh = pending
             self.state.smplx_fit.note = ""
@@ -240,7 +240,7 @@ class SmplxAvatarController:
             traceback.print_exc()
             self.state.smplx_fit.note = f"avatar update failed: {type(exc).__name__}: {exc}"
 
-    def __fit_parameters(self):
+    def fit_parameters(self):
         fit = self.state.smplx_fit
         with self.state.stream_buffers.lock:
             if not fit.orient:
@@ -251,11 +251,11 @@ class SmplxAvatarController:
             orient = np.concatenate(fit.orient, 0)
             return orient, np.concatenate(fit.pose, 0), np.concatenate(fit.transl, 0), betas
 
-    def __avatar_mesh(
+    def avatar_mesh(
         self, gender: str, user_betas: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, bool]:
         cfg = replace(self.state.config.fit, model_dir=self.state.model_dir, gender=gender)
-        parameters = self.__fit_parameters()
+        parameters = self.fit_parameters()
         if parameters is None:
             zero = np.zeros((1, 3), dtype=np.float32)
             rest_pose = np.zeros((1, 63), dtype=np.float32)

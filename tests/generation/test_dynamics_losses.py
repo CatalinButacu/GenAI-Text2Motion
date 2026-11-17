@@ -4,12 +4,12 @@ import pytest
 import torch
 
 from text2motion.generation.contracts import LossWeights
-from text2motion.generation.losses import __dynamics_terms
+from text2motion.generation.losses import dynamics_terms
 from text2motion.motion.representation import DIM, SLICES
 from text2motion.tokenization.nn_model import TokenizerNetwork
 
 
-def __standing_motion(frames: int = 12) -> torch.Tensor:
+def standing_motion(frames: int = 12) -> torch.Tensor:
     features = torch.zeros(1, frames, DIM)
     features[..., 3] = 0.9
     features[..., SLICES["foot"]] = 1.0
@@ -28,35 +28,35 @@ def test_default_weights_keep_the_existing_recipe():
 
 def test_a_body_sliding_over_planted_feet_is_penalized_and_a_still_one_is_not():
     mean, std = torch.zeros(DIM), torch.ones(DIM)
-    gt = __standing_motion()
-    still = __dynamics_terms(gt.clone(), gt, None, mean, std)
+    gt = standing_motion()
+    still = dynamics_terms(gt.clone(), gt, None, mean, std)
     assert still["foot_skate"].item() == pytest.approx(0.0, abs=1e-6)
     sliding = gt.clone()
     sliding[..., 1] = 0.05
-    slid = __dynamics_terms(sliding, gt, None, mean, std)
+    slid = dynamics_terms(sliding, gt, None, mean, std)
     assert slid["foot_skate"].item() == pytest.approx(0.05, rel=1e-3)
 
 
 def test_a_one_frame_jitter_raises_the_acceleration_term():
     mean, std = torch.zeros(DIM), torch.ones(DIM)
-    gt = __standing_motion()
-    assert __dynamics_terms(gt.clone(), gt, None, mean, std)["accel"].item() == pytest.approx(
+    gt = standing_motion()
+    assert dynamics_terms(gt.clone(), gt, None, mean, std)["accel"].item() == pytest.approx(
         0.0, abs=1e-7
     )
     jittery = gt.clone()
     jittery[0, 6, 3] += 0.1
     expected = (0.1 + 0.2 + 0.1) / (10 * 22 * 3)
-    assert __dynamics_terms(jittery, gt, None, mean, std)["accel"].item() == pytest.approx(
+    assert dynamics_terms(jittery, gt, None, mean, std)["accel"].item() == pytest.approx(
         expected, rel=1e-3
     )
 
 
 def test_padding_frames_do_not_count():
     mean, std = torch.zeros(DIM), torch.ones(DIM)
-    gt = __standing_motion()
+    gt = standing_motion()
     recon = gt.clone()
     recon[0, 9:, 1] = 0.5
-    terms = __dynamics_terms(recon, gt, torch.tensor([8]), mean, std)
+    terms = dynamics_terms(recon, gt, torch.tensor([8]), mean, std)
     assert terms["foot_skate"].item() == pytest.approx(0.0, abs=1e-6)
 
 

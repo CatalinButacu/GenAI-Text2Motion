@@ -52,7 +52,7 @@ def evaluate_tokenizer_reconstruction(
     was_training = module.training
     module.eval()
     try:
-        return __reconstruction_metrics(
+        return reconstruction_metrics(
             module,
             root,
             scaler,
@@ -69,7 +69,7 @@ def evaluate_tokenizer_reconstruction(
         module.train(was_training)
 
 
-def __reconstruction_metrics(
+def reconstruction_metrics(
     module: TokenizerNetwork,
     root: Path,
     scaler: MotionScaler,

@@ -40,7 +40,7 @@ def pretraining_resume_path(out_path: Path) -> Path:
     return out_path.with_name(out_path.stem + "_last.pt")
 
 
-def __load_pretraining_resume(
+def load_pretraining_resume(
     generator,
     optimizer: torch.optim.Optimizer,
     resume_path: Path,
@@ -66,7 +66,7 @@ def __load_pretraining_resume(
     return step, start_epoch
 
 
-def __pretraining_state(
+def pretraining_state(
     generator: nn.Module,
     optimizer: torch.optim.Optimizer,
     total_steps: int,
@@ -133,7 +133,7 @@ def pretrain_generator(
             f"--resume continues from {resume_path}, which does not exist; start without --resume"
         )
     if request.resume:
-        step, start_epoch = __load_pretraining_resume(
+        step, start_epoch = load_pretraining_resume(
             generator, opt, resume_path, request, total_steps, device
         )
 
@@ -178,7 +178,7 @@ def pretrain_generator(
         except Exception as error:
             write_failure_dump(
                 failure_dump_path,
-                __pretraining_state(generator, opt, total_steps, run_dir, step, epoch),
+                pretraining_state(generator, opt, total_steps, run_dir, step, epoch),
                 inputs,
                 seen,
                 generator,
@@ -217,7 +217,7 @@ def pretrain_generator(
         logger.info(line)
         atomic_torch_save(generator.state_dict(), out_path)
         atomic_torch_save(
-            __pretraining_state(generator, opt, total_steps, run_dir, step, epoch), resume_path
+            pretraining_state(generator, opt, total_steps, run_dir, step, epoch), resume_path
         )
         if device == "cuda":
             torch.cuda.empty_cache()

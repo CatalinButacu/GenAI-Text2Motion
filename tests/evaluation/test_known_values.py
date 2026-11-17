@@ -14,7 +14,7 @@ from text2motion.motion.representation import FPS, RAW_OFFSETS, kinematic_bones
 JOINTS = 22
 
 
-def __standing_motion() -> np.ndarray:
+def standing_motion() -> np.ndarray:
     pose = np.zeros((JOINTS, 3))
     for parent, child in kinematic_bones():
         pose[child] = pose[parent] + RAW_OFFSETS[child] * 0.1
@@ -30,7 +30,7 @@ def test_flowmdm_jerk_profile_uses_l1_coordinates_then_maximum_joint():
 
 
 def test_transition_contacts_use_the_common_floor_and_do_not_hide_airborne_feet():
-    joints = __standing_motion()
+    joints = standing_motion()
     joints[:, :, 0] += np.arange(len(joints))[:, None] * 0.01
     floor = metrics.transition_statistics(joints, 50)
     assert floor["foot_skate_m_per_s"] == pytest.approx(0.2)

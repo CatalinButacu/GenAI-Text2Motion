@@ -72,20 +72,20 @@ def head_trim_frames(source_path: str | Path, fps: int) -> int:
     return int(round(_HEAD_TRIM_SECONDS.get(dataset_name(source_path), 0.0) * fps))
 
 
-def __source_parts(source_path: str) -> list[str]:
+def source_parts(source_path: str) -> list[str]:
     return [part for part in Path(source_path).parts if part not in (".", "pose_data")]
 
 
-def __pose_folders(source_path: str, pose_root: Path) -> list[Path]:
-    parts = __source_parts(source_path)
+def pose_folders(source_path: str, pose_root: Path) -> list[Path]:
+    parts = source_parts(source_path)
     if not parts:
         return []
     datasets = list(dict.fromkeys([_FOLDER_NAMES.get(parts[0], parts[0]), parts[0]]))
     return [pose_root / Path(dataset, *parts[1:-1]) for dataset in datasets]
 
 
-def __pose_candidates(source_path: str, pose_root: Path) -> list[Path]:
-    parts = __source_parts(source_path)
+def pose_candidates(source_path: str, pose_root: Path) -> list[Path]:
+    parts = source_parts(source_path)
     if not parts:
         return []
     stem = Path(parts[-1]).stem
@@ -98,11 +98,11 @@ def __pose_candidates(source_path: str, pose_root: Path) -> list[Path]:
             for suffix in ("_stageii", "_poses", "")
         )
     )
-    return [folder / name for folder in __pose_folders(source_path, pose_root) for name in names]
+    return [folder / name for folder in pose_folders(source_path, pose_root) for name in names]
 
 
 def resolve_pose_path(source_path: str, pose_root: Path) -> Path | None:
-    candidates = __pose_candidates(source_path, pose_root)
+    candidates = pose_candidates(source_path, pose_root)
     return next((candidate for candidate in candidates if candidate.is_file()), None)
 
 
@@ -130,8 +130,8 @@ def heldout_sources(index_csv: Path, out_dir: Path, pose_root: Path) -> set[Path
         if Path(str(row["new_name"])).stem not in held_ids:
             continue
         source_path = str(row["source_path"])
-        folders = __pose_folders(source_path, pose_root)
-        candidates = __pose_candidates(source_path, pose_root)
+        folders = pose_folders(source_path, pose_root)
+        candidates = pose_candidates(source_path, pose_root)
         matches = [candidate.resolve() for candidate in candidates if candidate.is_file()]
         if matches:
             excluded.update(matches)
@@ -224,13 +224,13 @@ class AmassPoseExtractor:
             },
         }
 
-    def __model(self, gender: object):
+    def model(self, gender: object):
         return self._models[resolve_gender(gender).value]
 
     def to_float_tensor(self, array: np.ndarray) -> torch.Tensor:
         return torch.as_tensor(array, dtype=torch.float32, device=self.device)
 
-    def __forward(
+    def forward(
         self,
         model: Any,
         root: torch.Tensor,
@@ -257,7 +257,7 @@ class AmassPoseExtractor:
         )
         return output.joints[:, : self._joint_count, :]
 
-    def __stride(self, source_fps: float, src_path: str | Path) -> int:
+    def stride(self, source_fps: float, src_path: str | Path) -> int:
         ratio = source_fps / self._fps
         stride = round(ratio)
         if stride < 1 or abs(ratio - stride) > 1e-6:
@@ -278,7 +278,7 @@ class AmassPoseExtractor:
             )
             if fps_key is None:
                 raise ValueError(f"{src_path} has motion but no frame-rate field")
-            sample = slice(None, None, self.__stride(float(data[fps_key]), src_path))
+            sample = slice(None, None, self.stride(float(data[fps_key]), src_path))
             root = np.asarray(data["root_orient"][sample], dtype=np.float32)
             if root.shape[0] == 0:
                 return None
@@ -291,7 +291,7 @@ class AmassPoseExtractor:
                     f"{self._beta_count}"
                 )
             betas = np.asarray(data["betas"][: self._beta_count], dtype=np.float32)
-            model = self.__model(data["gender"])
+            model = self.model(data["gender"])
 
         root_device = self.to_float_tensor(root)
         body_device = self.to_float_tensor(body)
@@ -303,7 +303,7 @@ class AmassPoseExtractor:
         for start in range(0, root.shape[0], self._chunk_size):
             end = min(start + self._chunk_size, root.shape[0])
             chunks.append(
-                self.__forward(
+                self.forward(
                     model,
                     root_device[start:end],
                     body_device[start:end],

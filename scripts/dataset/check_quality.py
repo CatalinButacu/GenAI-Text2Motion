@@ -39,7 +39,7 @@ FLIGHT_CLEARANCE_M = 0.06
 MIN_FLIGHT_SECONDS = 0.1
 
 
-def __arguments() -> argparse.Namespace:
+def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
     quality = commands.add_parser("quality")
@@ -51,22 +51,22 @@ def __arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def __hml3d_dir(fps: int) -> pathlib.Path:
+def hml3d_dir(fps: int) -> pathlib.Path:
     return PATHS.hml3d_official if fps == 20 else PATHS.hml3d_at(fps)
 
 
-def __source_files(source: str, fps: int) -> list[pathlib.Path]:
+def source_files(source: str, fps: int) -> list[pathlib.Path]:
     if source in (HML3D_TRAIN, HML3D_VAL):
-        root = __hml3d_dir(fps)
+        root = hml3d_dir(fps)
         split = "train" if source == HML3D_TRAIN else "val"
         paths = [root / "new_joint_vecs" / f"{n}.npy" for n in base_clip_ids(root, split)]
         return [path for path in paths if path.is_file()]
     return sorted(PATHS.features(fps, source).glob("*.npy"))
 
 
-def __measure(source: str, fps: int) -> list[dict[str, object]]:
+def measure(source: str, fps: int) -> list[dict[str, object]]:
     rows = []
-    for path in tqdm(__source_files(source, fps), desc=source):
+    for path in tqdm(source_files(source, fps), desc=source):
         features = np.load(path).astype(np.float32)
         if features.shape[0] < MIN_CLIP_SECONDS * fps:
             continue
@@ -85,11 +85,11 @@ def __measure(source: str, fps: int) -> list[dict[str, object]]:
     return rows
 
 
-def __metric_matrix(rows: list[dict[str, object]]) -> np.ndarray:
+def metric_matrix(rows: list[dict[str, object]]) -> np.ndarray:
     return np.array([[float(str(row[key])) for key in QUALITY_METRICS] for row in rows])
 
 
-def __verdict(row: dict[str, object]) -> ClipVerdict:
+def to_verdict(row: dict[str, object]) -> ClipVerdict:
     return ClipVerdict(
         source=str(row["source"]),
         subset=str(row["subset"]),
@@ -100,33 +100,33 @@ def __verdict(row: dict[str, object]) -> ClipVerdict:
     )
 
 
-def __write_csv(path: pathlib.Path, rows: list[dict[str, object]]) -> None:
+def write_csv(path: pathlib.Path, rows: list[dict[str, object]]) -> None:
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
 
-def __quality(fps: int, sources: list[str]) -> None:
-    train = __measure(HML3D_TRAIN, fps)
-    rows = train + __measure(HML3D_VAL, fps)
+def write_quality_report(fps: int, sources: list[str]) -> None:
+    train = measure(HML3D_TRAIN, fps)
+    rows = train + measure(HML3D_VAL, fps)
     for source in sources:
-        rows += __measure(source, fps)
-    forest = fit_quality_forest(__metric_matrix(train), QUALITY)
-    for row, inlier in zip(rows, quality_inliers(forest, __metric_matrix(rows)), strict=True):
-        verdict = __verdict({**row, "inlier": bool(inlier)})
+        rows += measure(source, fps)
+    forest = fit_quality_forest(metric_matrix(train), QUALITY)
+    for row, inlier in zip(rows, quality_inliers(forest, metric_matrix(rows)), strict=True):
+        verdict = to_verdict({**row, "inlier": bool(inlier)})
         row["inlier"] = verdict.inlier
         row["kept"] = verdict.kept(NEWTON)
         row["in_step0"] = in_step0(verdict.source, verdict.subset)
-    __write_csv(PATHS.extra / f"quality_clips_{fps}fps.csv", rows)
-    table = summary_table([__verdict(row) for row in rows], NEWTON)
-    __write_csv(PATHS.notes / f"quality_{fps}fps.csv", table)
+    write_csv(PATHS.extra / f"quality_clips_{fps}fps.csv", rows)
+    table = summary_table([to_verdict(row) for row in rows], NEWTON)
+    write_csv(PATHS.notes / f"quality_{fps}fps.csv", table)
     for line in table:
         print(line)
     print("limits", asdict(NEWTON), asdict(QUALITY))
 
 
-def __gravity_row(label: str, pattern: str, fps: int) -> dict[str, object]:
+def gravity_row(label: str, pattern: str, fps: int) -> dict[str, object]:
     files = sorted(glob.glob(pattern, recursive=True))
     if not files:
         raise FileNotFoundError(f"{label}: no file matches {pattern}")
@@ -150,20 +150,20 @@ def __gravity_row(label: str, pattern: str, fps: int) -> dict[str, object]:
     }
 
 
-def __gravity(fps: int, patterns: list[str]) -> None:
+def write_gravity_report(fps: int, patterns: list[str]) -> None:
     pairs = [argument.partition("=") for argument in patterns]
-    rows = [__gravity_row(label, pattern, fps) for label, _, pattern in pairs]
-    __write_csv(PATHS.notes / "amass_clock_gravity.csv", rows)
+    rows = [gravity_row(label, pattern, fps) for label, _, pattern in pairs]
+    write_csv(PATHS.notes / "amass_clock_gravity.csv", rows)
     for row in rows:
         print(row)
 
 
 def main() -> None:
-    arguments = __arguments()
+    arguments = parse_arguments()
     if arguments.command == "quality":
-        __quality(arguments.fps, arguments.sources)
+        write_quality_report(arguments.fps, arguments.sources)
         return
-    __gravity(arguments.fps, arguments.patterns)
+    write_gravity_report(arguments.fps, arguments.patterns)
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ from text2motion.motion.contracts import MotionDataConfig
 CLIPS = 6
 
 
-def __dataset_root(tmp_path):
+def dataset_root(tmp_path):
     rng = np.random.default_rng(0)
     (tmp_path / "new_joint_vecs").mkdir()
     (tmp_path / "texts").mkdir()
@@ -29,7 +29,7 @@ def __dataset_root(tmp_path):
     return tmp_path
 
 
-def __datasets(root):
+def datasets(root):
     data = MotionDataConfig(mirror_augment=False, min_motion_len=40, max_motion_len=64)
     return {
         "window": MotionWindowDataset(root, data, "train", 32, seed=2026),
@@ -37,7 +37,7 @@ def __datasets(root):
     }
 
 
-def __epoch_draws(
+def epoch_draws(
     dataset: MotionWindowDataset | CaptionedMotionDataset, workers: DataLoader, epoch: int
 ) -> list[object]:
     dataset.set_epoch(epoch)
@@ -48,7 +48,7 @@ def __epoch_draws(
     return draws
 
 
-def __loader(dataset, workers: int) -> DataLoader:
+def loader(dataset, workers: int) -> DataLoader:
     return DataLoader(
         dataset,
         batch_size=3,
@@ -63,13 +63,13 @@ def __loader(dataset, workers: int) -> DataLoader:
 
 @pytest.mark.parametrize("kind", ["window", "captioned"])
 def test_persistent_spawn_workers_see_each_new_epoch(tmp_path, kind):
-    dataset = __datasets(__dataset_root(tmp_path))[kind]
-    workers = __loader(dataset, 2)
-    first = __epoch_draws(dataset, workers, 0)
-    second = __epoch_draws(dataset, workers, 1)
+    dataset = datasets(dataset_root(tmp_path))[kind]
+    workers = loader(dataset, 2)
+    first = epoch_draws(dataset, workers, 0)
+    second = epoch_draws(dataset, workers, 1)
 
-    resumed = __epoch_draws(dataset, __loader(dataset, 2), 1)
-    single = __epoch_draws(dataset, __loader(dataset, 0), 1)
+    resumed = epoch_draws(dataset, loader(dataset, 2), 1)
+    single = epoch_draws(dataset, loader(dataset, 0), 1)
 
     assert first != second
     assert resumed == second
@@ -78,7 +78,7 @@ def test_persistent_spawn_workers_see_each_new_epoch(tmp_path, kind):
 
 @pytest.mark.parametrize("split", ["train", "val"])
 def test_each_window_is_a_normalized_slice_of_its_clip(tmp_path, split):
-    root = __dataset_root(tmp_path)
+    root = dataset_root(tmp_path)
     (root / "val.txt").write_text(
         (root / "train.txt").read_text(encoding="utf-8"), encoding="utf-8"
     )

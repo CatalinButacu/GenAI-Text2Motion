@@ -8,7 +8,7 @@ import torch
 GOLDEN_OUTPUTS_SCRIPT = Path("scripts/qa/golden_outputs.py")
 
 
-def __golden_outputs_module():
+def golden_outputs_module():
     spec = importlib.util.spec_from_file_location("golden_outputs", GOLDEN_OUTPUTS_SCRIPT)
     assert spec is not None
     assert spec.loader is not None
@@ -41,7 +41,7 @@ def test_the_generator_metrics_match_the_golden_values(restored_torch_flags):
     assert torch.cuda.is_available(), (
         "the generator golden values come from CUDA; this run has none"
     )
-    golden = __golden_outputs_module()
+    golden = golden_outputs_module()
     record = json.loads(golden.GENERATOR_GOLDEN_PATH.read_text(encoding="utf-8"))
     assert record["torch"] == torch.__version__, (
         f"the golden values come from torch {record['torch']}, this run uses "

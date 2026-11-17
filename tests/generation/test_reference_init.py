@@ -28,11 +28,11 @@ def test_a_fresh_mamba_mixer_starts_with_the_reference_dt_and_a_long_memory():
     assert float(kept.median()) > 0.5
 
 
-def __cfg(backbone: Backbone) -> GeneratorConfig:
+def small_config(backbone: Backbone) -> GeneratorConfig:
     return GeneratorConfig(backbone=backbone, d_model=128, n_layers=4, n_heads=4, codebook_size=512)
 
 
-def __residual_outputs(model: MotionTokenGenerator) -> list[tuple[torch.Tensor, int]]:
+def residual_outputs(model: MotionTokenGenerator) -> list[tuple[torch.Tensor, int]]:
     layers = []
     for module in model.modules():
         if isinstance(module, MambaBlock):
@@ -46,7 +46,7 @@ def __residual_outputs(model: MotionTokenGenerator) -> list[tuple[torch.Tensor, 
 @pytest.mark.parametrize("backbone", list(Backbone))
 def test_both_twins_start_from_the_mamba_ssm_reference_init(backbone):
     torch.manual_seed(2026)
-    cfg = __cfg(backbone)
+    cfg = small_config(backbone)
     model = MotionTokenGenerator(cfg)
 
     embeddings = [
@@ -55,7 +55,7 @@ def test_both_twins_start_from_the_mamba_ssm_reference_init(backbone):
     for weight in embeddings:
         assert abs(float(weight.detach().std()) - 0.02) < 0.002
 
-    for weight, residuals_per_layer in __residual_outputs(model):
+    for weight, residuals_per_layer in residual_outputs(model):
         bound = 1 / math.sqrt(weight.size(1) * residuals_per_layer * cfg.n_layers)
         assert float(weight.detach().abs().max()) <= bound * 1.0001
 

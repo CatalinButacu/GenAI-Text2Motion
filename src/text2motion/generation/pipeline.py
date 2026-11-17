@@ -72,9 +72,9 @@ class TextToMotionGenerator:
         if not steps:
             return None
         indices = torch.stack(steps, dim=1)
-        return indices, self.__row_lengths(indices)
+        return indices, self.row_lengths(indices)
 
-    def __row_lengths(self, indices: torch.Tensor) -> list[int]:
+    def row_lengths(self, indices: torch.Tensor) -> list[int]:
         end_id = self.token_generator.end_id
         if end_id is None:
             return [indices.shape[1]] * indices.shape[0]
@@ -82,7 +82,7 @@ class TextToMotionGenerator:
         first_end = ended.int().argmax(dim=1)
         return torch.where(ended.any(dim=1), first_end, indices.shape[1]).tolist()
 
-    def __decode_rows(self, indices: torch.Tensor, lengths: list[int]) -> list[torch.Tensor]:
+    def decode_rows(self, indices: torch.Tensor, lengths: list[int]) -> list[torch.Tensor]:
         decoder = self.tokenizer.network
         if len(set(lengths)) == 1:
             return list(decoder.decode(indices[:, : lengths[0]]))
@@ -101,7 +101,7 @@ class TextToMotionGenerator:
         if sampled is None:
             return None
         indices, lengths = sampled
-        decoded = self.__decode_rows(indices, lengths)
+        decoded = self.decode_rows(indices, lengths)
         return [
             GeneratedMotion(
                 prompt=caption,

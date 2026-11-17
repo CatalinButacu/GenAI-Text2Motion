@@ -211,7 +211,7 @@ def run_train_tokenizer(
     )
 
 
-def __initial_generator(
+def initial_generator(
     architecture: GeneratorModelSpec, device: str, init_ckpt: Path | None
 ) -> MotionTokenGenerator:
     module = architecture.create_model(device)
@@ -223,7 +223,7 @@ def __initial_generator(
     return module
 
 
-def __overfit_criteria(init_ckpt: Path | None) -> OverfitCriteria:
+def overfit_criteria(init_ckpt: Path | None) -> OverfitCriteria:
     return DEFAULT_OVERFIT_CRITERIA if init_ckpt is None else PRETRAINED_OVERFIT_CRITERIA
 
 
@@ -244,7 +244,7 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
         ema_decay=0.0,
     )
     trainer = GeneratorTrainer(
-        __initial_generator(architecture, app.device, args.init_ckpt),
+        initial_generator(architecture, app.device, args.init_ckpt),
         tokenizer.network,
         train_config,
         downsample=app.config.tokenizer.downsample,
@@ -258,7 +258,7 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
         batch.lengths.to(app.device),
         list(batch.captions),
         args.steps,
-        __overfit_criteria(args.init_ckpt),
+        overfit_criteria(args.init_ckpt),
     )
     gate = OverfitGate(
         config_sha256=sha256_file(args.config),
@@ -272,7 +272,7 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
         token_accuracy=metrics["token_accuracy"],
         ce=metrics["ce"],
     )
-    gate.validate_metrics(__overfit_criteria(args.init_ckpt))
+    gate.validate_metrics(overfit_criteria(args.init_ckpt))
     gate.save(args.overfit_gate)
     logger.info(f"PASS: wrote real-batch overfit gate -> {args.overfit_gate}")
 
@@ -286,11 +286,11 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         tokenizer_ckpt=tokenizer_ckpt,
         backbone=args.backbone,
         resolved_config=architecture.as_dict(),
-        criteria=__overfit_criteria(args.init_ckpt),
+        criteria=overfit_criteria(args.init_ckpt),
     )
     logger.info(f"verified mandatory real-batch overfit gate: {args.overfit_gate}")
 
-    module = __initial_generator(architecture, app.device, args.init_ckpt)
+    module = initial_generator(architecture, app.device, args.init_ckpt)
 
     text_encoder = app.load_text_encoder()
     repository = app.create_motion_repository()

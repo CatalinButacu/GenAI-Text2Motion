@@ -91,7 +91,7 @@ def test_overfit_gate_ignores_dropout_difference_from_training_config(tmp_path):
     )
 
 
-def __gate(**overrides) -> OverfitGate:
+def make_gate(**overrides) -> OverfitGate:
     fields = {
         "config_sha256": "config",
         "tokenizer_sha256": "tokenizer",
@@ -108,7 +108,7 @@ def __gate(**overrides) -> OverfitGate:
 
 
 def test_overfit_gate_accepts_valid_metrics():
-    __gate().validate_metrics()
+    make_gate().validate_metrics()
 
 
 @pytest.mark.parametrize(
@@ -120,7 +120,7 @@ def test_overfit_gate_accepts_valid_metrics():
     ],
 )
 def test_overfit_gate_reports_custom_criteria(criteria, message):
-    gate = __gate()
+    gate = make_gate()
     assert not criteria.accepts(gate.token_accuracy, gate.ce, gate.total_ratio)
     with pytest.raises(RuntimeError) as error:
         gate.validate_metrics(criteria)
@@ -144,7 +144,7 @@ def test_overfit_criteria_accepts_preserves_comparisons(token_accuracy, ce, tota
 
 
 def test_pretrained_criteria_drop_only_the_total_ratio_rule():
-    low_first_loss = __gate(first_total=4.5, final_total=0.257, token_accuracy=1.0, ce=0.001)
+    low_first_loss = make_gate(first_total=4.5, final_total=0.257, token_accuracy=1.0, ce=0.001)
     with pytest.raises(RuntimeError, match="total loss ratio"):
         low_first_loss.validate_metrics()
     low_first_loss.validate_metrics(PRETRAINED_OVERFIT_CRITERIA)
@@ -171,7 +171,7 @@ def test_pretrained_criteria_drop_only_the_total_ratio_rule():
 )
 def test_overfit_gate_rejects_invalid_metrics(overrides):
     with pytest.raises(RuntimeError):
-        __gate(**overrides).validate_metrics()
+        make_gate(**overrides).validate_metrics()
 
 
 def test_overfit_gate_rejects_weak_accuracy(tmp_path):

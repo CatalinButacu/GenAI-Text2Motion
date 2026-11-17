@@ -34,7 +34,7 @@ class _FakeTrainer:
         return {"epoch": epoch, "best_fid": best_fid}
 
 
-def __run(
+def run(
     tmp_path,
     fresh_selection: bool,
     write_resume: bool = True,
@@ -84,25 +84,25 @@ def __run(
 
 
 def test_fresh_selection_saves_the_fine_tunes_own_best(tmp_path):
-    assert __run(tmp_path, fresh_selection=False) == []
-    assert __run(tmp_path, fresh_selection=True) == [(61, 0.30)]
+    assert run(tmp_path, fresh_selection=False) == []
+    assert run(tmp_path, fresh_selection=True) == [(61, 0.30)]
 
 
 def test_the_r1_floor_blocks_a_save_below_it_and_default_zero_changes_nothing(tmp_path):
-    assert __run(tmp_path, fresh_selection=True, r1_floor=0.5) == []
-    assert __run(tmp_path, fresh_selection=True, r1_floor=0.4) == [(61, 0.30)]
-    assert __run(tmp_path, fresh_selection=True) == [(61, 0.30)]
+    assert run(tmp_path, fresh_selection=True, r1_floor=0.5) == []
+    assert run(tmp_path, fresh_selection=True, r1_floor=0.4) == [(61, 0.30)]
+    assert run(tmp_path, fresh_selection=True) == [(61, 0.30)]
 
 
 def test_fresh_selection_refuses_to_start_without_the_resume_file(tmp_path):
     with pytest.raises(FileNotFoundError, match="does not exist"):
-        __run(tmp_path, fresh_selection=True, write_resume=False)
+        run(tmp_path, fresh_selection=True, write_resume=False)
 
 
 def test_a_non_finite_fid_stops_the_run_without_a_save(tmp_path):
     saved = []
     with pytest.raises(RuntimeError, match="not finite"):
-        __run(tmp_path, fresh_selection=True, fid=float("nan"), saved=saved)
+        run(tmp_path, fresh_selection=True, fid=float("nan"), saved=saved)
 
     assert saved == []
     assert torch.load(tmp_path / "generator_last.pt")["epoch"] == 59

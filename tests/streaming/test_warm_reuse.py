@@ -16,14 +16,14 @@ POLICY = MappingProxyType(
 )
 
 
-def __release(tmp_path) -> tuple[str, str, str, str]:
+def write_release_files(tmp_path) -> tuple[str, str, str, str]:
     paths = {name: tmp_path / f"{name}.bin" for name in ("config", "ckpt", "tokenizer")}
     for name, path in paths.items():
         path.write_bytes(name.encode())
     return str(paths["config"]), str(paths["ckpt"]), str(paths["tokenizer"]), "mamba"
 
 
-def __warm_service(hello: dict, loaded_identity: dict, commands: list[str]) -> int:
+def warm_service(hello: dict, loaded_identity: dict, commands: list[str]) -> int:
     server = socket.create_server(("127.0.0.1", 0))
 
     def serve() -> None:
@@ -46,7 +46,7 @@ def __warm_service(hello: dict, loaded_identity: dict, commands: list[str]) -> i
     return server.getsockname()[1]
 
 
-def __connect(release: tuple[str, str, str, str], port: int, tmp_path):
+def connect(release: tuple[str, str, str, str], port: int, tmp_path):
     return motion_service_client(
         *release,
         "127.0.0.1",
@@ -58,29 +58,29 @@ def __connect(release: tuple[str, str, str, str], port: int, tmp_path):
 
 
 def test_a_warm_service_with_the_same_release_is_reused(tmp_path):
-    release = __release(tmp_path)
+    release = write_release_files(tmp_path)
     identity = release_identity(*release)
     commands: list[str] = []
-    port = __warm_service(
+    port = warm_service(
         {"type": "hello", "identity": identity, "policy": dict(POLICY)}, {}, commands
     )
 
-    client = __connect(release, port, tmp_path)
+    client = connect(release, port, tmp_path)
 
     assert client.hello["identity"] == identity
     client.close()
 
 
 def test_a_retrained_checkpoint_at_the_same_path_is_reloaded(tmp_path):
-    release = __release(tmp_path)
+    release = write_release_files(tmp_path)
     old_identity = release_identity(*release)
     (tmp_path / "ckpt.bin").write_bytes(b"retrained")
     new_identity = release_identity(*release)
     commands: list[str] = []
     hello = {"type": "hello", "identity": old_identity, "policy": dict(POLICY)}
-    port = __warm_service(hello, new_identity, commands)
+    port = warm_service(hello, new_identity, commands)
 
-    client = __connect(release, port, tmp_path)
+    client = connect(release, port, tmp_path)
 
     assert commands == ["load"]
     assert client.hello["identity"]["ckpt_sha256"] == new_identity["ckpt_sha256"]
@@ -88,27 +88,27 @@ def test_a_retrained_checkpoint_at_the_same_path_is_reloaded(tmp_path):
 
 
 def test_a_service_that_loads_another_release_is_refused(tmp_path):
-    release = __release(tmp_path)
+    release = write_release_files(tmp_path)
     identity = release_identity(*release)
     commands: list[str] = []
     hello = {"type": "hello", "identity": {}, "policy": dict(POLICY)}
-    port = __warm_service(hello, {**identity, "tokenizer_sha256": "other"}, commands)
+    port = warm_service(hello, {**identity, "tokenizer_sha256": "other"}, commands)
 
     with pytest.raises(RuntimeError, match="tokenizer_sha256"):
-        __connect(release, port, tmp_path)
+        connect(release, port, tmp_path)
 
 
 def test_a_warm_service_with_another_policy_is_refused(tmp_path):
-    release = __release(tmp_path)
+    release = write_release_files(tmp_path)
     identity = release_identity(*release)
     commands: list[str] = []
     other_policy = {**POLICY, "anchor_every_tokens": 48}
-    port = __warm_service(
+    port = warm_service(
         {"type": "hello", "identity": identity, "policy": other_policy}, {}, commands
     )
 
     with pytest.raises(RuntimeError, match="Stop the warm service"):
-        __connect(release, port, tmp_path)
+        connect(release, port, tmp_path)
 
 
 def test_a_model_change_refreshes_every_derived_limit():

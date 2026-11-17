@@ -25,7 +25,7 @@ from text2motion.motion.storage import sha256_file
 REVIEW_FRAMES = tuple(range(176, 289))
 
 
-def __review_tpose(model) -> np.ndarray:
+def review_tpose(model) -> np.ndarray:
     with torch.no_grad():
         zeros = {
             "global_orient": torch.zeros((1, 3)),
@@ -48,7 +48,7 @@ def __review_tpose(model) -> np.ndarray:
     return rest
 
 
-def __review_frame(renderer, case: dict, frame: int):
+def review_frame(renderer, case: dict, frame: int):
     from PIL import Image, ImageDraw, ImageFont
 
     renderer.scene.current_frame_id = frame
@@ -68,7 +68,7 @@ def __review_frame(renderer, case: dict, frame: int):
     return result
 
 
-def __review(a: argparse.Namespace) -> None:
+def render_review(a: argparse.Namespace) -> None:
     from aitviewer.headless import HeadlessRenderer
     from aitviewer.scene.camera import ViewerCamera
     from aitviewer.scene.scene import Scene
@@ -95,7 +95,7 @@ def __review(a: argparse.Namespace) -> None:
         scene: Scene = renderer.scene
         scene.floor.enabled = True
         model = build_smplx_body_model(SmplxFitConfig(model_dir=a.model_dir), 1, "cpu")
-        rest = __review_tpose(model)
+        rest = review_tpose(model)
         node = create_skeleton_sequence_node(rest, radius=0.025)
         node.color = (0.05, 0.15, 0.65, 1.0)
         scene.add(node)
@@ -162,7 +162,7 @@ def __review(a: argparse.Namespace) -> None:
             camera.update_matrices(800, 480)
             frames = []
             for frame in REVIEW_FRAMES:
-                image = __review_frame(renderer, case, frame)
+                image = review_frame(renderer, case, frame)
                 frames.append(image.convert("P", palette=Image.Palette.ADAPTIVE, colors=64))
             gif = a.review_out / f"{case['case']}.gif"
             frames[0].save(
@@ -217,7 +217,7 @@ def __review(a: argparse.Namespace) -> None:
 
 def run(a: argparse.Namespace) -> None:
     if a.review is not None:
-        __review(a)
+        render_review(a)
         return
     app = ApplicationBootstrap.from_config(a.config)
     cfg = app.config

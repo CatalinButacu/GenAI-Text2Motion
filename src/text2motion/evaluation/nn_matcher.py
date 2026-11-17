@@ -148,7 +148,7 @@ class GuoWordPosVectorizer:
             word2idx = pickle.load(index_file)
         self.word2vec = {w: vectors[word2idx[w]] for w in words}
 
-    def __pos_one_hot(self, pos):
+    def pos_one_hot(self, pos):
         pos_vec = np.zeros(len(_POS_INDEX))
         if pos in _POS_INDEX:
             pos_vec[_POS_INDEX[pos]] = 1
@@ -168,13 +168,10 @@ class GuoWordPosVectorizer:
                 if word in values:
                     vip_pos = key
                     break
-            if vip_pos is not None:
-                pos_vec = self.__pos_one_hot(vip_pos)
-            else:
-                pos_vec = self.__pos_one_hot(pos)
+            pos_vec = self.pos_one_hot(vip_pos if vip_pos is not None else pos)
         else:
             word_vec = self.word2vec["unk"]
-            pos_vec = self.__pos_one_hot("OTHER")
+            pos_vec = self.pos_one_hot("OTHER")
         return word_vec, pos_vec
 
 
@@ -340,16 +337,16 @@ def load_frozen_guo_embedding_encoders(
     ckpt = torch.load(Path(finest_tar), map_location="cpu", weights_only=False)
 
     motion = GuoMotionEmbeddingEncoder()
-    __load_exact(motion.movement, ckpt["movement_encoder"], "movement_encoder")
-    __load_exact(motion.encoder, ckpt["motion_encoder"], "motion_encoder")
+    load_exact(motion.movement, ckpt["movement_encoder"], "movement_encoder")
+    load_exact(motion.encoder, ckpt["motion_encoder"], "motion_encoder")
 
     text = GuoTextEmbeddingEncoder()
-    __load_exact(text, ckpt["text_encoder"], "text_encoder")
+    load_exact(text, ckpt["text_encoder"], "text_encoder")
 
     return motion.to(device).eval(), text.to(device).eval()
 
 
-def __load_exact(module: nn.Module, state: dict, name: str) -> None:
+def load_exact(module: nn.Module, state: dict, name: str) -> None:
     missing, unexpected = module.load_state_dict(state, strict=False)
 
     if missing:

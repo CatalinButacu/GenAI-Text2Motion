@@ -69,7 +69,7 @@ SWITCH_CONTEXTS = (16, 8, 0)
 COUNTERFACTUAL_SCENARIOS = ("A_to_A", "A_to_B", "B_to_A")
 
 
-def __scenario_selection(selection: list[ProbePrompt], scenario: str) -> list[ProbePrompt]:
+def scenario_selection(selection: list[ProbePrompt], scenario: str) -> list[ProbePrompt]:
     if scenario not in COUNTERFACTUAL_SCENARIOS or len(selection) != 2 * R_PRECISION_POOL:
         raise ValueError("counterfactual selection requires one original32-pair cohort")
     left, right = selection[:R_PRECISION_POOL], selection[R_PRECISION_POOL:]
@@ -80,7 +80,7 @@ def __scenario_selection(selection: list[ProbePrompt], scenario: str) -> list[Pr
     return list(selection)
 
 
-def __review_selection(rows: list[dict]) -> list[dict]:
+def review_selection(rows: list[dict]) -> list[dict]:
     rng = np.random.default_rng(2026)
     chosen = {}
     for offset in (0, 64):
@@ -104,7 +104,7 @@ def __review_selection(rows: list[dict]) -> list[dict]:
     return list(chosen.values())
 
 
-def __review_distributions(rows: list[dict]) -> dict:
+def review_distributions(rows: list[dict]) -> dict:
     distributions = {}
     for backbone in ("mamba", "transformer"):
         distributions[backbone] = {}
@@ -125,13 +125,13 @@ def __review_distributions(rows: list[dict]) -> dict:
                     statistics[metric] = {
                         "valid_pairs": len(values),
                         "quantiles": np.quantile(values, (0, 0.25, 0.5, 0.75, 0.9, 1)).tolist(),
-                        "paired_mean": __paired_change(np.stack((np.zeros_like(values), values))),
+                        "paired_mean": paired_change(np.stack((np.zeros_like(values), values))),
                     }
             distributions[backbone][str(offset)] = statistics
     return distributions
 
 
-def __review_audit(source: Path, out_path: Path, summary_csv: Path) -> None:
+def review_audit(source: Path, out_path: Path, summary_csv: Path) -> None:
     started = time.perf_counter()
     folder = out_path.with_suffix("")
     if any(p.exists() for p in (out_path, folder, summary_csv)):
@@ -186,7 +186,7 @@ def __review_audit(source: Path, out_path: Path, summary_csv: Path) -> None:
                 rows.append(row)
     if len(rows) != 128:
         raise ValueError("review audit requires both32-pair cohorts on both twins")
-    selected = __review_selection(rows)
+    selected = review_selection(rows)
     rng = np.random.default_rng(2026)
     manifest, mapping, distributions = [], [], {}
     for number, selected_case in enumerate(selected, 1):
@@ -217,7 +217,7 @@ def __review_audit(source: Path, out_path: Path, summary_csv: Path) -> None:
             }
         )
         mapping.append({"case": case_id, "A": order[0], "B": order[1]})
-    distributions = __review_distributions(rows)
+    distributions = review_distributions(rows)
     result = {
         "source": str(source),
         "source_sha256": sha256_file(source),
@@ -240,7 +240,7 @@ def __review_audit(source: Path, out_path: Path, summary_csv: Path) -> None:
     logger.info("wrote128-pair diagnostic audit and%d blinded review cases", len(manifest))
 
 
-def __raw_motion(resources, clip_id: str) -> np.ndarray:
+def raw_motion(resources, clip_id: str) -> np.ndarray:
     path = resources.motion_dataset_dir / FEATURES_DIR / f"{clip_id}.npy"
     features = np.load(path, mmap_mode="r", allow_pickle=False)
     if (
@@ -277,7 +277,7 @@ def test_prompts(resources, count: int, split: Split = Split.TEST) -> list[tuple
     raise ValueError(f"only {len(prompts)} captioned {split.value} clips found, {count} requested")
 
 
-def __family_prompts(
+def family_prompts(
     resources, count: int, split: Split, index: Path, offset: int, min_frames: int = 0
 ) -> list[ProbePrompt]:
     families: dict[str, str] = {}
@@ -300,7 +300,7 @@ def __family_prompts(
         family = families[clip_id]
         if family in used_sources or family in training_sources:
             continue
-        if min_frames and len(__raw_motion(resources, clip_id)) < min_frames:
+        if min_frames and len(raw_motion(resources, clip_id)) < min_frames:
             logger.info("%s: skipped, shorter than %s reference frames", clip_id, min_frames)
             continue
         annotations = parse_text_file(resources.annotation_dir / f"{clip_id}.txt")
@@ -324,7 +324,7 @@ def __family_prompts(
     )
 
 
-def __bridge(cut: np.ndarray, boundary: int, frames: int, method: str) -> np.ndarray:
+def bridge(cut: np.ndarray, boundary: int, frames: int, method: str) -> np.ndarray:
     jerk_profile(cut)
     if method not in ("cut", "linear", "minimum_jerk"):
         raise ValueError(f"unknown positional bridge: {method}")
@@ -342,7 +342,7 @@ def __bridge(cut: np.ndarray, boundary: int, frames: int, method: str) -> np.nda
 
 
 @torch.no_grad()
-def __transition_generate(
+def transition_generate(
     pipeline,
     resources,
     pairs,
@@ -433,7 +433,7 @@ def __transition_generate(
     return features, time.perf_counter() - started
 
 
-def __transition_scores(
+def transition_scores(
     profiles: dict[str, np.ndarray], reference: np.ndarray
 ) -> tuple[dict, dict]:
     if (
@@ -491,7 +491,7 @@ def __transition_scores(
     return summary, contrasts
 
 
-def __transition_retrieval(features, evaluator, pairs, frames: int) -> dict:
+def transition_retrieval(features, evaluator, pairs, frames: int) -> dict:
     resources = evaluator.resources
     result = {}
     for action in (0, 1):
@@ -514,7 +514,7 @@ def __transition_retrieval(features, evaluator, pairs, frames: int) -> dict:
     return result
 
 
-def __switch_metrics(text: np.ndarray, motion: np.ndarray) -> dict[str, np.ndarray]:
+def switch_metrics(text: np.ndarray, motion: np.ndarray) -> dict[str, np.ndarray]:
     if (
         text.ndim != 3
         or text.shape[:2] != (2, R_PRECISION_POOL)
@@ -540,7 +540,7 @@ def __switch_metrics(text: np.ndarray, motion: np.ndarray) -> dict[str, np.ndarr
     }
 
 
-def __switch_sources(paths: list[Path]) -> list[dict]:
+def switch_sources(paths: list[Path]) -> list[dict]:
     reports = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
     if [report["backbone"] for report in reports] != ["mamba", "transformer"]:
         raise ValueError("pass Mamba then Transformer R6 reports")
@@ -574,23 +574,23 @@ def __switch_sources(paths: list[Path]) -> list[dict]:
     return reports
 
 
-def __switch_contrasts(measured: dict) -> dict:
+def switch_contrasts(measured: dict) -> dict:
     contrasts = {}
     for backbone, windows in measured.items():
         for window, methods in windows.items():
             contrasts[f"{backbone}/{window}/generator_minus_cut"] = {
-                metric: __paired_change(np.stack((methods["cut"][metric], values)))
+                metric: paired_change(np.stack((methods["cut"][metric], values)))
                 for metric, values in methods["generator"].items()
             }
         for method, scores in windows["late"].items():
             contrasts[f"{backbone}/{method}/late_minus_early"] = {
-                metric: __paired_change(np.stack((windows["early"][method][metric], values)))
+                metric: paired_change(np.stack((windows["early"][method][metric], values)))
                 for metric, values in scores.items()
             }
     return contrasts
 
 
-def __score_switch_archive(source: Path, report: dict, evaluator, text: np.ndarray):
+def score_switch_archive(source: Path, report: dict, evaluator, text: np.ndarray):
     measured, embeddings, hashes = {}, [], {}
     features = {}
     for method in ("cut", "generator"):
@@ -607,7 +607,7 @@ def __score_switch_archive(source: Path, report: dict, evaluator, text: np.ndarr
         measured[window], window_embeddings = {}, []
         for method, clips in features.items():
             motion = evaluator.compute_motion_embeddings([clip[start:stop] for clip in clips])
-            scores = __switch_metrics(text, motion)
+            scores = switch_metrics(text, motion)
             if window == "full":
                 previous = report["retrieval"]["2"][method]
                 if not np.array_equal(
@@ -628,11 +628,11 @@ def __score_switch_archive(source: Path, report: dict, evaluator, text: np.ndarr
     return measured, np.asarray(embeddings), hashes
 
 
-def __caption_switch(paths: list[Path], out_path: Path, summary_csv: Path, index: Path) -> None:
+def caption_switch(paths: list[Path], out_path: Path, summary_csv: Path, index: Path) -> None:
     folder = out_path.with_suffix("")
     if any(path.exists() for path in (out_path, summary_csv, folder)):
         raise FileExistsError("caption-switch outputs already exist; choose new paths")
-    reports = __switch_sources(paths)
+    reports = switch_sources(paths)
     app = ApplicationBootstrap.from_config(reports[0]["config"], seed=2026)
     if app.config.precision.value != reports[0]["precision"]:
         raise ValueError("scoring precision differs from R6")
@@ -641,7 +641,7 @@ def __caption_switch(paths: list[Path], out_path: Path, summary_csv: Path, index
         raise ValueError("caption-switch scoring requires the frozen Guo matcher")
     evaluator = app.create_humanml3d_generation_evaluator()
     resources = evaluator.resources
-    selection = __family_prompts(resources, R_PRECISION_POOL * 2, Split.VALIDATION, index, 0, 60)
+    selection = family_prompts(resources, R_PRECISION_POOL * 2, Split.VALIDATION, index, 0, 60)
     expected = [
         {"left": asdict(left), "right": asdict(right)}
         for left, right in zip(
@@ -666,7 +666,7 @@ def __caption_switch(paths: list[Path], out_path: Path, summary_csv: Path, index
     measured, embeddings, hashes, rows = {}, [], {}, []
     for source, report in zip(paths, reports, strict=True):
         backbone = report["backbone"]
-        scores, motion, hashes[backbone] = __score_switch_archive(source, report, evaluator, text)
+        scores, motion, hashes[backbone] = score_switch_archive(source, report, evaluator, text)
         measured[backbone] = scores
         embeddings.append(motion)
         for window, start, stop in SWITCH_WINDOWS:
@@ -686,7 +686,7 @@ def __caption_switch(paths: list[Path], out_path: Path, summary_csv: Path, index
                     "config_sha256": report["config_sha256"],
                 }
                 for metric, values in metrics.items():
-                    estimate = __paired_change(np.stack((np.zeros_like(values), values)))
+                    estimate = paired_change(np.stack((np.zeros_like(values), values)))
                     row.update(
                         {
                             metric: float(values.mean()),
@@ -727,7 +727,7 @@ def __caption_switch(paths: list[Path], out_path: Path, summary_csv: Path, index
             "text": ["old", "new"],
         },
         "summary": rows,
-        "contrasts": __switch_contrasts(measured),
+        "contrasts": switch_contrasts(measured),
         "per_pair": {
             b: {
                 w: {m: {k: v.tolist() for k, v in scores.items()} for m, scores in methods.items()}
@@ -752,14 +752,14 @@ def __caption_switch(paths: list[Path], out_path: Path, summary_csv: Path, index
     logger.info("wrote caption-switch evidence %s and %s", out_path, summary_csv)
 
 
-def __transition_screen(args, app, pipeline, evaluator, selection) -> dict:
+def transition_screen(args, app, pipeline, evaluator, selection) -> dict:
     resources = evaluator.resources
     pairs = list(zip(selection[: args.prompts], selection[args.prompts :], strict=True))
     frames = args.segment_tokens * pipeline.downsample
     half = args.boundary_frames // 2
     if frames <= half:
         raise ValueError("the boundary window must leave reference frames outside each action")
-    features, seconds = __transition_generate(
+    features, seconds = transition_generate(
         pipeline,
         resources,
         pairs,
@@ -775,7 +775,7 @@ def __transition_screen(args, app, pipeline, evaluator, selection) -> dict:
     for pair in pairs:
         profiles = []
         for sample in pair:
-            joints = recover_skeleton(__raw_motion(resources, sample.clip_id).copy())
+            joints = recover_skeleton(raw_motion(resources, sample.clip_id).copy())
             center = len(joints) // 2
             profiles.append(jerk_profile(joints[center - half : center + half]))
         reference.append(profiles)
@@ -789,7 +789,7 @@ def __transition_screen(args, app, pipeline, evaluator, selection) -> dict:
         joints = (
             raw_joints["generator"]
             if method == "generator"
-            else [__bridge(clip, frames, args.blend_frames, method) for clip in raw_joints["cut"]]
+            else [bridge(clip, frames, args.blend_frames, method) for clip in raw_joints["cut"]]
         )
         path = folder / f"{method}_joints.npy"
         atomic_numpy_save(np.stack(joints), path)
@@ -801,7 +801,7 @@ def __transition_screen(args, app, pipeline, evaluator, selection) -> dict:
     for method, clips in features.items():
         atomic_numpy_save(np.stack(clips), folder / f"{method}_features.npy")
     atomic_numpy_save(reference, folder / "reference_jerk.npy")
-    summary, contrasts = __transition_scores(profiles, reference)
+    summary, contrasts = transition_scores(profiles, reference)
     for method, values in diagnostics.items():
         summary[method]["diagnostics"] = {}
         for key in values[0]:
@@ -848,7 +848,7 @@ def __transition_screen(args, app, pipeline, evaluator, selection) -> dict:
         "jerk_profiles": {method: trace.tolist() for method, trace in profiles.items()},
         "per_pair_diagnostics": diagnostics,
         "motion_files": motion_files,
-        "retrieval": __transition_retrieval(features, evaluator, pairs, frames),
+        "retrieval": transition_retrieval(features, evaluator, pairs, frames),
         "generation_decode_seconds": seconds,
         "limitations": "Offline noncausal decode, not live latency. Positional bridges have "
         "future endpoint access and no IK. Generator is paired by captions, not endpoint poses. "
@@ -863,7 +863,7 @@ def __transition_screen(args, app, pipeline, evaluator, selection) -> dict:
     return report
 
 
-def __history_contrasts(cases: dict) -> dict:
+def history_contrasts(cases: dict) -> dict:
     result = {}
     for backbone, cohorts in cases.items():
         result[backbone] = {}
@@ -878,7 +878,7 @@ def __history_contrasts(cases: dict) -> dict:
                 )
                 for keep, case in variants.items()
             }
-            _, physical = __transition_scores(profiles, reference)
+            _, physical = transition_scores(profiles, reference)
             comparisons = {}
             for keep in variants:
                 if keep == "16":
@@ -886,7 +886,7 @@ def __history_contrasts(cases: dict) -> dict:
                 baseline, candidate = variants["16"], variants[keep]
                 semantic = {
                     window: {
-                        metric: __paired_change(
+                        metric: paired_change(
                             np.stack(
                                 (
                                     baseline["semantic"][window]["generator"][metric],
@@ -908,7 +908,7 @@ def __history_contrasts(cases: dict) -> dict:
                     if left["foot_skate_m_per_s"] is not None
                     and right["foot_skate_m_per_s"] is not None
                 ]
-                skate = __paired_change(np.asarray(pairs).T) if pairs else None
+                skate = paired_change(np.asarray(pairs).T) if pairs else None
                 if not pairs:
                     logger.warning(
                         "%s/%s/%s: no jointly contacting pairs; skate comparison unavailable",
@@ -926,7 +926,7 @@ def __history_contrasts(cases: dict) -> dict:
     return result
 
 
-def __history_case(
+def history_case(
     source: dict,
     offset: int,
     keep: int,
@@ -962,7 +962,7 @@ def __history_case(
             )
         ),
     )
-    report = __transition_screen(args, app, pipeline, evaluator, selection)
+    report = transition_screen(args, app, pipeline, evaluator, selection)
     if sampling_selection is not None:
         report["scenario"] = scenario
         report["sampling_evidence"] = {
@@ -996,7 +996,7 @@ def __history_case(
             for side in ("left", "right")
         ]
     )
-    semantic, embeddings, hashes = __score_switch_archive(path, report, evaluator, text)
+    semantic, embeddings, hashes = score_switch_archive(path, report, evaluator, text)
     atomic_numpy_save(text, path.with_suffix("") / "text_embeddings.npy")
     atomic_numpy_save(embeddings, path.with_suffix("") / "semantic_embeddings.npy")
     return {
@@ -1010,7 +1010,7 @@ def __history_case(
     }
 
 
-def __counterfactual_interactions(cases: dict) -> dict:
+def counterfactual_interactions(cases: dict) -> dict:
     result = {}
     for backbone, scenarios in cases.items():
         text = np.load(
@@ -1028,18 +1028,18 @@ def __counterfactual_interactions(cases: dict) -> dict:
                         / "semantic_embeddings.npy",
                         allow_pickle=False,
                     )
-                    scores.append(__switch_metrics(text, embeddings[index, 1]))
+                    scores.append(switch_metrics(text, embeddings[index, 1]))
                 deltas.append(
                     {metric: scores[1][metric] - values for metric, values in scores[0].items()}
                 )
             result[backbone][window] = {
-                metric: __paired_change(np.stack((deltas[0][metric], values)))
+                metric: paired_change(np.stack((deltas[0][metric], values)))
                 for metric, values in deltas[1].items()
             }
     return result
 
 
-def __history_screen(
+def history_screen(
     paths: list[Path],
     out_path: Path,
     summary_csv: Path,
@@ -1050,11 +1050,11 @@ def __history_screen(
     folder = out_path.with_suffix("")
     if any(path.exists() for path in (folder, out_path, summary_csv)):
         raise FileExistsError("history screen requires new output paths")
-    sources = __switch_sources(paths)
+    sources = switch_sources(paths)
     app = ApplicationBootstrap.from_config(sources[0]["config"], seed=2026)
     tokenizer = app.load_tokenizer(sources[0]["tokenizer_checkpoint"])
     evaluator = app.create_humanml3d_generation_evaluator()
-    selection = __family_prompts(
+    selection = family_prompts(
         evaluator.resources,
         R_PRECISION_POOL * (2 if counterfactual else 4),
         Split.VALIDATION,
@@ -1064,7 +1064,7 @@ def __history_screen(
     )
     groups = (
         [
-            (scenario, 0, __scenario_selection(selection, scenario))
+            (scenario, 0, scenario_selection(selection, scenario))
             for scenario in COUNTERFACTUAL_SCENARIOS
         ]
         if counterfactual
@@ -1089,7 +1089,7 @@ def __history_screen(
             for keep in contexts:
                 label = group if counterfactual else f"offset{offset}"
                 path = folder / f"{backbone}_{label}_keep{keep}.json"
-                case = __history_case(
+                case = history_case(
                     source,
                     offset,
                     keep,
@@ -1141,7 +1141,7 @@ def __history_screen(
         "switch_contexts": list(contexts),
         "cases": cases,
         "summary": rows,
-        "comparisons_to_keep16": __history_contrasts(cases),
+        "comparisons_to_keep16": history_contrasts(cases),
         "wall_seconds": time.perf_counter() - started,
         "limitations": "Only token48 changes retained history; discarded tokens never return. Other resets use capacity16. "
         "Offline noncausal tokenizer decode; not live latency. Recording-disjoint validation selection absent TRAIN, "
@@ -1156,7 +1156,7 @@ def __history_screen(
                 selection[:R_PRECISION_POOL], selection[R_PRECISION_POOL:], strict=True
             )
         ]
-        report["switch_specific_interactions"] = __counterfactual_interactions(cases)
+        report["switch_specific_interactions"] = counterfactual_interactions(cases)
         report["limitations"] += (
             " Original A/B sampling identities fix all uniforms across scenarios/policies/twins. "
             "A-to-A has32 distinct recordings, other scenarios64. "
@@ -1173,7 +1173,7 @@ def __history_screen(
     logger.info("history screen complete: %.1fs for12 cells", report["wall_seconds"])
 
 
-def __generate(
+def generate(
     pipeline,
     resources,
     captions: list[str],
@@ -1215,7 +1215,7 @@ def __generate(
     return features
 
 
-def __score(
+def score(
     features: list[np.ndarray],
     evaluator,
     text_embeddings: np.ndarray,
@@ -1267,7 +1267,7 @@ def __score(
     return rows, measured
 
 
-def __paired_change(values: np.ndarray) -> dict[str, float]:
+def paired_change(values: np.ndarray) -> dict[str, float]:
     if values.ndim != 2 or values.shape[0] < 2 or values.shape[1] < 1:
         raise ValueError("paired changes need at least two windows and one prompt")
     if not np.isfinite(values).all():
@@ -1292,7 +1292,7 @@ def policy_fits(policy: MemoryPolicy, positions: int | None, prefix: int, tokens
     return policy.anchor_context + policy.anchor_every <= available
 
 
-def __validate_args(args: argparse.Namespace) -> None:
+def validate_args(args: argparse.Namespace) -> None:
     if args.backbone is None or args.ckpt is None:
         raise ValueError("--backbone and --ckpt are required for generation")
     if args.prompts < R_PRECISION_POOL or args.prompts % R_PRECISION_POOL:
@@ -1312,10 +1312,10 @@ def __validate_args(args: argparse.Namespace) -> None:
     if args.save_motion and (args.out_path is None or args.out_path.with_suffix("").exists()):
         raise FileExistsError("--save_motion requires a new explicit output path")
     if args.transition_screen:
-        __validate_transition_args(args)
+        validate_transition_args(args)
 
 
-def __validate_transition_args(args: argparse.Namespace) -> None:
+def validate_transition_args(args: argparse.Namespace) -> None:
     if args.split != Split.VALIDATION or args.family_index is None or not args.save_motion:
         raise ValueError("transition screen requires --split val, --family_index and --save_motion")
     if args.segments != 2 or args.segment_tokens % 8:
@@ -1331,7 +1331,7 @@ def __validate_transition_args(args: argparse.Namespace) -> None:
         raise ValueError("transition screen fixes reset8/keep16; omit --policies")
 
 
-def __policy_contrasts(left: dict, right: dict) -> dict:
+def policy_contrasts(left: dict, right: dict) -> dict:
     contrasts = (
         ("mamba_restart_minus_full_late", left, "reset_8_keep_16", left, "full_state"),
         ("mamba_minus_transformer_restart_late", left, "reset_8_keep_16", right, "reset_8_keep_16"),
@@ -1351,13 +1351,13 @@ def __policy_contrasts(left: dict, right: dict) -> dict:
                 raise ValueError(f"missing baseline per-prompt metric {metric}")
             new = np.asarray(candidate["per_prompt"][candidate_policy][metric])[-1]
             old = np.asarray(baseline["per_prompt"][baseline_policy][metric])[-1]
-            comparisons.setdefault(metric, {})[name] = __paired_change(np.stack([old, new]))
+            comparisons.setdefault(metric, {})[name] = paired_change(np.stack([old, new]))
     if not comparisons:
         raise ValueError("no supported paired contrasts in reports")
     return comparisons
 
 
-def __compare(paths: list[Path], out_path: Path, summary_csv: Path) -> None:
+def compare(paths: list[Path], out_path: Path, summary_csv: Path) -> None:
     if out_path.exists() or summary_csv.exists():
         raise FileExistsError("comparison outputs already exist; choose new paths")
     left, right = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
@@ -1397,7 +1397,7 @@ def __compare(paths: list[Path], out_path: Path, summary_csv: Path) -> None:
             evidence.extend(
                 {"backbone": report["backbone"], "policy": policy, **row} for row in rows
             )
-    comparisons = __policy_contrasts(left, right)
+    comparisons = policy_contrasts(left, right)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
         json.dumps(
@@ -1421,19 +1421,19 @@ def __compare(paths: list[Path], out_path: Path, summary_csv: Path) -> None:
     logger.info(f"wrote {out_path} and {summary_csv}")
 
 
-def __compare_mode(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+def compare_mode(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     if args.out_path is None or args.summary_csv is None:
         parser.error("--compare requires --out_path and --summary_csv")
     if len(args.compare) != (1 if args.review_audit else 2):
         parser.error("--compare needs one report for review audit, otherwise two reports")
     logging.basicConfig(level=logging.INFO)
     if args.review_audit:
-        __review_audit(args.compare[0], args.out_path, args.summary_csv)
+        review_audit(args.compare[0], args.out_path, args.summary_csv)
     elif args.caption_switch or args.history_screen or args.counterfactual:
         if args.family_index is None:
             parser.error("archived transition screens require --family_index")
         if args.counterfactual:
-            __history_screen(
+            history_screen(
                 args.compare,
                 args.out_path,
                 args.summary_csv,
@@ -1441,10 +1441,10 @@ def __compare_mode(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
                 counterfactual=True,
             )
         else:
-            comparison = __history_screen if args.history_screen else __caption_switch
+            comparison = history_screen if args.history_screen else caption_switch
             comparison(args.compare, args.out_path, args.summary_csv, args.family_index)
     else:
-        __compare(args.compare, args.out_path, args.summary_csv)
+        compare(args.compare, args.out_path, args.summary_csv)
 
 
 def main() -> None:
@@ -1484,11 +1484,11 @@ def main() -> None:
     parser.add_argument("--boundary_frames", type=int, default=60)
     args = parser.parse_args()
     if args.compare is not None:
-        __compare_mode(args, parser)
+        compare_mode(args, parser)
         return
     if args.caption_switch or args.history_screen or args.review_audit or args.counterfactual:
         parser.error("archived transition screens require --compare")
-    __validate_args(args)
+    validate_args(args)
 
     app = ApplicationBootstrap.from_config(args.config, seed=2026)
     tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
@@ -1501,7 +1501,7 @@ def main() -> None:
 
     selection = []
     if args.family_index is not None:
-        selection = __family_prompts(
+        selection = family_prompts(
             resources,
             args.prompts * (2 if args.transition_screen else 1),
             args.split,
@@ -1513,7 +1513,7 @@ def main() -> None:
     else:
         prompts = test_prompts(resources, args.prompts, args.split)
     if args.transition_screen:
-        __transition_screen(args, app, pipeline, evaluator, selection)
+        transition_screen(args, app, pipeline, evaluator, selection)
         return
     captions = [caption for caption, _ in prompts]
     text_inputs = [resources.build_guo_text_inputs(tokens) for _, tokens in prompts]
@@ -1549,11 +1549,11 @@ def main() -> None:
                 )
                 continue
             started = time.perf_counter()
-            features = __generate(
+            features = generate(
                 pipeline, resources, captions, tokens_total, args.batch_size, policy, sampling
             )
             costs[policy.name] = time.perf_counter() - started
-            rows, measured = __score(
+            rows, measured = score(
                 features,
                 evaluator,
                 text_embeddings,
@@ -1566,8 +1566,8 @@ def main() -> None:
             report[policy.name] = rows
             per_prompt[policy.name] = measured
             changes[policy.name] = {
-                "text_distance": __paired_change(np.asarray(measured["text_distance"])),
-                "r_top1_fixed_pool": __paired_change(np.asarray(measured["r_top1"])),
+                "text_distance": paired_change(np.asarray(measured["text_distance"])),
+                "r_top1_fixed_pool": paired_change(np.asarray(measured["r_top1"])),
             }
             if args.save_motion:
                 motion_path = args.out_path.with_suffix("") / f"{policy.name}.npy"

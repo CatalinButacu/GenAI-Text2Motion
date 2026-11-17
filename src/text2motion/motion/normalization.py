@@ -80,21 +80,21 @@ class MotionScaler:
     def normalize(self, feats):
         self.check_features(feats)
         if isinstance(feats, torch.Tensor):
-            return (feats - self.__as_tensor(self.mean, feats)) / self.__as_tensor(self.std, feats)
+            return (feats - self.as_tensor(self.mean, feats)) / self.as_tensor(self.std, feats)
         return (feats - self.mean) / self.std
 
     def denormalize(self, feats):
         self.check_features(feats)
         if isinstance(feats, torch.Tensor):
-            return feats * self.__as_tensor(self.std, feats) + self.__as_tensor(self.mean, feats)
+            return feats * self.as_tensor(self.std, feats) + self.as_tensor(self.mean, feats)
         return feats * self.std + self.mean
 
     @staticmethod
-    def __as_tensor(array: np.ndarray, like: torch.Tensor) -> torch.Tensor:
+    def as_tensor(array: np.ndarray, like: torch.Tensor) -> torch.Tensor:
         return torch.as_tensor(array, device=like.device, dtype=like.dtype)
 
 
-def __require_clip_files(vec_dir: Path, unique: list[str]) -> None:
+def require_clip_files(vec_dir: Path, unique: list[str]) -> None:
     missing = [name for name in unique if not (vec_dir / f"{name}.npy").is_file()]
     if missing:
         raise FileNotFoundError(
@@ -102,20 +102,20 @@ def __require_clip_files(vec_dir: Path, unique: list[str]) -> None:
         )
 
 
-def __checked_clip(vec_dir: Path, name: str) -> np.ndarray:
+def checked_clip(vec_dir: Path, name: str) -> np.ndarray:
     clip = np.load(vec_dir / f"{name}.npy")
     if clip.ndim != 2 or clip.shape[0] == 0 or not np.isfinite(clip).all():
         raise ValueError(f"train clip {name} is empty, not 2-D, or holds NaN or Inf")
     return clip
 
 
-def __streamed_clips(vec_dir: Path, unique: list[str]) -> Iterator[np.ndarray]:
-    return (__checked_clip(vec_dir, name) for name in unique)
+def streamed_clips(vec_dir: Path, unique: list[str]) -> Iterator[np.ndarray]:
+    return (checked_clip(vec_dir, name) for name in unique)
 
 
 def load_clips(vec_dir: Path, names: list[str]) -> list[np.ndarray]:
     unique = sorted(set(names))
-    __require_clip_files(vec_dir, unique)
+    require_clip_files(vec_dir, unique)
     clips = [np.load(vec_dir / f"{name}.npy") for name in unique]
     malformed = [
         name
@@ -182,8 +182,8 @@ def fit_train_stats(
     vec_dir: Path, train_names: list[str], out_dir: Path, joint_count: int
 ) -> tuple[np.ndarray, np.ndarray]:
     unique = sorted(set(train_names))
-    __require_clip_files(vec_dir, unique)
-    mean, std = normalization_stats(__streamed_clips(vec_dir, unique), joint_count)
+    require_clip_files(vec_dir, unique)
+    mean, std = normalization_stats(streamed_clips(vec_dir, unique), joint_count)
     frame_counts = [np.load(vec_dir / f"{name}.npy", mmap_mode="r").shape[0] for name in unique]
 
     mean_path = out_dir / MEAN_FILE

@@ -73,11 +73,11 @@ class CaptionedMotionDataset(Dataset):
         self._text_dir = Path(texts_dir) if texts_dir is not None else root / TEXTS_DIR
         self.scaler = MotionScaler.load(root, dim=DIM)
 
-        self._ids, self.dropped_clip_ids = self.__select_usable_clip_ids(base_clip_ids(root, split))
+        self._ids, self.dropped_clip_ids = self.select_usable_clip_ids(base_clip_ids(root, split))
         log_dropped_clips(self.dropped_clip_ids, f"shorter than {self._min_len} frames")
         if not self._ids:
             raise RuntimeError(f"no usable clips for split {split!r} under {self._vec_dir}")
-        uncaptioned = self.__clips_without_usable_caption()
+        uncaptioned = self.clips_without_usable_caption()
         if uncaptioned:
             raise ValueError(
                 f"{len(uncaptioned)} clips of split {split!r} have no caption that covers "
@@ -85,7 +85,7 @@ class CaptionedMotionDataset(Dataset):
             )
         self._verb_clip_counts: dict[str, int] | None = None
         if data.caption_weighting == CaptionWeighting.RARE_VERB and self._train:
-            self._verb_clip_counts = self.__verb_clip_counts(
+            self._verb_clip_counts = self.count_verb_clips(
                 RARE_VERB_MIN_CLIPS, "rare_verb caption"
             )
         self._verb_group_sizes: dict[str, int] | None = None
@@ -93,59 +93,59 @@ class CaptionedMotionDataset(Dataset):
         if data.clip_weighting == ClipWeighting.MOTION_CLASS and self._train:
             if data.motion_classes is None:
                 raise ValueError("motion_class clip weighting needs the motion_classes verb map")
-            clip_classes = self.__clip_classes(read_motion_classes(data.motion_classes))
-            self._clip_weights = self.__motion_class_weights(clip_classes)
+            clip_classes = self.clip_classes(read_motion_classes(data.motion_classes))
+            self._clip_weights = self.motion_class_weights(clip_classes)
         if data.clip_weighting == ClipWeighting.UNIFORM_REPLACEMENT and self._train:
             self._clip_weights = np.ones(len(self._ids), dtype=np.float64)
         if data.clip_weighting == ClipWeighting.VERB and self._train:
-            balance_counts = self.__verb_clip_counts(VERB_BALANCE_MIN_CLIPS, "verb clip")
+            balance_counts = self.count_verb_clips(VERB_BALANCE_MIN_CLIPS, "verb clip")
             self._verb_clip_counts = balance_counts
-            caption_groups = self.__caption_groups(balance_counts)
-            self._verb_group_sizes = self.__verb_group_sizes(caption_groups)
-            self._clip_weights = self.__verb_group_weights(caption_groups, self._verb_group_sizes)
+            caption_groups = self.caption_groups(balance_counts)
+            self._verb_group_sizes = self.verb_group_sizes(caption_groups)
+            self._clip_weights = self.verb_group_weights(caption_groups, self._verb_group_sizes)
 
-    def __clip_verbs(self) -> list[frozenset[str]]:
+    def clip_verbs(self) -> list[frozenset[str]]:
         found = []
         for clip_id in self._ids:
             annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
             found.append(frozenset().union(*(caption_verbs(a) for a in annotations)))
         return found
 
-    def __clip_classes(self, classes: dict[str, int]) -> list[frozenset[int]]:
+    def clip_classes(self, classes: dict[str, int]) -> list[frozenset[int]]:
         found = []
-        for verbs in self.__clip_verbs():
+        for verbs in self.clip_verbs():
             labels = frozenset(classes[verb] for verb in verbs if verb in classes)
             found.append(labels or frozenset({NO_MOTION_CLASS}))
         return found
 
     @staticmethod
-    def __rarest_verb(annotation: TextAnnotation, counts: dict[str, int]) -> str:
+    def rarest_verb(annotation: TextAnnotation, counts: dict[str, int]) -> str:
         kept = [verb for verb in caption_verbs(annotation) if verb in counts]
         return min(kept, key=lambda verb: (counts[verb], verb), default=NO_VERB_GROUP)
 
-    def __caption_groups(self, counts: dict[str, int]) -> list[list[str]]:
+    def caption_groups(self, counts: dict[str, int]) -> list[list[str]]:
         lengths = clip_frame_counts(self._vec_dir, self._ids)
         groups = []
         for clip_id in self._ids:
             annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
-            usable = self.__usable_annotations(annotations, lengths[clip_id])
-            groups.append([self.__rarest_verb(annotation, counts) for annotation, _ in usable])
+            usable = self.usable_annotations(annotations, lengths[clip_id])
+            groups.append([self.rarest_verb(annotation, counts) for annotation, _ in usable])
         return groups
 
     @staticmethod
-    def __verb_group_sizes(caption_groups: list[list[str]]) -> dict[str, int]:
+    def verb_group_sizes(caption_groups: list[list[str]]) -> dict[str, int]:
         sizes = Counter(group for groups in caption_groups for group in groups)
         verb_sizes = [size for group, size in sizes.items() if group != NO_VERB_GROUP]
         sizes[NO_VERB_GROUP] = max(verb_sizes)
         return dict(sizes)
 
     @staticmethod
-    def __verb_group_weights(caption_groups: list[list[str]], sizes: dict[str, int]) -> np.ndarray:
+    def verb_group_weights(caption_groups: list[list[str]], sizes: dict[str, int]) -> np.ndarray:
         weights = [sum(1.0 / sizes[group] for group in groups) for groups in caption_groups]
         return np.asarray(weights, dtype=np.float64)
 
     @staticmethod
-    def __motion_class_weights(clip_classes: list[frozenset[int]]) -> np.ndarray:
+    def motion_class_weights(clip_classes: list[frozenset[int]]) -> np.ndarray:
         sizes = Counter(label for labels in clip_classes for label in labels)
         labelled = [size for label, size in sizes.items() if label != NO_MOTION_CLASS]
         if not labelled:
@@ -154,7 +154,7 @@ class CaptionedMotionDataset(Dataset):
         rarest = [min(sizes[label] for label in labels) for labels in clip_classes]
         return np.asarray(rarest, dtype=np.float64) ** -MOTION_CLASS_POWER
 
-    def __verb_clip_counts(self, min_clips: int, weighting: str) -> dict[str, int]:
+    def count_verb_clips(self, min_clips: int, weighting: str) -> dict[str, int]:
         counts: dict[str, int] = {}
         for clip_id in self._ids:
             if clip_id.startswith("M"):
@@ -190,11 +190,11 @@ class CaptionedMotionDataset(Dataset):
     def std(self) -> np.ndarray:
         return self.scaler.std
 
-    def __clip_id_variants(self, name: str) -> list[str]:
+    def clip_id_variants(self, name: str) -> list[str]:
         return [name, f"M{name}"] if self._mirror else [name]
 
-    def __select_usable_clip_ids(self, names: list[str]) -> tuple[list[str], list[str]]:
-        candidates = [clip_id for name in names for clip_id in self.__clip_id_variants(name)]
+    def select_usable_clip_ids(self, names: list[str]) -> tuple[list[str], list[str]]:
+        candidates = [clip_id for name in names for clip_id in self.clip_id_variants(name)]
         lengths = clip_frame_counts(self._vec_dir, candidates)
         check_no_missing_files(
             "feature", [clip_id for clip_id in candidates if clip_id not in lengths]
@@ -234,8 +234,8 @@ class CaptionedMotionDataset(Dataset):
 
         rng = item_rng(self._seed, self._epoch.value, idx)
         annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
-        annotation, feat = self.__select_captioned_segment(annotations, feat, rng)
-        feat = self.normalize(self.__crop_to_max_frames(feat, rng))
+        annotation, feat = self.select_captioned_segment(annotations, feat, rng)
+        feat = self.normalize(self.crop_to_max_frames(feat, rng))
         return MotionClip(
             features=torch.from_numpy(feat),
             frame_count=feat.shape[0],
@@ -244,43 +244,43 @@ class CaptionedMotionDataset(Dataset):
         )
 
     @staticmethod
-    def __annotation_frame_range(annotation: TextAnnotation, total: int) -> tuple[int, int] | None:
+    def annotation_frame_range(annotation: TextAnnotation, total: int) -> tuple[int, int] | None:
         if annotation.start_time == 0.0 and annotation.end_time == 0.0:
             return None
         start = max(int(annotation.start_time * FPS), 0)
         end = min(int(annotation.end_time * FPS), total)
         return start, end
 
-    def __usable_annotations(
+    def usable_annotations(
         self, annotations: list[TextAnnotation], total: int
     ) -> list[tuple[TextAnnotation, tuple[int, int] | None]]:
         usable = []
         for annotation in annotations:
-            segment = self.__annotation_frame_range(annotation, total)
+            segment = self.annotation_frame_range(annotation, total)
             if segment is None or segment[1] - segment[0] >= self._min_len:
                 usable.append((annotation, segment))
         return usable
 
-    def __clips_without_usable_caption(self) -> list[str]:
+    def clips_without_usable_caption(self) -> list[str]:
         lengths = clip_frame_counts(self._vec_dir, self._ids)
         return [
             clip_id
             for clip_id in self._ids
-            if not self.__usable_annotations(
+            if not self.usable_annotations(
                 parse_text_file(self._text_dir / f"{clip_id}.txt"), lengths[clip_id]
             )
         ]
 
-    def __select_captioned_segment(
+    def select_captioned_segment(
         self, annotations: list[TextAnnotation], feat: np.ndarray, rng: np.random.RandomState
     ) -> tuple[TextAnnotation, np.ndarray]:
-        usable = self.__usable_annotations(annotations, feat.shape[0])
+        usable = self.usable_annotations(annotations, feat.shape[0])
         if not usable:
             raise ValueError("no caption of this clip covers a segment of the minimum length")
-        annotation, segment = usable[self.__caption_index([a for a, _ in usable], rng)]
+        annotation, segment = usable[self.caption_index([a for a, _ in usable], rng)]
         return annotation, feat if segment is None else feat[segment[0] : segment[1]]
 
-    def __caption_index(self, annotations: list[TextAnnotation], rng: np.random.RandomState) -> int:
+    def caption_index(self, annotations: list[TextAnnotation], rng: np.random.RandomState) -> int:
         if self._verb_clip_counts is None:
             return rng.randint(len(annotations))
         return int(rng.choice(len(annotations), p=self.caption_weights(annotations)))
@@ -291,7 +291,7 @@ class CaptionedMotionDataset(Dataset):
             return np.full(len(annotations), 1.0 / len(annotations))
         sizes = self._verb_group_sizes
         if sizes is not None:
-            groups = [self.__rarest_verb(annotation, counts) for annotation in annotations]
+            groups = [self.rarest_verb(annotation, counts) for annotation in annotations]
             weights = np.asarray([1.0 / sizes[group] for group in groups], dtype=np.float64)
             return weights / weights.sum()
         common = max(counts.values())
@@ -302,7 +302,7 @@ class CaptionedMotionDataset(Dataset):
         weights = np.asarray(rarest, dtype=np.float64) ** -RARE_VERB_POWER
         return weights / weights.sum()
 
-    def __crop_to_max_frames(self, feat: np.ndarray, rng: np.random.RandomState) -> np.ndarray:
+    def crop_to_max_frames(self, feat: np.ndarray, rng: np.random.RandomState) -> np.ndarray:
         overflow = feat.shape[0] - self._max_len
         if overflow <= 0:
             return feat
@@ -335,7 +335,7 @@ class MotionWindowDataset(Dataset):
         root = Path(root)
         self._vec_dir = root / FEATURES_DIR
         self.scaler = MotionScaler.load(root, dim=DIM)
-        self._ids, self._cache, self.dropped_clip_ids = self.__load_windowable_clips(
+        self._ids, self._cache, self.dropped_clip_ids = self.load_windowable_clips(
             base_clip_ids(root, split)
         )
         log_dropped_clips(self.dropped_clip_ids, f"shorter than the window of {window} frames")
@@ -345,7 +345,7 @@ class MotionWindowDataset(Dataset):
         self._starts = self._overflows // 2
         self._starts_epoch = -1
 
-    def __load_windowable_clips(
+    def load_windowable_clips(
         self, names: list[str]
     ) -> tuple[list[str], list[np.ndarray], list[str]]:
         ids: list[str] = []
@@ -503,7 +503,7 @@ class MotionDataModule:
         dataset = self.captioned_dataset(split)
         shuffled = (split == Split.TRAIN) if shuffle is None else shuffle
         weights = dataset.clip_weights if shuffled else None
-        sampler = None if weights is None else self.__weighted_sampler(weights)
+        sampler = None if weights is None else self.weighted_sampler(weights)
         return DataLoader(
             dataset,
             batch_size=batch_size,
@@ -517,7 +517,7 @@ class MotionDataModule:
             prefetch_factor=2 if num_workers > 0 else None,
         )
 
-    def __weighted_sampler(self, weights: np.ndarray) -> WeightedRandomSampler:
+    def weighted_sampler(self, weights: np.ndarray) -> WeightedRandomSampler:
         return WeightedRandomSampler(
             weights.tolist(),
             num_samples=len(weights),

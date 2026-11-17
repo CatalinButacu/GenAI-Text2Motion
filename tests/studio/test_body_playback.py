@@ -34,7 +34,7 @@ class FakeScene:
         self.selected_object = node
 
 
-def __updater_with(skeleton_frames: int, body_frames: int, fitting: bool, playhead: int):
+def updater_with(skeleton_frames: int, body_frames: int, fitting: bool, playhead: int):
     scene = FakeScene()
     host = SimpleNamespace(scene=scene)
     buffers = StudioStreamBuffers()
@@ -50,13 +50,13 @@ def __updater_with(skeleton_frames: int, body_frames: int, fitting: bool, playhe
 
 
 def test_playhead_waits_at_the_first_frame_until_the_first_mesh_is_fitted():
-    updater, scene = __updater_with(skeleton_frames=160, body_frames=0, fitting=True, playhead=90)
+    updater, scene = updater_with(skeleton_frames=160, body_frames=0, fitting=True, playhead=90)
     updater.hold_playhead_at_fitted_body()
     assert scene.current_frame_id == 0
 
 
 def test_playhead_is_held_at_the_last_fitted_body_frame_while_fitting():
-    updater, scene = __updater_with(skeleton_frames=160, body_frames=48, fitting=True, playhead=90)
+    updater, scene = updater_with(skeleton_frames=160, body_frames=48, fitting=True, playhead=90)
     updater.hold_playhead_at_fitted_body()
     assert scene.current_frame_id == 47
     updater.sync_display_nodes()
@@ -65,7 +65,7 @@ def test_playhead_is_held_at_the_last_fitted_body_frame_while_fitting():
 
 
 def test_playhead_runs_free_once_fitting_has_stopped():
-    updater, scene = __updater_with(skeleton_frames=160, body_frames=48, fitting=False, playhead=90)
+    updater, scene = updater_with(skeleton_frames=160, body_frames=48, fitting=False, playhead=90)
     updater.hold_playhead_at_fitted_body()
     assert scene.current_frame_id == 90
 
@@ -390,14 +390,14 @@ def test_upsampling_interpolates_between_frames_and_ends_on_each_source_frame():
     assert upsample_joints(None, joints, 1) is joints
 
 
-def __z_rotation(degrees: float) -> np.ndarray:
+def z_rotation(degrees: float) -> np.ndarray:
     return np.array([0.0, 0.0, np.radians(degrees)], np.float32)
 
 
 def test_pose_upsampling_ends_on_each_source_frame_and_moves_translation_linearly():
     from text2motion.studio.fitting import upsample_pose_parameters
 
-    orient = np.stack([__z_rotation(0), __z_rotation(30), __z_rotation(60)])
+    orient = np.stack([z_rotation(0), z_rotation(30), z_rotation(60)])
     pose = np.zeros((3, 63), np.float32)
     transl = np.array([[0, 0, 0], [3, 0, 0], [6, 0, 0]], np.float32)
 
@@ -414,8 +414,8 @@ def test_pose_upsampling_ends_on_each_source_frame_and_moves_translation_linearl
 def test_pose_upsampling_takes_the_short_way_across_180_degrees():
     from text2motion.studio.fitting import upsample_pose_parameters
 
-    anchor = (__z_rotation(170), np.zeros(63, np.float32), np.zeros(3, np.float32))
-    orient = __z_rotation(-170)[None]
+    anchor = (z_rotation(170), np.zeros(63, np.float32), np.zeros(3, np.float32))
+    orient = z_rotation(-170)[None]
 
     up_orient, _, _ = upsample_pose_parameters(
         anchor, orient, np.zeros((1, 63), np.float32), np.zeros((1, 3), np.float32), 2

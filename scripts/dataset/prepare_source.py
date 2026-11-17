@@ -82,7 +82,7 @@ class Tally:
     seconds: float = 0.0
 
 
-def __arguments() -> argparse.Namespace:
+def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("source", choices=SOURCES)
     parser.add_argument("--fps", type=int, choices=FPS_CHOICES, required=True)
@@ -90,7 +90,7 @@ def __arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def __amass_clips(fps: int) -> Iterator[RawClip]:
+def amass_clips(fps: int) -> Iterator[RawClip]:
     reader = AmassReader(PATHS.smplx_models, fps)
     files = amass_files_outside_hml3d(PATHS.amass_raw, PATHS.hml3d_official)
     for path in tqdm(files, desc="amass"):
@@ -101,7 +101,7 @@ def __amass_clips(fps: int) -> Iterator[RawClip]:
         yield RawClip(clip_name(*parts), parts[0], joints, fps, "")
 
 
-def __motionx_clips() -> Iterator[RawClip]:
+def motionx_clips() -> Iterator[RawClip]:
     for subset in MOTIONX_SUBSETS:
         captions = motionx_captions(PATHS.motionx / "semantic_label" / f"{subset}.zip")
         clips = motionx_body_clips(PATHS.motionx / "joint" / f"{subset}.zip")
@@ -110,32 +110,32 @@ def __motionx_clips() -> Iterator[RawClip]:
             yield RawClip(clip_name(subset, stem), subset, joints, MOTIONX_FPS, caption)
 
 
-def __at_target(clip: RawClip, fps: int, cutoff: float | None) -> np.ndarray:
+def at_target(clip: RawClip, fps: int, cutoff: float | None) -> np.ndarray:
     smooth = clip.joints if cutoff is None else lowpass(clip.joints, clip.fps, cutoff)
     if clip.fps < fps:
         return cubic_resample(smooth, clip.fps, fps)
     return downsample(smooth, int(clip.fps), fps)
 
 
-def __long_enough(frames: int, fps: float) -> bool:
+def long_enough(frames: int, fps: float) -> bool:
     return frames >= MIN_CLIP_SECONDS * fps
 
 
-def __write_inventory(path: pathlib.Path, rows: list[tuple]) -> None:
+def write_inventory(path: pathlib.Path, rows: list[tuple]) -> None:
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(INVENTORY_COLUMNS)
         writer.writerows(rows)
 
 
-def __add_clip(clip: RawClip, target: Target, tally: Tally) -> None:
+def add_clip(clip: RawClip, target: Target, tally: Tally) -> None:
     row = clip.inventory_row()
     tally.inventory.append(row)
-    if not row[5] or not __long_enough(clip.joints.shape[0], clip.fps):
+    if not row[5] or not long_enough(clip.joints.shape[0], clip.fps):
         return
-    joints = __at_target(clip, target.fps, target.cutoff)
+    joints = at_target(clip, target.fps, target.cutoff)
     np.save(target.joints_dir / f"{clip.name}.npy", joints.astype(np.float32))
-    if not __long_enough(joints.shape[0], target.fps):
+    if not long_enough(joints.shape[0], target.fps):
         return
     features = clip_features(joints, target.params)
     if features is None:
@@ -146,7 +146,7 @@ def __add_clip(clip: RawClip, target: Target, tally: Tally) -> None:
     tally.seconds += features.shape[0] / target.fps
 
 
-def __target(source: str, fps: int, cutoff: float | None) -> Target:
+def make_target(source: str, fps: int, cutoff: float | None) -> Target:
     folder = source if cutoff is None else f"{source}_lp{cutoff:g}"
     target = Target(
         folder=folder,
@@ -162,15 +162,15 @@ def __target(source: str, fps: int, cutoff: float | None) -> Target:
 
 
 def main() -> None:
-    arguments = __arguments()
-    target = __target(arguments.source, arguments.fps, arguments.lowpass_hz)
+    arguments = parse_arguments()
+    target = make_target(arguments.source, arguments.fps, arguments.lowpass_hz)
     amass = arguments.source == "amass_extra"
-    clips = __amass_clips(target.fps) if amass else __motionx_clips()
+    clips = amass_clips(target.fps) if amass else motionx_clips()
     tally = Tally()
     for clip in clips:
-        __add_clip(clip, target, tally)
+        add_clip(clip, target, tally)
     suffix = f"{target.fps}fps"
-    __write_inventory(PATHS.extra / f"inventory_{arguments.source}_{suffix}.csv", tally.inventory)
+    write_inventory(PATHS.extra / f"inventory_{arguments.source}_{suffix}.csv", tally.inventory)
     rejected = PATHS.extra / f"rejected_{target.folder}_{suffix}.txt"
     rejected.write_text("".join(f"{name}\n" for name in tally.non_finite), encoding="utf-8")
     print(

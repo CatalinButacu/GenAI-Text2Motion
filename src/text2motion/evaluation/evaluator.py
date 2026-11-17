@@ -70,7 +70,7 @@ class HumanMl3dGenerationEvaluator:
         return fid(self.compute_motion_embeddings(reference), self.compute_motion_embeddings(recon))
 
     @staticmethod
-    def __guo_pieces(
+    def guo_pieces(
         clip_id: str, motion: np.ndarray, annotations: list[TextAnnotation]
     ) -> list[tuple[str, np.ndarray, list[TextAnnotation]]]:
         whole = [item for item in annotations if item.start_time == 0.0 and item.end_time == 0.0]
@@ -81,7 +81,7 @@ class HumanMl3dGenerationEvaluator:
             pieces.append((f"{clip_id}#{index}", segment, [item]))
         return pieces
 
-    def __listed_ids(self, split: Split | str, clip_list: tuple[str, ...] | None) -> list[str]:
+    def listed_ids(self, split: Split | str, clip_list: tuple[str, ...] | None) -> list[str]:
         ids = self.resources.clip_ids(split)
         if clip_list is None:
             return ids
@@ -99,7 +99,7 @@ class HumanMl3dGenerationEvaluator:
         downsample = self.resources.tokenizer_downsample_factor
         dropped = {"missing_files": 0, "not_finite": 0, "out_of_length": 0, "no_caption": 0}
         samples: list[EvaluationSample] = []
-        for clip_id in self.__listed_ids(split, clip_list)[:max_clips]:
+        for clip_id in self.listed_ids(split, clip_list)[:max_clips]:
             text_path = self.resources.annotation_dir / f"{clip_id}.txt"
             vec_path = self.resources.motion_dataset_dir / FEATURES_DIR / f"{clip_id}.npy"
             if not text_path.is_file() or not vec_path.is_file():
@@ -110,7 +110,7 @@ class HumanMl3dGenerationEvaluator:
                 dropped["not_finite"] += 1
                 continue
             annotations = parse_text_file(text_path)
-            for sample_id, piece, piece_annotations in self.__guo_pieces(
+            for sample_id, piece, piece_annotations in self.guo_pieces(
                 clip_id, motion, annotations
             ):
                 if not GUO_MIN_FRAMES <= piece.shape[0] < GUO_MAX_FRAMES:

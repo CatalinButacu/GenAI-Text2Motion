@@ -16,7 +16,7 @@ MODULE = Path("scripts/training/TrainingRun.psm1").resolve()
 DRIVER = MODULE.with_name("run_size_sweep_local.ps1")
 
 
-def __powershell(script: str, cwd: Path) -> str:
+def powershell(script: str, cwd: Path) -> str:
     command = f"Import-Module '{MODULE}' -Force; {script}"
     result = subprocess.run(
         ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
@@ -29,7 +29,7 @@ def __powershell(script: str, cwd: Path) -> str:
     return result.stdout + result.stderr
 
 
-def __step(tmp_path: Path, code: str, max_hours: float = 1.0) -> str:
+def step(tmp_path: Path, code: str, max_hours: float = 1.0) -> str:
     return (
         f"$code = Invoke-TrainingStep -Tag probe -Arguments @('-c', '{code}') "
         f"-LogFile '{tmp_path / 'probe.log'}' -Python '{sys.executable}' "
@@ -46,14 +46,14 @@ def workdir(tmp_path: Path) -> Path:
 
 
 def test_a_failed_step_returns_its_exit_code_and_writes_no_done_marker(workdir):
-    output = __powershell(__step(workdir, "import sys; sys.exit(3)"), workdir)
+    output = powershell(step(workdir, "import sys; sys.exit(3)"), workdir)
 
     assert "code=3 ok=False" in output
     assert not (workdir / "DONE.txt").exists()
 
 
 def test_a_successful_step_writes_the_done_marker_and_prints_its_command(workdir):
-    output = __powershell(__step(workdir, "print(1)"), workdir)
+    output = powershell(step(workdir, "print(1)"), workdir)
 
     assert "code=0 ok=True" in output
     assert '-u -c "print(1)"' in output or "-u -c print(1)" in output
@@ -61,7 +61,7 @@ def test_a_successful_step_writes_the_done_marker_and_prints_its_command(workdir
 
 
 def test_a_step_over_its_time_budget_is_killed_and_logged(workdir):
-    output = __powershell(__step(workdir, "import time; time.sleep(60)", max_hours=0.0005), workdir)
+    output = powershell(step(workdir, "import time; time.sleep(60)", max_hours=0.0005), workdir)
 
     assert "code=124 ok=False" in output
     assert "KILLED" in (workdir / "artifacts" / "outputs" / "GUARD_KILL.txt").read_text("utf-8-sig")
@@ -69,7 +69,7 @@ def test_a_step_over_its_time_budget_is_killed_and_logged(workdir):
 
 def test_time_cap_stops_the_actual_python_child_not_only_its_venv_launcher(workdir):
     code = 'import os,time; open("child.pid","w").write(str(os.getpid())); time.sleep(60)'
-    output = __powershell(__step(workdir, code, max_hours=0.001), workdir)
+    output = powershell(step(workdir, code, max_hours=0.001), workdir)
     child_pid = int((workdir / "child.pid").read_text())
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
@@ -98,7 +98,7 @@ def test_a_run_is_complete_only_when_its_resume_file_reached_the_last_epoch(work
         f"Write-Output \"none=$(Test-RunComplete -ResumePath '{workdir / 'x_last.pt'}' -Epochs 1)\""
     )
 
-    output = __powershell(script, workdir)
+    output = powershell(script, workdir)
 
     assert "e60=True" in output
     assert "e61=False" in output
@@ -111,7 +111,7 @@ def test_an_empty_resume_flag_does_not_reach_the_command_line(workdir):
         f"-LogFile '{workdir / 'probe.log'}' -Python '{sys.executable}' -PollSeconds 1"
     )
 
-    output = __powershell(script, workdir)
+    output = powershell(script, workdir)
 
     assert '-c "print(1)" ""' not in output
     assert "code 0" in output
@@ -125,7 +125,7 @@ def test_resume_is_passed_only_when_the_resume_file_exists(workdir):
         f"Write-Output \"b=[$(Get-ResumeFlag -ResumePath '{workdir / 'missing_last.pt'}')]\""
     )
 
-    output = __powershell(script, workdir)
+    output = powershell(script, workdir)
 
     assert "a=[--resume]" in output
     assert "b=[]" in output
@@ -138,7 +138,7 @@ def test_streaming_prints_both_logs_without_changing_the_exit_code(workdir):
         f"-LogFile '{workdir / 'stream.log'}' -Python '{sys.executable}' "
         '-StreamLogs -PollSeconds 1; Write-Output "code=$code"'
     )
-    output = __powershell(script, workdir)
+    output = powershell(script, workdir)
 
     assert "code=0" in output
     assert "visible-out" in output
@@ -156,13 +156,13 @@ def test_a_stale_process_has_a_distinct_exit_code_when_requested(workdir):
         "-StaleMinutes 1 -StaleExitCode 125 -PollSeconds 1; "
         'Write-Output "code=$code"'
     )
-    output = __powershell(script, workdir)
+    output = powershell(script, workdir)
 
     assert "code=125" in output
     assert "no heartbeat" in output
 
 
-def __pilot(
+def pilot(
     workdir: Path,
     transformer: int,
     mamba: int,
@@ -230,7 +230,7 @@ Export-ModuleMember -Function Enter-RepoRoot, Invoke-TrainingStep, Write-DoneMar
 def test_pilot_gates_both_twins_before_training_and_only_continues_time_caps(
     workdir, transformer, mamba, gate, expected_code, expected_calls
 ):
-    result = __pilot(workdir, transformer, mamba, gate)
+    result = pilot(workdir, transformer, mamba, gate)
     calls = (workdir / "calls.txt").read_text().splitlines()
 
     assert result.returncode == expected_code, result.stdout + result.stderr
@@ -253,7 +253,7 @@ def test_pilot_gates_both_twins_before_training_and_only_continues_time_caps(
 
 def test_pilot_refuses_existing_outputs_before_launching_a_gate(workdir):
     (workdir / "artifacts" / "outputs" / "pilot_test_existing.log").write_text("preserve")
-    result = __pilot(workdir, 0, 0)
+    result = pilot(workdir, 0, 0)
 
     assert result.returncode != 0
     assert "choose a fresh Tag" in result.stderr
@@ -261,7 +261,7 @@ def test_pilot_refuses_existing_outputs_before_launching_a_gate(workdir):
 
 
 def test_default_recipe_is_width320_with_six_epoch_ce_patience_for_both_twins(workdir):
-    result = __pilot(workdir, 124, 124, default_recipe=True)
+    result = pilot(workdir, 124, 124, default_recipe=True)
     calls = (workdir / "calls.txt").read_text().splitlines()
 
     assert result.returncode == 124, result.stdout + result.stderr
@@ -280,7 +280,7 @@ def test_recovery_keeps_original_time_budget_and_does_not_resume_the_unstarted_t
     checkpoints = workdir / "artifacts" / "checkpoints" / "generator"
     checkpoints.mkdir(parents=True)
     (checkpoints / "generator_transformer_w256_pilot_test_last.pt").write_bytes(b"checkpoint")
-    result = __pilot(workdir, 124, 124, recover=True)
+    result = pilot(workdir, 124, 124, recover=True)
     calls = (workdir / "calls.txt").read_text().splitlines()
 
     assert result.returncode == 124, result.stdout + result.stderr
@@ -297,7 +297,7 @@ def test_recovery_refuses_to_restart_an_interrupted_run_without_its_checkpoint(w
     for backbone in ("transformer", "mamba"):
         (outputs / "gates" / f"pilot_test_{backbone}_w256_overfit.json").write_text("passed")
     (outputs / "pilot_test_transformer_w256.log").write_text("original evidence")
-    result = __pilot(workdir, 0, 0, recover=True)
+    result = pilot(workdir, 0, 0, recover=True)
 
     assert result.returncode != 0
     assert "durable checkpoint" in result.stderr
@@ -311,10 +311,10 @@ def test_recovery_skips_an_expired_original_budget_but_runs_the_unstarted_twin(w
         (outputs / "gates" / f"pilot_test_{backbone}_w256_overfit.json").write_text("passed")
     original = outputs / "pilot_test_transformer_w256.log"
     original.write_text("original evidence")
-    __powershell(
+    powershell(
         f"(Get-Item '{original}').CreationTimeUtc = [datetime]::UtcNow.AddHours(-2)", workdir
     )
-    result = __pilot(workdir, 0, 0, recover=True)
+    result = pilot(workdir, 0, 0, recover=True)
     calls = (workdir / "calls.txt").read_text().splitlines()
 
     assert result.returncode == 124, result.stdout + result.stderr

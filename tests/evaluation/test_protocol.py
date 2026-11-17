@@ -26,7 +26,7 @@ DROPPED = MappingProxyType(
 )
 
 
-def __write_clip(root, clip_id: str, frames: int, lines: list[str]) -> None:
+def write_clip(root, clip_id: str, frames: int, lines: list[str]) -> None:
     np.save(root / FEATURES_DIR / f"{clip_id}.npy", np.zeros((frames, 263), np.float32))
     (root / "texts" / f"{clip_id}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -34,11 +34,11 @@ def __write_clip(root, clip_id: str, frames: int, lines: list[str]) -> None:
 def test_the_sample_set_follows_the_guo_dataset(tmp_path):
     (tmp_path / FEATURES_DIR).mkdir()
     (tmp_path / "texts").mkdir()
-    __write_clip(
+    write_clip(
         tmp_path, "A", 120, ["whole#a/DET#0.0#0.0", "part#b/DET#1.0#4.0", "tiny#c/DET#0.5#1.0"]
     )
-    __write_clip(tmp_path, "B", 250, ["long#d/DET#0.0#0.0"])
-    __write_clip(tmp_path, "C", 100, ["only part#e/DET#0.5#3.0"])
+    write_clip(tmp_path, "B", 250, ["long#d/DET#0.0#0.0"])
+    write_clip(tmp_path, "C", 100, ["only part#e/DET#0.5#3.0"])
     resources = SimpleNamespace(
         clip_ids=lambda split: ["A", "B", "C"],
         annotation_dir=tmp_path / "texts",
@@ -76,7 +76,7 @@ def test_the_interval_is_the_guo_half_width_over_runs():
     assert half_width == pytest.approx(1.96 * np.std([1.0, 2.0, 3.0]) / np.sqrt(3))
 
 
-def __evaluator(monkeypatch, ids_of_run) -> tuple[HumanMl3dGenerationEvaluator, list[int]]:
+def stubbed_evaluator(monkeypatch, ids_of_run) -> tuple[HumanMl3dGenerationEvaluator, list[int]]:
     evaluator = HumanMl3dGenerationEvaluator(cast(GuoEvaluationResources, None))
     reference = [np.random.default_rng(index).normal(size=(1, 8)) for index in range(CLIPS)]
     calls: list[int] = []
@@ -104,7 +104,7 @@ def __evaluator(monkeypatch, ids_of_run) -> tuple[HumanMl3dGenerationEvaluator, 
 
 
 def test_each_generation_run_samples_all_clips_again(monkeypatch):
-    evaluator, calls = __evaluator(monkeypatch, lambda run: [f"c{i}" for i in range(CLIPS)])
+    evaluator, calls = stubbed_evaluator(monkeypatch, lambda run: [f"c{i}" for i in range(CLIPS)])
     protocol = GenerationEvaluationProtocol(reps=3, bootstrap=0, mm_clips=0)
 
     report = evaluator.run_generation_evaluation_protocol(
@@ -117,7 +117,7 @@ def test_each_generation_run_samples_all_clips_again(monkeypatch):
 
 
 def test_a_run_with_a_different_sample_set_stops_the_evaluation(monkeypatch):
-    evaluator, _ = __evaluator(monkeypatch, lambda run: [f"c{i}-{run}" for i in range(CLIPS)])
+    evaluator, _ = stubbed_evaluator(monkeypatch, lambda run: [f"c{i}-{run}" for i in range(CLIPS)])
     protocol = GenerationEvaluationProtocol(reps=2, bootstrap=0, mm_clips=0)
 
     with pytest.raises(RuntimeError, match="different sample set"):

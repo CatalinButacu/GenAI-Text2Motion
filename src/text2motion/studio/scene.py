@@ -35,7 +35,7 @@ class StudioSceneNodes:
         self.body = None
         self.follow_center: np.ndarray | None = None
 
-    def __drop(self, node):
+    def drop(self, node):
         if node is None:
             return
         if self.scene.selected_object is node:
@@ -43,13 +43,13 @@ class StudioSceneNodes:
         self.scene.remove(node)
 
     def clear_rest(self) -> None:
-        self.rest = self.__drop(self.rest)
+        self.rest = self.drop(self.rest)
 
     def clear_motion(self) -> None:
-        self.motion = self.__drop(self.motion)
+        self.motion = self.drop(self.motion)
 
     def clear_body(self) -> None:
-        self.body = self.__drop(self.body)
+        self.body = self.drop(self.body)
 
     def clear_all(self) -> None:
         self.clear_motion()
@@ -93,14 +93,14 @@ class StreamSceneUpdater:
         if chunks:
             self.append_chunks(chunks)
         if body_chunks:
-            self.__append_body_chunks(body_chunks)
+            self.append_body_chunks(body_chunks)
         if remesh is not None:
-            self.__apply_remesh(*remesh)
+            self.apply_remesh(*remesh)
         if self.state.stream_buffers.need_reset_view:
             self.state.stream_buffers.need_reset_view = False
             node = self.state.nodes.focus
             if node is not None:
-                self.__center_view(node)
+                self.center_view(node)
 
     def hold_playhead_at_fitted_body(self) -> None:
         buffers = self.state.stream_buffers
@@ -137,7 +137,7 @@ class StreamSceneUpdater:
         if motion is not None:
             motion.enabled = not on_body
 
-    def __center_view(self, node) -> None:
+    def center_view(self, node) -> None:
         bounds = node.current_bounds
         if not np.isfinite(bounds).all():
             logger.info(f"[warn] skipped centring on {node.name}: non-finite bounds")
@@ -165,7 +165,7 @@ class StreamSceneUpdater:
             f"[DISP] skeleton node added: accum={self.state.stream_buffers.accum_joints.shape} "
             f"scene_frames={self.host.scene.n_frames} started={self.state.stream_buffers.started}"
         )
-        self.__trim_to_window()
+        self.trim_to_window()
         if not self.state.stream_buffers.started:
             self.state.stream_buffers.started = True
             self.state.nodes.clear_body()
@@ -175,7 +175,7 @@ class StreamSceneUpdater:
             self.host.toggle_animation(True)
             self.state.stream_buffers.need_reset_view = True
 
-    def __trim_to_window(self) -> None:
+    def trim_to_window(self) -> None:
         window = self.state.window_frames
         motion = self.state.nodes.motion
         if window <= 0 or motion is None:
@@ -202,7 +202,7 @@ class StreamSceneUpdater:
         self.state.stream_buffers.keep_last_source_frames(len(kept) // self.state.upsample + 1)
         self.host.scene.current_frame_id = max(0, self.host.scene.current_frame_id - excess)
 
-    def __append_body_chunks(self, chunks: list[tuple[np.ndarray, np.ndarray]]) -> None:
+    def append_body_chunks(self, chunks: list[tuple[np.ndarray, np.ndarray]]) -> None:
         for verts, faces in chunks:
             if self.state.nodes.body is None:
                 self.state.nodes.show_body(
@@ -224,7 +224,7 @@ class StreamSceneUpdater:
             f"skeleton frames={len(motion.joint_positions)} lag={lag}"
         )
 
-    def __apply_remesh(self, verts: np.ndarray, faces: np.ndarray, is_rest: bool) -> None:
+    def apply_remesh(self, verts: np.ndarray, faces: np.ndarray, is_rest: bool) -> None:
         if is_rest:
             if self.state.nodes.has_generated_motion:
                 return
@@ -240,7 +240,7 @@ class StreamSceneUpdater:
         self.state.stream_buffers.body_verts = verts
         self.host.scene.current_frame_id = min(frame, len(verts) - 1)
 
-    def __current_center(self) -> np.ndarray | None:
+    def current_center(self) -> np.ndarray | None:
         frame = self.host.scene.current_frame_id
         nodes = self.state.nodes
         body_verts = self.state.stream_buffers.body_verts
@@ -261,7 +261,7 @@ class StreamSceneUpdater:
         if not isinstance(camera, ViewerCamera):
             return
 
-        center = self.__current_center()
+        center = self.current_center()
         if center is None:
             return
 

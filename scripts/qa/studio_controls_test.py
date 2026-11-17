@@ -67,9 +67,9 @@ class WidgetTracker:
         self.fired: set[str] = set()
         self.originals = {name: getattr(imgui, name) for name in TRACKED_WIDGETS}
         for name, original in self.originals.items():
-            setattr(imgui, name, self.__wrap(name, original))
+            setattr(imgui, name, self.wrap(name, original))
 
-    def __wrap(self, kind, original):
+    def wrap(self, kind, original):
         def tracked(label, *args, **kwargs):
             result = original(label, *args, **kwargs)
             self.kinds[label] = kind

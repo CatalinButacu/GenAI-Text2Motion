@@ -23,7 +23,7 @@ from text2motion.tokenization.trainer import TokenizerTrainer, train_tokenizer
 CFG = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 
 
-def __training_request(tmp_path, resume=False) -> TrainTokenizerRequest:
+def training_request(tmp_path, resume=False) -> TrainTokenizerRequest:
     return TrainTokenizerRequest(
         config=tmp_path / "unused.yaml",
         tokenizer=TokenizerKind.FINITE_SCALAR,
@@ -45,7 +45,7 @@ class _FakeTrainer:
         return {"epoch": epoch, "best_fid": best_fid}
 
 
-def __resumable_trainer() -> TokenizerTrainer:
+def resumable_trainer() -> TokenizerTrainer:
     torch.manual_seed(2026)
     return TokenizerTrainer(
         FiniteScalarQuantizationTokenizer(CFG), lr=1e-3, weight_decay=0.0, ema_decay=0.9
@@ -54,14 +54,14 @@ def __resumable_trainer() -> TokenizerTrainer:
 
 def test_a_resumed_tokenizer_run_continues_like_an_uninterrupted_run(tmp_path):
     path = tmp_path / "tokenizer_last.pt"
-    uninterrupted = __resumable_trainer()
+    uninterrupted = resumable_trainer()
     motion = torch.randn(2, 32, 263)
     uninterrupted.train_step(motion)
     atomic_torch_save(uninterrupted.resume_state(0, 1.0, None), path)
     uninterrupted.train_step(motion)
     uninterrupted.train_step(motion)
 
-    resumed = __resumable_trainer()
+    resumed = resumable_trainer()
     resumed.load_resume_state(torch.load(path, weights_only=True), False)
     resumed.train_step(motion)
     resumed.train_step(motion)
@@ -97,7 +97,7 @@ def test_a_non_finite_recon_fid_stops_the_run_without_a_save(tmp_path):
         train_tokenizer(
             cast(TokenizerTrainer, _FakeTrainer()),
             loader,
-            __training_request(tmp_path),
+            training_request(tmp_path),
             "cpu",
             evaluate=lambda split: dict(metrics),
             checkpoint_path=checkpoint_path,
@@ -115,7 +115,7 @@ def test_resume_without_the_resume_file_fails(tmp_path):
         train_tokenizer(
             cast(TokenizerTrainer, _FakeTrainer()),
             loader,
-            __training_request(tmp_path, resume=True),
+            training_request(tmp_path, resume=True),
             "cpu",
             evaluate=lambda split: {},
             checkpoint_path=tmp_path / "tokenizer.pt",
@@ -124,7 +124,7 @@ def test_resume_without_the_resume_file_fails(tmp_path):
 
 
 def test_code_statistics_match_a_count_per_codebook():
-    trainer = __resumable_trainer()
+    trainer = resumable_trainer()
     indices = torch.tensor([[[0, 1], [0, 2], [3, 2], [0, 2]]])
     perplexity, usage = trainer.code_statistics(indices)
     probabilities = torch.tensor([0.75, 0.25])
@@ -134,7 +134,7 @@ def test_code_statistics_match_a_count_per_codebook():
 
 
 def test_code_statistics_skip_a_dropped_codebook():
-    trainer = __resumable_trainer()
+    trainer = resumable_trainer()
     indices = torch.tensor([[[0, DROPPED_CODE], [1, DROPPED_CODE]]])
     perplexity, usage = trainer.code_statistics(indices)
     torch.testing.assert_close(perplexity, torch.tensor(2.0))
@@ -155,7 +155,7 @@ def test_a_residual_vector_step_with_dropped_stages_gives_finite_values():
 
 
 def test_a_non_finite_gradient_raises_before_the_update():
-    trainer = __resumable_trainer()
+    trainer = resumable_trainer()
     first = next(trainer.tokenizer_network.parameters())
     first.register_hook(lambda gradient: gradient * float("inf"))
     before = {name: value.clone() for name, value in trainer.tokenizer_network.state_dict().items()}
@@ -206,7 +206,7 @@ class _OneBatchLoader(list):
 
 
 def test_a_failed_tokenizer_epoch_writes_a_dump_with_the_batch(tmp_path):
-    trainer = __resumable_trainer()
+    trainer = resumable_trainer()
     first_name, first = next(iter(trainer.tokenizer_network.named_parameters()))
     first.register_hook(lambda gradient: gradient * float("inf"))
     motion = torch.randn(2, 32, 263)
@@ -216,7 +216,7 @@ def test_a_failed_tokenizer_epoch_writes_a_dump_with_the_batch(tmp_path):
         train_tokenizer(
             trainer,
             _OneBatchLoader([motion]),
-            __training_request(tmp_path),
+            training_request(tmp_path),
             "cpu",
             evaluate=lambda split: {},
             checkpoint_path=tmp_path / "tokenizer.pt",
@@ -234,7 +234,7 @@ def test_a_failed_tokenizer_epoch_writes_a_dump_with_the_batch(tmp_path):
 
 def test_an_epoch_without_a_batch_raises():
     with pytest.raises(ValueError, match="no batch"):
-        __resumable_trainer().train_epoch([], "cpu")
+        resumable_trainer().train_epoch([], "cpu")
 
 
 @pytest.mark.parametrize(

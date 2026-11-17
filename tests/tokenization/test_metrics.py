@@ -22,7 +22,7 @@ class IdentityTokenizer(TokenizerNetwork):
         return TokenizerReconstruction(motion, empty.long(), empty)
 
 
-def __dataset(root, clips: dict[str, int], listed: str):
+def dataset(root, clips: dict[str, int], listed: str):
     features_dir = root / FEATURES_DIR
     features_dir.mkdir()
     generator = np.random.default_rng(2026)
@@ -34,7 +34,7 @@ def __dataset(root, clips: dict[str, int], listed: str):
 
 
 def test_a_perfect_reconstruction_scores_zero_and_skips_short_clips(tmp_path):
-    scaler = __dataset(
+    scaler = dataset(
         tmp_path, {"000001": 40, "000002": 50, "000003": 6}, "000001\nM000001\n000002\n000003\n"
     )
     scored: list[int] = []
@@ -59,7 +59,7 @@ def test_a_perfect_reconstruction_scores_zero_and_skips_short_clips(tmp_path):
 
 
 def test_a_listed_clip_without_a_feature_file_raises(tmp_path):
-    scaler = __dataset(tmp_path, {"000001": 40}, "000001\n000009\n")
+    scaler = dataset(tmp_path, {"000001": 40}, "000001\n000009\n")
     with pytest.raises(FileNotFoundError, match="000009"):
         evaluate_tokenizer_reconstruction(
             IdentityTokenizer(), tmp_path, scaler, max_frames=30, split=Split.VALIDATION
@@ -77,7 +77,7 @@ def test_a_listed_clip_without_a_feature_file_raises(tmp_path):
     ids=["every_clip_too_short", "empty_list", "max_clips_zero", "max_frames_too_small"],
 )
 def test_an_evaluation_without_a_usable_clip_raises(tmp_path, clips, listed, settings):
-    scaler = __dataset(tmp_path, clips, listed)
+    scaler = dataset(tmp_path, clips, listed)
     arguments = {"max_frames": 30, **settings}
     with pytest.raises(ValueError, match="usable frames"):
         evaluate_tokenizer_reconstruction(
@@ -86,7 +86,7 @@ def test_an_evaluation_without_a_usable_clip_raises(tmp_path, clips, listed, set
 
 
 def test_a_clip_with_nan_features_raises_with_its_name(tmp_path):
-    scaler = __dataset(tmp_path, {"000001": 40, "000002": 40}, "000001\n000002\n")
+    scaler = dataset(tmp_path, {"000001": 40, "000002": 40}, "000001\n000002\n")
     path = tmp_path / FEATURES_DIR / "000002.npy"
     features = np.load(path)
     features[3, 10] = np.nan

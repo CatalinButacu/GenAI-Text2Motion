@@ -36,7 +36,7 @@ GEN = GeneratorConfig(
 )
 
 
-def __noisy_trainer() -> GeneratorTrainer:
+def noisy_trainer() -> GeneratorTrainer:
     torch.manual_seed(2026)
     trainer = GeneratorTrainer(
         MotionTokenGenerator(GEN),
@@ -49,7 +49,7 @@ def __noisy_trainer() -> GeneratorTrainer:
     return trainer
 
 
-def __batches() -> list[SimpleNamespace]:
+def random_batches() -> list[SimpleNamespace]:
     generator = torch.Generator().manual_seed(7)
     return [
         SimpleNamespace(
@@ -62,8 +62,8 @@ def __batches() -> list[SimpleNamespace]:
 
 
 def test_the_clean_ce_repeats_and_ignores_the_training_noise():
-    trainer = __noisy_trainer()
-    batches = __batches()
+    trainer = noisy_trainer()
+    batches = random_batches()
     first = trainer.teacher_forced_ce(batches, "cpu")
     second = trainer.teacher_forced_ce(batches, "cpu")
     assert first == second
@@ -71,10 +71,10 @@ def test_the_clean_ce_repeats_and_ignores_the_training_noise():
 
 
 def test_the_clean_ce_changes_no_weight_and_restores_the_train_mode():
-    trainer = __noisy_trainer()
+    trainer = noisy_trainer()
     before = [parameter.detach().clone() for parameter in trainer.token_generator.parameters()]
     trainer.token_generator.train()
-    trainer.teacher_forced_ce(__batches(), "cpu", max_batches=1)
+    trainer.teacher_forced_ce(random_batches(), "cpu", max_batches=1)
     after = list(trainer.token_generator.parameters())
     assert all(torch.equal(old, new) for old, new in zip(before, after, strict=True))
     assert trainer.token_generator.training
@@ -82,7 +82,7 @@ def test_the_clean_ce_changes_no_weight_and_restores_the_train_mode():
 
 def test_the_clean_ce_fails_loud_on_an_empty_loader():
     with pytest.raises(ValueError, match="no batch"):
-        __noisy_trainer().teacher_forced_ce([], "cpu")
+        noisy_trainer().teacher_forced_ce([], "cpu")
 
 
 class __CurveTrainer:
@@ -120,7 +120,7 @@ class __CurveTrainer:
         return self.epochs, state["best_fid"], state["stale_evaluations"]
 
 
-def __train_curve(tmp_path, curve, epochs, resume=False, fresh_selection=False, run_dir=None):
+def train_curve(tmp_path, curve, epochs, resume=False, fresh_selection=False, run_dir=None):
     records = []
     train_generator(
         cast("GeneratorTrainer", curve),
@@ -180,7 +180,7 @@ def test_a_validation_ce_patience_needs_the_ce_loaders(tmp_path):
 
 def test_default_stop_allows_five_retries_and_stops_on_the_sixth_tie(tmp_path):
     curve = __CurveTrainer([2.0] * 7 + [1.9])
-    __train_curve(tmp_path, curve, epochs=8)
+    train_curve(tmp_path, curve, epochs=8)
     state = torch.load(tmp_path / "last.pt", weights_only=True)
 
     assert curve.epochs == 7
@@ -189,7 +189,7 @@ def test_default_stop_allows_five_retries_and_stops_on_the_sixth_tie(tmp_path):
 
 def test_a_lower_validation_ce_resets_the_full_six_epoch_patience(tmp_path):
     curve = __CurveTrainer([2.0] * 6 + [1.9] * 7 + [1.8])
-    __train_curve(tmp_path, curve, epochs=14)
+    train_curve(tmp_path, curve, epochs=14)
 
     assert curve.epochs == 13
     assert torch.load(tmp_path / "last.pt", weights_only=True)["clean_ce_progress"] == {
@@ -204,7 +204,7 @@ def test_resume_preserves_the_streak_instead_of_granting_six_new_retries(tmp_pat
     first = __CurveTrainer(values)
     folder = tmp_path / "run"
     folder.mkdir()
-    records = __train_curve(tmp_path, first, epochs=4, run_dir=folder)
+    records = train_curve(tmp_path, first, epochs=4, run_dir=folder)
     (folder / "metrics.jsonl").write_text(
         "\n".join(json.dumps(record) for record in [*records, {"epoch": 5, "val_ce": 1.0}]),
         encoding="utf-8",
@@ -214,7 +214,7 @@ def test_resume_preserves_the_streak_instead_of_granting_six_new_retries(tmp_pat
         del state["clean_ce_progress"]
         torch.save(state, tmp_path / "last.pt")
     resumed = __CurveTrainer(values)
-    __train_curve(tmp_path, resumed, epochs=8, resume=True, run_dir=folder)
+    train_curve(tmp_path, resumed, epochs=8, resume=True, run_dir=folder)
 
     assert first.epochs == 4
     assert resumed.epochs == 7
@@ -223,27 +223,27 @@ def test_resume_preserves_the_streak_instead_of_granting_six_new_retries(tmp_pat
 
 def test_an_exhausted_resume_budget_stops_before_another_training_epoch(tmp_path):
     values = [2.0] + [2.1] * 6 + [1.9]
-    __train_curve(tmp_path, __CurveTrainer(values), epochs=8)
+    train_curve(tmp_path, __CurveTrainer(values), epochs=8)
     resumed = __CurveTrainer(values)
-    assert __train_curve(tmp_path, resumed, epochs=8, resume=True) == []
+    assert train_curve(tmp_path, resumed, epochs=8, resume=True) == []
     assert resumed.epochs == 7
 
 
 def test_old_resume_without_ce_history_fails_instead_of_resetting_patience(tmp_path):
     values = [2.0] + [2.1] * 6 + [1.9]
-    __train_curve(tmp_path, __CurveTrainer(values), epochs=4)
+    train_curve(tmp_path, __CurveTrainer(values), epochs=4)
     state = torch.load(tmp_path / "last.pt", weights_only=True)
     del state["clean_ce_progress"]
     torch.save(state, tmp_path / "last.pt")
     with pytest.raises(ValueError, match="recorded run directory"):
-        __train_curve(tmp_path, __CurveTrainer(values), epochs=8, resume=True)
+        train_curve(tmp_path, __CurveTrainer(values), epochs=8, resume=True)
 
 
 def test_fresh_selection_is_an_explicit_ce_patience_reset(tmp_path):
     values = [2.0] + [2.1] * 9 + [2.0]
-    __train_curve(tmp_path, __CurveTrainer(values), epochs=4)
+    train_curve(tmp_path, __CurveTrainer(values), epochs=4)
     resumed = __CurveTrainer(values)
-    __train_curve(tmp_path, resumed, epochs=11, resume=True, fresh_selection=True)
+    train_curve(tmp_path, resumed, epochs=11, resume=True, fresh_selection=True)
     assert resumed.epochs == 11
 
 
@@ -257,12 +257,12 @@ def test_fresh_selection_is_an_explicit_ce_patience_reset(tmp_path):
 )
 def test_invalid_saved_ce_patience_fails_before_training(tmp_path, progress):
     values = [2.0] + [2.1] * 6 + [1.9]
-    __train_curve(tmp_path, __CurveTrainer(values), epochs=4)
+    train_curve(tmp_path, __CurveTrainer(values), epochs=4)
     state = torch.load(tmp_path / "last.pt", weights_only=True)
     state["clean_ce_progress"] = progress
     torch.save(state, tmp_path / "last.pt")
     with pytest.raises(ValueError, match="invalid saved"):
-        __train_curve(tmp_path, __CurveTrainer(values), epochs=8, resume=True)
+        train_curve(tmp_path, __CurveTrainer(values), epochs=8, resume=True)
 
 
 def test_a_planned_stop_ends_the_run_and_evaluates_its_last_epoch(tmp_path):
@@ -332,7 +332,7 @@ def test_whole_step_noise_replaces_all_codes_of_a_step_together(monkeypatch):
     assert 0 < changed.all(dim=-1).float().mean() < 1
 
 
-def __ce_with_text(cfg_dropout: float, text: torch.Tensor) -> float:
+def ce_with_text(cfg_dropout: float, text: torch.Tensor) -> float:
     torch.manual_seed(2026)
     trainer = GeneratorTrainer(
         MotionTokenGenerator(GEN),
@@ -341,14 +341,14 @@ def __ce_with_text(cfg_dropout: float, text: torch.Tensor) -> float:
         downsample=4,
     )
     trainer.encode = lambda texts: text.expand(len(texts), -1)
-    return trainer.teacher_forced_ce(__batches(), "cpu")
+    return trainer.teacher_forced_ce(random_batches(), "cpu")
 
 
 def test_an_unconditional_run_measures_its_clean_ce_without_the_text():
     text = torch.randn(1, GEN.d_text, generator=torch.Generator().manual_seed(3))
     empty = torch.zeros(1, GEN.d_text)
-    assert __ce_with_text(1.0, text) == __ce_with_text(1.0, empty)
-    assert __ce_with_text(0.5, text) != __ce_with_text(0.5, empty)
+    assert ce_with_text(1.0, text) == ce_with_text(1.0, empty)
+    assert ce_with_text(0.5, text) != ce_with_text(0.5, empty)
 
 
 def test_val_ce_selection_saves_at_each_lower_validation_ce_and_never_on_fid(tmp_path):

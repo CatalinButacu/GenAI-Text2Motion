@@ -103,7 +103,7 @@ def median_ms(
     return statistics.median(samples)
 
 
-def __precision_error(reference: np.ndarray, candidate: np.ndarray) -> dict[str, float]:
+def precision_error(reference: np.ndarray, candidate: np.ndarray) -> dict[str, float]:
     if reference.shape != candidate.shape or not reference.size:
         raise ValueError("precision comparison requires matching nonempty arrays")
     if not np.isfinite(reference).all() or not np.isfinite(candidate).all():
@@ -119,7 +119,7 @@ def __precision_error(reference: np.ndarray, candidate: np.ndarray) -> dict[str,
     }
 
 
-def __precision_numeric(trainer, text, tokens, amp: bool):
+def precision_numeric(trainer, text, tokens, amp: bool):
     model = trainer.token_generator
     model.eval()
     model.zero_grad(set_to_none=True)
@@ -148,7 +148,7 @@ def __precision_numeric(trainer, text, tokens, amp: bool):
     )
 
 
-def __precision_case(args, config, device: str, backbone: Backbone, mode: str, tokens):
+def precision_case(args, config, device: str, backbone: Backbone, mode: str, tokens):
     amp = mode == "bf16"
     seed_everything(2026, config.deterministic)
     trainer = build_trainer(
@@ -176,7 +176,7 @@ def __precision_case(args, config, device: str, backbone: Backbone, mode: str, t
             if trainer.token_generator.end_id is not None:
                 tokens, _ = trainer.append_end_targets(tokens, lengths)
     apply_precision(Float32Precision.HIGHEST if mode == "fp32" else Float32Precision.TF32)
-    logits, gradients, loss, names = __precision_numeric(trainer, text, tokens, amp)
+    logits, gradients, loss, names = precision_numeric(trainer, text, tokens, amp)
     folder = args.out_path.with_suffix("")
     atomic_numpy_save(logits, folder / f"{backbone.value}_{mode}_logits.npy")
     atomic_numpy_save(gradients, folder / f"{backbone.value}_{mode}_gradients.npy")
@@ -254,7 +254,7 @@ def precision_benchmark(args) -> None:
             None,
         )
         for mode in ("fp32", "tf32", "bf16"):
-            row, logits, gradients, tokens = __precision_case(
+            row, logits, gradients, tokens = precision_case(
                 args, config, device, backbone, mode, tokens
             )
             if reference is None or reference_grads is None:
@@ -267,8 +267,8 @@ def precision_benchmark(args) -> None:
                 raise RuntimeError(
                     "precision modes changed initial weights or gradient parameter coverage"
                 )
-            forward = __precision_error(reference, logits)
-            backward = __precision_error(reference_grads, gradients)
+            forward = precision_error(reference, logits)
+            backward = precision_error(reference_grads, gradients)
             row.update(
                 logits_max_abs=forward["max_abs"],
                 logits_relative_l2=forward["relative_l2"],

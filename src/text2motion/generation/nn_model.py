@@ -46,9 +46,9 @@ class CLIPTextEncoder(nn.Module):
                 f"(set GeneratorConfig.d_text and TextEncoderConfig.out_dim to {proj_dim})"
             )
 
-        self.__freeze_except_last(cfg.unfreeze_last_n, cfg.unfreeze_projection)
+        self.freeze_except_last(cfg.unfreeze_last_n, cfg.unfreeze_projection)
 
-    def __freeze_except_last(self, unfreeze_last_n: int, unfreeze_projection: bool) -> None:
+    def freeze_except_last(self, unfreeze_last_n: int, unfreeze_projection: bool) -> None:
         for p in self.model.parameters():
             p.requires_grad_(False)
 
@@ -308,11 +308,11 @@ class MotionTokenGenerator(nn.Module):
             streamed_text = with_null_rows(text_for(index))
             prefix = self.project_text_prefix(streamed_text)
             text_vector = self.per_step_text_vector(streamed_text, prefix)
-            context = self.__reset_context(recent, index, anchor_context, anchor_context_at)
+            context = self.reset_context(recent, index, anchor_context, anchor_context_at)
             logits, decode_step = start_from(context)
             since_anchor = 0
 
-    def __reset_context(
+    def reset_context(
         self,
         recent: deque[torch.Tensor],
         index: int,

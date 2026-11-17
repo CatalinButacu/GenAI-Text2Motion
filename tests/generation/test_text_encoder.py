@@ -28,7 +28,7 @@ GEN = GeneratorConfig(
 )
 
 
-def __encoder(unfreeze_last_n: int = 1) -> CLIPTextEncoder:
+def encoder(unfreeze_last_n: int = 1) -> CLIPTextEncoder:
     try:
         return CLIPTextEncoder(TextEncoderConfig(unfreeze_last_n=unfreeze_last_n))
     except Exception as exc:  # noqa: BLE001 - any load failure (offline / no weights) -> skip
@@ -37,7 +37,7 @@ def __encoder(unfreeze_last_n: int = 1) -> CLIPTextEncoder:
 
 @pytest.mark.slow
 def test_encode_shape_and_partial_unfreeze():
-    enc = __encoder(unfreeze_last_n=1)
+    enc = encoder(unfreeze_last_n=1)
     emb = enc(["a person walks forward then stops", "someone waves with the right hand"])
 
     assert emb.shape == (2, 512)
@@ -54,7 +54,7 @@ def test_encode_shape_and_partial_unfreeze():
 
 @pytest.mark.slow
 def test_trainer_includes_encoder_and_grad_flows():
-    enc = __encoder(unfreeze_last_n=1)
+    enc = encoder(unfreeze_last_n=1)
     tok = FiniteScalarQuantizationTokenizer(TOK)
     gen = MotionTokenGenerator(GEN)
     trainer = GeneratorTrainer(

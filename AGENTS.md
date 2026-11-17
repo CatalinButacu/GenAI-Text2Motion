@@ -35,7 +35,7 @@
 
 ## Code rules
 - No comments, except the class separator box in `src` and the run command on the first line of a script.
-- Private functions start with 2 underscores. One objective per function. At most 10 files per package.
+- Function names have no underscore prefix. One objective per function. At most 10 files per package.
 - Module constants are UPPER_CASE and read-only (tuple, frozenset, MappingProxyType).
 - Fail loud. No silent fallbacks.
 - Rename only with `scripts/maintenance/rename_everywhere.py`.

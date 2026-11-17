@@ -39,7 +39,7 @@ GROUPS = (
 SHEET_COLUMNS = ("label", "source", "type", "clip", "seconds", "caption", "owner_note")
 
 
-def __kept_names() -> set[tuple[str, str]]:
+def kept_names() -> set[tuple[str, str]]:
     with open(EXTRA / "quality_clips.csv", newline="", encoding="utf-8") as handle:
         inliers = {
             (row["source"], row["name"])
@@ -56,12 +56,12 @@ def __kept_names() -> set[tuple[str, str]]:
         }
 
 
-def __captions() -> dict[str, str]:
+def read_captions() -> dict[str, str]:
     with open(EXTRA / "inventory_motionx_official.csv", newline="", encoding="utf-8") as handle:
         return {row["name"]: row["caption"].split(". ")[0] for row in csv.DictReader(handle)}
 
 
-def __picked(
+def pick_clips(
     kept: set[tuple[str, str]], rng: np.random.Generator
 ) -> list[tuple[str, str, pathlib.Path]]:
     picked = []
@@ -81,7 +81,7 @@ def __picked(
     return picked
 
 
-def __draw(axis, joints: np.ndarray, frame: int, bounds: tuple[float, float, float, float]) -> None:
+def draw(axis, joints: np.ndarray, frame: int, bounds: tuple[float, float, float, float]) -> None:
     x_low, x_high, z_low, z_high = bounds
     axis.clear()
     for x in np.arange(np.floor(x_low), x_high + GRID_STEP_M, GRID_STEP_M):
@@ -99,7 +99,7 @@ def __draw(axis, joints: np.ndarray, frame: int, bounds: tuple[float, float, flo
     axis.set_axis_off()
 
 
-def __render(path: pathlib.Path, video: pathlib.Path, title: str) -> float:
+def render(path: pathlib.Path, video: pathlib.Path, title: str) -> float:
     joints = np.load(path)[: MAX_SECONDS * FPS].astype(np.float64)
     joints[..., 1] -= joints[..., 1].min()
     centre_x, centre_z = joints[:, 0, 0].mean(), joints[:, 0, 2].mean()
@@ -111,7 +111,7 @@ def __render(path: pathlib.Path, video: pathlib.Path, title: str) -> float:
     if not writer.isOpened():
         raise RuntimeError(f"cannot open video writer for {video}")
     for frame in range(len(joints)):
-        __draw(axis, joints, frame, bounds)
+        draw(axis, joints, frame, bounds)
         axis.set_title(title, fontsize=10)
         canvas = figure.canvas
         if not isinstance(canvas, FigureCanvasAgg):
@@ -126,14 +126,14 @@ def __render(path: pathlib.Path, video: pathlib.Path, title: str) -> float:
 
 def main() -> None:
     rng = np.random.default_rng(SEED)
-    picked = __picked(__kept_names(), rng)
-    captions = __captions()
+    picked = pick_clips(kept_names(), rng)
+    captions = read_captions()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     rows = []
     for position, index in enumerate(rng.permutation(len(picked)), start=1):
         source, subset, path = picked[int(index)]
         label = f"G{position:02d}"
-        seconds = __render(path, OUT_DIR / f"{label}.mp4", f"{label} {subset}")
+        seconds = render(path, OUT_DIR / f"{label}.mp4", f"{label} {subset}")
         rows.append(
             (label, source, subset, path.stem, round(seconds, 2), captions.get(path.stem, ""), "")
         )

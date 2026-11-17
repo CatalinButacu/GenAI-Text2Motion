@@ -60,7 +60,7 @@ def upsample_pose_parameters(
     )
 
 
-def __yaw_init(
+def yaw_init(
     model,
     target: torch.Tensor,
     transl: torch.Tensor,
@@ -87,7 +87,7 @@ def __yaw_init(
     return best_aa
 
 
-def __start_parameters(
+def start_parameters(
     model,
     target: torch.Tensor,
     cfg: SmplxFitConfig,
@@ -97,7 +97,7 @@ def __start_parameters(
     frames = target.shape[0]
     if warm_start is None:
         root_position = target[:, 0].detach()
-        yaw = __yaw_init(model, target, root_position, device, cfg.yaw_candidates_deg)
+        yaw = yaw_init(model, target, root_position, device, cfg.yaw_candidates_deg)
         body_pose = torch.zeros(frames, 63, device=device, requires_grad=True)
         betas = torch.zeros(1, cfg.num_betas, device=device, requires_grad=True)
         return yaw.requires_grad_(True), body_pose, betas
@@ -108,7 +108,7 @@ def __start_parameters(
     return orient.clone().requires_grad_(True), pose.clone().requires_grad_(True), betas
 
 
-def __is_report_step(step: int, steps: int, every: int) -> bool:
+def is_report_step(step: int, steps: int, every: int) -> bool:
     return step % every == 0 or step == steps - 1
 
 
@@ -164,7 +164,7 @@ def fit_smplx_to_joints(
     total_iters = max(1, cfg.stage1_iters + cfg.stage2_iters)
 
     transl = target[:, 0].clone().requires_grad_(True)
-    global_orient, body_pose, betas = __start_parameters(model, target, cfg, warm_start, dev)
+    global_orient, body_pose, betas = start_parameters(model, target, cfg, warm_start, dev)
 
     def forward():
         return model(
@@ -179,7 +179,7 @@ def fit_smplx_to_joints(
         stage1.zero_grad()
         ((forward() - target) ** 2).sum(-1).mean().backward()
         stage1.step()
-        if on_progress is not None and __is_report_step(it, cfg.stage1_iters, cfg.progress_every):
+        if on_progress is not None and is_report_step(it, cfg.stage1_iters, cfg.progress_every):
             on_progress(it, total_iters)
 
     stage2_params = [global_orient, body_pose, transl] + ([] if warm_start is not None else [betas])
@@ -194,9 +194,9 @@ def fit_smplx_to_joints(
         loss = data + cfg.w_smooth * smooth + cfg.w_reg * body_pose.pow(2).mean()
         loss.backward()
         stage2.step()
-        if on_progress is not None and __is_report_step(it, cfg.stage2_iters, cfg.progress_every):
+        if on_progress is not None and is_report_step(it, cfg.stage2_iters, cfg.progress_every):
             on_progress(cfg.stage1_iters + it, total_iters)
-        if verbose and __is_report_step(it, cfg.stage2_iters, cfg.verbose_every):
+        if verbose and is_report_step(it, cfg.stage2_iters, cfg.verbose_every):
             err = (joints.detach() - target).norm(dim=-1).mean().item() * 100
             logger.info(f"  fit it {it:3d}  joint err {err:.1f} cm")
 

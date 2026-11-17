@@ -61,9 +61,9 @@ class StudioGenerationController:
         prompt = self.state.prompt_text.strip()
         if prompt and not self.state.generating:
             self.state.live.last_dispatched = prompt
-            self.__start_generation(prompt, live=False)
+            self.start_generation(prompt, live=False)
 
-    def __start_generation(self, prompt: str, live: bool) -> None:
+    def start_generation(self, prompt: str, live: bool) -> None:
         self.state.generating = True
         self.state.stream_buffers.cancel = False
         self.state.stream_buffers.gen_progress = 0.0
@@ -133,11 +133,11 @@ class StudioGenerationController:
                 self.state.stream_buffers.cancel = True
                 self.state.live.regen_pending = True
             else:
-                self.__start_generation(prompt, live=True)
+                self.start_generation(prompt, live=True)
         if self.state.live.regen_pending and not self.state.generating:
             self.state.live.regen_pending = False
             if prompt:
-                self.__start_generation(prompt, live=True)
+                self.start_generation(prompt, live=True)
 
     def stop(self) -> None:
         self.state.stream_buffers.cancel = True
@@ -145,7 +145,7 @@ class StudioGenerationController:
             self.state.stream_buffers.new_chunks.clear()
         self.state.status = "stopping..."
 
-    def __finish(self, n_frames: int, params: dict, fit_died: bool = False) -> None:
+    def finish(self, n_frames: int, params: dict, fit_died: bool = False) -> None:
         if not self.state.generating:
             return
         duration = n_frames / self.host.playback_fps
@@ -226,7 +226,7 @@ class StudioGenerationController:
                 should_cancel=lambda: self.state.stream_buffers.cancel,
             )
             for chunk in chunks:
-                n_frames += self.__accept_chunk(
+                n_frames += self.accept_chunk(
                     chunk, n_frames, total_frames, fit_queue, fit_thread
                 )
         except Exception as exc:
@@ -235,7 +235,7 @@ class StudioGenerationController:
             self.state.status = f"error after {n_frames} frames: {type(exc).__name__}: {exc}"
             if fit_queue is not None and fit_thread is not None:
                 discard_pending_items(fit_queue)
-                self.__close_fitter(fit_queue, fit_thread)
+                self.close_fitter(fit_queue, fit_thread)
             self.state.generating = False
             return
 
@@ -244,10 +244,10 @@ class StudioGenerationController:
         if fit_queue is not None and fit_thread is not None:
             if self.state.stream_buffers.cancel:
                 discard_pending_items(fit_queue)
-            self.__close_fitter(fit_queue, fit_thread)
-        self.__finish(n_frames, params, fit_died)
+            self.close_fitter(fit_queue, fit_thread)
+        self.finish(n_frames, params, fit_died)
 
-    def __feed_fitter(self, fit_queue: queue.Queue, fit_thread: threading.Thread, chunk) -> None:
+    def feed_fitter(self, fit_queue: queue.Queue, fit_thread: threading.Thread, chunk) -> None:
         while not self.state.stream_buffers.cancel and fit_thread.is_alive():
             try:
                 fit_queue.put(chunk, timeout=0.2)
@@ -255,7 +255,7 @@ class StudioGenerationController:
             except queue.Full:
                 continue
 
-    def __close_fitter(self, fit_queue: queue.Queue, fit_thread: threading.Thread) -> None:
+    def close_fitter(self, fit_queue: queue.Queue, fit_thread: threading.Thread) -> None:
         while fit_thread.is_alive():
             try:
                 fit_queue.put(None, timeout=0.2)
@@ -276,7 +276,7 @@ class StudioGenerationController:
         ):
             time.sleep(0.01)
 
-    def __accept_chunk(
+    def accept_chunk(
         self,
         chunk,
         n_frames: int,
@@ -304,7 +304,7 @@ class StudioGenerationController:
         with self.state.stream_buffers.lock:
             self.state.stream_buffers.new_chunks.append(joints)
         if fit_queue is not None and fit_thread is not None:
-            self.__feed_fitter(fit_queue, fit_thread, chunk)
+            self.feed_fitter(fit_queue, fit_thread, chunk)
             if fit_thread.is_alive():
                 self.state.status = f"streaming... {emitted} frames"
         else:
@@ -317,9 +317,9 @@ class StudioGenerationController:
         entry = self.state.models[self.state.model_idx]
         self.state.loading_model = True
         self.state.load_status = f"loading {entry.label}..."
-        threading.Thread(target=self.__load_selected_model, args=(entry,), daemon=True).start()
+        threading.Thread(target=self.load_selected_model, args=(entry,), daemon=True).start()
 
-    def __load_selected_model(self, entry: StudioModelEntry) -> None:
+    def load_selected_model(self, entry: StudioModelEntry) -> None:
         try:
             hello = self.state.client.load(
                 entry.config, entry.ckpt, entry.tokenizer_ckpt, entry.backbone

@@ -113,7 +113,7 @@ def run_serve(app: ApplicationContext, args: ServeRequest) -> None:
     )
 
 
-def __select_model(args: StudioRequest, model: str, registry: Path) -> None:
+def select_model(args: StudioRequest, model: str, registry: Path) -> None:
     from text2motion.studio.session import load_model_registry
 
     entries, _ = load_model_registry(None, registry)
@@ -138,7 +138,7 @@ def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
         else StudioConfig()
     )
     if args.model:
-        __select_model(args, args.model, studio_config.model_registry)
+        select_model(args, args.model, studio_config.model_registry)
         app = app.with_config(args.config)
     app = app.with_service_file(args.service_config)
     args.ckpt = args.ckpt or app.config.paths.generator_checkpoint(args.backbone)
