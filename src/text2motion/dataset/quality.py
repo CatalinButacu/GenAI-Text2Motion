@@ -43,12 +43,6 @@ class NewtonResult:
         return self.hover_share + self.unbalanced_share
 
 
-def centre_of_mass(joints: np.ndarray) -> np.ndarray:
-    masses = np.array([mass for _, _, mass in SEGMENTS])
-    centres = np.stack([(joints[:, a] + joints[:, b]) / 2 for a, b, _ in SEGMENTS], axis=1)
-    return np.einsum("s,fsc->fc", masses, centres) / masses.sum()
-
-
 def long_runs(mask: np.ndarray, min_frames: int) -> list[tuple[int, int]]:
     edges = np.diff(np.concatenate(([0], mask.astype(np.int8), [0])))
     starts = np.flatnonzero(edges == 1).tolist()
@@ -107,6 +101,11 @@ def unbalanced_frames(
 
 
 def newton_violations(joints: np.ndarray, fps: int, limits: NewtonLimits) -> NewtonResult:
+    def centre_of_mass(joints: np.ndarray) -> np.ndarray:
+        masses = np.array([mass for _, _, mass in SEGMENTS])
+        centres = np.stack([(joints[:, a] + joints[:, b]) / 2 for a, b, _ in SEGMENTS], axis=1)
+        return np.einsum("s,fsc->fc", masses, centres) / masses.sum()
+
     heights = joints[..., UP_AXIS] - joints[..., UP_AXIS].min()
     touching = heights < np.array(CONTACT_HEIGHT_M)
     com = centre_of_mass(joints)

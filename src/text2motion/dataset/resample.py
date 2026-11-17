@@ -8,14 +8,13 @@ LOWPASS_ORDER = 4
 WHOLE_FRAME_TOLERANCE = 1e-6
 
 
-def target_frame_count(source_frames: int, source_fps: float, target_fps: float) -> int:
-    span = (source_frames - 1) / source_fps * target_fps
-    nearest = round(span)
-    whole = abs(span - nearest) < WHOLE_FRAME_TOLERANCE
-    return (nearest if whole else int(np.floor(span))) + 1
-
-
 def cubic_resample(joints: np.ndarray, source_fps: float, target_fps: float) -> np.ndarray:
+    def target_frame_count(source_frames: int, source_fps: float, target_fps: float) -> int:
+        span = (source_frames - 1) / source_fps * target_fps
+        nearest = round(span)
+        whole = abs(span - nearest) < WHOLE_FRAME_TOLERANCE
+        return (nearest if whole else int(np.floor(span))) + 1
+
     if joints.shape[0] < 2:
         raise ValueError(f"a cubic spline needs 2 or more frames, got {joints.shape[0]}")
     times = np.arange(joints.shape[0]) / source_fps

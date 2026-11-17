@@ -154,6 +154,11 @@ class MambaMixer(nn.Module):
         return out, new_ssm, new_conv
 
     def forward(self, seq: torch.Tensor) -> torch.Tensor:
+        def selective_scan_function() -> Callable:
+            if INTERFACE_MODULE not in sys.modules and importlib.util.find_spec("triton") is None:
+                register_package_without_triton()
+            return importlib.import_module(INTERFACE_MODULE).selective_scan_fn
+
         x, z = self.in_proj(seq).chunk(2, dim=-1)
 
         x_pad = F.pad(x.transpose(1, 2), (self.d_conv - 1, 0))
@@ -396,9 +401,3 @@ def register_package_without_triton() -> None:
         triton_stub.__path__ = []
         sys.modules[name] = triton_stub
     sys.modules[TRITON_MODULES[1]].__dict__["_layer_norm_fwd"] = None
-
-
-def selective_scan_function() -> Callable:
-    if INTERFACE_MODULE not in sys.modules and importlib.util.find_spec("triton") is None:
-        register_package_without_triton()
-    return importlib.import_module(INTERFACE_MODULE).selective_scan_fn

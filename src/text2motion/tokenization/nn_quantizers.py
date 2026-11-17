@@ -82,10 +82,6 @@ def dropped_code_indices(latent: torch.Tensor) -> torch.Tensor:
     return torch.full(latent.shape[:-1], DROPPED_CODE, dtype=torch.long, device=latent.device)
 
 
-def round_straight_through(latent: torch.Tensor) -> torch.Tensor:
-    return latent + (torch.round(latent) - latent).detach()
-
-
 def reject_other_fsq_levels(
     module: nn.Module,
     state_dict: dict[str, torch.Tensor],
@@ -160,6 +156,9 @@ class FiniteScalarQuantizer(Quantizer):
         return torch.tanh(latent + self.bound_shift) * self.bound_scale - self.bound_offset
 
     def quantize(self, latent: torch.Tensor) -> torch.Tensor:
+        def round_straight_through(latent: torch.Tensor) -> torch.Tensor:
+            return latent + (torch.round(latent) - latent).detach()
+
         quantized = round_straight_through(self.bound(latent))
         return quantized / self.half_width
 

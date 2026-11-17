@@ -211,14 +211,13 @@ def parse_text_file(path: Path) -> list[TextAnnotation]:
     return annotations
 
 
-def read_frame_count_cache(cache_path: Path) -> dict[str, list[int]]:
-    if not cache_path.is_file():
-        return {}
-    raw = json.loads(cache_path.read_text(encoding="utf-8"))
-    return {key: list(value) for key, value in raw.items()}
-
-
 def clip_frame_counts(vec_dir: Path, clip_ids: list[str]) -> dict[str, int]:
+    def read_frame_count_cache(cache_path: Path) -> dict[str, list[int]]:
+        if not cache_path.is_file():
+            return {}
+        raw = json.loads(cache_path.read_text(encoding="utf-8"))
+        return {key: list(value) for key, value in raw.items()}
+
     cache_path = vec_dir.parent / CLIP_LENGTHS_FILE
     cache = read_frame_count_cache(cache_path)
 

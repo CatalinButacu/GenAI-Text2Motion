@@ -64,13 +64,6 @@ CLOCKED_POSES = "pose_data_clocked"
 _HML3D_FPS = 20
 
 
-def parquet_files(src: Path, split: str) -> list[Path]:
-    matches = sorted(src.glob(f"**/{split}-*.parquet"))
-    if not matches:
-        matches = sorted(p for p in src.glob("**/*.parquet") if split in p.name)
-    return matches
-
-
 def parquet_module():
     try:
         import pyarrow.parquet as pq
@@ -103,6 +96,12 @@ def index_frame_scale(fps: int) -> int:
 
 
 def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
+    def parquet_files(src: Path, split: str) -> list[Path]:
+        matches = sorted(src.glob(f"**/{split}-*.parquet"))
+        if not matches:
+            matches = sorted(p for p in src.glob("**/*.parquet") if split in p.name)
+        return matches
+
     pq = parquet_module()
 
     vec_dir = out_dir / FEATURES_DIR
@@ -177,12 +176,6 @@ def pose_path_for(src: Path, amass_root: Path, pose_root: Path) -> Path:
     return (pose_root / src.relative_to(amass_root)).with_suffix(".npy")
 
 
-def same_pose(extracted: np.ndarray | None, saved: np.ndarray) -> bool:
-    if extracted is None or extracted.shape != saved.shape:
-        return False
-    return bool(np.allclose(extracted, saved, rtol=0.0, atol=_ADOPT_TOLERANCE))
-
-
 def adopt_pose_folder(
     extractor: AmassPoseExtractor,
     amass_root: Path,
@@ -190,6 +183,11 @@ def adopt_pose_folder(
     npz_files: list[Path],
     recipe: dict[str, object],
 ) -> None:
+    def same_pose(extracted: np.ndarray | None, saved: np.ndarray) -> bool:
+        if extracted is None or extracted.shape != saved.shape:
+            return False
+        return bool(np.allclose(extracted, saved, rtol=0.0, atol=_ADOPT_TOLERANCE))
+
     manifest_path = pose_root / POSE_MANIFEST
     if manifest_path.is_file():
         raise ValueError(f"{manifest_path} exists; adoption is only for a folder without one")
@@ -642,12 +640,6 @@ def preparation_request(paths: DatasetPaths, fps: int) -> PreparationRequest:
     )
 
 
-def clock_rates(clock_csv: Path) -> list[tuple[str, int]]:
-    with open(clock_csv, newline="", encoding="utf-8") as handle:
-        rows = [row for row in csv.DictReader(handle) if row["status"] in USABLE_STATUS]
-    return [(row["source_path"], int(row["stored_fps"])) for row in rows]
-
-
 def write_clocked_poses(
     paths: DatasetPaths, layout: Hml3dPreparationLayout, rates: list[tuple[str, int]], fps: int
 ) -> dict[int, int]:
@@ -673,11 +665,6 @@ def write_clocked_poses(
     return counts
 
 
-def official_joints_at(official_dir: Path, name: str, fps: int) -> np.ndarray:
-    features = np.load(official_dir / "new_joint_vecs" / f"{name}.npy").astype(np.float32)
-    return cubic_resample(feature_joints(features), _HML3D_FPS, fps)
-
-
 def read_split_names(official_dir: Path) -> set[str]:
     return {
         line.strip().removeprefix("M")
@@ -688,6 +675,10 @@ def read_split_names(official_dir: Path) -> set[str]:
 
 
 def fill_from_official(official_dir: Path, layout: Hml3dPreparationLayout, fps: int) -> int:
+    def official_joints_at(official_dir: Path, name: str, fps: int) -> np.ndarray:
+        features = np.load(official_dir / "new_joint_vecs" / f"{name}.npy").astype(np.float32)
+        return cubic_resample(feature_joints(features), _HML3D_FPS, fps)
+
     manifest = json.loads((layout.out_dir / INDEX_MANIFEST).read_text(encoding="utf-8"))
     missing = [str(name).removesuffix(".npy") for name in manifest["missing_names"]]
     listed = read_split_names(official_dir)
@@ -707,6 +698,11 @@ def fill_from_official(official_dir: Path, layout: Hml3dPreparationLayout, fps: 
 
 
 def build_joint_clips(paths: DatasetPaths, clock_csv: Path, fps: int) -> None:
+    def clock_rates(clock_csv: Path) -> list[tuple[str, int]]:
+        with open(clock_csv, newline="", encoding="utf-8") as handle:
+            rows = [row for row in csv.DictReader(handle) if row["status"] in USABLE_STATUS]
+        return [(row["source_path"], int(row["stored_fps"])) for row in rows]
+
     request = preparation_request(paths, fps)
     layout = Hml3dPreparationLayout(request.out_dir)
     layout.mkdirs()

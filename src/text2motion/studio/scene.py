@@ -18,12 +18,6 @@ def create_skeleton_sequence_node(joints: np.ndarray, radius: float = 0.01):
     return Skeletons(joint_positions=joints, joint_connections=kinematic_bones(), radius=radius)
 
 
-def append_skeleton_sequence_frames(node, joints: np.ndarray) -> None:
-    node.joint_positions = np.append(node.joint_positions, joints, axis=0)
-    node.spheres.add_frames(joints)
-    node.lines.add_frames(joints[:, node.skeleton].reshape(len(joints), -1, 3))
-
-
 ############################################################
 #       StudioSceneNodes
 ############################################################
@@ -145,6 +139,11 @@ class StreamSceneUpdater:
         self.host.center_view_on_node(node)
 
     def append_chunks(self, chunks: list[np.ndarray]) -> None:
+        def append_skeleton_sequence_frames(node, joints: np.ndarray) -> None:
+            node.joint_positions = np.append(node.joint_positions, joints, axis=0)
+            node.spheres.add_frames(joints)
+            node.lines.add_frames(joints[:, node.skeleton].reshape(len(joints), -1, 3))
+
         new = np.concatenate(chunks, axis=0)
         if not self.state.stream_buffers.started:
             self.state.nodes.clear_motion()

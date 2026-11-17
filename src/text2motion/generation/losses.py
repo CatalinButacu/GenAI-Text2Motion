@@ -71,12 +71,6 @@ def geometric_terms(
     return {name: masked_l1(recon[..., sl], gt[..., sl], mask) for name, sl in SLICES.items()}
 
 
-def recover_rot_batched(motion_raw: torch.Tensor, skeleton) -> torch.Tensor:
-    return torch.stack(
-        [recover_from_rot(motion_raw[b], JOINTS, skeleton) for b in range(motion_raw.size(0))]
-    )
-
-
 def fk_consistency_terms(
     recon: torch.Tensor,
     gt: torch.Tensor,
@@ -85,6 +79,11 @@ def fk_consistency_terms(
     std: torch.Tensor,
     skeleton,
 ) -> dict[str, torch.Tensor]:
+    def recover_rot_batched(motion_raw: torch.Tensor, skeleton) -> torch.Tensor:
+        return torch.stack(
+            [recover_from_rot(motion_raw[b], JOINTS, skeleton) for b in range(motion_raw.size(0))]
+        )
+
     recon_raw = recon * std + mean
     gt_raw = gt * std + mean
     pos_ric = recover_from_ric(recon_raw, JOINTS)

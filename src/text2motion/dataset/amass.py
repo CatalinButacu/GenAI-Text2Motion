@@ -106,14 +106,13 @@ def resolve_pose_path(source_path: str, pose_root: Path) -> Path | None:
     return next((candidate for candidate in candidates if candidate.is_file()), None)
 
 
-def read_heldout_ids(out_dir: Path) -> set[str]:
-    held: set[str] = set()
-    for split in (Split.VALIDATION, Split.TEST):
-        held.update(base_clip_ids(out_dir, split))
-    return held
-
-
 def heldout_sources(index_csv: Path, out_dir: Path, pose_root: Path) -> set[Path]:
+    def read_heldout_ids(out_dir: Path) -> set[str]:
+        held: set[str] = set()
+        for split in (Split.VALIDATION, Split.TEST):
+            held.update(base_clip_ids(out_dir, split))
+        return held
+
     import pandas as pd
 
     held_ids = read_heldout_ids(out_dir)

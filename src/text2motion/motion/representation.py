@@ -278,11 +278,10 @@ def encode_joints(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndar
     return data, global_positions, positions, l_velocity
 
 
-def feature_width(joint_count: int) -> int:
-    return 8 + (joint_count - 1) * 9 + joint_count * 3
-
-
 def check_feature_width(data: torch.Tensor, joint_count: int) -> None:
+    def feature_width(joint_count: int) -> int:
+        return 8 + (joint_count - 1) * 9 + joint_count * 3
+
     expected = feature_width(joint_count)
     if data.dim() < 2 or data.shape[-1] != expected:
         raise ValueError(

@@ -102,17 +102,6 @@ def require_clip_files(vec_dir: Path, unique: list[str]) -> None:
         )
 
 
-def checked_clip(vec_dir: Path, name: str) -> np.ndarray:
-    clip = np.load(vec_dir / f"{name}.npy")
-    if clip.ndim != 2 or clip.shape[0] == 0 or not np.isfinite(clip).all():
-        raise ValueError(f"train clip {name} is empty, not 2-D, or holds NaN or Inf")
-    return clip
-
-
-def streamed_clips(vec_dir: Path, unique: list[str]) -> Iterator[np.ndarray]:
-    return (checked_clip(vec_dir, name) for name in unique)
-
-
 def load_clips(vec_dir: Path, names: list[str]) -> list[np.ndarray]:
     unique = sorted(set(names))
     require_clip_files(vec_dir, unique)
@@ -181,6 +170,15 @@ def normalization_stats(
 def fit_train_stats(
     vec_dir: Path, train_names: list[str], out_dir: Path, joint_count: int
 ) -> tuple[np.ndarray, np.ndarray]:
+    def streamed_clips(vec_dir: Path, unique: list[str]) -> Iterator[np.ndarray]:
+        def checked_clip(vec_dir: Path, name: str) -> np.ndarray:
+            clip = np.load(vec_dir / f"{name}.npy")
+            if clip.ndim != 2 or clip.shape[0] == 0 or not np.isfinite(clip).all():
+                raise ValueError(f"train clip {name} is empty, not 2-D, or holds NaN or Inf")
+            return clip
+
+        return (checked_clip(vec_dir, name) for name in unique)
+
     unique = sorted(set(train_names))
     require_clip_files(vec_dir, unique)
     mean, std = normalization_stats(streamed_clips(vec_dir, unique), joint_count)

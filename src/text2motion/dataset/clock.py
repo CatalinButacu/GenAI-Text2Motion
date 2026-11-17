@@ -53,16 +53,15 @@ def distances(joints: np.ndarray) -> np.ndarray:
     return np.stack([np.linalg.norm(joints[:, a] - joints[:, b], axis=-1) for a, b in PAIRS], 1)
 
 
-def correlation(ours: np.ndarray, official: np.ndarray) -> float:
-    a = ours - ours.mean(axis=0)
-    b = official - official.mean(axis=0)
-    denominator = np.sqrt((a * a).sum() * (b * b).sum())
-    return float((a * b).sum() / denominator) if denominator > 0 else float("nan")
-
-
 def clip_score(
     pose: np.ndarray, official: np.ndarray, first_frame: int, stored_fps: int, pose_stride: int
 ) -> float:
+    def correlation(ours: np.ndarray, official: np.ndarray) -> float:
+        a = ours - ours.mean(axis=0)
+        b = official - official.mean(axis=0)
+        denominator = np.sqrt((a * a).sum() * (b * b).sum())
+        return float((a * b).sum() / denominator) if denominator > 0 else float("nan")
+
     seconds = (first_frame + np.arange(official.shape[0])) / FPS
     positions = seconds * stored_fps / pose_stride
     if positions[-1] > pose.shape[0] - 1:

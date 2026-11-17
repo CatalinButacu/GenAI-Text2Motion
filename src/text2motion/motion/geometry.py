@@ -14,11 +14,6 @@ def qinv_np(q: np.ndarray) -> np.ndarray:
     return qinv(torch.from_numpy(q).float()).numpy()
 
 
-def qnormalize(q: torch.Tensor) -> torch.Tensor:
-    assert q.shape[-1] == 4, "q must be a tensor of shape (*, 4)"
-    return q / torch.norm(q, dim=-1, keepdim=True)
-
-
 def qmul(q: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
     assert q.shape[-1] == 4
     assert r.shape[-1] == 4
@@ -82,12 +77,11 @@ def quaternion_to_matrix(quaternions: torch.Tensor) -> torch.Tensor:
     return o.reshape(quaternions.shape[:-1] + (3, 3))
 
 
-def quaternion_to_matrix_np(quaternions: np.ndarray) -> np.ndarray:
-    q = torch.from_numpy(quaternions).contiguous().float()
-    return quaternion_to_matrix(q).numpy()
-
-
 def quaternion_to_cont6d_np(quaternions: np.ndarray) -> np.ndarray:
+    def quaternion_to_matrix_np(quaternions: np.ndarray) -> np.ndarray:
+        q = torch.from_numpy(quaternions).contiguous().float()
+        return quaternion_to_matrix(q).numpy()
+
     rotation_mat = quaternion_to_matrix_np(quaternions)
     return np.concatenate([rotation_mat[..., 0], rotation_mat[..., 1]], axis=-1)
 
@@ -116,6 +110,10 @@ def cont6d_to_matrix(cont6d: torch.Tensor) -> torch.Tensor:
 
 
 def qbetween(v0: torch.Tensor, v1: torch.Tensor) -> torch.Tensor:
+    def qnormalize(q: torch.Tensor) -> torch.Tensor:
+        assert q.shape[-1] == 4, "q must be a tensor of shape (*, 4)"
+        return q / torch.norm(q, dim=-1, keepdim=True)
+
     assert v0.shape[-1] == 3, "v0 must be of the shape (*, 3)"
     assert v1.shape[-1] == 3, "v1 must be of the shape (*, 3)"
 

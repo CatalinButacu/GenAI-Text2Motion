@@ -48,10 +48,6 @@ def live_step_budget(steps: int, cap: int) -> int:
     return min(steps, cap)
 
 
-def default_step_budget(trained_steps: int, max_steps: int) -> int:
-    return min(trained_steps, max_steps) if max_steps else trained_steps
-
-
 def resolve_step_budget(args: StudioLaunchArguments, downsample: int, max_steps: int) -> int:
     fps = max(1, int(args.fps))
     requested = int(args.steps)
@@ -311,6 +307,9 @@ class StudioSession:
         self.styled = False
 
     def apply_model_limits(self, hello: dict) -> None:
+        def default_step_budget(trained_steps: int, max_steps: int) -> int:
+            return min(trained_steps, max_steps) if max_steps else trained_steps
+
         self.downsample = int(hello["downsample"])
         self.trained_steps = int(hello["trained_steps"])
         self.max_steps = int(hello["max_steps"])

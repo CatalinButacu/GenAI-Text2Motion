@@ -34,6 +34,11 @@ class TokenizerNetwork(nn.Module):
     downsample: int
 
     def checked_frame_count(self, motion: torch.Tensor) -> torch.Tensor:
+        def reject_non_finite_motion(motion: torch.Tensor) -> torch.Tensor:
+            if not bool(torch.isfinite(motion).all()):
+                raise ValueError("the motion holds NaN or Inf values; fix the clip before encode")
+            return motion
+
         frames = motion.shape[1]
         if frames < self.downsample or frames % self.downsample:
             raise ValueError(
@@ -71,12 +76,6 @@ class TokenizerNetwork(nn.Module):
             token_indices=indices,
             commitment_loss=commitment_loss,
         )
-
-
-def reject_non_finite_motion(motion: torch.Tensor) -> torch.Tensor:
-    if not bool(torch.isfinite(motion).all()):
-        raise ValueError("the motion holds NaN or Inf values; fix the clip before encode")
-    return motion
 
 
 def downsample_stage_count(downsample: int) -> int:
