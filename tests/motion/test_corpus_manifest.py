@@ -101,7 +101,9 @@ def test_a_heldout_file_already_in_the_folder_stops_the_build(tmp_path, monkeypa
 
 
 def test_heldout_sources_are_skipped(tmp_path, monkeypatch):
-    request, regen, out_dir = build_layout(tmp_path, monkeypatch, frozenset({"ACCAD__run_stageii.npy"}))
+    request, regen, out_dir = build_layout(
+        tmp_path, monkeypatch, frozenset({"ACCAD__run_stageii.npy"})
+    )
 
     summary = preparation.build_amass_pretraining_corpus(request, regen, out_dir, 10)
 

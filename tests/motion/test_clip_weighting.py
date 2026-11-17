@@ -74,7 +74,9 @@ def test_an_unshuffled_train_loader_keeps_every_clip_once(tmp_path):
 
 def test_validation_ignores_motion_class_weighting(tmp_path):
     classes = write_clips(tmp_path, split=Split.VALIDATION)
-    dataset = CaptionedMotionDataset(tmp_path, weighted_config(classes), Split.VALIDATION, seed=2026)
+    dataset = CaptionedMotionDataset(
+        tmp_path, weighted_config(classes), Split.VALIDATION, seed=2026
+    )
 
     assert dataset.clip_weights is None
 

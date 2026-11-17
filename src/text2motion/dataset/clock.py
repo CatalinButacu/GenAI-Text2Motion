@@ -126,8 +126,7 @@ def stored_fps_table(official_dir: Path, pose_root: Path, pose_stride: int) -> l
         first = head_trim_frames(source_path, FPS) + int(row["start_frame"])
         scores[source_path].append(
             tuple(
-                clip_score(pose, official, first, fps, pose_stride)
-                for fps in STORED_FPS_HYPOTHESES
+                clip_score(pose, official, first, fps, pose_stride) for fps in STORED_FPS_HYPOTHESES
             )
         )
         longest[source_path] = max(longest[source_path], official.shape[0])

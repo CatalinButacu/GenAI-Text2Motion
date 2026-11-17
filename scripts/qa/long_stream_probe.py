@@ -433,9 +433,7 @@ def transition_generate(
     return features, time.perf_counter() - started
 
 
-def transition_scores(
-    profiles: dict[str, np.ndarray], reference: np.ndarray
-) -> tuple[dict, dict]:
+def transition_scores(profiles: dict[str, np.ndarray], reference: np.ndarray) -> tuple[dict, dict]:
     if (
         reference.ndim != 3
         or reference.shape[1] != 2

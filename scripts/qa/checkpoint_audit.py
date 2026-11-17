@@ -111,9 +111,7 @@ def audit_generator(checkpoint: Path, tokenizer_names: dict[str, str]) -> AuditR
     return AuditRow(checkpoint.as_posix(), "OK", f"bundle; tokenizer {tokenizer}")
 
 
-def spec_difference(
-    bundle: GeneratorBundle, config_path: Path, tokenizer_path: Path
-) -> list[str]:
+def spec_difference(bundle: GeneratorBundle, config_path: Path, tokenizer_path: Path) -> list[str]:
     app = ApplicationBootstrap.from_config(config_path, device="cpu")
     config = app.config
     codebook_size = build_tokenizer_network(config.tokenizer, config.rvq_baseline).codebook_size

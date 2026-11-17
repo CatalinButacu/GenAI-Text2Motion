@@ -201,9 +201,7 @@ def adopt_pose_folder(
     picks = sorted(rng.choice(len(pairs), min(_ADOPT_SAMPLE, len(pairs)), replace=False))
     sample = [pairs[index] for index in picks]
     mismatched = [
-        saved.name
-        for src, saved in sample
-        if not same_pose(extractor.extract(src), np.load(saved))
+        saved.name for src, saved in sample if not same_pose(extractor.extract(src), np.load(saved))
     ]
     if mismatched:
         raise ValueError(

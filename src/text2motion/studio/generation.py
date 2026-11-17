@@ -226,9 +226,7 @@ class StudioGenerationController:
                 should_cancel=lambda: self.state.stream_buffers.cancel,
             )
             for chunk in chunks:
-                n_frames += self.accept_chunk(
-                    chunk, n_frames, total_frames, fit_queue, fit_thread
-                )
+                n_frames += self.accept_chunk(chunk, n_frames, total_frames, fit_queue, fit_thread)
         except Exception as exc:
             traceback.print_exc()
             log_result("generation", False, f"{type(exc).__name__}: {exc}")

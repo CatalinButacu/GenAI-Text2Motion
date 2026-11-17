@@ -175,9 +175,7 @@ def test_a_bytes_gender_reaches_the_model_of_that_gender(tmp_path):
     extractor = recording_extractor(models["neutral"])
     extractor._models = models
     source = tmp_path / "clip.npz"
-    write_capture(
-        source, np.array(b"male"), np.zeros(16, np.float32), np.ones((4, 3), np.float32)
-    )
+    write_capture(source, np.array(b"male"), np.zeros(16, np.float32), np.ones((4, 3), np.float32))
 
     extractor.extract(source)
 

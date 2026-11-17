@@ -85,9 +85,7 @@ class CaptionedMotionDataset(Dataset):
             )
         self._verb_clip_counts: dict[str, int] | None = None
         if data.caption_weighting == CaptionWeighting.RARE_VERB and self._train:
-            self._verb_clip_counts = self.count_verb_clips(
-                RARE_VERB_MIN_CLIPS, "rare_verb caption"
-            )
+            self._verb_clip_counts = self.count_verb_clips(RARE_VERB_MIN_CLIPS, "rare_verb caption")
         self._verb_group_sizes: dict[str, int] | None = None
         self._clip_weights: np.ndarray | None = None
         if data.clip_weighting == ClipWeighting.MOTION_CLASS and self._train:
