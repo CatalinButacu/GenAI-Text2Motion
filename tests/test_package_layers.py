@@ -14,7 +14,9 @@ ALLOWED = MappingProxyType(
         "tokenization": frozenset({"motion", "dataset"}),
         "generation": frozenset({"motion", "dataset", "tokenization"}),
         "evaluation": frozenset({"motion", "generation"}),
-        "app": frozenset({"motion", "dataset", "studio", "tokenization", "generation", "evaluation"}),
+        "app": frozenset(
+            {"motion", "dataset", "studio", "tokenization", "generation", "evaluation"}
+        ),
     }
 )
 
