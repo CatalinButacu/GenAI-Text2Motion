@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any
+
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -146,42 +149,67 @@ class UncertaintyWeighter(nn.Module):
         return total
 
 
+############################################################
+#       LossBatch
+############################################################
+@dataclass(frozen=True)
+class LossBatch:
+    logits: torch.Tensor
+    target_tokens: torch.Tensor
+    gt_motion: torch.Tensor
+    lengths: torch.Tensor | None = None
+    token_lengths: torch.Tensor | None = None
+
+
+############################################################
+#       LossSetup
+############################################################
+@dataclass(frozen=True)
+class LossSetup:
+    tokenizer: TokenizerNetwork
+    weights: LossWeights
+    downsample: int
+    has_end: bool = False
+    mean: torch.Tensor | None = None
+    std: torch.Tensor | None = None
+    skeleton: Any = None
+    weighter: UncertaintyWeighter | None = None
+
+
 def generator_loss(
-    logits: torch.Tensor,
-    target_tokens: torch.Tensor,
-    gt_motion: torch.Tensor,
-    tokenizer: TokenizerNetwork,
-    weights: LossWeights,
-    downsample: int,
-    lengths: torch.Tensor | None = None,
-    token_lengths: torch.Tensor | None = None,
-    has_end: bool = False,
-    mean: torch.Tensor | None = None,
-    std: torch.Tensor | None = None,
-    skeleton=None,
-    weighter: UncertaintyWeighter | None = None,
+    batch: LossBatch, setup: LossSetup
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-    if token_lengths is None and lengths is not None:
-        token_lengths = (lengths // downsample).clamp(max=target_tokens.size(1))
+    token_lengths = batch.token_lengths
+    if token_lengths is None and batch.lengths is not None:
+        token_lengths = (batch.lengths // setup.downsample).clamp(max=batch.target_tokens.size(1))
 
-    ce = token_ce_loss(logits, target_tokens, token_lengths)
-    motion_logits = logits[:, :-1] if has_end else logits
-    recon = soft_decode(motion_logits, tokenizer)
+    ce = token_ce_loss(batch.logits, batch.target_tokens, token_lengths)
+    motion_logits = batch.logits[:, :-1] if setup.has_end else batch.logits
+    recon = soft_decode(motion_logits, setup.tokenizer)
 
-    terms = geometric_terms(recon, gt_motion, lengths)
-    weight_map = weights.as_dict()
-    if weights.fk_enabled and skeleton is not None:
-        if mean is None or std is None:
+    terms = geometric_terms(recon, batch.gt_motion, batch.lengths)
+    weight_map = setup.weights.as_dict()
+    if setup.weights.fk_enabled and setup.skeleton is not None:
+        if setup.mean is None or setup.std is None:
             raise ValueError("the FK losses need mean and std to recover joint positions")
-        terms.update(fk_consistency_terms(recon, gt_motion, lengths, mean, std, skeleton))
-    if weights.dynamics_enabled:
-        if mean is None or std is None:
+        terms.update(
+            fk_consistency_terms(
+                recon,
+                batch.gt_motion,
+                batch.lengths,
+                setup.mean,
+                setup.std,
+                setup.skeleton,
+            )
+        )
+    if setup.weights.dynamics_enabled:
+        if setup.mean is None or setup.std is None:
             raise ValueError("foot_skate/accel losses need mean and std to recover joint positions")
-        dynamics = dynamics_terms(recon, gt_motion, lengths, mean, std)
+        dynamics = dynamics_terms(recon, batch.gt_motion, batch.lengths, setup.mean, setup.std)
         terms.update({name: value for name, value in dynamics.items() if weight_map[name] > 0})
 
-    if weighter is not None:
-        total = ce + weighter(terms)
+    if setup.weighter is not None:
+        total = ce + setup.weighter(terms)
     else:
         total = ce + sum(weight_map[name] * value for name, value in terms.items())
 

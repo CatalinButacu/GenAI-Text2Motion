@@ -61,16 +61,20 @@ def test_padding_frames_do_not_count():
 
 
 def test_dynamics_losses_refuse_to_run_without_normalization_stats():
-    from text2motion.generation.losses import generator_loss
+    from text2motion.generation.losses import LossBatch, LossSetup, generator_loss
 
     with pytest.raises(ValueError, match="mean and std"):
         generator_loss(
-            torch.zeros(1, 2, 1, 4),
-            torch.zeros(1, 2, 1, dtype=torch.long),
-            torch.zeros(1, 8, DIM),
-            cast(TokenizerNetwork, _FakeTokenizer()),
-            LossWeights(foot_skate=1.0),
-            4,
+            LossBatch(
+                logits=torch.zeros(1, 2, 1, 4),
+                target_tokens=torch.zeros(1, 2, 1, dtype=torch.long),
+                gt_motion=torch.zeros(1, 8, DIM),
+            ),
+            LossSetup(
+                tokenizer=cast(TokenizerNetwork, _FakeTokenizer()),
+                weights=LossWeights(foot_skate=1.0),
+                downsample=4,
+            ),
         )
 
 

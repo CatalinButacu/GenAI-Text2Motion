@@ -24,6 +24,8 @@ from text2motion.generation.contracts import (
     OverfitCriteria,
 )
 from text2motion.generation.losses import (
+    LossBatch,
+    LossSetup,
     UncertaintyWeighter,
     generator_loss,
 )
@@ -426,19 +428,23 @@ class GeneratorTrainer:
             condition = self.drop_text(text_emb) if noisy else text_emb
             logits = self.token_generator(input_tokens, condition)
             return generator_loss(
-                logits,
-                target_tokens,
-                gt_motion,
-                self.tokenizer_network,
-                self.training_config.loss_weights,
-                self.downsample,
-                lengths,
-                token_lengths=token_lengths,
-                has_end=self.token_generator.end_id is not None,
-                mean=self._mean,
-                std=self._std,
-                skeleton=self._skeleton,
-                weighter=self.weighter,
+                LossBatch(
+                    logits=logits,
+                    target_tokens=target_tokens,
+                    gt_motion=gt_motion,
+                    lengths=lengths,
+                    token_lengths=token_lengths,
+                ),
+                LossSetup(
+                    tokenizer=self.tokenizer_network,
+                    weights=self.training_config.loss_weights,
+                    downsample=self.downsample,
+                    has_end=self.token_generator.end_id is not None,
+                    mean=self._mean,
+                    std=self._std,
+                    skeleton=self._skeleton,
+                    weighter=self.weighter,
+                ),
             )
 
     def apply_pending_gradients(self) -> None:
