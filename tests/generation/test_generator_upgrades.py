@@ -44,7 +44,9 @@ def test_multi_token_prefix_forward_and_stream(backbone):
     logits = gen(tokens, text)
     assert logits.shape == (3, 8, cfg.num_codebooks, cfg.codebook_size)
 
-    streamed = torch.stack(list(gen.stream_token_indices(text, 8, cfg_scale=3.0)), dim=1)
+    streamed = torch.stack(
+        list(gen.stream_token_indices(text, 8, sampling=SamplingConfig(cfg_scale=3.0))), dim=1
+    )
     assert streamed.shape == (3, 8, cfg.num_codebooks)
 
 
@@ -95,7 +97,7 @@ def test_end_token_targets_and_masked_stream():
     assert fixed.shape == (1, 10, cfg.num_codebooks) and (fixed != gen.end_id).all()
 
     stopped = list(
-        gen.stream_token_indices(text, 10, stop_at_end=True)
+        gen.stream_token_indices(text, 10, sampling=SamplingConfig(stop_at_end=True))
     )  # END allowed but never yielded (B=1)
     assert len(stopped) <= 10
     assert all((step != gen.end_id).all() for step in stopped)
@@ -113,7 +115,11 @@ def test_end_cannot_end_a_stream_at_the_first_step(monkeypatch):
         return logits
 
     monkeypatch.setattr(gen, "predict_token_logits", end_is_most_likely)
-    steps = list(gen.stream_token_indices(torch.randn(1, cfg.d_text), 10, stop_at_end=True))
+    steps = list(
+        gen.stream_token_indices(
+            torch.randn(1, cfg.d_text), 10, sampling=SamplingConfig(stop_at_end=True)
+        )
+    )
 
     assert len(steps) == 1
     assert (steps[0] != end_id).all()

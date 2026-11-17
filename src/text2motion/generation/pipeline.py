@@ -62,10 +62,7 @@ class TextToMotionGenerator:
             self.token_generator.stream_token_indices(
                 text_emb,
                 token_steps,
-                temperature=sampling.temperature,
-                top_p=sampling.top_p,
-                cfg_scale=sampling.cfg_scale,
-                stop_at_end=sampling.stop_at_end,
+                sampling=sampling,
                 uniforms=uniforms,
             )
         )
@@ -125,13 +122,9 @@ class TextToMotionGenerator:
     def stream_token_indices(
         self, request: TextToMotionGenerationRequest
     ) -> Iterator[torch.Tensor]:
-        sampling = request.sampling
         text_emb = self.text_encoder([request.prompt])
         return self.token_generator.stream_token_indices(
             text_emb,
             request.token_steps,
-            temperature=sampling.temperature,
-            top_p=sampling.top_p,
-            cfg_scale=sampling.cfg_scale,
-            stop_at_end=sampling.stop_at_end,
+            sampling=request.sampling,
         )

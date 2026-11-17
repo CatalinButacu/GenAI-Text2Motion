@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from text2motion.app.bootstrap import ApplicationBootstrap
-from text2motion.generation.contracts import Backbone
+from text2motion.generation.contracts import Backbone, SamplingConfig, StreamAnchors
 from text2motion.generation.decoder import StreamingMotionDecoder
 from text2motion.motion.representation import FPS, StreamingSkeletonRecovery, recover_skeleton
 
@@ -27,9 +27,8 @@ def streamed_joints(pipeline, decoder, text_emb, steps, cfg_scale, anchor_every,
     token_source = pipeline.token_generator.stream_token_indices(
         text_emb,
         steps,
-        cfg_scale=cfg_scale,
-        anchor_every=anchor_every,
-        anchor_context=anchor_context,
+        sampling=SamplingConfig(cfg_scale=cfg_scale),
+        anchors=StreamAnchors(every=anchor_every, context=anchor_context),
     )
     recovery = StreamingSkeletonRecovery()
     chunks = []

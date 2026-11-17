@@ -4,8 +4,14 @@ import math
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from text2motion.motion.representation import DYNAMICS_TERMS, FK_TERMS, GEO_TERMS
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import torch
 
 
 ############################################################
@@ -186,6 +192,23 @@ class SamplingConfig:
     top_p: float = 0.9
     cfg_scale: float = 1.0
     stop_at_end: bool = False
+
+
+DEFAULT_SAMPLING = SamplingConfig()
+
+
+############################################################
+#       StreamAnchors
+############################################################
+@dataclass(frozen=True)
+class StreamAnchors:
+    every: int = 0
+    context: int = 16
+    text_at: Callable[[int], torch.Tensor] | None = None
+    context_at: Callable[[int], int] | None = None
+
+
+NO_ANCHORS = StreamAnchors()
 
 
 ############################################################

@@ -3,7 +3,7 @@ from dataclasses import replace
 import pytest
 import torch
 
-from text2motion.generation.contracts import Backbone, GeneratorConfig
+from text2motion.generation.contracts import Backbone, GeneratorConfig, StreamAnchors
 from text2motion.generation.nn_backbones import TransformerBackbone
 from text2motion.generation.nn_model import (
     EagerDecodeStep,
@@ -100,8 +100,7 @@ def test_transformer_re_anchoring_over_the_full_history_keeps_the_per_step_text(
                     text,
                     steps=8,
                     uniforms=uniforms,
-                    anchor_every=anchor_every,
-                    anchor_context=16,
+                    anchors=StreamAnchors(every=anchor_every, context=16),
                 )
             ),
             dim=1,
@@ -120,7 +119,7 @@ def test_default_reset_context_matches_explicit_constant_context(backbone):
     original = torch.stack(
         list(
             model.stream_token_indices(
-                text, 25, uniforms=uniforms, anchor_every=8, anchor_context=16
+                text, 25, uniforms=uniforms, anchors=StreamAnchors(every=8, context=16)
             )
         ),
         dim=1,
@@ -131,9 +130,7 @@ def test_default_reset_context_matches_explicit_constant_context(backbone):
                 text,
                 25,
                 uniforms=uniforms,
-                anchor_every=8,
-                anchor_context=16,
-                anchor_context_at=lambda _: 16,
+                anchors=StreamAnchors(every=8, context=16, context_at=lambda _: 16),
             )
         ),
         dim=1,
@@ -160,9 +157,11 @@ def test_switch_discarded_history_does_not_resurrect_at_the_next_reset(monkeypat
         model.stream_token_indices(
             torch.randn(1, cfg.d_text),
             25,
-            anchor_every=8,
-            anchor_context=16,
-            anchor_context_at=lambda index: keep if index == 16 else 16,
+            anchors=StreamAnchors(
+                every=8,
+                context=16,
+                context_at=lambda index: keep if index == 16 else 16,
+            ),
         )
     )
     assert calls == expected
@@ -175,7 +174,7 @@ def test_reset_context_rejects_invalid_or_unbounded_retention(keep):
     with pytest.raises(ValueError, match="reset context"):
         list(
             model.stream_token_indices(
-                torch.randn(1, 32), 10, anchor_every=8, anchor_context_at=lambda _: keep
+                torch.randn(1, 32), 10, anchors=StreamAnchors(every=8, context_at=lambda _: keep)
             )
         )
 
@@ -183,7 +182,11 @@ def test_reset_context_rejects_invalid_or_unbounded_retention(keep):
 def test_reset_context_callback_requires_resets():
     model = trained_like(small_cfg(Backbone.TRANSFORMER))
     with pytest.raises(ValueError, match="require re-anchoring"):
-        list(model.stream_token_indices(torch.zeros(1, 32), 1, anchor_context_at=lambda _: 0))
+        list(
+            model.stream_token_indices(
+                torch.zeros(1, 32), 1, anchors=StreamAnchors(context_at=lambda _: 0)
+            )
+        )
 
 
 def test_per_step_text_refuses_a_multi_vector_prefix():

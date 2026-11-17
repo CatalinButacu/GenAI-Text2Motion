@@ -15,7 +15,7 @@ from matplotlib.animation import PillowWriter
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.app.cli_requests import ModelServiceRequest
 from text2motion.app.serving import load_inference_pipeline
-from text2motion.generation.contracts import Backbone
+from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.representation import FPS, StreamingSkeletonRecovery
 from text2motion.studio.config import SmplxFitConfig
 from text2motion.studio.fitting import fit_smplx_to_joints
@@ -64,10 +64,12 @@ def run(a):
         it = pipeline.generator.token_generator.stream_token_indices(
             emb,
             steps,
-            temperature=a.temperature,
-            top_p=a.top_p,
-            cfg_scale=a.cfg_scale,
-            stop_at_end=False,
+            sampling=SamplingConfig(
+                temperature=a.temperature,
+                top_p=a.top_p,
+                cfg_scale=a.cfg_scale,
+                stop_at_end=False,
+            ),
         )
         recovery = StreamingSkeletonRecovery()
         joints = np.concatenate(

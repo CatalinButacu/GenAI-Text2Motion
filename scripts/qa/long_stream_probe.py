@@ -25,7 +25,12 @@ from text2motion.evaluation.metrics import (
     r_precision,
     transition_statistics,
 )
-from text2motion.generation.contracts import Backbone, StudioSamplingConfig
+from text2motion.generation.contracts import (
+    Backbone,
+    SamplingConfig,
+    StreamAnchors,
+    StudioSamplingConfig,
+)
 from text2motion.generation.nn_model import seeded_sampling_uniforms
 from text2motion.motion.contracts import Split
 from text2motion.motion.representation import DIM, FPS, recover_skeleton
@@ -373,12 +378,12 @@ def transition_generate(
             seeds, tokens * 2, model.cfg.num_codebooks, resources.device
         )
         kwargs = {
-            "temperature": sampling.temperature,
-            "top_p": sampling.top_p,
-            "cfg_scale": sampling.cfg_scale,
-            "stop_at_end": False,
-            "anchor_every": 8,
-            "anchor_context": 16,
+            "sampling": SamplingConfig(
+                temperature=sampling.temperature,
+                top_p=sampling.top_p,
+                cfg_scale=sampling.cfg_scale,
+                stop_at_end=False,
+            ),
         }
         continuous = torch.stack(
             list(
@@ -386,10 +391,14 @@ def transition_generate(
                     text[0],
                     tokens * 2,
                     uniforms=uniforms,
-                    text_at=lambda index, text=text: text[int(index >= tokens)],
-                    anchor_context_at=None
-                    if switch_context == 16
-                    else lambda index: switch_context if index == tokens else 16,
+                    anchors=StreamAnchors(
+                        every=8,
+                        context=16,
+                        text_at=lambda index, text=text: text[int(index >= tokens)],
+                        context_at=None
+                        if switch_context == 16
+                        else lambda index: switch_context if index == tokens else 16,
+                    ),
                     **kwargs,
                 )
             ),
@@ -397,7 +406,13 @@ def transition_generate(
         )
         right = torch.stack(
             list(
-                model.stream_token_indices(text[1], tokens, uniforms=uniforms[:, tokens:], **kwargs)
+                model.stream_token_indices(
+                    text[1],
+                    tokens,
+                    uniforms=uniforms[:, tokens:],
+                    anchors=StreamAnchors(every=8, context=16),
+                    **kwargs,
+                )
             ),
             dim=1,
         )
@@ -1193,13 +1208,14 @@ def generate(
             model.stream_token_indices(
                 condition,
                 tokens,
-                temperature=sampling.temperature,
-                top_p=sampling.top_p,
-                cfg_scale=sampling.cfg_scale,
-                stop_at_end=sampling.stop_at_end,
+                sampling=SamplingConfig(
+                    temperature=sampling.temperature,
+                    top_p=sampling.top_p,
+                    cfg_scale=sampling.cfg_scale,
+                    stop_at_end=sampling.stop_at_end,
+                ),
                 uniforms=uniforms,
-                anchor_every=policy.anchor_every,
-                anchor_context=policy.anchor_context,
+                anchors=StreamAnchors(every=policy.anchor_every, context=policy.anchor_context),
             )
         )
         indices = torch.stack(steps, dim=1)

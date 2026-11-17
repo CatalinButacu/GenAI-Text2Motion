@@ -8,6 +8,7 @@ from collections.abc import Iterable, Iterator
 import numpy as np
 import torch
 
+from text2motion.generation.contracts import DEFAULT_SAMPLING, SamplingConfig
 from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.motion.representation import DIM
 from text2motion.tokenization.nn_model import TokenizerNetwork
@@ -137,20 +138,10 @@ class StreamingMotionDecoder:
         generator: MotionTokenGenerator,
         text_emb: torch.Tensor,
         num_steps: int,
-        temperature: float = 1.0,
-        top_p: float = 0.9,
-        cfg_scale: float = 1.0,
-        stop_at_end: bool = False,
+        sampling: SamplingConfig = DEFAULT_SAMPLING,
     ) -> Iterator[torch.Tensor]:
         yield from self.stream_tokens(
-            generator.stream_token_indices(
-                text_emb,
-                num_steps,
-                temperature=temperature,
-                top_p=top_p,
-                cfg_scale=cfg_scale,
-                stop_at_end=stop_at_end,
-            )
+            generator.stream_token_indices(text_emb, num_steps, sampling=sampling)
         )
 
 
@@ -160,20 +151,9 @@ def run_producer(
     text_emb: torch.Tensor,
     num_steps: int,
     out_queue: "queue_mod.Queue",
-    temperature: float = 1.0,
-    top_p: float = 0.9,
-    cfg_scale: float = 1.0,
-    stop_at_end: bool = False,
+    sampling: SamplingConfig = DEFAULT_SAMPLING,
 ) -> None:
-    for chunk in decoder.stream(
-        generator,
-        text_emb,
-        num_steps,
-        temperature=temperature,
-        top_p=top_p,
-        cfg_scale=cfg_scale,
-        stop_at_end=stop_at_end,
-    ):
+    for chunk in decoder.stream(generator, text_emb, num_steps, sampling=sampling):
         put_drop_oldest(out_queue, chunk)
 
     put_drop_oldest(out_queue, _END)

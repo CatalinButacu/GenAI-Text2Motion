@@ -13,7 +13,7 @@ from torch.nn import functional as F
 
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.app.run_log import log_metrics, start_run
-from text2motion.generation.contracts import Backbone, StudioSamplingConfig
+from text2motion.generation.contracts import Backbone, SamplingConfig, StudioSamplingConfig
 from text2motion.generation.nn_backbones import MambaMixer
 from text2motion.generation.nn_model import MotionTokenGenerator, seeded_sampling_uniforms
 
@@ -128,9 +128,11 @@ def main() -> None:
             stream = generator.stream_token_indices(
                 text,
                 args.tokens,
-                temperature=sampling.temperature,
-                top_p=sampling.top_p,
-                cfg_scale=sampling.cfg_scale,
+                sampling=SamplingConfig(
+                    temperature=sampling.temperature,
+                    top_p=sampling.top_p,
+                    cfg_scale=sampling.cfg_scale,
+                ),
                 uniforms=uniforms,
             )
             tokens = torch.stack(list(stream), dim=1)

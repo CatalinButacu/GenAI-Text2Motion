@@ -19,7 +19,12 @@ from text2motion.evaluation.metrics import (
     own_caption_ranks,
     r_precision,
 )
-from text2motion.generation.contracts import Backbone, StudioSamplingConfig
+from text2motion.generation.contracts import (
+    Backbone,
+    SamplingConfig,
+    StreamAnchors,
+    StudioSamplingConfig,
+)
 from text2motion.generation.nn_model import seeded_sampling_uniforms
 from text2motion.motion.representation import recover_skeleton
 
@@ -128,13 +133,17 @@ def main() -> None:
                     token_generator.stream_token_indices(
                         first_text,
                         tokens_total,
-                        temperature=sampling.temperature,
-                        top_p=sampling.top_p,
-                        cfg_scale=sampling.cfg_scale,
+                        sampling=SamplingConfig(
+                            temperature=sampling.temperature,
+                            top_p=sampling.top_p,
+                            cfg_scale=sampling.cfg_scale,
+                        ),
                         uniforms=uniforms,
-                        anchor_every=args.anchor_every,
-                        anchor_context=args.anchor_context,
-                        text_at=text_at,
+                        anchors=StreamAnchors(
+                            every=args.anchor_every,
+                            context=args.anchor_context,
+                            text_at=text_at,
+                        ),
                     )
                 )
                 decoded = tokenizer.network.decode(torch.stack(steps, dim=1)).cpu().numpy()

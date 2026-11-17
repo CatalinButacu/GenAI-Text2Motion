@@ -18,7 +18,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.app.cli_requests import ModelServiceRequest
 from text2motion.app.serving import load_inference_pipeline
-from text2motion.generation.contracts import Backbone
+from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.representation import DIM, FPS, kinematic_bones, recover_skeleton
 from text2motion.motion.storage import sha256_file
 
@@ -235,10 +235,12 @@ def run(a: argparse.Namespace) -> None:
         it = pipeline.generator.token_generator.stream_token_indices(
             emb,
             steps,
-            temperature=a.temperature,
-            top_p=a.top_p,
-            cfg_scale=a.cfg_scale,
-            stop_at_end=not a.fixed_length,
+            sampling=SamplingConfig(
+                temperature=a.temperature,
+                top_p=a.top_p,
+                cfg_scale=a.cfg_scale,
+                stop_at_end=not a.fixed_length,
+            ),
         )
         for ch in pipeline.decoder.stream_tokens(it):
             chunks.append(ch.squeeze(0).cpu().numpy())

@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from text2motion.generation.contracts import SamplingConfig, StreamAnchors
 from text2motion.generation.decoder import StreamingMotionDecoder
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.contracts import StreamedChunk
@@ -419,12 +420,16 @@ class MotionInferenceServer:
             token_source = self.pipeline.generator.token_generator.stream_token_indices(
                 text_emb,
                 int(request["steps"]),
-                temperature=float(request["temperature"]),
-                top_p=float(request["top_p"]),
-                cfg_scale=float(request["cfg_scale"]),
-                stop_at_end=False,
-                anchor_every=self.pipeline.anchor_every,
-                anchor_context=self.pipeline.anchor_context,
+                sampling=SamplingConfig(
+                    temperature=float(request["temperature"]),
+                    top_p=float(request["top_p"]),
+                    cfg_scale=float(request["cfg_scale"]),
+                    stop_at_end=False,
+                ),
+                anchors=StreamAnchors(
+                    every=self.pipeline.anchor_every,
+                    context=self.pipeline.anchor_context,
+                ),
             )
             for chunk in self.pipeline.decoder.stream_tokens(timed_tokens(token_source)):
                 features = chunk.squeeze(0).cpu().numpy()

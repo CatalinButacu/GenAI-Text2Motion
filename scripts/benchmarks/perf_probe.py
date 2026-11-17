@@ -19,7 +19,7 @@ import torch
 
 from text2motion.app.bootstrap import apply_precision, resolve_device, seed_everything
 from text2motion.app.config import Float32Precision, load_config
-from text2motion.generation.contracts import Backbone, MixedPrecisionMode
+from text2motion.generation.contracts import Backbone, MixedPrecisionMode, SamplingConfig
 from text2motion.generation.nn_model import GeneratorModelSpec
 from text2motion.generation.trainer import GeneratorTrainer
 from text2motion.motion.representation import DIM, FPS
@@ -374,7 +374,11 @@ def rollout_benchmark(args) -> None:
 
         def rollout(text=text):
             with torch.no_grad():
-                list(generator.stream_token_indices(text, args.steps, temperature=1.0, top_p=0.9))
+                list(
+                    generator.stream_token_indices(
+                        text, args.steps, sampling=SamplingConfig(temperature=1.0, top_p=0.9)
+                    )
+                )
 
         ms = median_ms(rollout, args.repeats)
         print(f"{batch:>6} {ms / 1000:>9.3f}s {ms / batch:>9.1f}ms")
@@ -501,7 +505,9 @@ def demo_probe(args) -> None:
     frames = 0
     warm_start = None
     token_iter = generator.token_generator.stream_token_indices(
-        text_emb, args.steps, temperature=1.0, top_p=0.9, cfg_scale=args.cfg_scale
+        text_emb,
+        args.steps,
+        sampling=SamplingConfig(temperature=1.0, top_p=0.9, cfg_scale=args.cfg_scale),
     )
 
     generated = time.perf_counter()
@@ -613,7 +619,11 @@ def kernel_probe(args) -> None:
 
             def once(g=generator, t=text):
                 with torch.no_grad():
-                    list(g.stream_token_indices(t, args.steps, temperature=1.0, top_p=0.9))
+                    list(
+                        g.stream_token_indices(
+                            t, args.steps, sampling=SamplingConfig(temperature=1.0, top_p=0.9)
+                        )
+                    )
 
             ms = median_ms(once, max(3, args.repeats // 2))
             key = "fused" if use_kernel else "eager"

@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from text2motion.app.config import GeneratorConfig, TokenizerConfig
-from text2motion.generation.contracts import Backbone
+from text2motion.generation.contracts import Backbone, SamplingConfig, StreamAnchors
 from text2motion.generation.decoder import (
     StreamingMotionDecoder,
     collect_stream,
@@ -87,7 +87,9 @@ def test_end_to_end_stream_from_generator():
     gen = MotionTokenGenerator(GEN).eval()
     text = torch.randn(1, GEN.d_text)
 
-    chunks = list(dec.stream(gen, text, num_steps=8, temperature=0.0))  # greedy -> deterministic
+    chunks = list(
+        dec.stream(gen, text, num_steps=8, sampling=SamplingConfig(temperature=0.0))
+    )  # greedy -> deterministic
     motion = torch.cat(chunks, dim=1)
 
     assert motion.shape == (1, 8 * TOK.downsample, 263)
@@ -97,7 +99,14 @@ def test_queue_producer_pushes_chunks_then_sentinel():
     dec = make_decoder()
     gen = MotionTokenGenerator(GEN).eval()
     q: queue_mod.Queue = queue_mod.Queue(maxsize=4)
-    run_producer(dec, gen, torch.randn(1, GEN.d_text), num_steps=8, out_queue=q, temperature=0.0)
+    run_producer(
+        dec,
+        gen,
+        torch.randn(1, GEN.d_text),
+        num_steps=8,
+        out_queue=q,
+        sampling=SamplingConfig(temperature=0.0),
+    )
 
     motion = collect_stream(q)  # drains until STREAM_END
     assert motion.shape == (8 * TOK.downsample, 263)
@@ -108,7 +117,14 @@ def test_producer_never_stalls_on_a_full_queue():
     dec = make_decoder()
     gen = MotionTokenGenerator(GEN).eval()
     q: queue_mod.Queue = queue_mod.Queue(maxsize=1)
-    run_producer(dec, gen, torch.randn(1, GEN.d_text), num_steps=8, out_queue=q, temperature=0.0)
+    run_producer(
+        dec,
+        gen,
+        torch.randn(1, GEN.d_text),
+        num_steps=8,
+        out_queue=q,
+        sampling=SamplingConfig(temperature=0.0),
+    )
 
     motion = collect_stream(q)  # returns -> proves no deadlock; sentinel was reached
     assert motion.shape[1] == 263  # some (possibly dropped) frames, then STREAM_END
@@ -167,13 +183,12 @@ def test_stream_forwards_guidance_and_end_stopping():
             cast(MotionTokenGenerator, FakeGenerator()),
             torch.zeros(1, 1, 512),
             4,
-            cfg_scale=6.0,
-            stop_at_end=True,
+            sampling=SamplingConfig(cfg_scale=6.0, stop_at_end=True),
         )
     )
 
-    assert seen["cfg_scale"] == 6.0
-    assert seen["stop_at_end"] is True
+    assert seen["sampling"].cfg_scale == 6.0
+    assert seen["sampling"].stop_at_end is True
 
 
 def test_unbounded_stream_runs_past_the_position_table_on_a_recurrent_backbone():
@@ -302,7 +317,9 @@ def test_cuda_graph_decode_streams_the_same_tokens_as_eager_decode():
     uniforms = seeded_sampling_uniforms([3], steps, GEN.num_codebooks, "cuda")
 
     def stream() -> torch.Tensor:
-        tokens = gen.stream_token_indices(text, steps, cfg_scale=3.0, uniforms=uniforms)
+        tokens = gen.stream_token_indices(
+            text, steps, sampling=SamplingConfig(cfg_scale=3.0), uniforms=uniforms
+        )
         return torch.stack(list(tokens), 1)
 
     eager = stream()
@@ -344,7 +361,9 @@ def test_anchored_stream_runs_a_positional_backbone_past_its_learned_positions()
     text = torch.randn(1, 32)
     limit = gen.backbone.max_positions
     assert limit is not None
-    tokens = list(gen.stream_token_indices(text, 3 * limit, anchor_every=8, anchor_context=8))
+    tokens = list(
+        gen.stream_token_indices(text, 3 * limit, anchors=StreamAnchors(every=8, context=8))
+    )
     assert len(tokens) == 3 * limit
 
 
@@ -361,7 +380,11 @@ def test_anchoring_that_would_overrun_the_learned_positions_is_refused():
     )
     gen = MotionTokenGenerator(cfg).eval()
     with pytest.raises(ValueError, match="re-anchoring"):
-        list(gen.stream_token_indices(torch.randn(1, 32), 10, anchor_every=20, anchor_context=16))
+        list(
+            gen.stream_token_indices(
+                torch.randn(1, 32), 10, anchors=StreamAnchors(every=20, context=16)
+            )
+        )
 
 
 def test_anchoring_disabled_leaves_the_stream_unchanged_and_enabled_changes_it():
@@ -373,11 +396,14 @@ def test_anchoring_disabled_leaves_the_stream_unchanged_and_enabled_changes_it()
     uniforms = seeded_sampling_uniforms([5], 20, GEN.num_codebooks, "cpu")
     plain = torch.stack(list(gen.stream_token_indices(text, 20, uniforms=uniforms)), 1)
     again = torch.stack(
-        list(gen.stream_token_indices(text, 20, uniforms=uniforms, anchor_every=0)), 1
+        list(gen.stream_token_indices(text, 20, uniforms=uniforms, anchors=StreamAnchors(every=0))),
+        1,
     )
     anchored = torch.stack(
         list(
-            gen.stream_token_indices(text, 20, uniforms=uniforms, anchor_every=4, anchor_context=2)
+            gen.stream_token_indices(
+                text, 20, uniforms=uniforms, anchors=StreamAnchors(every=4, context=2)
+            )
         ),
         1,
     )
@@ -397,7 +423,11 @@ def test_anchored_cuda_graph_decode_matches_anchored_eager_decode():
 
     def stream() -> torch.Tensor:
         tokens = gen.stream_token_indices(
-            text, 24, cfg_scale=3.0, uniforms=uniforms, anchor_every=6, anchor_context=4
+            text,
+            24,
+            sampling=SamplingConfig(cfg_scale=3.0),
+            uniforms=uniforms,
+            anchors=StreamAnchors(every=6, context=4),
         )
         return torch.stack(list(tokens), 1)
 
@@ -414,14 +444,28 @@ def test_a_new_text_at_a_reset_changes_only_the_tokens_after_that_reset():
     first_text = torch.randn(1, 32)
     second_text = torch.randn(1, 32)
     uniforms = seeded_sampling_uniforms([5], 12, GEN.num_codebooks, "cpu")
-    settings = {"uniforms": uniforms, "anchor_every": 4, "anchor_context": 2, "cfg_scale": 3.0}
-    one_text = torch.stack(list(gen.stream_token_indices(first_text, 12, **settings)), 1)
+    settings = {
+        "uniforms": uniforms,
+        "sampling": SamplingConfig(cfg_scale=3.0),
+    }
+    one_text = torch.stack(
+        list(
+            gen.stream_token_indices(
+                first_text, 12, anchors=StreamAnchors(every=4, context=2), **settings
+            )
+        ),
+        1,
+    )
     switched = torch.stack(
         list(
             gen.stream_token_indices(
                 first_text,
                 12,
-                text_at=lambda index: first_text if index < 8 else second_text,
+                anchors=StreamAnchors(
+                    every=4,
+                    context=2,
+                    text_at=lambda index: first_text if index < 8 else second_text,
+                ),
                 **settings,
             )
         ),
@@ -435,4 +479,4 @@ def test_a_text_schedule_without_resets_is_refused():
     gen = MotionTokenGenerator(GEN).eval()
     text = torch.randn(1, 32)
     with pytest.raises(ValueError, match="anchor_every"):
-        list(gen.stream_token_indices(text, 4, text_at=lambda index: text))
+        list(gen.stream_token_indices(text, 4, anchors=StreamAnchors(text_at=lambda index: text)))

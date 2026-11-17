@@ -14,8 +14,12 @@ from torch.nn import functional as F
 from transformers.masking_utils import create_causal_mask
 
 from text2motion.generation.contracts import (
+    DEFAULT_SAMPLING,
+    NO_ANCHORS,
     Backbone,
     GeneratorConfig,
+    SamplingConfig,
+    StreamAnchors,
     TextEncoderConfig,
 )
 from text2motion.generation.contracts import BackboneChoice as BackboneChoice
@@ -366,23 +370,17 @@ class MotionTokenGenerator(nn.Module):
         self,
         text_emb: torch.Tensor,
         steps: int,
-        temperature: float = 1.0,
-        top_p: float = 0.9,
-        cfg_scale: float = 1.0,
-        stop_at_end: bool = False,
+        sampling: SamplingConfig = DEFAULT_SAMPLING,
         uniforms: torch.Tensor | None = None,
-        anchor_every: int = 0,
-        anchor_context: int = 16,
-        text_at: Callable[[int], torch.Tensor] | None = None,
-        anchor_context_at: Callable[[int], int] | None = None,
+        anchors: StreamAnchors = NO_ANCHORS,
     ):
         device = text_emb.device
-        guided = cfg_scale != 1.0
-        if (text_at is not None or anchor_context_at is not None) and not anchor_every:
+        guided = sampling.cfg_scale != 1.0
+        if (anchors.text_at is not None or anchors.context_at is not None) and not anchors.every:
             raise ValueError(
                 "text_at and anchor_context_at require re-anchoring; set anchor_every above 0"
             )
-        text_for = text_at or (lambda index: text_emb)
+        text_for = anchors.text_at or (lambda index: text_emb)
 
         def with_null_rows(text: torch.Tensor) -> torch.Tensor:
             if guided:
@@ -394,7 +392,7 @@ class MotionTokenGenerator(nn.Module):
         text_vector = self.per_step_text_vector(streamed_text, prefix)
         batch = prefix.size(0)
         self.check_stream_budget(
-            steps, prefix.size(1), uniforms, anchor_every, anchor_context if anchor_every else 0
+            steps, prefix.size(1), uniforms, anchors.every, anchors.context if anchors.every else 0
         )
 
         def start_from(context: list[torch.Tensor]):
@@ -417,37 +415,41 @@ class MotionTokenGenerator(nn.Module):
                 logits = step(feed)
             return logits, step
 
-        recent: deque[torch.Tensor] = deque(maxlen=anchor_context if anchor_every else 0)
+        recent: deque[torch.Tensor] = deque(maxlen=anchors.context if anchors.every else 0)
         logits, decode_step = start_from([])
         since_anchor = 0
         index = 0
         while steps == 0 or index < steps:
             if guided:
                 cond, uncond = logits.chunk(2, dim=0)
-                logits = uncond + cfg_scale * (cond - uncond)
-            if self.end_id is not None and (not stop_at_end or index == 0):
+                logits = uncond + sampling.cfg_scale * (cond - uncond)
+            if self.end_id is not None and (not sampling.stop_at_end or index == 0):
                 logits[..., self.end_id] = float("-inf")
             uniform = None if uniforms is None else uniforms[:, index]
-            tokens = sample_logits(logits, temperature, top_p, uniform)
-            if self.end_id is not None and stop_at_end and (tokens == self.end_id).any(-1).all():
+            tokens = sample_logits(logits, sampling.temperature, sampling.top_p, uniform)
+            if (
+                self.end_id is not None
+                and sampling.stop_at_end
+                and (tokens == self.end_id).any(-1).all()
+            ):
                 return
             yield tokens
             index += 1
             if steps != 0 and index >= steps:
                 return
             feed = torch.cat([tokens, tokens], dim=0) if guided else tokens
-            if not anchor_every:
+            if not anchors.every:
                 logits = decode_step(feed)
                 continue
             recent.append(feed)
             since_anchor += 1
-            if since_anchor < anchor_every:
+            if since_anchor < anchors.every:
                 logits = decode_step(feed)
                 continue
             streamed_text = with_null_rows(text_for(index))
             prefix = self.project_text_prefix(streamed_text)
             text_vector = self.per_step_text_vector(streamed_text, prefix)
-            context = self.reset_context(recent, index, anchor_context, anchor_context_at)
+            context = self.reset_context(recent, index, anchors.context, anchors.context_at)
             logits, decode_step = start_from(context)
             since_anchor = 0
 
