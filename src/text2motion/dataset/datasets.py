@@ -75,6 +75,9 @@ class CaptionedMotionDataset(Dataset):
         log_dropped_clips(self.dropped_clip_ids, f"shorter than {self._min_len} frames")
         if not self._ids:
             raise RuntimeError(f"no usable clips for split {split!r} under {self._vec_dir}")
+        self._annotations = {
+            clip_id: parse_text_file(self._text_dir / f"{clip_id}.txt") for clip_id in self._ids
+        }
         uncaptioned = self.clips_without_usable_caption()
         if uncaptioned:
             raise ValueError(
@@ -103,7 +106,7 @@ class CaptionedMotionDataset(Dataset):
     def clip_verbs(self) -> list[frozenset[str]]:
         found = []
         for clip_id in self._ids:
-            annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
+            annotations = self._annotations[clip_id]
             found.append(frozenset().union(*(caption_verbs(a) for a in annotations)))
         return found
 
@@ -123,7 +126,7 @@ class CaptionedMotionDataset(Dataset):
         lengths = clip_frame_counts(self._vec_dir, self._ids)
         groups = []
         for clip_id in self._ids:
-            annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
+            annotations = self._annotations[clip_id]
             usable = self.usable_annotations(annotations, lengths[clip_id])
             groups.append([self.rarest_verb(annotation, counts) for annotation, _ in usable])
         return groups
@@ -155,7 +158,7 @@ class CaptionedMotionDataset(Dataset):
         for clip_id in self._ids:
             if clip_id.startswith("M"):
                 continue
-            annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
+            annotations = self._annotations[clip_id]
             for verb in frozenset().union(*(caption_verbs(a) for a in annotations)):
                 counts[verb] = counts.get(verb, 0) + 1
         kept = {verb: n for verb, n in counts.items() if n >= min_clips}
@@ -177,6 +180,15 @@ class CaptionedMotionDataset(Dataset):
     @property
     def clip_ids(self) -> list[str]:
         return list(self._ids)
+
+    def captions(self) -> list[str]:
+        return sorted(
+            {
+                annotation.caption
+                for annotations in self._annotations.values()
+                for annotation in annotations
+            }
+        )
 
     @property
     def mean(self) -> np.ndarray:
@@ -229,7 +241,7 @@ class CaptionedMotionDataset(Dataset):
             )
 
         rng = item_rng(self._seed, self._epoch.value, idx)
-        annotations = parse_text_file(self._text_dir / f"{clip_id}.txt")
+        annotations = self._annotations[clip_id]
         annotation, feat = self.select_captioned_segment(annotations, feat, rng)
         feat = self.normalize(self.crop_to_max_frames(feat, rng))
         return MotionClip(
@@ -262,9 +274,7 @@ class CaptionedMotionDataset(Dataset):
         return [
             clip_id
             for clip_id in self._ids
-            if not self.usable_annotations(
-                parse_text_file(self._text_dir / f"{clip_id}.txt"), lengths[clip_id]
-            )
+            if not self.usable_annotations(self._annotations[clip_id], lengths[clip_id])
         ]
 
     def select_captioned_segment(
