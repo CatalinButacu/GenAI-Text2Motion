@@ -7,7 +7,8 @@ import torch
 from text2motion.app import cli
 from text2motion.app.bootstrap import ApplicationBootstrap, resolve_device
 from text2motion.app.cli import COMMANDS, parse_request
-from text2motion.evaluation.contracts import BenchmarkRequest, StreamingBenchmarkProtocol
+from text2motion.app.cli_requests import BenchmarkRequest
+from text2motion.evaluation.contracts import StreamingBenchmarkProtocol
 
 
 def test_benchmark_request_has_the_protocol_defaults():

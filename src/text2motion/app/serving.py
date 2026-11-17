@@ -7,6 +7,8 @@ import torch
 
 from text2motion.app.bootstrap import ApplicationContext
 from text2motion.app.cli_requests import (
+    BenchmarkRequest,
+    EvaluateRequest,
     HealthRequest,
     ModelServiceRequest,
     ServeRequest,
@@ -21,8 +23,6 @@ from text2motion.app.service import (
 )
 from text2motion.evaluation.benchmark import run_streaming_state_latency_benchmark
 from text2motion.evaluation.contracts import (
-    BenchmarkRequest,
-    EvaluateRequest,
     GenerationEvaluationProtocol,
     GenerationLengthPolicy,
     StreamingBenchmarkProtocol,

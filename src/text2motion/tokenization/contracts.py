@@ -8,7 +8,8 @@ from typing import NamedTuple
 import torch
 from pydantic import Field
 
-from text2motion.motion.contracts import CommandRequest, CorpusLayout, MotionDataConfig
+from text2motion.dataset.contracts import MotionDataConfig
+from text2motion.motion.contracts import CommandRequest, CorpusLayout
 from text2motion.motion.representation import DIM
 
 DROPPED_CODE = -1

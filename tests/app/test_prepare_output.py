@@ -6,7 +6,8 @@ import pytest
 
 from text2motion.app import training
 from text2motion.app.bootstrap import ApplicationContext
-from text2motion.motion.contracts import PreparationRequest, PreparationStage, PrepareRequest
+from text2motion.app.cli_requests import PrepareRequest
+from text2motion.motion.contracts import PreparationRequest, PreparationStage
 
 
 def app(official: Path) -> ApplicationContext:

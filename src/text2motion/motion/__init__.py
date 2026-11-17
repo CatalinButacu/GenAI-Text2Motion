@@ -3,14 +3,12 @@ from text2motion.motion.contracts import (
     MotionBatch,
     MotionChunk,
     MotionClip,
-    MotionDataConfig,
     MotionTokens,
     Split,
 )
 from text2motion.motion.normalization import MotionScaler
 
 __all__ = [
-    "MotionDataConfig",
     "GeneratedMotion",
     "MotionBatch",
     "MotionChunk",

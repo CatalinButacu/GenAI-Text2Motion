@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+
+from text2motion.motion.representation import MotionSource, RepresentationTrack
 
 GRAVITY_M_PER_S2 = 9.81
 SEED = 2026
@@ -129,3 +132,52 @@ class DatasetPaths:
 
     def features(self, fps: int, source: str) -> Path:
         return self.extra / f"features{fps}" / source
+
+
+############################################################
+#       CaptionWeighting
+############################################################
+class CaptionWeighting(StrEnum):
+    UNIFORM = "uniform"
+    RARE_VERB = "rare_verb"
+
+
+############################################################
+#       ClipWeighting
+############################################################
+class ClipWeighting(StrEnum):
+    UNIFORM = "uniform"
+    MOTION_CLASS = "motion_class"
+    UNIFORM_REPLACEMENT = "uniform_replacement"
+    VERB = "verb"
+
+
+############################################################
+#       MotionDataConfig
+############################################################
+@dataclass(frozen=True)
+class MotionDataConfig:
+    track: RepresentationTrack = RepresentationTrack.HML3D_263
+    sources: tuple[MotionSource, ...] = (MotionSource.HUMANML3D,)
+    mirror_augment: bool = True
+    caption_weighting: CaptionWeighting = CaptionWeighting.UNIFORM
+    clip_weighting: ClipWeighting = ClipWeighting.UNIFORM
+    motion_classes: Path | None = None
+    max_motion_len: int = 196
+    min_motion_len: int = 40
+
+    def __post_init__(self) -> None:
+        if not 0 < self.min_motion_len <= self.max_motion_len:
+            raise ValueError(
+                f"motion lengths need 0 < min_motion_len <= max_motion_len, got "
+                f"{self.min_motion_len} and {self.max_motion_len}"
+            )
+        if not self.sources:
+            raise ValueError("the data config needs at least one motion source")
+        if self.clip_weighting is ClipWeighting.MOTION_CLASS and self.motion_classes is None:
+            raise ValueError("motion_class clip weighting needs the motion_classes verb map")
+        if (
+            self.clip_weighting is ClipWeighting.VERB
+            and self.caption_weighting is CaptionWeighting.RARE_VERB
+        ):
+            raise ValueError("verb clip weighting picks its own caption; use uniform captions")

@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
-from text2motion.motion.representation import FPS, JOINTS, MotionSource, RepresentationTrack
+from text2motion.motion.representation import FPS, JOINTS
 
 
 ############################################################
@@ -35,55 +35,6 @@ class PreparationStage(StrEnum):
     FEATURE = "feature"
     STATS = "stats"
     ALL = "all"
-
-
-############################################################
-#       CaptionWeighting
-############################################################
-class CaptionWeighting(StrEnum):
-    UNIFORM = "uniform"
-    RARE_VERB = "rare_verb"
-
-
-############################################################
-#       ClipWeighting
-############################################################
-class ClipWeighting(StrEnum):
-    UNIFORM = "uniform"
-    MOTION_CLASS = "motion_class"
-    UNIFORM_REPLACEMENT = "uniform_replacement"
-    VERB = "verb"
-
-
-############################################################
-#       MotionDataConfig
-############################################################
-@dataclass(frozen=True)
-class MotionDataConfig:
-    track: RepresentationTrack = RepresentationTrack.HML3D_263
-    sources: tuple[MotionSource, ...] = (MotionSource.HUMANML3D,)
-    mirror_augment: bool = True
-    caption_weighting: CaptionWeighting = CaptionWeighting.UNIFORM
-    clip_weighting: ClipWeighting = ClipWeighting.UNIFORM
-    motion_classes: Path | None = None
-    max_motion_len: int = 196
-    min_motion_len: int = 40
-
-    def __post_init__(self) -> None:
-        if not 0 < self.min_motion_len <= self.max_motion_len:
-            raise ValueError(
-                f"motion lengths need 0 < min_motion_len <= max_motion_len, got "
-                f"{self.min_motion_len} and {self.max_motion_len}"
-            )
-        if not self.sources:
-            raise ValueError("the data config needs at least one motion source")
-        if self.clip_weighting is ClipWeighting.MOTION_CLASS and self.motion_classes is None:
-            raise ValueError("motion_class clip weighting needs the motion_classes verb map")
-        if (
-            self.clip_weighting is ClipWeighting.VERB
-            and self.caption_weighting is CaptionWeighting.RARE_VERB
-        ):
-            raise ValueError("verb clip weighting picks its own caption; use uniform captions")
 
 
 ############################################################
@@ -151,49 +102,6 @@ class CommandRequest(BaseModel):
 ############################################################
 class DefaultConfigRequest(CommandRequest):
     config: Path = Field(default=DEFAULT_CONFIG, description=CONFIG_HELP)
-
-
-############################################################
-#       PrepareRequest
-############################################################
-class PrepareRequest(DefaultConfigRequest):
-    stage: PreparationStage = Field(
-        default=PreparationStage.ALL,
-        description="run one preparation stage only (amass, index, feature, stats); all runs them in sequence",
-    )
-    corpus: bool = Field(
-        default=False,
-        description="build the unlabeled AMASS pretraining corpus and not the captioned data set",
-    )
-    adopt_pose_folder: bool = Field(
-        default=False,
-        description="stage amass: accept an existing pose folder without a manifest after a new "
-        "extraction of a fixed sample matches the files on disk",
-    )
-    regen_dir: Path = Field(
-        default=CorpusLayout().regen_dir,
-        description="folder with the regenerated poses and joints that the corpus is built from",
-    )
-    corpus_dir: Path = Field(
-        default=CorpusLayout().amass_corpus_dir,
-        description="output folder of the AMASS 263-feature corpus",
-    )
-    min_frames: int = Field(
-        default=MotionDataConfig().min_motion_len,
-        description="clips shorter than this are dropped; a higher value gives fewer, longer clips",
-    )
-    limit: int = Field(
-        default=0,
-        description="convert only the first N sequences, for a quick test; 0 converts all",
-    )
-    source_release: Path | None = Field(
-        default=None,
-        description="folder of an official HumanML3D release to convert; skips all other stages",
-    )
-    converted_dir: Path = Field(
-        default=CorpusLayout().official_dir,
-        description="output folder for the converted official release",
-    )
 
 
 SMPLX_MODEL_TYPE = "smplx"

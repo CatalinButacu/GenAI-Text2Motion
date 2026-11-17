@@ -2,12 +2,12 @@ import numpy as np
 import pytest
 from torch.utils.data import DataLoader
 
+from text2motion.dataset.contracts import MotionDataConfig
 from text2motion.dataset.datasets import (
     CaptionedMotionDataset,
     MotionWindowDataset,
     collate_motion_clips,
 )
-from text2motion.motion.contracts import MotionDataConfig
 
 CLIPS = 6
 

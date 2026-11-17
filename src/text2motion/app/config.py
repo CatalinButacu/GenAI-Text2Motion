@@ -12,13 +12,14 @@ from typing import Any, TypeVar, cast
 import yaml
 from pydantic import ConfigDict, TypeAdapter
 
+from text2motion.dataset.contracts import MotionDataConfig
 from text2motion.generation.contracts import (
     Backbone,
     GeneratorConfig,
     GeneratorTrainingConfig,
     TextEncoderConfig,
 )
-from text2motion.motion.contracts import Gender, MotionDataConfig
+from text2motion.motion.contracts import Gender
 from text2motion.motion.representation import DIM, FPS, JOINTS
 from text2motion.tokenization.contracts import (
     ResidualVectorQuantizationConfig,

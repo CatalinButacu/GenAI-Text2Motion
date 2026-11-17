@@ -10,12 +10,10 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 
+from text2motion.dataset.contracts import CaptionWeighting, ClipWeighting, MotionDataConfig
 from text2motion.motion.contracts import (
-    CaptionWeighting,
-    ClipWeighting,
     MotionBatch,
     MotionClip,
-    MotionDataConfig,
     Split,
     TextAnnotation,
 )

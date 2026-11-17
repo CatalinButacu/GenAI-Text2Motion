@@ -8,6 +8,12 @@ import torch
 
 from text2motion.app.bootstrap import ApplicationContext, required_path
 from text2motion.app.checkpoint import GeneratorBundle, OverfitGate, load_generator_checkpoint
+from text2motion.app.cli_requests import (
+    PrepareRequest,
+    PretrainRequest,
+    SanityOverfitRequest,
+    TrainGeneratorRequest,
+)
 from text2motion.app.run_log import (
     log_metrics,
     resumed_run_dir,
@@ -28,10 +34,7 @@ from text2motion.generation.contracts import (
     GeneratorTrainingRequest,
     MixedPrecisionMode,
     OverfitCriteria,
-    PretrainRequest,
     SamplingConfig,
-    SanityOverfitRequest,
-    TrainGeneratorRequest,
 )
 from text2motion.generation.nn_model import GeneratorModelSpec, MotionTokenGenerator
 from text2motion.generation.pipeline import TextToMotionGenerator
@@ -42,7 +45,7 @@ from text2motion.generation.trainer import (
     overfit_single_batch,
     train_generator,
 )
-from text2motion.motion.contracts import PrepareRequest, Split
+from text2motion.motion.contracts import Split
 from text2motion.motion.storage import MEAN_FILE, SPLIT_FILES, STD_FILE, sha256_file
 from text2motion.tokenization.contracts import (
     TokenizeRequest,
