@@ -4,7 +4,7 @@ from typing import cast
 
 import numpy as np
 
-from text2motion.app.service import MotionInferenceClient, MotionStreamProtocol
+from text2motion.app.service import MotionInferenceClient, MotionStreamProtocol, ServiceAddress
 
 
 def stub_server(server: socket.socket, script: str, chunks: list[np.ndarray]) -> None:
@@ -50,7 +50,7 @@ def start(script: str, chunks: list[np.ndarray]) -> int:
 def test_client_streams_chunks_and_done():
     chunks = [np.random.rand(4, 22, 3).astype(np.float32) for _ in range(3)]
     port = start("ok", chunks)
-    client = MotionInferenceClient("127.0.0.1", port)
+    client = MotionInferenceClient(ServiceAddress("127.0.0.1", port))
     assert client.hello["downsample"] == 4
     assert client.hello["trained_steps"] == 49
     received = list(client.generate("walk", steps=3, temperature=1.0, top_p=0.9, cfg_scale=1.0))
@@ -66,7 +66,7 @@ def test_client_streams_chunks_and_done():
 
 def test_client_raises_on_service_error():
     port = start("error", [])
-    client = MotionInferenceClient("127.0.0.1", port)
+    client = MotionInferenceClient(ServiceAddress("127.0.0.1", port))
     try:
         list(client.generate("walk", steps=3, temperature=1.0, top_p=0.9, cfg_scale=1.0))
         raise AssertionError("expected RuntimeError from service error message")
@@ -215,7 +215,7 @@ def test_a_client_that_stops_reading_early_leaves_the_connection_usable():
     server = socket.create_server(("127.0.0.1", 0))
     port = server.getsockname()[1]
     threading.Thread(target=abandon_server, args=(server,), daemon=True).start()
-    client = MotionInferenceClient("127.0.0.1", port)
+    client = MotionInferenceClient(ServiceAddress("127.0.0.1", port))
     client.sock.settimeout(5)
     stream = client.generate("walk", steps=0, temperature=1.0, top_p=0.9, cfg_scale=1.0)
     next(stream)

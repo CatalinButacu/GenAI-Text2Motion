@@ -13,7 +13,12 @@ import numpy as np
 from studio_human_test import HumanDriver, build_studio_viewer
 
 from text2motion.app.config import load_dataclass, load_service_config, service_policy
-from text2motion.app.service import MotionStreamProtocol, motion_service_client
+from text2motion.app.service import (
+    MotionStreamProtocol,
+    Release,
+    ServiceAddress,
+    motion_service_client,
+)
 from text2motion.studio.config import StudioConfig
 
 TRACKED_WIDGETS = (
@@ -626,12 +631,8 @@ def main() -> int:
     tracker = WidgetTracker()
     config = load_dataclass(StudioConfig, args.studio_config)
     client = motion_service_client(
-        args.config,
-        args.ckpt,
-        args.tokenizer_ckpt,
-        "mamba",
-        "127.0.0.1",
-        args.port,
+        Release(args.config, args.ckpt, args.tokenizer_ckpt, "mamba"),
+        ServiceAddress("127.0.0.1", args.port),
         out_dir / "motion_service.log",
         service_config="configs/service.yml",
         policy=service_policy(load_service_config("configs/service.yml")),

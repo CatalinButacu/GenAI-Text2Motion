@@ -16,7 +16,12 @@ from aitviewer.utils.pyqt6_window import Keys as StudioWindowKeys
 from moderngl_window.context.headless.window import Window as HeadlessWindow
 
 from text2motion.app.config import load_dataclass, load_service_config, service_policy
-from text2motion.app.service import MotionStreamProtocol, motion_service_client
+from text2motion.app.service import (
+    MotionStreamProtocol,
+    Release,
+    ServiceAddress,
+    motion_service_client,
+)
 from text2motion.studio.config import StudioConfig
 from text2motion.studio.viewer import StreamingStudioViewer
 
@@ -529,12 +534,8 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     config = load_dataclass(StudioConfig, args.studio_config)
     client = motion_service_client(
-        args.config,
-        args.ckpt,
-        args.tokenizer_ckpt,
-        args.backbone,
-        "127.0.0.1",
-        args.port,
+        Release(args.config, args.ckpt, args.tokenizer_ckpt, args.backbone),
+        ServiceAddress("127.0.0.1", args.port),
         out_dir / "motion_service.log",
         service_config="configs/service.yml",
         policy=service_policy(load_service_config("configs/service.yml")),

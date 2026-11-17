@@ -7,7 +7,7 @@ import statistics
 from pathlib import Path
 
 from text2motion.app.config import load_config, load_service_config, service_policy
-from text2motion.app.service import motion_service_client
+from text2motion.app.service import Release, ServiceAddress, motion_service_client
 
 DELIVERY_SCOPE = (
     "delivery through the motion service: trained checkpoint, CLIP text encoder, sampling with "
@@ -69,16 +69,12 @@ def main() -> None:
     args = parse_arguments()
     service = load_service_config(args.service_config)
     client = motion_service_client(
-        args.config,
-        args.ckpt,
-        args.tokenizer_ckpt,
-        args.backbone,
-        service.connect_host,
-        service.port,
+        Release(args.config, args.ckpt, args.tokenizer_ckpt, args.backbone),
+        ServiceAddress(service.connect_host, service.port),
         load_config(args.config).paths.service_log,
-        service.startup_timeout_seconds,
         service_config=args.service_config,
         policy=service_policy(service),
+        spawn_wait_seconds=service.startup_timeout_seconds,
     )
     rows = timed_requests(client, args)
     summary = {

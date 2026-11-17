@@ -19,7 +19,8 @@ from text2motion.app.run_log import log_metrics, start_run
 from text2motion.app.service import (
     LoadedInferencePipeline,
     MotionInferenceServer,
-    release_identity,
+    Release,
+    ServiceAddress,
 )
 from text2motion.evaluation.benchmark import run_streaming_state_latency_benchmark
 from text2motion.evaluation.contracts import (
@@ -78,9 +79,9 @@ def load_inference_pipeline(
         trained_steps=app.config.data.max_motion_len // app.config.tokenizer.downsample,
         max_steps=max_steps,
         device=app.device,
-        identity=release_identity(
+        identity=Release(
             str(args.config), str(args.ckpt), str(args.tokenizer_ckpt), str(args.backbone)
-        ),
+        ).identity(),
         anchor_every=service.anchor_every_tokens,
         anchor_context=service.anchor_context_tokens,
     )
@@ -152,16 +153,17 @@ def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
     logger.info(f"[load] SMPL-X body fit runs on {device} ({torch.get_num_threads()} threads)")
     logger.info(f"[load] connecting to the motion service (backbone={args.backbone})...")
     client = motion_service_client(
-        str(args.config),
-        str(args.ckpt),
-        str(args.tokenizer_ckpt),
-        str(args.backbone),
-        args.host,
-        args.port,
+        Release(
+            str(args.config),
+            str(args.ckpt),
+            str(args.tokenizer_ckpt),
+            str(args.backbone),
+        ),
+        ServiceAddress(args.host, args.port),
         app.config.paths.service_log,
-        app.config.service.startup_timeout_seconds,
         service_config=args.service_config,
         policy=service_policy(app.config.service),
+        spawn_wait_seconds=app.config.service.startup_timeout_seconds,
     )
     model_dir = str(args.model_dir or studio_config.fit.model_dir)
     model_dir = model_dir if model_dir and Path(model_dir).exists() else ""
@@ -182,13 +184,15 @@ def run_health(app: ApplicationContext, request: HealthRequest) -> None:
     from text2motion.app.service import MotionInferenceClient
 
     app = app.with_service_file(request.service_config)
-    host = request.host or app.config.service.connect_host
-    port = request.port or app.config.service.port
-    client = MotionInferenceClient(host, port, app.config.service.connect_timeout_seconds)
+    address = ServiceAddress(
+        request.host or app.config.service.connect_host,
+        request.port or app.config.service.port,
+    )
+    client = MotionInferenceClient(address, app.config.service.connect_timeout_seconds)
     try:
         if client.hello.get("type") != "hello":
             raise RuntimeError(f"unexpected service response: {client.hello}")
-        logger.info(f"healthy: {host}:{port} ({client.hello.get('backbone')})")
+        logger.info(f"healthy: {address.host}:{address.port} ({client.hello.get('backbone')})")
     finally:
         client.close()
 

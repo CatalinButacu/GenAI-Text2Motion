@@ -6,8 +6,9 @@ import pytest
 
 from text2motion.app.service import (
     MotionStreamProtocol,
+    Release,
+    ServiceAddress,
     motion_service_client,
-    release_identity,
 )
 from text2motion.studio.session import StudioSession
 
@@ -16,11 +17,11 @@ POLICY = MappingProxyType(
 )
 
 
-def write_release_files(tmp_path) -> tuple[str, str, str, str]:
+def write_release_files(tmp_path) -> Release:
     paths = {name: tmp_path / f"{name}.bin" for name in ("config", "ckpt", "tokenizer")}
     for name, path in paths.items():
         path.write_bytes(name.encode())
-    return str(paths["config"]), str(paths["ckpt"]), str(paths["tokenizer"]), "mamba"
+    return Release(str(paths["config"]), str(paths["ckpt"]), str(paths["tokenizer"]), "mamba")
 
 
 def warm_service(hello: dict, loaded_identity: dict, commands: list[str]) -> int:
@@ -46,11 +47,10 @@ def warm_service(hello: dict, loaded_identity: dict, commands: list[str]) -> int
     return server.getsockname()[1]
 
 
-def connect(release: tuple[str, str, str, str], port: int, tmp_path):
+def connect(release: Release, port: int, tmp_path):
     return motion_service_client(
-        *release,
-        "127.0.0.1",
-        port,
+        release,
+        ServiceAddress("127.0.0.1", port),
         tmp_path / "service.log",
         service_config="service.yml",
         policy=dict(POLICY),
@@ -59,7 +59,7 @@ def connect(release: tuple[str, str, str, str], port: int, tmp_path):
 
 def test_a_warm_service_with_the_same_release_is_reused(tmp_path):
     release = write_release_files(tmp_path)
-    identity = release_identity(*release)
+    identity = release.identity()
     commands: list[str] = []
     port = warm_service(
         {"type": "hello", "identity": identity, "policy": dict(POLICY)}, {}, commands
@@ -73,9 +73,9 @@ def test_a_warm_service_with_the_same_release_is_reused(tmp_path):
 
 def test_a_retrained_checkpoint_at_the_same_path_is_reloaded(tmp_path):
     release = write_release_files(tmp_path)
-    old_identity = release_identity(*release)
+    old_identity = release.identity()
     (tmp_path / "ckpt.bin").write_bytes(b"retrained")
-    new_identity = release_identity(*release)
+    new_identity = release.identity()
     commands: list[str] = []
     hello = {"type": "hello", "identity": old_identity, "policy": dict(POLICY)}
     port = warm_service(hello, new_identity, commands)
@@ -89,7 +89,7 @@ def test_a_retrained_checkpoint_at_the_same_path_is_reloaded(tmp_path):
 
 def test_a_service_that_loads_another_release_is_refused(tmp_path):
     release = write_release_files(tmp_path)
-    identity = release_identity(*release)
+    identity = release.identity()
     commands: list[str] = []
     hello = {"type": "hello", "identity": {}, "policy": dict(POLICY)}
     port = warm_service(hello, {**identity, "tokenizer_sha256": "other"}, commands)
@@ -100,7 +100,7 @@ def test_a_service_that_loads_another_release_is_refused(tmp_path):
 
 def test_a_warm_service_with_another_policy_is_refused(tmp_path):
     release = write_release_files(tmp_path)
-    identity = release_identity(*release)
+    identity = release.identity()
     commands: list[str] = []
     other_policy = {**POLICY, "anchor_every_tokens": 48}
     port = warm_service(
