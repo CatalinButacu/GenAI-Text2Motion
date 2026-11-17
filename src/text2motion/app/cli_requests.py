@@ -210,6 +210,10 @@ class TrainGeneratorRequest(CommandRequest):
         default=None,
         description="pretrained weights to start from; without it training starts from random weights",
     )
+    text_cache: bool = Field(
+        default=True,
+        description="reuse the frozen CLIP layer states of the train captions from a disk cache; the results are the same, the step is faster",
+    )
     epochs: int = Field(
         default=GeneratorTrainingRequest().epochs,
         description="target epoch; the cosine schedule spans exactly this many epochs",

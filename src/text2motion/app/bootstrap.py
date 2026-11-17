@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
+import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -21,7 +23,7 @@ from text2motion.dataset.datasets import MotionDataModule
 from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
 from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.nn_model import CLIPTextEncoder, GeneratorModelSpec
+from text2motion.generation.nn_model import CLIPTextEncoder, FrozenTextStates, GeneratorModelSpec
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.contracts import PreparationRequest
 from text2motion.motion.storage import FAILURE_DUMP_FILE
@@ -73,6 +75,26 @@ class ApplicationContext:
         if state is not None:
             encoder.load_state_dict(state)
         return encoder
+
+    def attach_text_cache(
+        self, encoder: CLIPTextEncoder, captions: list[str], batch_size: int
+    ) -> FrozenTextStates:
+        digest = hashlib.sha256("\n".join(sorted(set(captions))).encode("utf-8")).hexdigest()[:12]
+        folder = Path(self.config.paths.cache_dir)
+        folder.mkdir(parents=True, exist_ok=True)
+        model = encoder.cfg.model_id.replace("/", "_")
+        path = folder / (
+            f"clip_frozen_{model}_keep{encoder.frozen_layer_count}_b{batch_size}_{digest}.npy"
+        )
+        if path.exists():
+            cache = FrozenTextStates.load(encoder, path)
+            logger.info(f"loaded text cache {path}")
+        else:
+            started = time.perf_counter()
+            cache = FrozenTextStates.build(encoder, captions, batch_size, path)
+            logger.info(f"built text cache {path} in {time.perf_counter() - started:.1f} s")
+        encoder.frozen_cache = cache
+        return cache
 
     def resolve_generator_spec(
         self,

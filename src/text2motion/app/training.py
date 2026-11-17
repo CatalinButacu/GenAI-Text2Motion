@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import torch
 
@@ -20,7 +21,7 @@ from text2motion.app.run_log import (
     run_dir_to_continue,
     start_run,
 )
-from text2motion.dataset.datasets import dataset_size
+from text2motion.dataset.datasets import CaptionedMotionDataset, dataset_size
 from text2motion.dataset.preparation import (
     build_amass_pretraining_corpus,
     convert_official_release,
@@ -302,6 +303,13 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
     loader = repository.captioned_batch_loader(
         Split.TRAIN, args.batch_size, num_workers=args.num_workers
     )
+    cache = (
+        app.attach_text_cache(
+            text_encoder, cast(CaptionedMotionDataset, loader.dataset).captions(), args.batch_size
+        )
+        if args.text_cache
+        else None
+    )
     scaler = repository.load_scaler()
     trainer = GeneratorTrainer(
         module,
@@ -408,6 +416,8 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         failure_dump_path=app.failure_dump_path(run_dir),
         ce_loaders=ce_loaders,
     )
+    if cache is not None:
+        logger.info(f"text cache hits {cache.hits} misses {cache.misses}")
 
 
 def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
