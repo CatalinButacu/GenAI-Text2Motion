@@ -18,6 +18,7 @@ from text2motion.generation.datasets import (
 )
 from text2motion.generation.nn_model import GeneratorModelSpec
 from text2motion.generation.pretrain import pretrain_generator
+from text2motion.motion.contracts import RunOutputs
 from text2motion.tokenization.corpus import PACK_FORMAT, PACK_IDENTITY_KEY, PACK_VERSION
 
 
@@ -164,7 +165,7 @@ def test_a_failed_pretraining_step_writes_a_dump_with_the_tokens(tmp_path):
             GeneratorTrainingConfig(),
             "cpu",
             tmp_path / "pretrained.pt",
-            failure_dump_path=dump_path,
+            outputs=RunOutputs(failure_dump_path=dump_path),
         )
 
     dump = torch.load(dump_path, weights_only=True)

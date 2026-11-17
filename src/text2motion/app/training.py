@@ -46,7 +46,7 @@ from text2motion.generation.trainer import (
     overfit_single_batch,
     train_generator,
 )
-from text2motion.motion.contracts import Split
+from text2motion.motion.contracts import RunOutputs, Split
 from text2motion.motion.storage import MEAN_FILE, SPLIT_FILES, STD_FILE, sha256_file
 from text2motion.tokenization.contracts import (
     TokenizeRequest,
@@ -196,9 +196,11 @@ def run_train_tokenizer(
         evaluate=evaluate,
         checkpoint_path=checkpoint_dir / name,
         resume_path=resume_path,
-        on_metrics=lambda record: log_metrics(run_dir, record),
-        run_dir=run_dir,
-        failure_dump_path=app.failure_dump_path(run_dir),
+        outputs=RunOutputs(
+            run_dir=run_dir,
+            on_metrics=lambda record: log_metrics(run_dir, record),
+            failure_dump_path=app.failure_dump_path(run_dir),
+        ),
     )
 
     best_path = checkpoint_dir / name
@@ -411,9 +413,11 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         evaluate=evaluate,
         save_best=save_best,
         resume_path=resume_path,
-        run_dir=run_dir,
-        on_metrics=lambda record: log_metrics(run_dir, record),
-        failure_dump_path=app.failure_dump_path(run_dir),
+        outputs=RunOutputs(
+            run_dir=run_dir,
+            on_metrics=lambda record: log_metrics(run_dir, record),
+            failure_dump_path=app.failure_dump_path(run_dir),
+        ),
         ce_loaders=ce_loaders,
     )
     if cache is not None:
@@ -474,8 +478,10 @@ def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
         train=app.config.train,
         device=app.device,
         out_path=out_path,
-        on_metrics=lambda record: log_metrics(run_dir, record),
+        outputs=RunOutputs(
+            run_dir=run_dir,
+            on_metrics=lambda record: log_metrics(run_dir, record),
+            failure_dump_path=app.failure_dump_path(run_dir),
+        ),
         seed=app.config.seed,
-        run_dir=run_dir,
-        failure_dump_path=app.failure_dump_path(run_dir),
     )

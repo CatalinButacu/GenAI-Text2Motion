@@ -17,6 +17,7 @@ from text2motion.generation.trainer import (
     check_ce_stop_setup,
     train_generator,
 )
+from text2motion.motion.contracts import RunOutputs
 from text2motion.motion.storage import RESUME_VERSION
 from text2motion.tokenization.nn_model import FiniteScalarQuantizationTokenizer
 
@@ -139,8 +140,7 @@ def train_curve(tmp_path, curve, epochs, resume=False, fresh_selection=False, ru
         },
         save_best=lambda epoch, fid: None,
         resume_path=tmp_path / "last.pt",
-        run_dir=run_dir,
-        on_metrics=records.append,
+        outputs=RunOutputs(run_dir=run_dir, on_metrics=records.append),
         ce_loaders=CleanCrossEntropyLoaders(train="train", validation="validation"),
     )
     return records
@@ -157,7 +157,7 @@ def test_the_run_stops_after_the_patience_without_a_lower_validation_ce(tmp_path
         evaluate=lambda split: {},
         save_best=lambda epoch, fid: None,
         resume_path=tmp_path / "last.pt",
-        on_metrics=records.append,
+        outputs=RunOutputs(on_metrics=records.append),
         ce_loaders=CleanCrossEntropyLoaders(train="train", validation="validation"),
     )
     assert curve.epochs == 4

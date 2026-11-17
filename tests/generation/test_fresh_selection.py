@@ -11,6 +11,7 @@ from text2motion.generation.trainer import (
     GeneratorTrainer,
     train_generator,
 )
+from text2motion.motion.contracts import RunOutputs
 from text2motion.motion.storage import RESUME_VERSION
 
 
@@ -132,7 +133,7 @@ def test_a_failed_generator_epoch_writes_a_dump(tmp_path):
             evaluate=lambda split: {},
             save_best=lambda epoch, fid: None,
             resume_path=tmp_path / "generator_last.pt",
-            failure_dump_path=dump_path,
+            outputs=RunOutputs(failure_dump_path=dump_path),
         )
 
     dump = torch.load(dump_path, weights_only=True)

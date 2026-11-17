@@ -20,7 +20,7 @@ from text2motion.generation.trainer import (
     check_schedule_horizon,
     warmup_cosine_factor,
 )
-from text2motion.motion.contracts import MetricSink
+from text2motion.motion.contracts import NO_RUN_OUTPUTS, RunOutputs
 from text2motion.motion.storage import (
     RESUME_VERSION,
     atomic_torch_save,
@@ -94,10 +94,8 @@ def pretrain_generator(
     train: GeneratorTrainingConfig,
     device: str,
     out_path: Path,
-    on_metrics: MetricSink = lambda metrics: None,
+    outputs: RunOutputs = NO_RUN_OUTPUTS,
     seed: int = 2026,
-    run_dir: Path | None = None,
-    failure_dump_path: Path | None = None,
 ) -> None:
     loader, val_loader, budget = build_token_loaders(request, seed)
     logger.info(
@@ -177,8 +175,8 @@ def pretrain_generator(
                 seen += 1
         except Exception as error:
             write_failure_dump(
-                failure_dump_path,
-                pretraining_state(generator, opt, total_steps, run_dir, step, epoch),
+                outputs.failure_dump_path,
+                pretraining_state(generator, opt, total_steps, outputs.run_dir, step, epoch),
                 inputs,
                 seen,
                 generator,
@@ -213,11 +211,12 @@ def pretrain_generator(
             record["gap"] = record["val_ce"] - record["ce"]
             line += f"  val_ce {record['val_ce']:.4f}  gap {record['gap']:+.4f}"
 
-        on_metrics(record)
+        outputs.on_metrics(record)
         logger.info(line)
         atomic_torch_save(generator.state_dict(), out_path)
         atomic_torch_save(
-            pretraining_state(generator, opt, total_steps, run_dir, step, epoch), resume_path
+            pretraining_state(generator, opt, total_steps, outputs.run_dir, step, epoch),
+            resume_path,
         )
         if device == "cuda":
             torch.cuda.empty_cache()

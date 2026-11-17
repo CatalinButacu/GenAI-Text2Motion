@@ -8,7 +8,13 @@ from pathlib import Path
 import torch
 from torch import nn
 
-from text2motion.motion.contracts import Evaluator, MetricSink, MotionBatch, Split
+from text2motion.motion.contracts import (
+    NO_RUN_OUTPUTS,
+    Evaluator,
+    MotionBatch,
+    RunOutputs,
+    Split,
+)
 from text2motion.motion.storage import (
     RESUME_VERSION,
     atomic_torch_save,
@@ -180,9 +186,7 @@ def train_tokenizer(
     evaluate: Evaluator,
     checkpoint_path: Path,
     resume_path: Path,
-    on_metrics: MetricSink = lambda metrics: None,
-    run_dir: Path | None = None,
-    failure_dump_path: Path | None = None,
+    outputs: RunOutputs = NO_RUN_OUTPUTS,
 ) -> float:
     best_fid = float("inf")
     start_epoch = 0
@@ -204,16 +208,16 @@ def train_tokenizer(
     for epoch in range(start_epoch, request.epochs):
         loader.dataset.set_epoch(epoch)
         with dump_on_failure(
-            failure_dump_path,
+            outputs.failure_dump_path,
             lambda epoch=epoch, best_fid=best_fid: (
-                trainer.resume_state(epoch, best_fid, run_dir),
+                trainer.resume_state(epoch, best_fid, outputs.run_dir),
                 trainer.current_inputs,
                 trainer.current_step,
                 trainer.tokenizer_network,
             ),
         ):
             means = trainer.train_epoch(loader, device)
-        on_metrics({"epoch": epoch + 1, **means})
+        outputs.on_metrics({"epoch": epoch + 1, **means})
         logger.info(
             f"epoch {epoch + 1:3d}  [common] recon {means['recon']:.4f} total {means['total']:.4f}  "
             f"[health] perplexity {means['perplexity']:.1f} usage {means['usage_frac']:.1%} "
@@ -225,7 +229,7 @@ def train_tokenizer(
 
         with trainer.ema_weights():
             metrics = evaluate(Split.VALIDATION)
-        on_metrics({"epoch": epoch + 1, "split": Split.VALIDATION.value, **metrics})
+        outputs.on_metrics({"epoch": epoch + 1, "split": Split.VALIDATION.value, **metrics})
         logger.info(
             f"  [val] clips {metrics['clips']}  MPJPE {metrics['mpjpe_mm']:.1f}mm  "
             f"feat-L2 {metrics['feature_l2']:.4f}  recon-FID {metrics['recon_fid']:.4f}"
@@ -240,6 +244,6 @@ def train_tokenizer(
                 atomic_torch_save(module.state_dict(), checkpoint_path)
             logger.info(f"  saved best (val) -> {checkpoint_path} (val recon-FID {best_fid:.4f})")
 
-        atomic_torch_save(trainer.resume_state(epoch, best_fid, run_dir), resume_path)
+        atomic_torch_save(trainer.resume_state(epoch, best_fid, outputs.run_dir), resume_path)
 
     return best_fid

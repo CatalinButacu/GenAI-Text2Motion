@@ -26,6 +26,23 @@ type MetricSink = Callable[[dict[str, object]], None]
 type Evaluator = Callable[[Split], dict[str, float]]
 
 
+def ignore_metrics(metrics: dict[str, object]) -> None:
+    return None
+
+
+############################################################
+#       RunOutputs
+############################################################
+@dataclass(frozen=True)
+class RunOutputs:
+    run_dir: Path | None = None
+    on_metrics: MetricSink = ignore_metrics
+    failure_dump_path: Path | None = None
+
+
+NO_RUN_OUTPUTS = RunOutputs()
+
+
 ############################################################
 #       PreparationStage
 ############################################################

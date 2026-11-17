@@ -7,6 +7,7 @@ import torch
 from pydantic import ValidationError
 
 from text2motion.app.config import TokenizerConfig
+from text2motion.motion.contracts import RunOutputs
 from text2motion.motion.storage import atomic_torch_save
 from text2motion.tokenization.contracts import (
     DROPPED_CODE,
@@ -221,7 +222,7 @@ def test_a_failed_tokenizer_epoch_writes_a_dump_with_the_batch(tmp_path):
             evaluate=lambda split: {},
             checkpoint_path=tmp_path / "tokenizer.pt",
             resume_path=tmp_path / "tokenizer_last.pt",
-            failure_dump_path=dump_path,
+            outputs=RunOutputs(failure_dump_path=dump_path),
         )
 
     dump = torch.load(dump_path, weights_only=True)
