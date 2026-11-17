@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 import torch
 
@@ -33,6 +35,54 @@ def encoder(unfreeze_last_n: int = 1) -> CLIPTextEncoder:
         return CLIPTextEncoder(TextEncoderConfig(unfreeze_last_n=unfreeze_last_n))
     except Exception as exc:  # noqa: BLE001 - any load failure (offline / no weights) -> skip
         pytest.skip(f"CLIP weights unavailable: {exc}")
+
+
+def monolithic_forward(enc: CLIPTextEncoder, texts: list[str]) -> torch.Tensor:
+    tokens = enc.tokens(texts)
+    out = enc.model(**tokens)
+    if enc.cfg.prefix_len == 1:
+        return out.text_embeds
+    hidden = out.last_hidden_state[:, : enc.cfg.prefix_len - 1]
+    mask = tokens["attention_mask"][:, : enc.cfg.prefix_len - 1]
+    hidden = hidden * mask.unsqueeze(-1).to(hidden.dtype)
+    return torch.cat([out.text_embeds.unsqueeze(1), hidden], dim=1)
+
+
+def grads_of(params: list[torch.nn.Parameter]) -> list[torch.Tensor]:
+    grads = []
+    for p in params:
+        assert p.grad is not None
+        grads.append(p.grad.clone())
+    return grads
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("unfreeze_last_n", [0, 1, 2])
+@pytest.mark.parametrize("prefix_len", [1, 3])
+def test_split_forward_matches_monolithic(unfreeze_last_n: int, prefix_len: int):
+    enc = encoder(unfreeze_last_n=unfreeze_last_n)
+    enc.cfg = replace(enc.cfg, prefix_len=prefix_len)
+    texts = [
+        "a person jumps",
+        "a person walks forward then stops",
+        "someone waves with the right hand",
+        "a person jumps over a low wall and lands softly on both feet",
+    ]
+    trainable = [p for p in enc.parameters() if p.requires_grad]
+
+    expected = monolithic_forward(enc, texts)
+    expected.sum().backward()
+    expected_grads = grads_of(trainable)
+    enc.zero_grad()
+
+    actual = enc(texts)
+    actual.sum().backward()
+
+    assert torch.equal(actual, expected), f"max abs diff {(actual - expected).abs().max().item()}"
+    for index, (got, want) in enumerate(zip(grads_of(trainable), expected_grads, strict=True)):
+        assert torch.equal(got, want), (
+            f"param {index} max abs grad diff {(got - want).abs().max().item()}"
+        )
 
 
 @pytest.mark.slow

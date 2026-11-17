@@ -3,11 +3,12 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, replace
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import nn
 from torch.nn import functional as F
+from transformers.masking_utils import create_causal_mask
 
 from text2motion.generation.contracts import (
     Backbone,
@@ -72,7 +73,11 @@ class CLIPTextEncoder(nn.Module):
     def device(self) -> torch.device:
         return next(self.parameters()).device
 
-    def forward(self, texts: list[str]) -> torch.Tensor:
+    @property
+    def frozen_layer_count(self) -> int:
+        return len(self.model.text_model.encoder.layers) - self.cfg.unfreeze_last_n
+
+    def tokens(self, texts: list[str]) -> dict[str, torch.Tensor]:
         tokens = self.tokenizer(
             texts,
             padding="max_length",
@@ -80,15 +85,55 @@ class CLIPTextEncoder(nn.Module):
             truncation=True,
             return_tensors="pt",
         )
-        tokens = {k: v.to(self.device) for k, v in tokens.items()}
-        out = self.model(**tokens)
-        if self.cfg.prefix_len == 1:
-            return out.text_embeds
+        return {k: v.to(self.device) for k, v in tokens.items()}
 
-        hidden = out.last_hidden_state[:, : self.cfg.prefix_len - 1]
-        mask = tokens["attention_mask"][:, : self.cfg.prefix_len - 1]
-        hidden = hidden * mask.unsqueeze(-1).to(hidden.dtype)
-        return torch.cat([out.text_embeds.unsqueeze(1), hidden], dim=1)
+    @torch.no_grad()
+    def frozen_states(self, tokens: dict[str, torch.Tensor]) -> torch.Tensor:
+        tm = self.model.text_model
+        hidden = tm.embeddings(input_ids=tokens["input_ids"])
+        mask = create_causal_mask(
+            config=tm.config,
+            inputs_embeds=hidden,
+            attention_mask=tokens["attention_mask"],
+            past_key_values=None,
+        )
+        for layer in tm.encoder.layers[: self.frozen_layer_count]:
+            hidden = layer(hidden, mask, is_causal=True)
+        return hidden
+
+    def head(self, states: torch.Tensor, tokens: dict[str, torch.Tensor]) -> torch.Tensor:
+        tm = self.model.text_model
+        mask = create_causal_mask(
+            config=tm.config,
+            inputs_embeds=states,
+            attention_mask=tokens["attention_mask"],
+            past_key_values=None,
+        )
+        hidden = states
+        for layer in tm.encoder.layers[self.frozen_layer_count :]:
+            hidden = layer(hidden, mask, is_causal=True)
+        last_hidden_state = tm.final_layer_norm(hidden)
+
+        ids = tokens["input_ids"].to(dtype=torch.int)
+        if tm.eos_token_id == 2:
+            eos_pos = ids.argmax(dim=-1)
+        else:
+            eos_pos = (ids == cast(int, tm.eos_token_id)).int().argmax(dim=-1)
+        pooled = last_hidden_state[
+            torch.arange(last_hidden_state.shape[0], device=last_hidden_state.device), eos_pos
+        ]
+        text_embeds = self.model.text_projection(pooled)
+        if self.cfg.prefix_len == 1:
+            return text_embeds
+
+        seq = last_hidden_state[:, : self.cfg.prefix_len - 1]
+        seq_mask = tokens["attention_mask"][:, : self.cfg.prefix_len - 1]
+        seq = seq * seq_mask.unsqueeze(-1).to(seq.dtype)
+        return torch.cat([text_embeds.unsqueeze(1), seq], dim=1)
+
+    def forward(self, texts: list[str]) -> torch.Tensor:
+        t = self.tokens(texts)
+        return self.head(self.frozen_states(t), t)
 
 
 ############################################################
