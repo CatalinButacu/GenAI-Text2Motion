@@ -209,6 +209,7 @@ class OverfitGate:
         tokenizer_ckpt: str | Path,
         backbone: Backbone | str,
         resolved_config: dict[str, Any],
+        criteria: OverfitCriteria = DEFAULT_OVERFIT_CRITERIA,
     ) -> None:
         expected = {
             "config_sha256": sha256_file(config_path),
@@ -229,7 +230,7 @@ class OverfitGate:
         for key, value in expected.items():
             if actual[key] != value:
                 raise RuntimeError(f"overfit gate mismatch for {key}: expected {value!r}")
-        self.validate_metrics()
+        self.validate_metrics(criteria)
 
     def save(self, path: str | Path) -> None:
         destination = Path(path)

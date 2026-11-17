@@ -48,6 +48,20 @@ def test_train_generator_has_no_option_to_select_on_the_test_split():
         parse_request("train-generator", [*required, "--eval_split", "test"])
 
 
+@pytest.mark.parametrize("backbone", ["mamba", "transformer"])
+def test_generator_ce_patience_defaults_to_six_and_can_be_explicitly_disabled(backbone):
+    required = ["--config", "c.yaml", "--backbone", backbone, "--overfit_gate", "g.json"]
+    assert parse_request("train-generator", required).model_dump()["val_ce_patience"] == 6
+    assert (
+        parse_request("train-generator", [*required, "--val_ce_patience", "0"]).model_dump()[
+            "val_ce_patience"
+        ]
+        == 0
+    )
+    with pytest.raises(SystemExit):
+        parse_request("train-generator", [*required, "--val_ce_patience", "-1"])
+
+
 def test_each_request_field_has_a_help_text():
     for command in COMMANDS.values():
         for name, field in command.request_model.model_fields.items():

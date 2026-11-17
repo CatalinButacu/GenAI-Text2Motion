@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, TokenizerConfig
-from text2motion.generation.contracts import Backbone, LossWeighting
+from text2motion.generation.contracts import Backbone, GeneratorFreeze, LossWeighting
 from text2motion.generation.losses import LossWeights, soft_decode
 from text2motion.generation.nn_model import MotionTokenGenerator
 from text2motion.generation.trainer import (
@@ -340,3 +340,29 @@ def test_pretraining_optimizer_groups_do_not_decay_ssm_memory_params():
             assert decay_by_id[id(param)] == 0.0, (
                 f"{name} must not be weight-decayed in pretraining"
             )
+
+
+@pytest.mark.parametrize(
+    ("policy", "frozen", "learning"),
+    [
+        (GeneratorFreeze.BACKBONE, ("backbone.",), ("text_proj.", "heads.")),
+        (GeneratorFreeze.LOWER_HALF, ("backbone.blocks.0.",), ("backbone.blocks.1.", "text_proj.")),
+    ],
+)
+def test_a_frozen_part_keeps_its_weights_while_the_text_link_learns(policy, frozen, learning):
+    torch.manual_seed(2026)
+    gen = MotionTokenGenerator(GEN)
+    config = GeneratorTrainingConfig(lr=3e-3, cfg_dropout=0.0, pkeep=1.0, freeze=policy)
+    trainer = GeneratorTrainer(gen, FiniteScalarQuantizationTokenizer(TOK), config, downsample=4)
+    before = {name: parameter.detach().clone() for name, parameter in gen.named_parameters()}
+    for _ in range(3):
+        trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
+    after = dict(gen.named_parameters())
+    held = [name for name in after if name.startswith(frozen)]
+    assert held
+    assert all(torch.equal(before[name], after[name]) for name in held)
+    assert all(not after[name].requires_grad for name in held)
+    for prefix in learning:
+        assert any(
+            not torch.equal(before[name], after[name]) for name in after if name.startswith(prefix)
+        )

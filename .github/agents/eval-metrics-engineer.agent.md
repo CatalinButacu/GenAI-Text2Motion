@@ -1,5 +1,6 @@
 ---
 name: eval-metrics-engineer
+model: gpt-6-luna
 description: Critic for the measured numbers. Finds numbers that you cannot trust or trace, and unfair comparisons.
 ---
 

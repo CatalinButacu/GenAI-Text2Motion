@@ -23,7 +23,7 @@ A sixteen-vector text prefix is also an alternative.
 
 The source files are:
 
-- `src\text2motion\motion\datasets.py`
+- `src\text2motion\dataset\datasets.py`
 - `src\text2motion\motion\representation.py`
 - `src\text2motion\tokenization\nn_model.py`
 - `src\text2motion\tokenization\nn_quantizers.py`
@@ -70,7 +70,7 @@ The channel types are:
 - The joint velocity features use metres per frame.
 - The foot contact features use values 0 or 1.
 
-## Stage 1 -- load + normalize (motion\datasets.py)
+## Stage 1 -- load + normalize (dataset\datasets.py)
 
 1. Select a caption and its motion segment.
    HumanML3D stores each annotation as `caption#tokens#start#end`.

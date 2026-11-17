@@ -235,11 +235,14 @@ class MotionTokenGenerator(nn.Module):
         anchor_every: int = 0,
         anchor_context: int = 16,
         text_at: Callable[[int], torch.Tensor] | None = None,
+        anchor_context_at: Callable[[int], int] | None = None,
     ):
         device = text_emb.device
         guided = cfg_scale != 1.0
-        if text_at is not None and not anchor_every:
-            raise ValueError("text_at changes the text at a reset; set anchor_every above 0")
+        if (text_at is not None or anchor_context_at is not None) and not anchor_every:
+            raise ValueError(
+                "text_at and anchor_context_at require re-anchoring; set anchor_every above 0"
+            )
         text_for = text_at or (lambda index: text_emb)
 
         def with_null_rows(text: torch.Tensor) -> torch.Tensor:
@@ -305,8 +308,24 @@ class MotionTokenGenerator(nn.Module):
             streamed_text = with_null_rows(text_for(index))
             prefix = self.project_text_prefix(streamed_text)
             text_vector = self.per_step_text_vector(streamed_text, prefix)
-            logits, decode_step = start_from(list(recent))
+            context = self.__reset_context(recent, index, anchor_context, anchor_context_at)
+            logits, decode_step = start_from(context)
             since_anchor = 0
+
+    def __reset_context(
+        self,
+        recent: deque[torch.Tensor],
+        index: int,
+        capacity: int,
+        context_at: Callable[[int], int] | None,
+    ) -> list[torch.Tensor]:
+        keep = capacity if context_at is None else context_at(index)
+        if isinstance(keep, bool) or not isinstance(keep, int) or not 0 <= keep <= capacity:
+            raise ValueError(f"reset context must be an integer within 0..{capacity}, got {keep}")
+        context = list(recent)[-keep:] if keep else []
+        recent.clear()
+        recent.extend(context)
+        return context
 
 
 ############################################################

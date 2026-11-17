@@ -2,7 +2,7 @@
 
 This lesson sits between the representation in Lesson 3 and the tokenization in Lesson 4. It explains how the tokenizer receives fixed-length batches from HumanML3D-263 clips.
 
-The loader is `MotionWindowDataset` in `src\text2motion\motion\datasets.py`. The logged runs use the complete `data\HumanML3D_official` source. The title retains the historical reference to regenerated clips.
+The loader is `MotionWindowDataset` in `src\text2motion\dataset\datasets.py`. The logged runs use the complete `data\HumanML3D_official` source. The title retains the historical reference to regenerated clips.
 
 An examiner can ask these questions:
 - Does the loader use every eligible clip?

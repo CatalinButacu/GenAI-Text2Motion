@@ -374,7 +374,7 @@ Lesson 2 adds time to a pose sequence. It explains the frame rate, the choice of
 
 The current code confirms the representation and display paths described in this lesson. These are implementation facts, not measurements of motion quality.
 
-- `src\text2motion\motion\amass.py` evaluates the source SMPL-X body model, selects the body joints, and converts the coordinates to Y-up.
+- `src\text2motion\dataset\amass.py` evaluates the source SMPL-X body model, selects the body joints, and converts the coordinates to Y-up.
 - `src\text2motion\motion\representation.py` treats joint 0 as the root and defines its block as channels 0-3.
 - `encode_joints` uses skeleton IK to obtain quaternions and converts them to rot6d. It subtracts root x and z, but preserves floor-relative y.
 - `src\text2motion\motion\geometry.py` contains the quaternion functions and `cont6d_to_matrix`. The rot6d decoder divides by vector norms without a protective denominator.

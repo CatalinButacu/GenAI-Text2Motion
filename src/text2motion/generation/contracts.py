@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -44,6 +45,15 @@ class LossWeighting(StrEnum):
 
 
 ############################################################
+#       GeneratorFreeze
+############################################################
+class GeneratorFreeze(StrEnum):
+    NONE = "none"
+    BACKBONE = "backbone"
+    LOWER_HALF = "lower_half"
+
+
+############################################################
 #       OverfitCriteria
 ############################################################
 @dataclass(frozen=True)
@@ -71,6 +81,7 @@ class OverfitCriteria:
 
 
 DEFAULT_OVERFIT_CRITERIA = OverfitCriteria()
+PRETRAINED_OVERFIT_CRITERIA = OverfitCriteria(max_total_ratio=math.inf)
 
 
 ############################################################
@@ -159,6 +170,8 @@ class GeneratorTrainingConfig:
     ema_decay: float = 0.999
     cfg_dropout: float = 0.1
     pkeep: float = 0.8
+    pkeep_whole_step: bool = False
+    freeze: GeneratorFreeze = GeneratorFreeze.NONE
     amp: MixedPrecisionMode = MixedPrecisionMode.OFF
     grad_accum: int = 1
     grad_clip: float = 1.0
@@ -229,7 +242,10 @@ class GeneratorTrainingRequest:
     extend_schedule: bool = False
     clean_ce: bool = True
     ce_batches: int = 50
-    val_ce_patience: int = 0
+    val_ce_patience: int = 6
+    stop_epoch: int = 0
+    select_on_val_ce: bool = False
+    save_r1_floor: float = 0.0
 
 
 ############################################################
@@ -273,6 +289,10 @@ class SanityOverfitRequest(CommandRequest):
     lr: float = Field(
         default=OverfitGateRequest().lr,
         description="learning rate for the gate only; high on purpose, to memorise fast",
+    )
+    init_ckpt: Path | None = Field(
+        default=None,
+        description="pretrained weights to start the gate from, as the run that uses the gate does",
     )
 
 
@@ -343,7 +363,7 @@ class TrainGeneratorRequest(CommandRequest):
     )
     fresh_selection: bool = Field(
         default=False,
-        description="with --resume: forget the earlier best FID, so selection restarts in this run",
+        description="with --resume: reset earlier best FID and validation-CE patience for this run",
     )
     resume_run_dir: Path | None = Field(
         default=None,
@@ -363,7 +383,23 @@ class TrainGeneratorRequest(CommandRequest):
     )
     val_ce_patience: int = Field(
         default=GeneratorTrainingRequest().val_ce_patience,
-        description="stop after this many epochs without a lower validation CE; 0 never stops early",
+        ge=0,
+        description="stop on this consecutive epoch without a lower clean validation CE; default 6 allows five retries; 0 disables",
+    )
+    stop_epoch: int = Field(
+        default=GeneratorTrainingRequest().stop_epoch,
+        ge=0,
+        description="stop after this epoch while --epochs still sets the cosine length; 0 runs to --epochs",
+    )
+    select_on_val_ce: bool = Field(
+        default=GeneratorTrainingRequest().select_on_val_ce,
+        description="save the best bundle at the lowest clean validation CE, not at the lowest val FID",
+    )
+    save_r1_floor: float = Field(
+        default=GeneratorTrainingRequest().save_r1_floor,
+        ge=0,
+        le=1,
+        description="save the best-FID bundle only at an evaluation whose val R@1 is at least this value; an evaluation below it counts as no improvement; default 0 keeps every run unchanged",
     )
     accept_legacy_resume: bool = Field(
         default=False,

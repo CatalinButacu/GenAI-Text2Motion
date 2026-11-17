@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import math
 import time
@@ -7,6 +8,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import torch
@@ -14,6 +16,7 @@ from torch import nn
 
 from text2motion.generation.contracts import (
     DEFAULT_OVERFIT_CRITERIA,
+    GeneratorFreeze,
     GeneratorTrainingConfig,
     GeneratorTrainingRequest,
     LossWeighting,
@@ -65,6 +68,66 @@ class CleanCrossEntropyLoaders:
 class CleanCrossEntropyProgress:
     best: float
     stale: int
+
+    def observe(self, value: float) -> CleanCrossEntropyProgress:
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"invalid clean validation CE: {value}")
+        if value < self.best:
+            return CleanCrossEntropyProgress(best=value, stale=0)
+        return CleanCrossEntropyProgress(best=self.best, stale=self.stale + 1)
+
+
+def __restore_clean_ce(
+    state: dict, completed_epochs: int, request: GeneratorTrainingRequest
+) -> CleanCrossEntropyProgress:
+    if request.fresh_selection or not request.val_ce_patience:
+        return CleanCrossEntropyProgress(best=float("inf"), stale=0)
+    saved = state.get("clean_ce_progress")
+    if saved is not None:
+        progress = CleanCrossEntropyProgress(best=float(saved["best"]), stale=saved["stale"])
+    else:
+        recorded_dir = state.get("run_dir")
+        if recorded_dir is None:
+            raise ValueError(
+                "resume lacks validation-CE patience and a recorded run directory; "
+                "use --fresh_selection only if intentionally resetting selection"
+            )
+        metrics_path = Path(recorded_dir) / "metrics.jsonl"
+        history: dict[int, float] = {}
+        with metrics_path.open(encoding="utf-8") as handle:
+            for line in handle:
+                record = json.loads(line)
+                if "val_ce" not in record:
+                    continue
+                epoch = record["epoch"]
+                if type(epoch) is not int or epoch < 1:
+                    raise ValueError(f"invalid clean-CE epoch in {metrics_path}: {epoch}")
+                if epoch > completed_epochs:
+                    continue
+                if epoch in history:
+                    logger.warning(
+                        f"duplicate clean CE for epoch {epoch} in {metrics_path}; using the latest"
+                    )
+                history[epoch] = float(record["val_ce"])
+        expected = set(range(1, completed_epochs + 1))
+        if set(history) != expected:
+            raise ValueError(
+                f"cannot restore validation-CE patience: {metrics_path} lacks completed epochs "
+                f"{sorted(expected - set(history))}; use --fresh_selection only for an intentional reset"
+            )
+        progress = CleanCrossEntropyProgress(best=float("inf"), stale=0)
+        for epoch in range(1, completed_epochs + 1):
+            progress = progress.observe(history[epoch])
+        logger.info(f"restored validation-CE patience from completed epochs in {metrics_path}")
+    if (
+        not math.isfinite(progress.best)
+        or progress.best < 0
+        or type(progress.stale) is not int
+        or not 0 <= progress.stale < completed_epochs
+    ):
+        raise ValueError("invalid saved validation-CE patience state")
+    logger.info(f"validation-CE resume: best {progress.best:.6f}, stale {progress.stale} epochs")
+    return progress
 
 
 ############################################################
@@ -121,6 +184,17 @@ def partition_parameters(
     return partition
 
 
+def freeze_generator_blocks(generator: MotionTokenGenerator, policy: GeneratorFreeze) -> None:
+    if policy == GeneratorFreeze.NONE:
+        return
+    blocks = list(cast("nn.ModuleList", generator.backbone.blocks))
+    if policy == GeneratorFreeze.BACKBONE:
+        generator.backbone.requires_grad_(False)
+        return
+    for block in blocks[: len(blocks) // 2]:
+        block.requires_grad_(False)
+
+
 def warmup_cosine_factor(step: int, warmup: int, total_steps: int, floor: float) -> float:
     warmup = max(warmup, 1)
     if step < warmup:
@@ -175,6 +249,7 @@ class GeneratorTrainer:
         self.text_encoder = text_encoder
         self.training_config = training_config
         self.downsample = downsample
+        freeze_generator_blocks(token_generator, training_config.freeze)
 
         groups: list[dict] = []
         self._clip_params = list(token_generator.parameters())
@@ -335,10 +410,10 @@ class GeneratorTrainer:
 
         input_tokens = target_tokens
         if with_training_noise and self.training_config.pkeep < 1.0:
-            corrupt = (
-                torch.rand(target_tokens.shape, device=target_tokens.device)
-                >= self.training_config.pkeep
-            )
+            shape = target_tokens.shape
+            if self.training_config.pkeep_whole_step:
+                shape = (*shape[:-1], 1)
+            corrupt = torch.rand(shape, device=target_tokens.device) >= self.training_config.pkeep
             random_tokens = torch.randint_like(
                 target_tokens, self.token_generator.cfg.codebook_size
             )
@@ -346,7 +421,9 @@ class GeneratorTrainer:
 
         amp_on = self.training_config.amp == MixedPrecisionMode.BF16 and gt_motion.is_cuda
         with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):
-            condition = self.drop_text(text_emb) if with_training_noise else text_emb
+            unconditional = self.training_config.cfg_dropout >= 1.0
+            noisy = with_training_noise or unconditional
+            condition = self.drop_text(text_emb) if noisy else text_emb
             logits = self.token_generator(input_tokens, condition)
             return generator_loss(
                 logits,
@@ -504,9 +581,11 @@ def train_generator(
         start_epoch, best_fid, stale_evaluations = trainer.load_resume_state(
             state, legacy, request.extend_schedule
         )
+        ce_progress = __restore_clean_ce(state, start_epoch, request)
         if request.fresh_selection:
             logger.info(
-                f"fresh selection: ignoring inherited best FID {best_fid:.4f} from the resumed run"
+                f"fresh selection: ignoring inherited best FID {best_fid:.4f} "
+                "and resetting validation-CE patience"
             )
             best_fid = float("inf")
             stale_evaluations = 0
@@ -514,6 +593,13 @@ def train_generator(
         if device == "cuda":
             torch.cuda.empty_cache()
         logger.info(f"resumed from {resume_path} at epoch {start_epoch} (best FID {best_fid:.4f})")
+
+        reason = early_stop_reason(
+            request, start_epoch - 1, stale_evaluations, best_fid, ce_progress
+        )
+        if reason:
+            logger.info(reason)
+            return best_fid
 
     for epoch in range(start_epoch, request.epochs):
         loader.dataset.set_epoch(epoch)
@@ -543,8 +629,12 @@ def train_generator(
         ce_progress = advance_clean_ce(
             trainer, ce_loaders, device, request.ce_batches, epoch, on_metrics, ce_progress
         )
+        __save_on_lower_val_ce(trainer, request, ce_progress, epoch, save_best)
 
-        due = (epoch + 1) % request.eval_every == 0 or epoch + 1 == request.epochs
+        due = (epoch + 1) % request.eval_every == 0 or epoch + 1 in (
+            request.epochs,
+            request.stop_epoch,
+        )
         if due:
             with trainer.ema_weights():
                 metrics = evaluate(Split.VALIDATION)
@@ -560,17 +650,17 @@ def train_generator(
                 raise RuntimeError(
                     f"epoch {epoch + 1}: evaluation metrics not finite: {not_finite}"
                 )
-            if metrics["fid"] < best_fid:
+            if __is_eligible_improvement(metrics, best_fid, request):
                 best_fid = metrics["fid"]
                 stale_evaluations = 0
-                with trainer.ema_weights():
-                    save_best(epoch + 1, best_fid)
+                __save_on_lower_fid(trainer, request, epoch, best_fid, save_best)
             else:
                 stale_evaluations += 1
 
-        atomic_torch_save(
-            trainer.resume_state(epoch, best_fid, stale_evaluations, run_dir), resume_path
-        )
+        state = trainer.resume_state(epoch, best_fid, stale_evaluations, run_dir)
+        state["clean_ce_progress"] = {"best": ce_progress.best, "stale": ce_progress.stale}
+        atomic_torch_save(state, resume_path)
+        del state
 
         if device == "cuda":
             torch.cuda.empty_cache()
@@ -583,13 +673,50 @@ def train_generator(
     return best_fid
 
 
+def __save_on_lower_val_ce(
+    trainer: GeneratorTrainer,
+    request: GeneratorTrainingRequest,
+    progress: CleanCrossEntropyProgress,
+    epoch: int,
+    save_best: CheckpointSink,
+) -> None:
+    if not request.select_on_val_ce or progress.stale:
+        return
+    with trainer.ema_weights():
+        save_best(epoch + 1, float("nan"))
+    logger.info(f"  selected on clean validation CE {progress.best:.4f}")
+
+
+def __is_eligible_improvement(
+    metrics: dict[str, float], best_fid: float, request: GeneratorTrainingRequest
+) -> bool:
+    return metrics["fid"] < best_fid and metrics["r_top1"] >= request.save_r1_floor
+
+
+def __save_on_lower_fid(
+    trainer: GeneratorTrainer,
+    request: GeneratorTrainingRequest,
+    epoch: int,
+    fid: float,
+    save_best: CheckpointSink,
+) -> None:
+    if request.select_on_val_ce:
+        return
+    with trainer.ema_weights():
+        save_best(epoch + 1, fid)
+
+
 def check_ce_stop_setup(
     request: GeneratorTrainingRequest, ce_loaders: CleanCrossEntropyLoaders | None
 ) -> None:
+    if request.val_ce_patience < 0:
+        raise ValueError("validation-CE patience must be nonnegative")
     if request.val_ce_patience and ce_loaders is None:
         raise ValueError("--val_ce_patience needs the clean CE loaders (keep --clean_ce on)")
-    if request.val_ce_patience and request.resume:
-        logger.warning("resumed run: the validation-CE stop counter starts again from zero")
+    if request.select_on_val_ce and ce_loaders is None:
+        raise ValueError("--select_on_val_ce needs the clean CE loaders (keep --clean_ce on)")
+    if not 0 <= request.stop_epoch <= request.epochs:
+        raise ValueError(f"stop_epoch {request.stop_epoch} out of [0, {request.epochs}]")
 
 
 def advance_clean_ce(
@@ -609,9 +736,7 @@ def advance_clean_ce(
         f"  [clean-ce] train {record['train_ce_clean']:.4f}  "
         f"val {record['val_ce']:.4f}  gap {record['ce_gap']:+.4f}"
     )
-    if record["val_ce"] < progress.best:
-        return CleanCrossEntropyProgress(best=record["val_ce"], stale=0)
-    return CleanCrossEntropyProgress(best=progress.best, stale=progress.stale + 1)
+    return progress.observe(record["val_ce"])
 
 
 def early_stop_reason(
@@ -626,6 +751,8 @@ def early_stop_reason(
             f"early stop at epoch {epoch + 1}: {stale_evaluations} consecutive evaluations "
             f"without improving val FID {best_fid:.4f} (patience {request.patience})"
         )
+    if request.stop_epoch and epoch + 1 >= request.stop_epoch:
+        return f"planned stop at epoch {epoch + 1} of a {request.epochs}-epoch schedule"
     if request.val_ce_patience and ce_progress.stale >= request.val_ce_patience:
         return (
             f"early stop at epoch {epoch + 1}: {ce_progress.stale} epochs without a lower "

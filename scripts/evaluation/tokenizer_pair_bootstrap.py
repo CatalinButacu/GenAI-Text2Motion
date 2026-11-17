@@ -1,4 +1,4 @@
-# python scripts/evaluation/tokenizer_pair_bootstrap.py --split val --resamples 1000 --out artifacts/outputs/qa/tokenizer_pair_bootstrap.json
+# python scripts/evaluation/tokenizer_pair_bootstrap.py --split val --resamples 1000 --pair fsq_g8_v1024_c1b rvq_l8_1024_c1b --out artifacts/outputs/qa/tokenizer_pair_bootstrap_c1b.json
 from __future__ import annotations
 
 import argparse
@@ -31,6 +31,7 @@ CONFIGS = MappingProxyType(
         "rvq_l8_1024": "configs/tokenizer/rvq_l8_1024.yaml",
     }
 )
+CHALLENGER_TAG = "_c1b"
 PAIRS = (
     ("fsq_g4_v512", "rvq_l4_512"),
     ("fsq_g6_v512", "rvq_l6_512"),
@@ -56,7 +57,7 @@ class CapturingScorer:
 def reconstruction_embeddings(
     stem: str, split: Split, evaluator
 ) -> tuple[np.ndarray, np.ndarray, float]:
-    app = ApplicationBootstrap.from_config(CONFIGS[stem], seed=SEED)
+    app = ApplicationBootstrap.from_config(CONFIGS[stem.split(CHALLENGER_TAG)[0]], seed=SEED)
     module = app.create_tokenizer_network()
     checkpoint = Path(app.config.paths.checkpoints_dir) / "tokenizer" / f"{stem}.pt"
     module.load_state_dict(torch.load(checkpoint, map_location="cpu", weights_only=True))
@@ -82,6 +83,7 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--split", type=Split, default=Split.VALIDATION)
     parser.add_argument("--resamples", type=int, default=1000)
+    parser.add_argument("--pair", nargs=2, metavar=("FSQ_STEM", "RVQ_STEM"))
     parser.add_argument(
         "--out", type=Path, default=Path("artifacts/outputs/qa/tokenizer_pair_bootstrap.json")
     )
@@ -93,7 +95,8 @@ def main() -> None:
     base = ApplicationBootstrap.from_config(CONFIGS["fsq_g8_v1024"], seed=SEED)
     evaluator = base.create_humanml3d_generation_evaluator()
     rows = []
-    for fsq, rvq in PAIRS:
+    pairs = (tuple(arguments.pair),) if arguments.pair else PAIRS
+    for fsq, rvq in pairs:
         real, fsq_embeddings, fsq_fid = reconstruction_embeddings(fsq, arguments.split, evaluator)
         real_again, rvq_embeddings, rvq_fid = reconstruction_embeddings(
             rvq, arguments.split, evaluator

@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 
 from text2motion.app.bootstrap import ApplicationContext, required_path
-from text2motion.app.checkpoint import GeneratorBundle, OverfitGate
+from text2motion.app.checkpoint import GeneratorBundle, OverfitGate, load_generator_checkpoint
 from text2motion.app.run_log import (
     log_metrics,
     resumed_run_dir,
@@ -22,14 +22,18 @@ from text2motion.dataset.preparation import (
     run_hml3d_preparation,
 )
 from text2motion.generation.contracts import (
+    DEFAULT_OVERFIT_CRITERIA,
+    PRETRAINED_OVERFIT_CRITERIA,
     GeneratorPretrainingRequest,
     GeneratorTrainingRequest,
     MixedPrecisionMode,
+    OverfitCriteria,
     PretrainRequest,
     SamplingConfig,
     SanityOverfitRequest,
     TrainGeneratorRequest,
 )
+from text2motion.generation.nn_model import GeneratorModelSpec, MotionTokenGenerator
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.generation.pretrain import pretrain_generator, pretraining_resume_path
 from text2motion.generation.trainer import (
@@ -113,23 +117,37 @@ def run_tokenize(app: ApplicationContext, request: TokenizeRequest) -> None:
     logger.info(summary)
 
 
-def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) -> None:
-    config = replace(app.config, tokenizer=replace(app.config.tokenizer, kind=args.tokenizer))
-    app.config = config
+def with_tokenizer_kind(app: ApplicationContext, kind: TokenizerKind) -> ApplicationContext:
+    tokenizer = replace(app.config.tokenizer, kind=kind)
+    return replace(app, config=replace(app.config, tokenizer=tokenizer))
 
+
+def create_tokenizer_trainer(
+    app: ApplicationContext, args: TrainTokenizerRequest
+) -> TokenizerTrainer:
+    config = app.config
     module = app.create_tokenizer_network().to(app.device)
     commitment = (
         config.rvq_baseline.commitment_beta
         if args.tokenizer is TokenizerKind.RESIDUAL_VECTOR
         else 0.0
     )
-    trainer = TokenizerTrainer(
+    return TokenizerTrainer(
         module,
         lr=config.train.lr,
         weight_decay=config.train.weight_decay,
         ema_decay=args.ema_decay,
         commitment_beta=commitment,
     )
+
+
+def run_train_tokenizer(
+    app: ApplicationContext, args: TrainTokenizerRequest, final_split: Split = Split.TEST
+) -> None:
+    app = with_tokenizer_kind(app, args.tokenizer)
+    config = app.config
+    trainer = create_tokenizer_trainer(app, args)
+    module = trainer.tokenizer_network
     repository = app.create_motion_repository()
     loader = repository.window_batch_loader(
         Split.TRAIN, args.window, args.batch_size, num_workers=args.num_workers
@@ -182,15 +200,31 @@ def run_train_tokenizer(app: ApplicationContext, args: TrainTokenizerRequest) ->
         return
     module.load_state_dict(torch.load(best_path, map_location=app.device, weights_only=True))
     module.eval()
-    metrics = evaluate(Split.TEST)
+    metrics = evaluate(final_split)
     log_metrics(
         run_dir,
-        {"epoch": args.epochs, "split": Split.TEST.value, "final": True, **metrics},
+        {"epoch": args.epochs, "split": final_split.value, "final": True, **metrics},
     )
     logger.info(
-        f"  [TEST once | val-selected best] clips {metrics['clips']}  "
+        f"  [{final_split.value} once | val-selected best] clips {metrics['clips']}  "
         f"recon-FID {metrics['recon_fid']:.4f}  MPJPE {metrics['mpjpe_mm']:.1f}mm"
     )
+
+
+def __initial_generator(
+    architecture: GeneratorModelSpec, device: str, init_ckpt: Path | None
+) -> MotionTokenGenerator:
+    module = architecture.create_model(device)
+    if init_ckpt is None:
+        return module
+    generator_state, _, _ = load_generator_checkpoint(init_ckpt, map_location=device)
+    module.load_state_dict(generator_state)
+    logger.info(f"initialised generator from pretrained {init_ckpt}")
+    return module
+
+
+def __overfit_criteria(init_ckpt: Path | None) -> OverfitCriteria:
+    return DEFAULT_OVERFIT_CRITERIA if init_ckpt is None else PRETRAINED_OVERFIT_CRITERIA
 
 
 def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> None:
@@ -210,7 +244,7 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
         ema_decay=0.0,
     )
     trainer = GeneratorTrainer(
-        architecture.create_model(app.device),
+        __initial_generator(architecture, app.device, args.init_ckpt),
         tokenizer.network,
         train_config,
         downsample=app.config.tokenizer.downsample,
@@ -224,6 +258,7 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
         batch.lengths.to(app.device),
         list(batch.captions),
         args.steps,
+        __overfit_criteria(args.init_ckpt),
     )
     gate = OverfitGate(
         config_sha256=sha256_file(args.config),
@@ -237,7 +272,7 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
         token_accuracy=metrics["token_accuracy"],
         ce=metrics["ce"],
     )
-    gate.validate_metrics()
+    gate.validate_metrics(__overfit_criteria(args.init_ckpt))
     gate.save(args.overfit_gate)
     logger.info(f"PASS: wrote real-batch overfit gate -> {args.overfit_gate}")
 
@@ -251,13 +286,11 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         tokenizer_ckpt=tokenizer_ckpt,
         backbone=args.backbone,
         resolved_config=architecture.as_dict(),
+        criteria=__overfit_criteria(args.init_ckpt),
     )
     logger.info(f"verified mandatory real-batch overfit gate: {args.overfit_gate}")
 
-    module = architecture.create_model(app.device)
-    if args.init_ckpt:
-        module.load_state_dict(torch.load(args.init_ckpt, map_location=app.device))
-        logger.info(f"initialised generator from pretrained {args.init_ckpt}")
+    module = __initial_generator(architecture, app.device, args.init_ckpt)
 
     text_encoder = app.load_text_encoder()
     repository = app.create_motion_repository()
@@ -299,6 +332,9 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         clean_ce=args.clean_ce,
         ce_batches=args.ce_batches,
         val_ce_patience=args.val_ce_patience,
+        stop_epoch=args.stop_epoch,
+        select_on_val_ce=args.select_on_val_ce,
+        save_r1_floor=args.save_r1_floor,
     )
     ce_loaders = None
     if request.clean_ce:

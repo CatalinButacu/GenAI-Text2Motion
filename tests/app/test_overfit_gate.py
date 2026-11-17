@@ -6,7 +6,11 @@ import torch
 
 from text2motion.app.checkpoint import OverfitGate, sha256_file
 from text2motion.app.config import ApplicationConfig
-from text2motion.generation.contracts import Backbone, OverfitCriteria
+from text2motion.generation.contracts import (
+    PRETRAINED_OVERFIT_CRITERIA,
+    Backbone,
+    OverfitCriteria,
+)
 from text2motion.generation.nn_model import GeneratorModelSpec
 
 
@@ -137,6 +141,16 @@ def test_overfit_gate_reports_custom_criteria(criteria, message):
 )
 def test_overfit_criteria_accepts_preserves_comparisons(token_accuracy, ce, total_ratio, expected):
     assert OverfitCriteria().accepts(token_accuracy, ce, total_ratio) is expected
+
+
+def test_pretrained_criteria_drop_only_the_total_ratio_rule():
+    low_first_loss = __gate(first_total=4.5, final_total=0.257, token_accuracy=1.0, ce=0.001)
+    with pytest.raises(RuntimeError, match="total loss ratio"):
+        low_first_loss.validate_metrics()
+    low_first_loss.validate_metrics(PRETRAINED_OVERFIT_CRITERIA)
+    assert not PRETRAINED_OVERFIT_CRITERIA.accepts(0.98, 0.001, 0.057)
+    assert not PRETRAINED_OVERFIT_CRITERIA.accepts(1.0, 0.11, 0.057)
+    assert not PRETRAINED_OVERFIT_CRITERIA.accepts(1.0, 0.001, math.nan)
 
 
 @pytest.mark.parametrize(

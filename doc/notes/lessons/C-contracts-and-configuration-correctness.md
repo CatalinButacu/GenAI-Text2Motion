@@ -175,7 +175,7 @@ The CLI now derives flags from the selected request model. It does not require a
 
 `app/training.py::run_train_generator` passes `args.num_workers` to the captioned batch loader.
 
-The loaders in `motion/datasets.py` also configure:
+The loaders in `dataset/datasets.py` also configure:
 
 - `pin_memory`
 - `persistent_workers`

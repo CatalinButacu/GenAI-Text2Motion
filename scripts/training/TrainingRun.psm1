@@ -12,7 +12,6 @@ function Enter-RepoRoot {
     }
     Set-Location $root
     $env:PYTHONPATH = "src"
-    $env:PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"
     New-Item -ItemType Directory -Force "artifacts/outputs" | Out-Null
     return $root
 }
@@ -63,6 +62,40 @@ function Get-NewestHeartbeat {
         Select-Object -First 1
 }
 
+function __StopTrainingProcess([Diagnostics.Process]$Process) {
+    $snapshot = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+    $ids = @($Process.Id)
+    for ($index = 0; $index -lt $ids.Count; $index++) {
+        $parentId = $ids[$index]
+        $ids += @($snapshot | Where-Object { $_.ParentProcessId -eq $parentId } |
+            ForEach-Object { [int]$_.ProcessId })
+    }
+    $stopped = @()
+    foreach ($processId in $ids) {
+        $alive = Get-CimInstance Win32_Process -Filter "ProcessId=$processId" -ErrorAction Stop
+        if ($alive -and ($processId -ne $Process.Id -or -not $Process.HasExited)) {
+            $original = $snapshot | Where-Object { $_.ProcessId -eq $processId }
+            if ($original -and $original.CreationDate -ne $alive.CreationDate) {
+                throw "refusing to stop reused PID $processId"
+            }
+            try {
+                $stopped += Stop-Process -Id $processId -Force -PassThru -ErrorAction Stop
+            }
+            catch [Microsoft.PowerShell.Commands.ProcessCommandException] {
+                if (Get-CimInstance Win32_Process -Filter "ProcessId=$processId" -ErrorAction Stop) {
+                    throw
+                }
+                Write-Host "Process $processId exited before termination"
+            }
+        }
+    }
+    foreach ($child in $stopped) {
+        $child.WaitForExit()
+        $child.Dispose()
+    }
+    $Process.WaitForExit()
+}
+
 function Invoke-TrainingStep {
     param(
         [Parameter(Mandatory = $true)][string]$Tag,
@@ -71,7 +104,9 @@ function Invoke-TrainingStep {
         [double]$MaxHours = 72,
         [int]$StaleMinutes = 0,
         [string]$Python = ".\.venv\Scripts\python.exe",
-        [int]$PollSeconds = 60
+        [int]$PollSeconds = 60,
+        [int]$StaleExitCode = 124,
+        [switch]$StreamLogs
     )
     $argumentLine = Join-QuotedArguments -Arguments (@("-u") + $Arguments)
     Write-Host "RUN ${Tag}: $Python $argumentLine"
@@ -80,34 +115,62 @@ function Invoke-TrainingStep {
         -RedirectStandardOutput $LogFile -RedirectStandardError "$LogFile.err"
     $null = $process.Handle
     $reason = ""
-    while (-not $process.WaitForExit($PollSeconds * 1000)) {
-        $hours = ((Get-Date) - $started).TotalHours
-        if ($hours -ge $MaxHours) {
-            $reason = "time budget of $MaxHours h reached"
-            break
+    $stopCode = 124
+    $readers = @()
+    try {
+        if ($StreamLogs) {
+            foreach ($path in @($LogFile, "$LogFile.err")) {
+                $absolutePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($path)
+                $stream = [IO.File]::Open($absolutePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+                $readers += [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8)
+            }
         }
-        if ($StaleMinutes -le 0) {
-            continue
+        while (-not $process.WaitForExit($PollSeconds * 1000)) {
+            foreach ($reader in $readers) {
+                [Console]::Write($reader.ReadToEnd())
+            }
+            $hours = ((Get-Date) - $started).TotalHours
+            if ($hours -ge $MaxHours) {
+                $reason = "time budget of $MaxHours h reached"
+                break
+            }
+            if ($StaleMinutes -le 0) {
+                continue
+            }
+            $heartbeat = Get-NewestHeartbeat -Since $started
+            $lastSign = if ($heartbeat) { $heartbeat.LastWriteTime } else { $started }
+            $age = ((Get-Date) - $lastSign).TotalMinutes
+            if ($age -ge $StaleMinutes) {
+                $reason = "no heartbeat for $([math]::Round($age)) min"
+                $stopCode = $StaleExitCode
+                break
+            }
         }
-        $heartbeat = Get-NewestHeartbeat -Since $started
-        $lastSign = if ($heartbeat) { $heartbeat.LastWriteTime } else { $started }
-        $age = ((Get-Date) - $lastSign).TotalMinutes
-        if ($age -ge $StaleMinutes) {
-            $reason = "no heartbeat for $([math]::Round($age)) min"
-            break
+        if ($reason) {
+            __StopTrainingProcess $process
+        }
+        foreach ($reader in $readers) {
+            [Console]::Write($reader.ReadToEnd())
+        }
+        if ($reason) {
+            $stamp = (Get-Date).ToUniversalTime().ToString("u")
+            "$stamp  $Tag KILLED: $reason" | Out-File -Append "artifacts/outputs/GUARD_KILL.txt" -Encoding utf8
+            Write-Host "KILLED ${Tag}: $reason"
+            return $stopCode
+        }
+        $code = $process.ExitCode
+        $elapsed = [math]::Round(((Get-Date) - $started).TotalHours, 2)
+        Write-Host "EXIT ${Tag}: code $code after $elapsed h"
+        return $code
+    }
+    finally {
+        if (-not $process.HasExited) {
+            __StopTrainingProcess $process
+        }
+        foreach ($reader in $readers) {
+            $reader.Dispose()
         }
     }
-    if ($reason) {
-        Stop-Process -Id $process.Id -Force
-        $stamp = (Get-Date).ToUniversalTime().ToString("u")
-        "$stamp  $Tag KILLED: $reason" | Out-File -Append "artifacts/outputs/GUARD_KILL.txt" -Encoding utf8
-        Write-Host "KILLED ${Tag}: $reason"
-        return 124
-    }
-    $code = $process.ExitCode
-    $elapsed = [math]::Round(((Get-Date) - $started).TotalHours, 2)
-    Write-Host "EXIT ${Tag}: code $code after $elapsed h"
-    return $code
 }
 
 function Write-DoneMarker {

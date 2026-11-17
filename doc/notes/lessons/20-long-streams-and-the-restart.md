@@ -663,3 +663,95 @@ A clamp tests excessive magnitude, not every form of state-distribution mismatch
 Both interventions can help, or neither can help. Such results can remain mixed or inconclusive.
 
 The current evidence supports policy B as the reference for long streams. It does not prove a causal state-range explanation or exact action completion.
+
+## 20.8 Pair-1 validation check (2026-11-05)
+
+This check uses the existing width-320 pair-1 bundles, not the older checkpoints in Section 20.7.
+The tokenizer remains frozen. Both generators use TF32, CFG 6, temperature 1, and top-p 0.9.
+
+The probe selects 32 distinct captions from the validation split with root seed 2026.
+Sampling uses caption-derived seeds and the same inverse-CDF uniforms across policies and twins.
+It generates six windows of 49 tokens each: 196 frames, or 9.8 seconds, per window.
+The total duration is 58.8 seconds. R@1 ranks each matching motion among a fixed pool of 32.
+The frozen Guo matcher scores every window.
+
+| Generator and policy | R@1, 0-9.8 s | R@1, 49-58.8 s | Text distance, first -> last |
+|---|---:|---:|---:|
+| Mamba, full state | 0.594 | 0.000 | 3.051 -> 8.366 |
+| Mamba, restart 8 / retain 16 | 0.594 | 0.406 | 2.945 -> 4.207 |
+| Transformer, restart 8 / retain 16 | 0.563 | 0.469 | 3.049 -> 3.606 |
+
+Transformer full-state generation cannot fit 294 tokens within its 97 learned positions,
+including the text prefix. The probe reports this arm as unsupported; it does not extend the
+position embeddings.
+
+For Mamba, restart raises late R@1 by 0.406. Its 95% prompt-paired bootstrap interval is
+[0.250, 0.563]. Late text distance decreases by 4.159, with interval [-5.356, -2.934].
+Lower text distance means better agreement in the matcher's embedding space.
+
+Under restart, late Mamba-minus-transformer R@1 is -0.063, with interval [-0.250, 0.125].
+The late text-distance difference is 0.602, with interval [-0.282, 1.559].
+Neither interval establishes a twin winner.
+
+The bootstrap uses 1,000 resamples of prompt pairs and conditions on the fixed distractor pool.
+It does not measure variation across training seeds. Captions can describe finite actions;
+forcing them to continue for a minute is a diagnostic, not the standard HumanML3D protocol.
+END termination is disabled. Full-sequence offline decoding supplies the scoring windows.
+The exported `ms_per_token` includes all prompt batches and offline decoding, so it must not be
+reported as per-stream latency.
+
+Aggregate scores are saved in [long_stream_validation.csv](../../paper/pics/long_stream_validation.csv).
+Per-prompt scores, captions, and sampler settings are in
+`artifacts/outputs/qa/long_stream_{mamba,transformer}_w320_p1_val_2026.json`.
+Paired policy and twin comparisons are in
+`artifacts/outputs/qa/long_stream_w320_p1_comparison_2026.json`.
+
+Use the Long-stream tasks in [.vscode/tasks.json](../../../.vscode/tasks.json) to reproduce
+the generation, verification, and CSV export in VS Code's integrated terminal.
+The probe refuses to overwrite existing outputs; select new paths for a repeat.
+
+This check supports retaining policy B. It does not show that fewer parameters or more epochs
+would improve long-stream generalization. A test that can overturn the policy result is a repeat
+on additional held-out validation captions, using the same checkpoint and paired sampler.
+
+## 20.9 Recording-disjoint policy screen (2026-11-06)
+
+R5b compares restart 8 / retain 16 with restart 32 / retain 16 on the frozen pair-1 bundles.
+It uses two cohorts of 32 validation captions. Each caption comes from a distinct source
+recording, identified through the official HumanML3D index. No recording appears in both
+cohorts or in the official training list. This is not subject-disjoint evaluation or an
+independent final test after checkpoint selection.
+
+Both twins use seed 2026, TF32, CFG 6, temperature 1, top-p 0.9 and batch 2.
+Each rollout lasts 58.8 seconds. The late window covers 49.0-58.8 seconds.
+
+| Twin | Cohort offset | Late text distance, restart32 minus restart8 | 95% paired interval |
+|---|---:|---:|---|
+| Mamba | 0 | +0.253 | [-0.825, 1.166] |
+| Mamba | 32 | +1.464 | [0.219, 2.905] |
+| Transformer | 0 | +0.287 | [-0.435, 1.047] |
+| Transformer | 32 | +0.024 | [-0.708, 0.822] |
+
+Positive distance differences mean worse agreement in the fixed matcher's embedding space.
+All four restart-policy R@1 difference intervals include zero. The screen does not establish
+a replicated policy winner. The intervals condition on fixed 32-motion distractor pools,
+not training seeds.
+
+Across both cohorts, Mamba restart32 takes 275.4 seconds for generation and offline decoding;
+restart8 takes 618.3 seconds. The corresponding Transformer totals are 107.1 and 113.6 seconds.
+These are single-pass run costs, excluding loading and scoring, not per-stream latency.
+
+Lower skate or jerk does not prove natural motion. Grounding still uses a clip-relative floor.
+The root_teleports metric counts steps above 0.25 m/frame, which is 5 m/s at 20 FPS.
+The three flagged late cases all describe running, with peaks of 5.19-5.37 m/s.
+Those counts are not evidence of literal teleports.
+
+The screen saves eight finite raw motion arrays, each with shape (32, 1176, 263).
+Aggregate data is in [cohort 0](../../paper/pics/long_stream_policy_offset0.csv) and
+[cohort 32](../../paper/pics/long_stream_policy_offset32.csv).
+[Per-prompt comparisons, verification and a selected static montage](../../../artifacts/outputs/qa/r5b_20261106/)
+retain the diagnostic evidence. Static poses do not establish naturalness or repetition.
+
+Restart8 remains the conservative service baseline, not a proven optimum. Blind temporal
+playback with prompt-following and repetition ratings can overturn that recommendation.
+This screen changes neither model capacity nor training duration.

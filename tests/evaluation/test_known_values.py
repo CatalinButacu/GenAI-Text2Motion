@@ -9,9 +9,49 @@ from text2motion.evaluation.metrics import (
     motion_statistics,
     r_precision,
 )
-from text2motion.motion.representation import FPS
+from text2motion.motion.representation import FPS, RAW_OFFSETS, kinematic_bones
 
 JOINTS = 22
+
+
+def __standing_motion() -> np.ndarray:
+    pose = np.zeros((JOINTS, 3))
+    for parent, child in kinematic_bones():
+        pose[child] = pose[parent] + RAW_OFFSETS[child] * 0.1
+    pose[:, 1] -= pose[list(metrics.FEET), 1].min()
+    return np.repeat(pose[None], 100, axis=0)
+
+
+def test_flowmdm_jerk_profile_uses_l1_coordinates_then_maximum_joint():
+    joints = np.zeros((10, JOINTS, 3))
+    joints[:, 0, 0] = np.arange(10) ** 3
+    joints[:, 1, :2] = np.arange(10)[:, None] ** 3
+    np.testing.assert_allclose(metrics.jerk_profile(joints), 12.0)
+
+
+def test_transition_contacts_use_the_common_floor_and_do_not_hide_airborne_feet():
+    joints = __standing_motion()
+    joints[:, :, 0] += np.arange(len(joints))[:, None] * 0.01
+    floor = metrics.transition_statistics(joints, 50)
+    assert floor["foot_skate_m_per_s"] == pytest.approx(0.2)
+    assert floor["bone_relative_deviation"] == pytest.approx(0.0, abs=1e-12)
+    joints[:, :, 1] += 0.2
+    raised = metrics.transition_statistics(joints, 50)
+    assert raised["foot_skate_m_per_s"] is None
+    assert raised["foot_contact_fraction"] == 0
+    assert raised["all_feet_above_floor_10cm_fraction"] == 1
+    joints[:, :, 1] -= 0.23
+    lowered = metrics.transition_statistics(joints, 50)
+    assert lowered["feet_below_floor_2cm_fraction"] == 1
+
+
+@pytest.mark.parametrize(
+    "joints",
+    [np.zeros((3, JOINTS, 3)), np.zeros((10, 21, 3)), np.full((10, JOINTS, 3), np.nan)],
+)
+def test_invalid_jerk_input_fails(joints):
+    with pytest.raises(ValueError):
+        metrics.jerk_profile(joints)
 
 
 def test_frechet_distance_of_shifted_unit_gaussians_is_the_squared_shift():

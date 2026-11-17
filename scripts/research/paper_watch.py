@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import logging
 import os
 import re
 import time
@@ -12,6 +13,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from types import MappingProxyType
 
@@ -66,6 +68,7 @@ TOPIC_WORDS = (
 )
 MOTION_PATTERN = re.compile(rf"\b({'|'.join(MOTION_WORDS)})\b")
 TOPIC_PATTERN = re.compile(rf"\b({'|'.join(TOPIC_WORDS)})\b")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -88,17 +91,40 @@ def fetch_text(url: str) -> str:
             if error.code != RETRY_STATUS:
                 raise
             if attempt == RETRY_COUNT - 1:
+                logger.error(
+                    "HTTP 429 from %s persisted after %s attempts",
+                    urllib.parse.urlsplit(url).netloc,
+                    RETRY_COUNT,
+                )
                 raise
-            time.sleep(retry_wait_seconds(error, attempt))
+            wait = retry_wait_seconds(error, attempt)
+            logger.warning(
+                "HTTP 429 from %s; retry %s/%s in %.1f seconds",
+                urllib.parse.urlsplit(url).netloc,
+                attempt + 1,
+                RETRY_COUNT,
+                wait,
+            )
+            time.sleep(wait)
     raise RuntimeError(f"no response from {url}")
 
 
 def retry_wait_seconds(error: urllib.error.HTTPError, attempt: int) -> float:
     backoff = RETRY_WAIT_SECONDS * (attempt + 1)
     header = error.headers.get("Retry-After") if error.headers else None
-    if header is None or not header.strip().isdigit():
+    if header is None or not header.strip():
         return backoff
-    return max(backoff, float(header) + 1.0)
+    if header.strip().isdigit():
+        return max(backoff, float(header) + 1.0)
+    try:
+        retry_at = parsedate_to_datetime(header)
+        if retry_at.tzinfo is None:
+            raise ValueError("HTTP date has no timezone")
+        wait = (retry_at - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+    except (TypeError, ValueError, OverflowError):
+        logger.warning("Invalid Retry-After date; using bounded attempt backoff")
+        return backoff
+    return max(backoff, wait + 1.0)
 
 
 def arxiv_query_url(term: str, max_results: int) -> str:

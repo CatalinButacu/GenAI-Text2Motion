@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import hashlib
+import json
 import queue
 import statistics
 import threading
@@ -9,15 +12,18 @@ import time
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import replace
+from pathlib import Path
 
+import numpy as np
 import torch
 
 from text2motion.app.bootstrap import apply_precision, resolve_device, seed_everything
-from text2motion.app.config import load_config
-from text2motion.generation.contracts import Backbone
+from text2motion.app.config import Float32Precision, load_config
+from text2motion.generation.contracts import Backbone, MixedPrecisionMode
 from text2motion.generation.nn_model import GeneratorModelSpec
 from text2motion.generation.trainer import GeneratorTrainer
 from text2motion.motion.representation import DIM, FPS
+from text2motion.motion.storage import atomic_numpy_save, sha256_file
 from text2motion.tokenization.nn_model import build_tokenizer_network
 
 
@@ -38,7 +44,7 @@ def build_trainer(config, device: str, backbone: Backbone, tokenizer_ckpt: str):
 
 
 def fixed_batch(batch: int, frames: int, device: str, d_text: int):
-    generator = torch.Generator(device="cpu").manual_seed(1234)
+    generator = torch.Generator(device="cpu").manual_seed(2026)
     motion = torch.randn(batch, frames, DIM, generator=generator).to(device)
     text = torch.randn(batch, 1, d_text, generator=generator).to(device)
     lengths = torch.full((batch,), frames, device=device)
@@ -80,7 +86,9 @@ def determinism_check(args) -> None:
         print("BIT-EXACT across two fresh runs -- the determinism claim holds")
 
 
-def median_ms(fn: Callable[[], object], repeats: int) -> float:
+def median_ms(
+    fn: Callable[[], object], repeats: int, durations: list[float] | None = None
+) -> float:
     fn()
     torch.cuda.synchronize()
     samples = []
@@ -90,7 +98,202 @@ def median_ms(fn: Callable[[], object], repeats: int) -> float:
         fn()
         torch.cuda.synchronize()
         samples.append((time.perf_counter() - start) * 1000)
+    if durations is not None:
+        durations.extend(samples)
     return statistics.median(samples)
+
+
+def __precision_error(reference: np.ndarray, candidate: np.ndarray) -> dict[str, float]:
+    if reference.shape != candidate.shape or not reference.size:
+        raise ValueError("precision comparison requires matching nonempty arrays")
+    if not np.isfinite(reference).all() or not np.isfinite(candidate).all():
+        raise ValueError("precision comparison requires finite arrays")
+    base = reference.astype(np.float64).ravel()
+    delta = candidate.astype(np.float64).ravel() - base
+    norm, error = float(np.linalg.norm(base)), float(np.linalg.norm(delta))
+    if norm == 0 and error != 0:
+        raise ValueError("nonzero candidate has undefined relative error against a zero reference")
+    return {
+        "max_abs": float(np.abs(delta).max()),
+        "relative_l2": error / norm if norm else 0.0,
+    }
+
+
+def __precision_numeric(trainer, text, tokens, amp: bool):
+    model = trainer.token_generator
+    model.eval()
+    model.zero_grad(set_to_none=True)
+    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp):
+        logits = model(tokens, text)
+        loss = torch.nn.functional.cross_entropy(logits.flatten(0, 2), tokens.flatten())
+    if not torch.isfinite(logits).all() or not torch.isfinite(loss):
+        raise RuntimeError("precision probe produced nonfinite forward values")
+    loss.backward()
+    gradients = []
+    names = []
+    for name, parameter in model.named_parameters():
+        if parameter.grad is not None:
+            if not torch.isfinite(parameter.grad).all():
+                raise RuntimeError(f"precision probe produced nonfinite gradient: {name}")
+            names.append(name)
+            gradients.append(parameter.grad.detach().float().cpu().flatten())
+    if not gradients:
+        raise RuntimeError("precision probe produced no parameter gradients")
+    model.train()
+    return (
+        logits.detach().float().cpu().numpy(),
+        torch.cat(gradients).numpy(),
+        float(loss.detach()),
+        names,
+    )
+
+
+def __precision_case(args, config, device: str, backbone: Backbone, mode: str, tokens):
+    amp = mode == "bf16"
+    seed_everything(2026, config.deterministic)
+    trainer = build_trainer(
+        replace(
+            config,
+            train=replace(
+                config.train, amp=MixedPrecisionMode.BF16 if amp else MixedPrecisionMode.OFF
+            ),
+        ),
+        device,
+        backbone,
+        args.tokenizer_ckpt,
+    )
+    digest = hashlib.sha256()
+    for name, tensor in trainer.token_generator.state_dict().items():
+        digest.update(name.encode("utf-8"))
+        digest.update(tensor.detach().cpu().numpy().tobytes())
+    motion, text, lengths = fixed_batch(
+        args.batch_size, args.frames[0], device, config.generator.d_text
+    )
+    apply_precision(Float32Precision.HIGHEST)
+    if tokens is None:
+        with torch.no_grad():
+            tokens = trainer.tokenizer_network.encode(motion)
+            if trainer.token_generator.end_id is not None:
+                tokens, _ = trainer.append_end_targets(tokens, lengths)
+    apply_precision(Float32Precision.HIGHEST if mode == "fp32" else Float32Precision.TF32)
+    logits, gradients, loss, names = __precision_numeric(trainer, text, tokens, amp)
+    folder = args.out_path.with_suffix("")
+    atomic_numpy_save(logits, folder / f"{backbone.value}_{mode}_logits.npy")
+    atomic_numpy_save(gradients, folder / f"{backbone.value}_{mode}_gradients.npy")
+    if mode == "fp32":
+        atomic_numpy_save(tokens.cpu().numpy(), folder / f"{backbone.value}_tokens.npy")
+    torch.cuda.reset_peak_memory_stats()
+    durations = []
+    ms = median_ms(
+        lambda step=trainer.train_step: step(motion, text, lengths),
+        args.repeats,
+        durations=durations,
+    )
+    peak = torch.cuda.max_memory_allocated() / 1e9
+    result = {
+        "backbone": backbone.value,
+        "mode": mode,
+        "seed": 2026,
+        "batch_size": args.batch_size,
+        "frames": args.frames[0],
+        "repeats": args.repeats,
+        "ms_per_step": ms,
+        "step_durations_ms": durations,
+        "peak_allocated_gb": peak,
+        "numeric_ce": loss,
+        "initial_weights_sha256": digest.hexdigest(),
+        "gradient_names": names,
+        "grad_accum": config.train.grad_accum,
+        "mamba_kernel": backbone == Backbone.MAMBA and config.generator.use_kernel,
+    }
+    del trainer
+    torch.cuda.empty_cache()
+    return result, logits, gradients, tokens
+
+
+def precision_benchmark(args) -> None:
+    if args.out_path is None or args.summary_csv is None:
+        raise ValueError("precision probe requires --out_path and --summary_csv")
+    if any(
+        path.exists() for path in (args.out_path, args.summary_csv, args.out_path.with_suffix(""))
+    ):
+        raise FileExistsError("precision probe requires new output paths")
+    config = load_config(args.config)
+    device = resolve_device(config.device, args.device)
+    if device != "cuda" or not torch.cuda.is_bf16_supported():
+        raise RuntimeError("precision probe requires CUDA with BF16 support")
+    if args.repeats < 1 or args.batch_size < 1 or len(args.frames) != 1:
+        raise ValueError("precision probe requires positive repeats/batch and one frame length")
+    if config.train.grad_accum != 1:
+        raise ValueError(
+            "precision step timing requires grad_accum1, one optimizer update per call"
+        )
+    report = {
+        "status": "in_progress",
+        "config": args.config,
+        "config_sha256": sha256_file(args.config),
+        "tokenizer_checkpoint": args.tokenizer_ckpt,
+        "tokenizer_sha256": sha256_file(args.tokenizer_ckpt),
+        "seed": 2026,
+        "gpu": torch.cuda.get_device_name(),
+        "torch": torch.__version__,
+        "rows": [],
+        "limitations": "Numeric forward/backward compares clean token-CE on fixed strict-FP32 tokenizer targets "
+        "and identical initial generator weights with dropout off. It does not prove total-loss gradient fidelity. "
+        "Timing uses the configured generator/tokenizer train_step with corruption/dropout, live tokenization, soft decode and optimizer/EMA; "
+        "synthetic precomputed text excludes CLIP encoding/backprop and the data loader. "
+        "Synthetic motion/text, one fixed length, no epoch-speed or generalization claim. BF16 autocast plus TF32 FP32 operations.",
+    }
+    csv_rows = []
+    for backbone in Backbone:
+        tokens, reference, reference_grads, weight_hash, reference_names = (
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        for mode in ("fp32", "tf32", "bf16"):
+            row, logits, gradients, tokens = __precision_case(
+                args, config, device, backbone, mode, tokens
+            )
+            if reference is None or reference_grads is None:
+                reference, reference_grads = logits, gradients
+                weight_hash, reference_names = row["initial_weights_sha256"], row["gradient_names"]
+            if (
+                row["initial_weights_sha256"] != weight_hash
+                or row["gradient_names"] != reference_names
+            ):
+                raise RuntimeError(
+                    "precision modes changed initial weights or gradient parameter coverage"
+                )
+            forward = __precision_error(reference, logits)
+            backward = __precision_error(reference_grads, gradients)
+            row.update(
+                logits_max_abs=forward["max_abs"],
+                logits_relative_l2=forward["relative_l2"],
+                gradients_max_abs=backward["max_abs"],
+                gradients_relative_l2=backward["relative_l2"],
+            )
+            report["rows"].append(row)
+            csv_rows.append(
+                {k: v for k, v in row.items() if k not in ("gradient_names", "step_durations_ms")}
+            )
+            args.out_path.write_text(
+                json.dumps(report, indent=2, allow_nan=False), encoding="utf-8"
+            )
+            print(
+                f"K8 {backbone.value}/{mode}: {row['ms_per_step']:.1f} ms/step; peak {row['peak_allocated_gb']:.3f} GB; logits relL2 {row['logits_relative_l2']:.3g}; grads relL2 {row['gradients_relative_l2']:.3g}",
+                flush=True,
+            )
+        del reference, reference_grads, tokens
+    report["status"] = "complete"
+    args.out_path.write_text(json.dumps(report, indent=2, allow_nan=False), encoding="utf-8")
+    args.summary_csv.parent.mkdir(parents=True, exist_ok=True)
+    with args.summary_csv.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(csv_rows[0]))
+        writer.writeheader()
+        writer.writerows(csv_rows)
 
 
 def step_benchmark(args) -> None:
@@ -438,6 +641,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default=None)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--repeats", type=int, default=8)
+    parser.add_argument("--out_path", type=Path)
+    parser.add_argument("--summary_csv", type=Path)
     parser.add_argument("--steps", type=int)
     parser.add_argument("--frames", type=int, nargs="+")
     parser.add_argument("--rows", type=int, default=15)
@@ -458,7 +663,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--probe",
         default="step",
-        choices=("determinism", "step", "profile", "sync", "rollout", "demo", "kernel"),
+        choices=(
+            "determinism",
+            "step",
+            "profile",
+            "sync",
+            "rollout",
+            "demo",
+            "kernel",
+            "precision",
+        ),
     )
     return parser
 
@@ -484,6 +698,7 @@ def main() -> None:
         "rollout": rollout_benchmark,
         "demo": demo_probe,
         "kernel": kernel_probe,
+        "precision": precision_benchmark,
     }[args.probe](args)
 
 

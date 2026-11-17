@@ -2,7 +2,7 @@
 
 ## Roles
 - Orchestrator (one agent with shell access): plans, writes briefs, starts jobs, checks every claim with a tool, edits code, commits. It never trusts a worker report alone.
-- Workers: Copilot CLI agents in `.github/agents/*.agent.md` (data, architect, training, eval, render, gpu-kernel, research-scout). Shared rules: `.github/copilot-instructions.md`. Models: `gpt-6.1-sol` for code roles, `gpt-6.1-terra` for research-scout, `gpt-6-luna` for cheap triage.
+- Workers: Copilot CLI agents in `.github/agents/*.agent.md` (data, architect, training, eval, render, gpu-kernel, research-scout). Shared rules: `.github/copilot-instructions.md`. Default model: `gpt-6-luna` for every role. No Claude models, Claude CLI, or Claude subagents. Ask the owner before using a stronger model.
 - Owner: approves each epic plan once and decides at the stop points.
 
 ## Where the state is
@@ -27,11 +27,11 @@
 ## Experiments
 - Decide with a two-sided test: measure both options in one process before a choice.
 - Run a long GPU job as a detached process (`Start-Process`, a pid file, a log file), never as a child of the chat session. Run one GPU job at a time. RAM is tight (16 GB).
-- Each training run: overfit gate first, seed 2026 only, both twins changed together, selection on validation only, clean validation CE after each epoch, stop 3 epochs after the lowest validation CE (`--val_ce_patience 3`).
+- Each new training run: overfit gate first, seed 2026 only, both twins changed together, selection on validation only, clean validation CE after each epoch, stop on the sixth consecutive epoch without a lower validation CE (`--val_ce_patience 6`); five retries are allowed, ties count, and an improvement resets patience. Preserve the counter on resume; `--fresh_selection` explicitly resets selection. Keep completed experiments' original recipes unchanged.
 - Benchmarks must use the training precision (TF32 by default).
 
 ## Big decisions
-- Run a council: 4 independent Copilot members (2 with a role, 2 with no role, one of another vendor), an anonymous cross-review, then a verdict by the orchestrator after a check of the disputed facts.
+- Run a council: 3 fresh `gpt-6-luna` members and 1 `gemini-4-argon` member (2 with a role, 2 with no role), an anonymous cross-review, then a verdict by the orchestrator after a check of the disputed facts. No Claude calls. Limit answers to 300 words and reviews to 450 words; eight calls per full council, no hidden retries.
 
 ## Code rules
 - No comments, except the class separator box in `src` and the run command on the first line of a script.

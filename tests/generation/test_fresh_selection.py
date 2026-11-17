@@ -40,6 +40,7 @@ def __run(
     write_resume: bool = True,
     fid: float = 0.30,
     saved: list | None = None,
+    r1_floor: float = 0.0,
 ):
     resume_path = tmp_path / "generator_last.pt"
     if write_resume:
@@ -54,7 +55,12 @@ def __run(
         )
     saved = [] if saved is None else saved
     request = GeneratorTrainingRequest(
-        epochs=62, eval_every=1, resume=True, fresh_selection=fresh_selection
+        epochs=62,
+        eval_every=1,
+        resume=True,
+        fresh_selection=fresh_selection,
+        val_ce_patience=0,
+        save_r1_floor=r1_floor,
     )
     metrics = {
         "clips": 1,
@@ -79,6 +85,12 @@ def __run(
 
 def test_fresh_selection_saves_the_fine_tunes_own_best(tmp_path):
     assert __run(tmp_path, fresh_selection=False) == []
+    assert __run(tmp_path, fresh_selection=True) == [(61, 0.30)]
+
+
+def test_the_r1_floor_blocks_a_save_below_it_and_default_zero_changes_nothing(tmp_path):
+    assert __run(tmp_path, fresh_selection=True, r1_floor=0.5) == []
+    assert __run(tmp_path, fresh_selection=True, r1_floor=0.4) == [(61, 0.30)]
     assert __run(tmp_path, fresh_selection=True) == [(61, 0.30)]
 
 
@@ -115,7 +127,7 @@ def test_a_failed_generator_epoch_writes_a_dump(tmp_path):
         train_generator(
             cast(GeneratorTrainer, _FailingTrainer()),
             loader,
-            GeneratorTrainingRequest(epochs=1, eval_every=1),
+            GeneratorTrainingRequest(epochs=1, eval_every=1, val_ce_patience=0),
             "cpu",
             evaluate=lambda split: {},
             save_best=lambda epoch, fid: None,

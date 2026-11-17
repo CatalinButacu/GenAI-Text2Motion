@@ -12,10 +12,10 @@ from text2motion.studio.contracts import ViewerHost
 logger = logging.getLogger(__name__)
 
 
-def create_skeleton_sequence_node(joints: np.ndarray):
+def create_skeleton_sequence_node(joints: np.ndarray, radius: float = 0.01):
     from aitviewer.renderables.skeletons import Skeletons
 
-    return Skeletons(joint_positions=joints, joint_connections=kinematic_bones())
+    return Skeletons(joint_positions=joints, joint_connections=kinematic_bones(), radius=radius)
 
 
 def append_skeleton_sequence_frames(node, joints: np.ndarray) -> None:

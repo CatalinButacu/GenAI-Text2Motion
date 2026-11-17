@@ -4,7 +4,7 @@ This lesson describes a future experiment. Lesson 6.6a increases the tokenizer c
 
 The proposed corpus is full AMASS, with derivative datasets as later options. The experiment requires a new tokenizer version and new generator versions. Complete the experiment before you freeze the final generator if its results must appear in the final comparison.
 
-The method uses `src\text2motion\motion\preparation.py`, the E7b plan lever, and the Being-M0 / MotionLib references in `.claude/docs/references.md`. The current tokenizer command does not implement AMASS pretraining.
+The method uses `src\text2motion\dataset\preparation.py`, the E7b plan lever, and the Being-M0 / MotionLib references in `.claude/docs/references.md`. The current tokenizer command does not implement AMASS pretraining.
 
 ## 18.0 The versioned pipeline
 
@@ -66,7 +66,7 @@ Use the official HumanML3D index to identify the held-out source captures. Apply
 
 ## 18.4 Feasibility and implementation requirements
 
-The donor AMASS release is SMPL-X G. The preparation path in `src\text2motion\motion\preparation.py` uses the SMPL-X body model to produce HumanML3D-263 features. Its source resolver handles differences between dataset folder names.
+The donor AMASS release is SMPL-X G. The preparation path in `src\text2motion\dataset\preparation.py` uses the SMPL-X body model to produce HumanML3D-263 features. Its source resolver handles differences between dataset folder names.
 
 The preparation path alone does not establish that the corpus is ready. The current corpus builder requires a complete `pose_manifest.json`. It also checks the corpus recipe through `corpus_manifest.json`.
 
