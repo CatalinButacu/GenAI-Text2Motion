@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, replace
+from pathlib import Path
 from typing import Any, cast
 
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -37,6 +40,7 @@ class CLIPTextEncoder(nn.Module):
         )
 
         self.cfg = cfg
+        self.frozen_cache: FrozenTextStates | None = None
         self.tokenizer = CLIPTokenizer.from_pretrained(cfg.model_id)
         self.model = CLIPTextModelWithProjection.from_pretrained(cfg.model_id)
 
@@ -133,7 +137,97 @@ class CLIPTextEncoder(nn.Module):
 
     def forward(self, texts: list[str]) -> torch.Tensor:
         t = self.tokens(texts)
-        return self.head(self.frozen_states(t), t)
+        states = (
+            self.frozen_states(t)
+            if self.frozen_cache is None
+            else self.frozen_cache.states(t, texts)
+        )
+        return self.head(states, t)
+
+
+############################################################
+#       FrozenTextStates
+############################################################
+def padded_chunk(chunk: list[str], batch_size: int) -> list[str]:
+    return chunk + [chunk[0]] * (batch_size - len(chunk))
+
+
+class FrozenTextStates:
+    def __init__(
+        self,
+        encoder: CLIPTextEncoder,
+        rows: np.ndarray,
+        captions: dict[str, tuple[int, int]],
+        batch_size: int,
+    ) -> None:
+        self.encoder = encoder
+        self.rows = rows
+        self.captions = captions
+        self.batch_size = batch_size
+        self.hits = 0
+        self.misses = 0
+
+    @classmethod
+    def build(
+        cls, encoder: CLIPTextEncoder, captions: list[str], batch_size: int, path: Path
+    ) -> FrozenTextStates:
+        unique = sorted(set(captions))
+        if not unique:
+            raise ValueError("no captions to cache")
+        chunks = [unique[i : i + batch_size] for i in range(0, len(unique), batch_size)]
+        index: dict[str, tuple[int, int]] = {}
+        offset = 0
+        for chunk in chunks:
+            t = encoder.tokens(padded_chunk(chunk, batch_size))
+            for i, text in enumerate(chunk):
+                n = int(t["attention_mask"][i].sum())
+                index[text] = (offset, n)
+                offset += n
+        width = encoder.model.text_model.config.hidden_size
+        rows = np.lib.format.open_memmap(path, mode="w+", dtype=np.float32, shape=(offset, width))
+        for chunk in chunks:
+            s = encoder.frozen_states(encoder.tokens(padded_chunk(chunk, batch_size)))
+            s = s.float().cpu().numpy()
+            for i, text in enumerate(chunk):
+                start, n = index[text]
+                rows[start : start + n] = s[i, :n]
+        rows.flush()
+        path.with_suffix(".json").write_text(
+            json.dumps({"batch_size": batch_size, "captions": index})
+        )
+        return cls.load(encoder, path)
+
+    @classmethod
+    def load(cls, encoder: CLIPTextEncoder, path: Path) -> FrozenTextStates:
+        rows = np.load(path, mmap_mode="r")
+        meta = json.loads(path.with_suffix(".json").read_text())
+        batch_size = int(meta["batch_size"])
+        captions = {text: (int(start), int(n)) for text, (start, n) in meta["captions"].items()}
+        probe = sorted(captions)[:batch_size]
+        s = encoder.frozen_states(encoder.tokens(padded_chunk(probe, batch_size)))
+        s = s.float().cpu().numpy()
+        for i, text in enumerate(probe):
+            start, n = captions[text]
+            if not np.array_equal(s[i, :n], rows[start : start + n]):
+                raise RuntimeError(
+                    f"frozen text states cache {path} does not match the encoder weights; "
+                    f"delete {path} and {path.with_suffix('.json')} to rebuild them"
+                )
+        return cls(encoder, rows, captions, batch_size)
+
+    def states(self, tokens: dict[str, torch.Tensor], texts: list[str]) -> torch.Tensor:
+        if not all(text in self.captions for text in texts):
+            self.misses += 1
+            return self.encoder.frozen_states(tokens)
+        self.hits += 1
+        device = self.encoder.device
+        out = torch.zeros(
+            len(texts), tokens["input_ids"].shape[1], self.rows.shape[1], device=device
+        )
+        for i, text in enumerate(texts):
+            start, n = self.captions[text]
+            out[i, :n] = torch.from_numpy(np.array(self.rows[start : start + n])).to(device)
+        return out
 
 
 ############################################################
