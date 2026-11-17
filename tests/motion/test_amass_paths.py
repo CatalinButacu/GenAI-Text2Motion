@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from text2motion.motion.amass import (
+from text2motion.dataset.amass import (
     dataset_name,
     head_trim_frames,
     heldout_sources,

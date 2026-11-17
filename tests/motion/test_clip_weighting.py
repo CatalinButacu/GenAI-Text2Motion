@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from text2motion.app.config import from_mapping
+from text2motion.dataset.datasets import CaptionedMotionDataset, MotionDataModule
 from text2motion.motion.contracts import CaptionWeighting, ClipWeighting, MotionDataConfig, Split
-from text2motion.motion.datasets import CaptionedMotionDataset, MotionDataModule
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import (
     FEATURES_DIR,

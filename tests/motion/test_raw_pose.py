@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from text2motion.app.config import load_config
-from text2motion.motion.amass import AmassPoseExtractor, resolve_gender
+from text2motion.dataset.amass import AmassPoseExtractor, resolve_gender
 from text2motion.motion.contracts import Gender
 
 

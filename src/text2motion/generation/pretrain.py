@@ -6,6 +6,7 @@ from pathlib import Path
 import torch
 from torch import nn
 
+from text2motion.dataset.datasets import dataset_size
 from text2motion.generation.contracts import (
     GeneratorPretrainingRequest,
     GeneratorTrainingConfig,
@@ -20,7 +21,6 @@ from text2motion.generation.trainer import (
     warmup_cosine_factor,
 )
 from text2motion.motion.contracts import MetricSink
-from text2motion.motion.datasets import dataset_size
 from text2motion.motion.storage import (
     RESUME_VERSION,
     atomic_torch_save,

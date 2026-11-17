@@ -14,6 +14,13 @@ from text2motion.app.run_log import (
     run_dir_to_continue,
     start_run,
 )
+from text2motion.dataset.datasets import dataset_size
+from text2motion.dataset.preparation import (
+    build_amass_pretraining_corpus,
+    convert_official_release,
+    heldout_feature_names,
+    run_hml3d_preparation,
+)
 from text2motion.generation.contracts import (
     GeneratorPretrainingRequest,
     GeneratorTrainingRequest,
@@ -32,13 +39,6 @@ from text2motion.generation.trainer import (
     train_generator,
 )
 from text2motion.motion.contracts import PrepareRequest, Split
-from text2motion.motion.datasets import dataset_size
-from text2motion.motion.preparation import (
-    build_amass_pretraining_corpus,
-    convert_official_release,
-    heldout_feature_names,
-    run_hml3d_preparation,
-)
 from text2motion.motion.storage import MEAN_FILE, SPLIT_FILES, STD_FILE, sha256_file
 from text2motion.tokenization.contracts import (
     TokenizeRequest,

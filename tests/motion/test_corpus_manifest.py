@@ -5,7 +5,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from text2motion.motion import preparation
+from text2motion.dataset import preparation
 from text2motion.motion.contracts import PreparationRequest, Split
 from text2motion.motion.storage import FEATURES_DIR, SPLIT_FILES
 

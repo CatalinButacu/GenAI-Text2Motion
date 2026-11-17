@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
+from text2motion.dataset.datasets import item_rng
+from text2motion.dataset.preparation import run_hml3d_preparation
 from text2motion.motion.contracts import PreparationRequest, PreparationStage
-from text2motion.motion.datasets import item_rng
 from text2motion.motion.normalization import fit_train_stats, normalization_stats
-from text2motion.motion.preparation import run_hml3d_preparation
 from text2motion.motion.storage import listed_clip_ids
 
 JOINTS = 22
@@ -94,7 +94,7 @@ def test_foot_contact_limit_keeps_the_same_speed_at_60_fps():
 
 
 def test_index_frames_scale_to_a_multiple_of_20_fps_only():
-    from text2motion.motion.preparation import index_frame_scale
+    from text2motion.dataset.preparation import index_frame_scale
 
     assert index_frame_scale(20) == 1
     assert index_frame_scale(60) == 3

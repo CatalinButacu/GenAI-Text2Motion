@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from text2motion.dataset.datasets import check_no_missing_files
 from text2motion.motion.contracts import Split
-from text2motion.motion.datasets import check_no_missing_files
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import JOINTS, recover_from_ric
 from text2motion.motion.storage import FEATURES_DIR, base_clip_ids

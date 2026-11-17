@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from text2motion.motion import preparation
+from text2motion.dataset import preparation
 from text2motion.motion.contracts import PreparationRequest
 
 CLIPS = ("walk", "run", "jump")

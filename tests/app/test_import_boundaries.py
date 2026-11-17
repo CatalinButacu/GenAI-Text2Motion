@@ -8,11 +8,14 @@ PACKAGE_ROOT = Path("src/text2motion")
 ALLOWED_DEPENDENCIES = MappingProxyType(
     {
         "motion": frozenset({"motion"}),
-        "tokenization": frozenset({"motion", "tokenization"}),
-        "generation": frozenset({"motion", "tokenization", "generation"}),
-        "evaluation": frozenset({"motion", "tokenization", "generation", "evaluation"}),
+        "dataset": frozenset({"motion", "dataset"}),
+        "tokenization": frozenset({"motion", "dataset", "tokenization"}),
+        "generation": frozenset({"motion", "dataset", "tokenization", "generation"}),
+        "evaluation": frozenset({"motion", "dataset", "tokenization", "generation", "evaluation"}),
         "studio": frozenset({"motion", "studio"}),
-        "app": frozenset({"motion", "tokenization", "generation", "evaluation", "studio", "app"}),
+        "app": frozenset(
+            {"motion", "dataset", "tokenization", "generation", "evaluation", "studio", "app"}
+        ),
     }
 )
 

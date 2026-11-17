@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
+from text2motion.dataset.datasets import CaptionedMotionDataset, MotionWindowDataset
 from text2motion.motion.contracts import MotionDataConfig
-from text2motion.motion.datasets import CaptionedMotionDataset, MotionWindowDataset
 
 CAPTION = "a person walks#a/DET#0.0#0.0"
 

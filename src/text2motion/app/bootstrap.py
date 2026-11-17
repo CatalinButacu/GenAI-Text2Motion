@@ -17,13 +17,13 @@ from text2motion.app.config import (
     load_config,
 )
 from text2motion.app.run_log import ensure_logging_configured
+from text2motion.dataset.datasets import MotionDataModule
 from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
 from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.generation.contracts import Backbone
 from text2motion.generation.nn_model import CLIPTextEncoder, GeneratorModelSpec
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.contracts import PreparationRequest
-from text2motion.motion.datasets import MotionDataModule
 from text2motion.motion.storage import FAILURE_DUMP_FILE
 from text2motion.tokenization.nn_model import FrozenMotionTokenizer, build_tokenizer_network
 
