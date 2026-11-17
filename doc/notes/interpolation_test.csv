@@ -1,0 +1,13 @@
+source_fps,target_fps,method,library_call,mean_error_mm,p99_error_mm,bone_length_error_pct,acceleration_rms_error_m_per_s2
+30,60,linear degree 1,numpy.interp,1.10,5.08,0.070,5.71
+30,60,cubic spline C2 degree 3,scipy.interpolate.CubicSpline,0.49,2.32,0.016,2.26
+30,60,quintic B-spline C4 degree 5,scipy.interpolate.make_interp_spline k=5,0.50,2.38,0.019,2.30
+30,60,PCHIP C1 degree 3,scipy.interpolate.PchipInterpolator,0.58,2.87,0.052,2.78
+30,60,makima C1 degree 3,scipy.interpolate.Akima1DInterpolator makima,0.53,2.58,0.032,2.49
+30,60,band-limited polyphase,scipy.signal.resample_poly padtype line,1.33,3.35,0.061,10.10
+20,60,linear degree 1,numpy.interp,2.00,9.24,0.135,7.40
+20,60,cubic spline C2 degree 3,scipy.interpolate.CubicSpline,0.83,4.24,0.037,2.94
+20,60,quintic B-spline C4 degree 5,scipy.interpolate.make_interp_spline k=5,0.86,4.40,0.042,3.03
+20,60,PCHIP C1 degree 3,scipy.interpolate.PchipInterpolator,1.08,5.49,0.106,4.00
+20,60,makima C1 degree 3,scipy.interpolate.Akima1DInterpolator makima,0.91,4.85,0.067,3.54
+20,60,band-limited polyphase,scipy.signal.resample_poly padtype line,1.26,5.07,0.066,7.11

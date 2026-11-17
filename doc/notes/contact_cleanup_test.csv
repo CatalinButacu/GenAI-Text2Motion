@@ -1,0 +1,8 @@
+criterion,measure,before,after,limit,pass
+1a control per-clip foot sliding change,median paired change,,-13.8%,within +-10%,False
+1b control Guo FID to HML3D val (188 clips),FID,1.406,1.568,after <= 1.1x before (ratio 1.115),False
+2 Motion-X++ T5c matched ratio locomotion (94 clips),ratio,1.88 (full source),1.29,<= 1.5,True
+2 Motion-X++ T5c matched ratio other (906 clips),ratio,1.73 (full source),0.63,<= 1.5,True
+3 Motion-X++ Guo FID to HML3D val (990 clips),FID,20.072,22.249,after <= before,False
+4 Motion-X++ jerk ratio,ratio,1.45 (full source),1.63,<= 2.0,True
+5 visual check of 3 clips,eye,,,not run (test already failed),

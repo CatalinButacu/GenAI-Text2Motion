@@ -1,0 +1,16 @@
+dataset_humanml3d_name,dataset_amass263_name,rows_tested,scale_votes,inferred_amass263_fps,status
+ACCAD,ACCAD,12,"1.0:11 0.5:1",20,ok
+BMLmovi,BMLmovi,12,"1.0:12",20,ok
+BioMotionLab_NTroje,BMLrub,12,"1.0:12",20,ok
+CMU,CMU,12,"1.0:9 0.5:3",mixed 20/10,per-file fix needed
+DFaust_67,DFaust,12,"0.5:12",10,wrong clock (60 fps source)
+EKUT,EKUT,12,"0.833:10 0.8:2",16.7,wrong clock (100 fps source)
+HumanEva,HumanEva,12,"1.0:11 0.5:1",20,ok
+KIT,KIT,12,"0.833:10 0.8:2",16.7,wrong clock (100 fps source)
+MPI_HDM05,HDM05,12,"1.0:12",20,ok
+MPI_Limits,PosePrior,12,"1.0:12",20,ok
+MPI_mosh,MoSh,12,"0.833:5 1.0:7",mixed 16.7/20,per-file fix needed
+SFU,SFU,12,"1.0:12",20,ok
+SSM_synced,SSM,10,"1.0:10",20,ok
+TotalCapture,TotalCapture,12,"0.5:11 0.6:1",10,wrong clock (60 fps source)
+-,"CNRS DanceDB GRAB HUMAN4D SOMA WEIZMANN TCDHands",0,-,unknown,not in HumanML3D; clock not testable this way

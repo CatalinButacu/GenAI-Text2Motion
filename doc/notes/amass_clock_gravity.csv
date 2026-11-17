@@ -1,0 +1,7 @@
+source,files,flights,median_m_per_s2,q25,q75,speed_factor
+DFaust_label_clock,129,6,-37.72,-38.68,-36.94,1.96
+TotalCapture_label_clock,37,1,-40.03,-40.03,-40.03,2.02
+BMLrub,3061,2431,-9.46,-10.51,-2.11,0.98
+HDM05,215,388,-9.32,-10.47,-3.09,0.97
+GRAB,1340,0,nan,,,
+HUMAN4D,148,330,-8.95,-10.02,-0.86,0.95

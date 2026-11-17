@@ -1,0 +1,11 @@
+source,kept_clips,kept_hours,locomotion_clips,locomotion_ratio,other_clips,other_ratio,pass
+WEIZMANN,1506,6.43,1500,2.22,6,,False
+BMLrub,1670,5.15,633,1.02,1037,1.25,True
+GRAB,1339,3.78,1,,1338,1.89,False
+DanceDB,139,3.2,24,,115,4.89,False
+HUMAN4D,147,1.21,1,,146,1.3,True
+SOMA,69,0.3,30,0.98,39,2.36,False
+TCDHands,61,0.14,0,,61,0.02,True
+CNRS,79,0.13,79,2.05,0,,False
+BMLmovi,62,0.09,6,,56,1.63,False
+AMASS_small,1,0.0,0,,1,,False

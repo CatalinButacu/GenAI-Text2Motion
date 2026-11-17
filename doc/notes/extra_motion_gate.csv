@@ -1,0 +1,6 @@
+source,clips,finite_share,median_mpjpe_mm,median_feature_l2,ratio_to_val_mpjpe,pass
+humanml3d_val,200,1.0,51.45,0.5017,1.0,reference
+aist,200,1.0,188.73,1.8422,3.668,False
+style100,200,1.0,382.51,3.519,7.435,False
+motionx_lp6,200,1.0,93.56,1.229,1.819,True
+amass_pass,200,1.0,101.6,1.0292,1.975,True
