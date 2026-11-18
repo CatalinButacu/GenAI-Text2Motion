@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import logging
 from dataclasses import replace
 from pathlib import Path
@@ -238,6 +239,14 @@ def initial_generator(
     return module
 
 
+def compile_generator(module: MotionTokenGenerator, device: str) -> bool:
+    if not str(device).startswith("cuda") or importlib.util.find_spec("triton") is None:
+        logger.warning("--compile needs CUDA and Triton; the generator runs eager")
+        return False
+    module.compile()
+    return True
+
+
 def overfit_criteria(init_ckpt: Path | None) -> OverfitCriteria:
     return DEFAULT_OVERFIT_CRITERIA if init_ckpt is None else PRETRAINED_OVERFIT_CRITERIA
 
@@ -306,6 +315,8 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
     logger.info(f"verified mandatory real-batch overfit gate: {args.overfit_gate}")
 
     module = initial_generator(architecture, app.device, args.init_ckpt)
+    compiled = args.compile and compile_generator(module, app.device)
+    logger.info(f"torch.compile: {'on' if compiled else 'off'}")
 
     text_encoder = app.load_text_encoder()
     repository = app.create_motion_repository()

@@ -237,6 +237,10 @@ class TrainGeneratorRequest(CommandRequest):
         default=True,
         description="reuse the frozen CLIP layer states of the train captions from a disk cache; the results are the same, the step is faster",
     )
+    compile: bool = Field(
+        default=True,
+        description="compile the generator with torch.compile; about 7% faster for mamba, the results are not bit-identical to an eager run; without CUDA or Triton the run stays eager",
+    )
     epochs: int = Field(
         default=GeneratorTrainingRequest().epochs,
         description="target epoch; the cosine schedule spans exactly this many epochs",
