@@ -102,22 +102,6 @@ def require_clip_files(vec_dir: Path, unique: list[str]) -> None:
         )
 
 
-def load_clips(vec_dir: Path, names: list[str]) -> list[np.ndarray]:
-    unique = sorted(set(names))
-    require_clip_files(vec_dir, unique)
-    clips = [np.load(vec_dir / f"{name}.npy") for name in unique]
-    malformed = [
-        name
-        for name, clip in zip(unique, clips, strict=True)
-        if clip.ndim != 2 or clip.shape[0] == 0 or not np.isfinite(clip).all()
-    ]
-    if malformed:
-        raise ValueError(
-            f"{len(malformed)} train clips are empty, not 2-D, or hold NaN or Inf: {malformed[:10]}"
-        )
-    return clips
-
-
 def normalization_stats(
     clips: Iterable[np.ndarray], joint_count: int
 ) -> tuple[np.ndarray, np.ndarray]:

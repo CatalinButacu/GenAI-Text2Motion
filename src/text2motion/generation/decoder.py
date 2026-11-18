@@ -5,15 +5,11 @@ import queue as queue_mod
 from collections import deque
 from collections.abc import Iterable, Iterator
 
-import numpy as np
 import torch
 
 from text2motion.generation.contracts import DEFAULT_SAMPLING, SamplingConfig
 from text2motion.generation.nn_generator import MotionTokenGenerator
-from text2motion.motion.representation import DIM
 from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
-
-_END = None
 
 
 @torch.no_grad()
@@ -143,31 +139,3 @@ class StreamingMotionDecoder:
         yield from self.stream_tokens(
             generator.stream_token_indices(text_emb, num_steps, sampling=sampling)
         )
-
-
-def run_producer(
-    decoder: StreamingMotionDecoder,
-    generator: MotionTokenGenerator,
-    text_emb: torch.Tensor,
-    num_steps: int,
-    out_queue: "queue_mod.Queue",
-    sampling: SamplingConfig = DEFAULT_SAMPLING,
-) -> None:
-    for chunk in decoder.stream(generator, text_emb, num_steps, sampling=sampling):
-        put_drop_oldest(out_queue, chunk)
-
-    put_drop_oldest(out_queue, _END)
-
-
-def collect_stream(out_queue: "queue_mod.Queue") -> np.ndarray:
-    chunks: list[np.ndarray] = []
-
-    while True:
-        item = out_queue.get()
-
-        if item is _END:
-            break
-
-        chunks.append(item.squeeze(0).cpu().numpy())
-
-    return np.concatenate(chunks, axis=0) if chunks else np.zeros((0, DIM), dtype=np.float32)

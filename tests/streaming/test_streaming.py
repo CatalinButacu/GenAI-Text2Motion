@@ -1,4 +1,3 @@
-import queue as queue_mod
 from typing import cast
 
 import numpy as np
@@ -7,11 +6,7 @@ import torch
 
 from text2motion.app.config import GeneratorConfig, TokenizerConfig
 from text2motion.generation.contracts import Backbone, SamplingConfig, StreamAnchors
-from text2motion.generation.decoder import (
-    StreamingMotionDecoder,
-    collect_stream,
-    run_producer,
-)
+from text2motion.generation.decoder import StreamingMotionDecoder
 from text2motion.generation.nn_generator import MotionTokenGenerator
 from text2motion.motion.representation import kinematic_bones, recover_skeleton
 from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
@@ -93,42 +88,6 @@ def test_end_to_end_stream_from_generator():
     motion = torch.cat(chunks, dim=1)
 
     assert motion.shape == (1, 8 * TOK.downsample, 263)
-
-
-def test_queue_producer_pushes_chunks_then_sentinel():
-    dec = make_decoder()
-    gen = MotionTokenGenerator(GEN).eval()
-    q: queue_mod.Queue = queue_mod.Queue(maxsize=4)
-    run_producer(
-        dec,
-        gen,
-        torch.randn(1, GEN.d_text),
-        num_steps=8,
-        out_queue=q,
-        sampling=SamplingConfig(temperature=0.0),
-    )
-
-    motion = collect_stream(q)  # drains until STREAM_END
-    assert motion.shape == (8 * TOK.downsample, 263)
-    assert q.empty()
-
-
-def test_producer_never_stalls_on_a_full_queue():
-    dec = make_decoder()
-    gen = MotionTokenGenerator(GEN).eval()
-    q: queue_mod.Queue = queue_mod.Queue(maxsize=1)
-    run_producer(
-        dec,
-        gen,
-        torch.randn(1, GEN.d_text),
-        num_steps=8,
-        out_queue=q,
-        sampling=SamplingConfig(temperature=0.0),
-    )
-
-    motion = collect_stream(q)  # returns -> proves no deadlock; sentinel was reached
-    assert motion.shape[1] == 263  # some (possibly dropped) frames, then STREAM_END
-    assert q.empty()
 
 
 def test_recover_skeleton_and_bones():

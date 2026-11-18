@@ -8,12 +8,13 @@ from text2motion.dataset.contracts import MotionDataConfig
 from text2motion.dataset.datasets import (
     CaptionedMotionDataset,
     MotionWindowDataset,
+    clip_frame_counts,
     collate_motion_clips,
 )
 from text2motion.motion import representation
 from text2motion.motion.contracts import MotionClip, Split
-from text2motion.motion.normalization import MotionScaler, load_clips
-from text2motion.motion.representation import DIM
+from text2motion.motion.normalization import MotionScaler, fit_train_stats
+from text2motion.motion.representation import DIM, JOINTS
 from text2motion.motion.storage import (
     FEATURES_DIR,
     MEAN_FILE,
@@ -21,7 +22,6 @@ from text2motion.motion.storage import (
     STD_FILE,
     TEXTS_DIR,
     atomic_numpy_save,
-    clip_frame_counts,
     parse_text_file,
 )
 
@@ -185,7 +185,7 @@ def test_fitting_statistics_refuses_a_missing_or_bad_train_clip(tmp_path, bad, e
         np.save(tmp_path / "bad.npy", bad)
 
     with pytest.raises(error, match=match):
-        load_clips(tmp_path, ["good", "bad"])
+        fit_train_stats(tmp_path, ["good", "bad"], tmp_path, JOINTS)
 
 
 @pytest.mark.parametrize("times", ["inf#0.0", "0.0#-1.0"], ids=["infinite", "negative"])
