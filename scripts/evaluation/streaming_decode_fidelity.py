@@ -14,7 +14,7 @@ from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import FEATURES_DIR, base_clip_ids
-from text2motion.tokenization.nn_model import build_tokenizer_network
+from text2motion.tokenization.nn_tokenizer import build_tokenizer_network
 
 
 def load_tokenizer(cfg, ckpt_path: str):

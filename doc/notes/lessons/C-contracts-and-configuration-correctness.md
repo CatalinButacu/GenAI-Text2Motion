@@ -103,7 +103,7 @@ The current branch in `app/training.py::run_pretrain` uses:
 - `config.rvq_baseline.codebook_size` for RVQ.
 - The product of `config.tokenizer.fsq_levels` for FSQ.
 
-This resolution agrees with the actual tokenizer vocabulary. `FrozenMotionTokenizer.codebook_size` reads `self.network.codebook_size` in `tokenization/nn_model.py:260-261`.
+This resolution agrees with the actual tokenizer vocabulary. `FrozenMotionTokenizer.codebook_size` reads `self.network.codebook_size` in `tokenization/nn_tokenizer.py:260-261`.
 
 The same pretrain operation serves the `transformer_rvq` pair in `run_twins.sh`. Before the fix, that pair also used the incorrect branch.
 
@@ -139,7 +139,7 @@ The regression test is:
 
 ### C.4a The current dropout policy and the gate learning rate
 
-Both generator backbones now use embedding-only dropout. The shared generator applies the configured dropout through `emb_drop` in `generation/nn_model.py`.
+Both generator backbones now use embedding-only dropout. The shared generator applies the configured dropout through `emb_drop` in `generation/nn_generator.py`.
 
 The Mamba blocks do not add backbone dropout. The transformer attention explicitly uses `dropout_p=0.0` in `generation/nn_backbones.py:288`.
 
@@ -200,7 +200,7 @@ The YAML can assign each field separately. The historical example used `tokenize
 
 `ApplicationContext.resolve_generator_spec` in `app/bootstrap.py` derives the generator count from `config.tokenizer.num_quantizers`. The benchmark path also uses this resolution.
 
-The tokenizer factory uses `config.rvq_baseline` to construct the RVQ network. See `tokenization/nn_model.py::build_tokenizer_network`.
+The tokenizer factory uses `config.rvq_baseline` to construct the RVQ network. See `tokenization/nn_tokenizer.py::build_tokenizer_network`.
 
 The historical investigation found equal counts in the repository configurations. That agreement depended on the configuration author because no cross-contract check enforced it.
 

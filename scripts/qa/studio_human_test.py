@@ -22,7 +22,7 @@ from text2motion.app.service import (
     ServiceAddress,
     motion_service_client,
 )
-from text2motion.studio.config import StudioConfig
+from text2motion.studio.studio_config import StudioConfig
 from text2motion.studio.viewer import StreamingStudioViewer
 
 UNIQUE_NODE_NAMES = ("Motion (streaming)", "Avatar (SMPL-X)", "Avatar (rest)")

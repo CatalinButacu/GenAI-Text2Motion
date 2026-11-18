@@ -6,7 +6,7 @@
 >
 > Equal accuracy remains a requirement for Contribution B. The historical checkpoint comparison does not prove equal accuracy or a Mamba quality advantage.
 >
-> The relevant code is in `src\text2motion\generation\nn_model.py`, `nn_backbones.py`, `contracts.py`, and `decoder.py`. The current benchmark code is in `src\text2motion\evaluation\benchmark.py`.
+> The relevant code is in `src\text2motion\generation\nn_generator.py`, `nn_backbones.py`, `contracts.py`, and `decoder.py`. The current benchmark code is in `src\text2motion\evaluation\benchmark.py`.
 
 ## 13.0 The picture
 

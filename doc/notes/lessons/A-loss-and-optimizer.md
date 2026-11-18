@@ -1,7 +1,7 @@
 # Applied Lesson A -- The loss function and the optimizer (what we actually run)
 
 > This lesson follows the representation theory in lessons 1-3. It explains how the trainer updates the generator.
-> Sources: `src\text2motion\generation\losses.py`, `src\text2motion\generation\trainer.py`, and `src\text2motion\generation\contracts.py` (`GeneratorTrainingConfig` and `LossWeights`).
+> Sources: `src\text2motion\generation\losses.py`, `src\text2motion\generation\generator_trainer.py`, and `src\text2motion\generation\contracts.py` (`GeneratorTrainingConfig` and `LossWeights`).
 
 ## A.1 Two families of loss
 

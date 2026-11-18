@@ -161,7 +161,7 @@ takes ~35 minutes; that is expected, and is why the AWS idle watchdog was raised
 | 3 | rollout latency, eager vs fused | **expect ~1.00x** |
 
 Gate 3 is not a bug. `use_kernel` only affects `MambaMixer.forward`
-(`src/text2motion/generation/nn_model.py:142`), the training path. Streaming uses
+(`src/text2motion/generation/nn_generator.py:142`), the training path. Streaming uses
 `MambaMixer.step` (`:109`), which has **no fused path at all**. Making the *latency* comparison
 fair additionally needs `mamba_ssm.ops.triton.selective_state_update` wired into `step()` —
 that is not implemented, and gate 3 documents the gap.
@@ -189,7 +189,7 @@ preserving paths.
 
 Spot eviction and Kaggle's 9-hour session cap are the same problem with the same fix:
 `--resume` is epoch-granular and reads `artifacts/checkpoints/<stem>_last.pt`, which `train_generator`
-writes **every epoch unconditionally** (`generation/trainer.py:389`) with generator + text
+writes **every epoch unconditionally** (`generation/generator_trainer.py:389`) with generator + text
 encoder + optimizer + EMA + scheduler + epoch + best_fid. Sync that file to Blob each epoch and
 an eviction costs at most one epoch.
 

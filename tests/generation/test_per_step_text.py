@@ -5,7 +5,7 @@ import torch
 
 from text2motion.generation.contracts import Backbone, GeneratorConfig, StreamAnchors
 from text2motion.generation.nn_backbones import TransformerBackbone
-from text2motion.generation.nn_model import (
+from text2motion.generation.nn_generator import (
     EagerDecodeStep,
     MotionTokenGenerator,
     seeded_sampling_uniforms,

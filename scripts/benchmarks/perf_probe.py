@@ -20,11 +20,11 @@ import torch
 from text2motion.app.bootstrap import apply_precision, resolve_device, seed_everything
 from text2motion.app.config import Float32Precision, load_config
 from text2motion.generation.contracts import Backbone, MixedPrecisionMode, SamplingConfig
-from text2motion.generation.nn_model import GeneratorModelSpec
-from text2motion.generation.trainer import GeneratorTrainer
+from text2motion.generation.generator_trainer import GeneratorTrainer
+from text2motion.generation.nn_generator import GeneratorModelSpec
 from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import atomic_numpy_save, sha256_file
-from text2motion.tokenization.nn_model import build_tokenizer_network
+from text2motion.tokenization.nn_tokenizer import build_tokenizer_network
 
 
 def build_trainer(config, device: str, backbone: Backbone, tokenizer_ckpt: str):
@@ -425,8 +425,8 @@ def demo_probe(args) -> None:
     from text2motion.app.config import load_dataclass
     from text2motion.generation.decoder import StreamingMotionDecoder, measure_decoder_context
     from text2motion.motion.representation import recover_skeleton
-    from text2motion.studio.config import StudioConfig
     from text2motion.studio.fitting import build_smplx_body_model, fit_smplx_to_joints
+    from text2motion.studio.studio_config import StudioConfig
 
     app = ApplicationBootstrap.from_config(args.config, device=args.device)
     tokenizer = app.load_tokenizer(args.tokenizer_ckpt)

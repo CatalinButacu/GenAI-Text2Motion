@@ -9,12 +9,12 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from text2motion.studio.config import StudioConfig
 from text2motion.studio.contracts import (
     MotionInferenceClientPort,
     StudioLaunchArguments,
 )
 from text2motion.studio.scene import StudioSceneNodes
+from text2motion.studio.studio_config import StudioConfig
 
 logger = logging.getLogger(__name__)
 

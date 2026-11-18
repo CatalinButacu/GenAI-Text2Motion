@@ -15,7 +15,7 @@ from text2motion.motion.representation import (
     recover_from_ric,
     recover_from_rot,
 )
-from text2motion.tokenization.nn_model import TokenizerNetwork
+from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
 
 
 def token_ce_loss(

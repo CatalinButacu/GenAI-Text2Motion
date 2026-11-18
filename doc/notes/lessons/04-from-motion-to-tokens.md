@@ -56,7 +56,7 @@ flowchart LR
 
 ## 4.3 What the tokenizer is: encoder -> quantizer -> decoder
 
-The networks are in `src\text2motion\tokenization\nn_model.py`. The quantizers are in `src\text2motion\tokenization\nn_quantizers.py`.
+The networks are in `src\text2motion\tokenization\nn_tokenizer.py`. The quantizers are in `src\text2motion\tokenization\nn_quantizers.py`.
 
 The tokenizer has three parts:
 

@@ -9,9 +9,9 @@ import numpy as np
 import torch
 
 from text2motion.generation.contracts import DEFAULT_SAMPLING, SamplingConfig
-from text2motion.generation.nn_model import MotionTokenGenerator
+from text2motion.generation.nn_generator import MotionTokenGenerator
 from text2motion.motion.representation import DIM
-from text2motion.tokenization.nn_model import TokenizerNetwork
+from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
 
 _END = None
 

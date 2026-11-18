@@ -247,7 +247,7 @@ $$
 
 It then truncates the accepted piece to a multiple of the tokenizer's downsample factor. The rules appear in `src\text2motion\evaluation\evaluator.py` and `src\text2motion\evaluation\contracts.py`.
 
-The representation defines `FPS = 20` in `src\text2motion\motion\representation.py`. The studio defines `StreamDisplayConfig.upsample = 6` in `src\text2motion\studio\config.py`. The resulting display rate is:
+The representation defines `FPS = 20` in `src\text2motion\motion\representation.py`. The studio defines `StreamDisplayConfig.upsample = 6` in `src\text2motion\studio\studio_config.py`. The resulting display rate is:
 
 $$
 f_{\mathrm{display}} = 6 \times 20 = 120\ \mathrm{fps}.

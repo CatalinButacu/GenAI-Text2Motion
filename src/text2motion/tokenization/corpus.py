@@ -13,7 +13,7 @@ from text2motion.motion.contracts import MotionClip
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.storage import sha256_file
 from text2motion.tokenization.contracts import TokenPackPlan
-from text2motion.tokenization.nn_model import FrozenMotionTokenizer
+from text2motion.tokenization.nn_tokenizer import FrozenMotionTokenizer
 
 PACK_IDENTITY_KEY = "__identity__"
 PACK_FORMAT = "text2motion.token_pack"

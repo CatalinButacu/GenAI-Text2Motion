@@ -19,12 +19,12 @@ This trace uses $B=1$ and $T=4T'$. CFG adds an unconditional row, so the backbon
 
 The source files are:
 
-- `src\text2motion\generation\nn_model.py`: the CLIP encoder and the generator.
+- `src\text2motion\generation\nn_generator.py`: the CLIP encoder and the generator.
 - `src\text2motion\generation\nn_backbones.py`: the two backbones.
 - `src\text2motion\generation\contracts.py`: the configuration types.
 - `src\text2motion\generation\pipeline.py`: batch generation and END removal.
 - `src\text2motion\generation\decoder.py`: the decoder for frame chunks.
-- `src\text2motion\tokenization\nn_model.py`: the tokenizer decoder.
+- `src\text2motion\tokenization\nn_tokenizer.py`: the tokenizer decoder.
 - `src\text2motion\motion\representation.py`: the motion representation and joint recovery.
 
 ## The picture (shapes end to end)
@@ -56,7 +56,7 @@ The input is one string: `"a person walks forward and sits down"`.
 
 Let $s$ denote this string. The CLIP tokenizer converts $s$ into text token IDs. These IDs represent words or word parts, not motion codes.
 
-## Stage 1 -- encode the text (`generation\nn_model.py`)
+## Stage 1 -- encode the text (`generation\nn_generator.py`)
 
 `CLIPTextEncoder` converts the text IDs into a projected text vector. The default prefix contains one vector.
 
@@ -71,7 +71,7 @@ CLIP returns the shape **(1, 512)** for this configuration. `project_text_prefix
 
 The alternative 16-vector configuration uses one pooled vector and 15 token states. Its prefix has shape **(1, 16, 512)**. It is not the default demo configuration.
 
-## Stage 2 -- set up classifier-free guidance (`generation\nn_model.py`)
+## Stage 2 -- set up classifier-free guidance (`generation\nn_generator.py`)
 
 CFG uses a conditional row and an unconditional row. The unconditional row contains a zero text vector. The generator does not encode an empty string for this row.
 
@@ -209,7 +209,7 @@ For a batch, each row ends at its first END in any codebook. `generation\pipelin
 
 The stream stops immediately when every row has END in at least one codebook at the current step. Batch generation also records separate row lengths.
 
-## Stage 6 -- FROZEN tokenizer DECODE: tokens -> motion (`tokenization\nn_model.py`)
+## Stage 6 -- FROZEN tokenizer DECODE: tokens -> motion (`tokenization\nn_tokenizer.py`)
 
 The frozen tokenizer uses three transformations:
 

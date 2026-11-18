@@ -6,7 +6,7 @@ from text2motion.generation.contracts import (
     TextEncoderConfig,
     TextToMotionGenerationRequest,
 )
-from text2motion.generation.nn_model import (
+from text2motion.generation.nn_generator import (
     CLIPTextEncoder,
     GeneratorModelSpec,
     MotionTokenGenerator,

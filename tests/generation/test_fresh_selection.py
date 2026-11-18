@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from text2motion.generation.contracts import GeneratorTrainingRequest
-from text2motion.generation.trainer import (
+from text2motion.generation.generator_trainer import (
     GENERATOR_RESUME_FORMAT,
     GeneratorTrainer,
     train_generator,

@@ -25,12 +25,12 @@ The source files are:
 
 - `src\text2motion\dataset\datasets.py`
 - `src\text2motion\motion\representation.py`
-- `src\text2motion\tokenization\nn_model.py`
+- `src\text2motion\tokenization\nn_tokenizer.py`
 - `src\text2motion\tokenization\nn_quantizers.py`
 - `src\text2motion\generation\contracts.py`
-- `src\text2motion\generation\nn_model.py`
+- `src\text2motion\generation\nn_generator.py`
 - `src\text2motion\generation\nn_backbones.py`
-- `src\text2motion\generation\trainer.py`
+- `src\text2motion\generation\generator_trainer.py`
 - `src\text2motion\generation\losses.py`
 - `src\text2motion\evaluation\evaluator.py`
 
@@ -122,7 +122,7 @@ The motion tensor then has shape (B,T,263).
 The tokenizer requires a positive frame count that is a multiple of four.
 A direct tokenizer call with a nonaligned frame count raises an error.
 
-## Stage 3 -- FROZEN tokenizer ENCODE: motion -> tokens (tokenization\nn_model.py)
+## Stage 3 -- FROZEN tokenizer ENCODE: motion -> tokens (tokenization\nn_tokenizer.py)
 
 The tokenizer parameters remain fixed throughout generator training.
 The trainer calls the encoder without an autograd graph.
@@ -152,7 +152,7 @@ The round operation makes each coordinate discrete.
 The index operation expresses the four discrete coordinates as one integer per group.
 The generator receives these integer codes, not the continuous encoder output.
 
-## Stage 4 -- build targets + corrupt inputs (generation\trainer.py)
+## Stage 4 -- build targets + corrupt inputs (generation\generator_trainer.py)
 
 1. Append a time position for END.
    The target tensor has shape (B,T'+1,8).
@@ -182,7 +182,7 @@ The targets remain clean.
 This corruption exposes the generator to imperfect previous tokens.
 The clean targets still specify the correct next token.
 
-## Stage 5 -- text branch (generation\nn_model.py + generation\trainer.py)
+## Stage 5 -- text branch (generation\nn_generator.py + generation\generator_trainer.py)
 
 CLIP converts each caption to a pooled vector with 512 coordinates.
 With a prefix length of one, CLIP returns shape (B,512).
@@ -201,7 +201,7 @@ It replaces the complete text vector with zeros for a selected row.
 The shape remains (B,512).
 These rows provide the text-free branch required by classifier-free guidance, or CFG.
 
-## Stage 6 -- generator FORWARD (generation\nn_model.py), teacher forced
+## Stage 6 -- generator FORWARD (generation\nn_generator.py), teacher forced
 
 1. Apply `embed_motion_tokens`.
    Each of the eight input integers selects a 512-coordinate embedding from its group's table.

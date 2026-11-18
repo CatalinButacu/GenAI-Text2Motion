@@ -39,15 +39,15 @@ from text2motion.generation.contracts import (
     OverfitCriteria,
     SamplingConfig,
 )
-from text2motion.generation.nn_model import GeneratorModelSpec, MotionTokenGenerator
-from text2motion.generation.pipeline import TextToMotionGenerator
-from text2motion.generation.pretrain import pretrain_generator, pretraining_resume_path
-from text2motion.generation.trainer import (
+from text2motion.generation.generator_trainer import (
     CleanCrossEntropyLoaders,
     GeneratorTrainer,
     overfit_single_batch,
     train_generator,
 )
+from text2motion.generation.nn_generator import GeneratorModelSpec, MotionTokenGenerator
+from text2motion.generation.pipeline import TextToMotionGenerator
+from text2motion.generation.pretrain import pretrain_generator, pretraining_resume_path
 from text2motion.motion.contracts import RunOutputs, Split
 from text2motion.motion.storage import MEAN_FILE, SPLIT_FILES, STD_FILE, sha256_file
 from text2motion.tokenization.contracts import (
@@ -60,8 +60,11 @@ from text2motion.tokenization.corpus import (
     check_pack_precision,
     read_pack_identity,
 )
-from text2motion.tokenization.metrics import ReconstructionSetup, evaluate_tokenizer_reconstruction
-from text2motion.tokenization.trainer import (
+from text2motion.tokenization.reconstruction_metrics import (
+    ReconstructionSetup,
+    evaluate_tokenizer_reconstruction,
+)
+from text2motion.tokenization.tokenizer_trainer import (
     TokenizerTrainer,
     train_tokenizer,
 )

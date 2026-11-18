@@ -53,7 +53,7 @@ The transformer creates 97 position embeddings, including the prefix position, i
 
 The code does not automatically remove old keys and values. Without a restart, the stream must obey the position limit.
 
-`check_stream_budget` checks this limit in `src\text2motion\generation\nn_model.py:188–223`. A longer text prefix reduces the available motion budget.
+`check_stream_budget` checks this limit in `src\text2motion\generation\nn_generator.py:188–223`. A longer text prefix reduces the available motion budget.
 
 Policy B makes the transformer cache bounded through repeated reconstruction. Section 20.3 explains this policy.
 
@@ -142,7 +142,7 @@ $$
 
 where $e(z_t)$ is the motion-token embedding and $c$ is the projected text vector.
 
-The code implements this addition in `src\text2motion\generation\nn_model.py:164–175`. The option applies during both normal prediction and context replay.
+The code implements this addition in `src\text2motion\generation\nn_generator.py:164–175`. The option applies during both normal prediction and context replay.
 
 Per-step text supplies a new text signal at each step. It therefore addresses the missing-input mechanism in H2.
 
@@ -170,7 +170,7 @@ These values identify the policy. They are not the default values of `stream_tok
 
 ### 20.3b The exact sequence
 
-`stream_token_indices` starts at `src\text2motion\generation\nn_model.py:226`.
+`stream_token_indices` starts at `src\text2motion\generation\nn_generator.py:226`.
 
 Its `start_from` function reconstructs the state at lines 258–276. The main loop stores recent tokens and schedules rebuilds at lines 278–309.
 
@@ -216,7 +216,7 @@ Both backbones discard the old generator state. Neither backbone changes motion 
 
 Both CFG branches undergo the rebuild. The conditional branch receives the current text, and the unconditional branch receives the null text input.
 
-The code forms these branches in `src\text2motion\generation\nn_model.py:244–247`. Each branch replays the same generated motion tokens.
+The code forms these branches in `src\text2motion\generation\nn_generator.py:244–247`. Each branch replays the same generated motion tokens.
 
 The decoder remains active throughout the rebuild. Its history and pending tokens belong to a separate iterator.
 
@@ -495,17 +495,17 @@ Neither RepNet nor an END token establishes exact touchdown control in this proj
 
 The training code constructs END targets at the valid clip boundary.
 
-`append_end_targets` implements this operation in `src\text2motion\generation\trainer.py:234–248`.
+`append_end_targets` implements this operation in `src\text2motion\generation\generator_trainer.py:234–248`.
 
 The service disables END-based termination through `stop_at_end=False` in `src\text2motion\app\service.py:415`.
 
-The stream masks the END symbol when termination is disabled. This behavior appears in `src\text2motion\generation\nn_model.py:286–293`.
+The stream masks the END symbol when termination is disabled. This behavior appears in `src\text2motion\generation\nn_generator.py:286–293`.
 
 Thus, END targets exist during training, but serving does not use them to stop a stream.
 
 The stream also accepts a `text_at` callback. It requires an active restart policy.
 
-The callback supplies new text only at a rebuild, at `src\text2motion\generation\nn_model.py:305–308`.
+The callback supplies new text only at a rebuild, at `src\text2motion\generation\nn_generator.py:305–308`.
 
 A prompt change therefore takes effect at a rebuild. It does not immediately affect a prediction between rebuilds.
 
@@ -523,7 +523,7 @@ $$
 
 A rebuild changes the generator state. It must not change $j$, $j_0$, $N$, or the observed event count.
 
-The current loop already separates its global `index` from `since_anchor`. Their updates appear in `src\text2motion\generation\nn_model.py:278–309`.
+The current loop already separates its global `index` from `since_anchor`. Their updates appear in `src\text2motion\generation\nn_generator.py:278–309`.
 
 A future progress-conditioned model must also use the original timestamps during replay. Replay must not increment the external counter.
 

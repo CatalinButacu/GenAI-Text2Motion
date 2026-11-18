@@ -5,19 +5,19 @@ import torch
 
 from text2motion.app.config import ResidualVectorQuantizationConfig, TokenizerConfig
 from text2motion.tokenization.contracts import DROPPED_CODE, FiniteScalarStackLayout, TokenizerKind
-from text2motion.tokenization.nn_model import (
-    FiniteScalarQuantizationTokenizer,
-    ResidualVectorQuantizationTokenizer,
-    TokenizerNetwork,
-    build_tokenizer_network,
-    downsample_stage_count,
-)
 from text2motion.tokenization.nn_quantizers import (
     FiniteScalarQuantizer,
     GroupedFiniteScalarQuantizer,
     QuantizerStack,
     ResidualFiniteScalarQuantizer,
     ResidualVectorQuantizer,
+)
+from text2motion.tokenization.nn_tokenizer import (
+    FiniteScalarQuantizationTokenizer,
+    ResidualVectorQuantizationTokenizer,
+    TokenizerNetwork,
+    build_tokenizer_network,
+    downsample_stage_count,
 )
 
 FSQ_CFG = TokenizerConfig(

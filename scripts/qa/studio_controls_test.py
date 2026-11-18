@@ -19,7 +19,7 @@ from text2motion.app.service import (
     ServiceAddress,
     motion_service_client,
 )
-from text2motion.studio.config import StudioConfig
+from text2motion.studio.studio_config import StudioConfig
 
 TRACKED_WIDGETS = (
     "button",

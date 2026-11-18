@@ -12,14 +12,14 @@ from text2motion.generation.contracts import (
     GeneratorTrainingConfig,
     MixedPrecisionMode,
 )
-from text2motion.generation.datasets import build_token_loaders
-from text2motion.generation.losses import token_ce_loss
-from text2motion.generation.nn_model import GeneratorModelSpec
-from text2motion.generation.trainer import (
+from text2motion.generation.generator_trainer import (
     adamw_groups,
     check_schedule_horizon,
     warmup_cosine_factor,
 )
+from text2motion.generation.losses import token_ce_loss
+from text2motion.generation.nn_generator import GeneratorModelSpec
+from text2motion.generation.token_datasets import build_token_loaders
 from text2motion.motion.contracts import NO_RUN_OUTPUTS, RunOutputs
 from text2motion.motion.storage import (
     RESUME_VERSION,

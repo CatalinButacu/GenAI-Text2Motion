@@ -15,14 +15,14 @@ from text2motion.tokenization.contracts import (
     TokenPackPlan,
 )
 from text2motion.tokenization.corpus import build_token_pack
-from text2motion.tokenization.nn_model import (
+from text2motion.tokenization.nn_quantizers import FiniteScalarQuantizer, VectorQuantizer
+from text2motion.tokenization.nn_tokenizer import (
     FiniteScalarQuantizationTokenizer,
     FrozenMotionTokenizer,
     ResidualVectorQuantizationTokenizer,
     feature_velocity_reconstruction_loss,
 )
-from text2motion.tokenization.nn_quantizers import FiniteScalarQuantizer, VectorQuantizer
-from text2motion.tokenization.trainer import TokenizerTrainer
+from text2motion.tokenization.tokenizer_trainer import TokenizerTrainer
 
 FSQ = TokenizerConfig(width=32, num_quantizers=2, fsq_levels=(4, 4), n_resblocks=1)
 RVQ = ResidualVectorQuantizationConfig(

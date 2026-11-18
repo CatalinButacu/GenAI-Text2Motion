@@ -20,7 +20,7 @@ from text2motion.tokenization.corpus import (
     read_pack_identity,
     window_starts,
 )
-from text2motion.tokenization.nn_model import FrozenMotionTokenizer
+from text2motion.tokenization.nn_tokenizer import FrozenMotionTokenizer
 
 
 @pytest.mark.parametrize(

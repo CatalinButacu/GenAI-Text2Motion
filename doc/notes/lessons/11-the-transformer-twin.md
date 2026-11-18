@@ -5,7 +5,7 @@
 > Both twins use the same objective, heads, loss, and sampler.
 > Only the backbone and its position mechanism differ.
 > `TransformerBlock` and `TransformerBackbone` are in `src\text2motion\generation\nn_backbones.py`.
-> The shared generator is in `src\text2motion\generation\nn_model.py`.
+> The shared generator is in `src\text2motion\generation\nn_generator.py`.
 
 ## 11.0 The picture
 

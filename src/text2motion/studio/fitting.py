@@ -12,8 +12,8 @@ import torch
 
 from text2motion.motion.contracts import SMPLX_MODEL_TYPE
 from text2motion.motion.representation import JOINTS
-from text2motion.studio.config import SmplxFitConfig
 from text2motion.studio.contracts import SmplxFitResult
+from text2motion.studio.studio_config import SmplxFitConfig
 
 logger = logging.getLogger(__name__)
 

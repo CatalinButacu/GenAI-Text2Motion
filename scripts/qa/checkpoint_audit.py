@@ -14,7 +14,7 @@ from text2motion.app.checkpoint import GeneratorBundle
 from text2motion.app.config import load_config
 from text2motion.motion.storage import sha256_file
 from text2motion.tokenization.contracts import TokenizerKind
-from text2motion.tokenization.nn_model import build_tokenizer_network
+from text2motion.tokenization.nn_tokenizer import build_tokenizer_network
 
 TOKENIZER_DIR = Path("artifacts/checkpoints/tokenizer")
 TOKENIZER_CONFIG_DIR = Path("configs/tokenizer")

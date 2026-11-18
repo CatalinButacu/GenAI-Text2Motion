@@ -74,9 +74,9 @@ def render_review(a: argparse.Namespace) -> None:
     from aitviewer.scene.scene import Scene
     from PIL import Image
 
-    from text2motion.studio.config import SmplxFitConfig
     from text2motion.studio.fitting import build_smplx_body_model
     from text2motion.studio.scene import create_skeleton_sequence_node
+    from text2motion.studio.studio_config import SmplxFitConfig
 
     started = time.perf_counter()
     manifest = json.loads(a.review.read_text(encoding="utf-8"))

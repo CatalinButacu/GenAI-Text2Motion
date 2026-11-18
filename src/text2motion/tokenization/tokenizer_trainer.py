@@ -25,7 +25,7 @@ from text2motion.motion.storage import (
 )
 from text2motion.tokenization.contracts import TokenizerSchedule
 from text2motion.tokenization.ema import ExponentialMovingAverage
-from text2motion.tokenization.nn_model import (
+from text2motion.tokenization.nn_tokenizer import (
     TokenizerNetwork,
     feature_velocity_reconstruction_loss,
 )

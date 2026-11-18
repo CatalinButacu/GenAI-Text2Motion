@@ -11,7 +11,7 @@ from text2motion.generation.contracts import (
     Backbone,
     OverfitCriteria,
 )
-from text2motion.generation.nn_model import GeneratorModelSpec
+from text2motion.generation.nn_generator import GeneratorModelSpec
 
 
 def resolve_generator_config(config: ApplicationConfig, backbone: str, codebook_size: int) -> dict:

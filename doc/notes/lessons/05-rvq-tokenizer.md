@@ -2,7 +2,7 @@
 
 > This lesson explains the RVQ baseline tokenizer, with mathematics at each step.
 > VQ assigns each vector to a centroid. An exponential moving average (EMA) updates the centroids.
-> Code: `src\text2motion\tokenization\nn_model.py`, `src\text2motion\tokenization\nn_quantizers.py`, and `src\text2motion\tokenization\trainer.py`.
+> Code: `src\text2motion\tokenization\nn_tokenizer.py`, `src\text2motion\tokenization\nn_quantizers.py`, and `src\text2motion\tokenization\tokenizer_trainer.py`.
 > Results appear in section 5.8 and Lesson 7.
 > Use a markdown preview with KaTeX or MathJax support for the LaTeX formulas.
 
@@ -170,7 +170,7 @@ The baseline uses a recipe from T2M-GPT, MoMask, and EnCodec:
 
 The encoder and decoder architecture stays the same in the comparison. Each tokenizer also has learned projections before and after its quantizer. The projection dimensions depend on the quantizer.
 
-The networks are in `src\text2motion\tokenization\nn_model.py`. The quantizers are in `src\text2motion\tokenization\nn_quantizers.py`. The trainer is in `src\text2motion\tokenization\trainer.py`.
+The networks are in `src\text2motion\tokenization\nn_tokenizer.py`. The quantizers are in `src\text2motion\tokenization\nn_quantizers.py`. The trainer is in `src\text2motion\tokenization\tokenizer_trainer.py`.
 
 The training step follows this sequence:
 

@@ -29,7 +29,7 @@ from text2motion.generation.losses import (
     UncertaintyWeighter,
     generator_loss,
 )
-from text2motion.generation.nn_model import CLIPTextEncoder, MotionTokenGenerator
+from text2motion.generation.nn_generator import CLIPTextEncoder, MotionTokenGenerator
 from text2motion.motion.contracts import NO_RUN_OUTPUTS, Evaluator, MetricSink, RunOutputs, Split
 from text2motion.motion.kinematics import Skeleton
 from text2motion.motion.representation import KINEMATIC_CHAINS, RAW_OFFSETS
@@ -42,7 +42,7 @@ from text2motion.motion.storage import (
     restore_rng_state,
 )
 from text2motion.tokenization.ema import ExponentialMovingAverage
-from text2motion.tokenization.nn_model import TokenizerNetwork
+from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
 
 logger = logging.getLogger(__name__)
 

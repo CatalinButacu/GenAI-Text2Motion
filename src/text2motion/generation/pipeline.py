@@ -5,7 +5,7 @@ from collections.abc import Iterator, Sequence
 import torch
 
 from text2motion.generation.contracts import SamplingConfig, TextToMotionGenerationRequest
-from text2motion.generation.nn_model import (
+from text2motion.generation.nn_generator import (
     CLIPTextEncoder,
     MotionTokenGenerator,
     seeded_sampling_uniforms,
@@ -15,7 +15,7 @@ from text2motion.motion.contracts import (
     MotionClip,
     MotionTokens,
 )
-from text2motion.tokenization.nn_model import FrozenMotionTokenizer
+from text2motion.tokenization.nn_tokenizer import FrozenMotionTokenizer
 
 
 ############################################################

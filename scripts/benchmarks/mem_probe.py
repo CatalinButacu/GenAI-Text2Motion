@@ -8,10 +8,10 @@ import torch
 from text2motion.app.bootstrap import required_path
 from text2motion.app.config import load_config
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.nn_model import CLIPTextEncoder, GeneratorModelSpec
-from text2motion.generation.trainer import GeneratorTrainer
+from text2motion.generation.generator_trainer import GeneratorTrainer
+from text2motion.generation.nn_generator import CLIPTextEncoder, GeneratorModelSpec
 from text2motion.motion.representation import DIM
-from text2motion.tokenization.nn_model import build_tokenizer_network
+from text2motion.tokenization.nn_tokenizer import build_tokenizer_network
 
 
 def run(a: argparse.Namespace) -> None:

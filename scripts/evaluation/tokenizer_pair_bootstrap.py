@@ -12,7 +12,10 @@ import torch
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.evaluation.metrics import paired_fid_delta
 from text2motion.motion.contracts import Split
-from text2motion.tokenization.metrics import ReconstructionSetup, evaluate_tokenizer_reconstruction
+from text2motion.tokenization.reconstruction_metrics import (
+    ReconstructionSetup,
+    evaluate_tokenizer_reconstruction,
+)
 
 SEED = 2026
 CONFIGS = MappingProxyType(

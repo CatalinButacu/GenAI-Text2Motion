@@ -130,7 +130,7 @@ def select_model(args: StudioRequest, model: str, registry: Path) -> None:
 
 def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
     from text2motion.app.service import motion_service_client
-    from text2motion.studio.config import StudioConfig
+    from text2motion.studio.studio_config import StudioConfig
     from text2motion.studio.viewer import StreamingStudioViewer
 
     studio_config = (

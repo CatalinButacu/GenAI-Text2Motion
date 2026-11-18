@@ -4,7 +4,7 @@
 > This lesson defines the conditional distribution that both twins learn.
 > Lessons 11 and 12 describe two implementations of $f_\theta$: the transformer and Mamba.
 > Lesson 13 describes their state and memory costs.
-> The equations correspond to `src\text2motion\generation\nn_model.py`, with the loss in `src\text2motion\generation\losses.py`.
+> The equations correspond to `src\text2motion\generation\nn_generator.py`, with the loss in `src\text2motion\generation\losses.py`.
 
 ## 8.0 The picture
 
@@ -111,7 +111,7 @@ The hidden states from position $P\!-\!1$ onward predict $z_1,\dots,z_L$.
 
 The actual trainer also corrupts the input tokens. The default `pkeep` is 0.8, so approximately 20% of the input entries receive random motion code IDs. The target tokens remain clean.
 
-`generation\trainer.py` applies this corruption before the forward pass. The sequence equation shows the clean teacher-forcing case. For the actual default procedure, the input embeddings use the corrupted history.
+`generation\generator_trainer.py` applies this corruption before the forward pass. The sequence equation shows the clean teacher-forcing case. For the actual default procedure, the input embeddings use the corrupted history.
 
 `token_ce_loss` computes the mean cross-entropy across codebooks. It masks positions outside each valid length $L_b$:
 $$

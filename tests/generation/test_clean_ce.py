@@ -9,17 +9,17 @@ import torch
 
 from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, TokenizerConfig
 from text2motion.generation.contracts import Backbone, GeneratorTrainingRequest
-from text2motion.generation.nn_model import MotionTokenGenerator
-from text2motion.generation.trainer import (
+from text2motion.generation.generator_trainer import (
     GENERATOR_RESUME_FORMAT,
     CleanCrossEntropyLoaders,
     GeneratorTrainer,
     check_ce_stop_setup,
     train_generator,
 )
+from text2motion.generation.nn_generator import MotionTokenGenerator
 from text2motion.motion.contracts import RunOutputs
 from text2motion.motion.storage import RESUME_VERSION
-from text2motion.tokenization.nn_model import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorConfig(

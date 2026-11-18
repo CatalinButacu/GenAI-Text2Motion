@@ -10,13 +10,13 @@ from text2motion.app.config import (
     TokenizerConfig,
 )
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.nn_model import (
+from text2motion.generation.generator_trainer import GeneratorTrainer
+from text2motion.generation.nn_generator import (
     CLIPTextEncoder,
     FrozenTextStates,
     MotionTokenGenerator,
 )
-from text2motion.generation.trainer import GeneratorTrainer
-from text2motion.tokenization.nn_model import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 CACHE_CAPTIONS = (

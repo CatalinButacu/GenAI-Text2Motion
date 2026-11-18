@@ -12,7 +12,7 @@ from text2motion.generation.nn_backbones import (
     MambaMixer,
     TransformerBlock,
 )
-from text2motion.generation.nn_model import MotionTokenGenerator
+from text2motion.generation.nn_generator import MotionTokenGenerator
 
 
 def test_a_fresh_mamba_mixer_starts_with_the_reference_dt_and_a_long_memory():

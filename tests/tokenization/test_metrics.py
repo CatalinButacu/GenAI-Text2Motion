@@ -7,8 +7,11 @@ from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import FEATURES_DIR, SPLIT_FILES
 from text2motion.tokenization.contracts import TokenizerReconstruction
-from text2motion.tokenization.metrics import ReconstructionSetup, evaluate_tokenizer_reconstruction
-from text2motion.tokenization.nn_model import TokenizerNetwork
+from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
+from text2motion.tokenization.reconstruction_metrics import (
+    ReconstructionSetup,
+    evaluate_tokenizer_reconstruction,
+)
 
 
 ############################################################

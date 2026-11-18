@@ -23,11 +23,15 @@ from text2motion.dataset.datasets import MotionDataModule
 from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
 from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.nn_model import CLIPTextEncoder, FrozenTextStates, GeneratorModelSpec
+from text2motion.generation.nn_generator import (
+    CLIPTextEncoder,
+    FrozenTextStates,
+    GeneratorModelSpec,
+)
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.contracts import PreparationRequest
 from text2motion.motion.storage import FAILURE_DUMP_FILE
-from text2motion.tokenization.nn_model import FrozenMotionTokenizer, build_tokenizer_network
+from text2motion.tokenization.nn_tokenizer import FrozenMotionTokenizer, build_tokenizer_network
 
 
 def required_path(value: Path | None, key: str) -> Path:
