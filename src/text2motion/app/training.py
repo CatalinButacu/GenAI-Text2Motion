@@ -13,7 +13,9 @@ from text2motion.app.cli_requests import (
     PrepareRequest,
     PretrainRequest,
     SanityOverfitRequest,
+    TokenizeRequest,
     TrainGeneratorRequest,
+    TrainTokenizerRequest,
 )
 from text2motion.app.run_log import (
     log_metrics,
@@ -49,9 +51,9 @@ from text2motion.generation.trainer import (
 from text2motion.motion.contracts import RunOutputs, Split
 from text2motion.motion.storage import MEAN_FILE, SPLIT_FILES, STD_FILE, sha256_file
 from text2motion.tokenization.contracts import (
-    TokenizeRequest,
     TokenizerKind,
-    TrainTokenizerRequest,
+    TokenizerSchedule,
+    TokenPackPlan,
 )
 from text2motion.tokenization.corpus import (
     build_token_pack,
@@ -113,7 +115,9 @@ def run_tokenize(app: ApplicationContext, request: TokenizeRequest) -> None:
     summary = build_token_pack(
         tokenizer,
         app.create_motion_repository().load_scaler(),
-        request,
+        TokenPackPlan(
+            request.features_dir, request.token_pack, request.segment_frames, request.stride
+        ),
         excluded,
         identity,
     )
@@ -191,7 +195,7 @@ def run_train_tokenizer(
     train_tokenizer(
         trainer,
         loader,
-        args,
+        TokenizerSchedule(args.epochs, args.eval_every, args.resume, args.accept_legacy_resume),
         device=app.device,
         evaluate=evaluate,
         checkpoint_path=checkpoint_dir / name,

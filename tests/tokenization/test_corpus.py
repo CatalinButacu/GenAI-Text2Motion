@@ -8,9 +8,10 @@ import pytest
 import torch
 from pydantic import ValidationError
 
+from text2motion.app.cli_requests import TokenizeRequest
 from text2motion.dataset import preparation
 from text2motion.motion.normalization import MotionScaler
-from text2motion.tokenization.contracts import TokenizeRequest
+from text2motion.tokenization.contracts import TokenPackPlan
 from text2motion.tokenization.corpus import (
     PACK_IDENTITY_KEY,
     build_token_pack,
@@ -56,7 +57,13 @@ def test_the_pack_skips_excluded_clips_and_records_its_identity(tmp_path):
     scaler = cast(MotionScaler, SimpleNamespace(normalize=lambda feat: feat))
 
     summary = build_token_pack(
-        fake_tokenizer(), scaler, request, {"heldout.npy"}, {"tokenizer_sha256": "abc"}
+        fake_tokenizer(),
+        scaler,
+        TokenPackPlan(
+            request.features_dir, request.token_pack, request.segment_frames, request.stride
+        ),
+        {"heldout.npy"},
+        {"tokenizer_sha256": "abc"},
     )
 
     with np.load(tmp_path / "pack.npz") as pack:
@@ -81,7 +88,15 @@ def test_pack_readers_count_only_clip_windows(tmp_path):
         stride=16,
     )
     scaler = cast(MotionScaler, SimpleNamespace(normalize=lambda feat: feat))
-    build_token_pack(fake_tokenizer(), scaler, request, set(), {"tokenizer_sha256": "abc"})
+    build_token_pack(
+        fake_tokenizer(),
+        scaler,
+        TokenPackPlan(
+            request.features_dir, request.token_pack, request.segment_frames, request.stride
+        ),
+        set(),
+        {"tokenizer_sha256": "abc"},
+    )
     spec = importlib.util.spec_from_file_location(
         "scaling_budget", Path("scripts/benchmarks/scaling_budget.py")
     )
@@ -137,7 +152,15 @@ def test_a_pack_without_any_window_is_not_written(tmp_path, case):
     excluded = {"only.npy"} if case == "all_excluded" else set()
 
     with pytest.raises(ValueError, match="would be empty"):
-        build_token_pack(fake_tokenizer(), scaler, request, excluded, {})
+        build_token_pack(
+            fake_tokenizer(),
+            scaler,
+            TokenPackPlan(
+                request.features_dir, request.token_pack, request.segment_frames, request.stride
+            ),
+            excluded,
+            {},
+        )
     assert not (tmp_path / "pack.npz").exists()
 
 

@@ -2,13 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum, StrEnum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import torch
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from text2motion.motion.representation import FPS, JOINTS
 
@@ -90,35 +88,6 @@ class CorpusLayout:
     amass_features_dir: Path = Path("data/AMASS_263/new_joint_vecs")
     amass_token_pack: Path = Path("data/amass_tokens.npz")
     pretraining_token_pack: Path = Path("data/amass_tokens_fsq8x1024.npz")
-
-
-DEFAULT_CONFIG = Path("configs/default.yaml")
-CONFIG_HELP = "YAML file with model, data and path settings; it selects the experiment"
-
-
-############################################################
-#       CommandRequest
-############################################################
-class CommandRequest(BaseModel):
-    model_config = ConfigDict(protected_namespaces=())
-    config: Path = Field(description=CONFIG_HELP)
-
-    @field_validator("*", mode="before")
-    @classmethod
-    def member_from_name(cls, value: Any, info: ValidationInfo) -> Any:
-        annotation = cls.model_fields[info.field_name or ""].annotation
-        if not (isinstance(annotation, type) and issubclass(annotation, Enum)):
-            return value
-        if isinstance(value, str) and value in annotation.__members__:
-            return annotation[value]
-        return value
-
-
-############################################################
-#       DefaultConfigRequest
-############################################################
-class DefaultConfigRequest(CommandRequest):
-    config: Path = Field(default=DEFAULT_CONFIG, description=CONFIG_HELP)
 
 
 SMPLX_MODEL_TYPE = "smplx"

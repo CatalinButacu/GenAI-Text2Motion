@@ -6,12 +6,13 @@ import numpy as np
 import pytest
 import torch
 
+from text2motion.app.cli_requests import TokenizeRequest
 from text2motion.motion.contracts import MotionBatch, MotionClip, MotionTokens
 from text2motion.motion.normalization import MotionScaler
 from text2motion.tokenization.contracts import (
     ResidualVectorQuantizationConfig,
     TokenizerConfig,
-    TokenizeRequest,
+    TokenPackPlan,
 )
 from text2motion.tokenization.corpus import build_token_pack
 from text2motion.tokenization.nn_model import (
@@ -78,7 +79,15 @@ def test_the_token_pack_refuses_overflow_and_unaligned_windows(
     tokenizer = SimpleNamespace(codebook_size=codebook_size, downsample=4)
     scaler = cast(MotionScaler, SimpleNamespace(normalize=lambda feat: feat))
     with pytest.raises(ValueError, match=match):
-        build_token_pack(cast(FrozenMotionTokenizer, tokenizer), scaler, request, set(), {})
+        build_token_pack(
+            cast(FrozenMotionTokenizer, tokenizer),
+            scaler,
+            TokenPackPlan(
+                request.features_dir, request.token_pack, request.segment_frames, request.stride
+            ),
+            set(),
+            {},
+        )
 
 
 def test_a_padded_batch_is_refused_by_the_tokenizer_trainer():

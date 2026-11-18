@@ -220,16 +220,6 @@ class StudioSamplingConfig(SamplingConfig):
 
 
 ############################################################
-#       OverfitGateRequest
-############################################################
-@dataclass(frozen=True)
-class OverfitGateRequest:
-    batch_size: int = 4
-    steps: int = 1000
-    lr: float = 3e-3
-
-
-############################################################
 #       TextToMotionGenerationRequest
 ############################################################
 @dataclass(frozen=True)

@@ -50,12 +50,12 @@ COMMANDS = MappingProxyType(
             "AMASS -> HumanML3D-263 data preparation",
         ),
         "tokenize": Command(
-            "text2motion.tokenization.contracts:TokenizeRequest",
+            "text2motion.app.cli_requests:TokenizeRequest",
             "text2motion.app.training:run_tokenize",
             "encode a feature corpus into tokens",
         ),
         "train-tokenizer": Command(
-            "text2motion.tokenization.contracts:TrainTokenizerRequest",
+            "text2motion.app.cli_requests:TrainTokenizerRequest",
             "text2motion.app.training:run_train_tokenizer",
             "train the motion tokenizer",
         ),

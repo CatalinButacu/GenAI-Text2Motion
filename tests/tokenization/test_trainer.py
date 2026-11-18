@@ -6,6 +6,7 @@ import pytest
 import torch
 from pydantic import ValidationError
 
+from text2motion.app.cli_requests import TrainTokenizerRequest
 from text2motion.app.config import TokenizerConfig
 from text2motion.motion.contracts import RunOutputs
 from text2motion.motion.storage import atomic_torch_save
@@ -13,7 +14,7 @@ from text2motion.tokenization.contracts import (
     DROPPED_CODE,
     ResidualVectorQuantizationConfig,
     TokenizerKind,
-    TrainTokenizerRequest,
+    TokenizerSchedule,
 )
 from text2motion.tokenization.nn_model import (
     FiniteScalarQuantizationTokenizer,
@@ -94,11 +95,14 @@ def test_a_non_finite_recon_fid_stops_the_run_without_a_save(tmp_path):
     loader = SimpleNamespace(dataset=SimpleNamespace(set_epoch=lambda epoch: None))
     metrics = {"clips": 1, "mpjpe_mm": 1.0, "feature_l2": 1.0, "recon_fid": float("nan")}
 
+    request = training_request(tmp_path)
     with pytest.raises(RuntimeError, match="not finite"):
         train_tokenizer(
             cast(TokenizerTrainer, _FakeTrainer()),
             loader,
-            training_request(tmp_path),
+            TokenizerSchedule(
+                request.epochs, request.eval_every, request.resume, request.accept_legacy_resume
+            ),
             "cpu",
             evaluate=lambda split: dict(metrics),
             checkpoint_path=checkpoint_path,
@@ -112,11 +116,14 @@ def test_a_non_finite_recon_fid_stops_the_run_without_a_save(tmp_path):
 def test_resume_without_the_resume_file_fails(tmp_path):
     loader = SimpleNamespace(dataset=SimpleNamespace(set_epoch=lambda epoch: None))
 
+    request = training_request(tmp_path, resume=True)
     with pytest.raises(FileNotFoundError, match="does not exist"):
         train_tokenizer(
             cast(TokenizerTrainer, _FakeTrainer()),
             loader,
-            training_request(tmp_path, resume=True),
+            TokenizerSchedule(
+                request.epochs, request.eval_every, request.resume, request.accept_legacy_resume
+            ),
             "cpu",
             evaluate=lambda split: {},
             checkpoint_path=tmp_path / "tokenizer.pt",
@@ -213,11 +220,14 @@ def test_a_failed_tokenizer_epoch_writes_a_dump_with_the_batch(tmp_path):
     motion = torch.randn(2, 32, 263)
     dump_path = tmp_path / "failure_dump.pt"
 
+    request = training_request(tmp_path)
     with pytest.raises(RuntimeError, match="non-finite"):
         train_tokenizer(
             trainer,
             _OneBatchLoader([motion]),
-            training_request(tmp_path),
+            TokenizerSchedule(
+                request.epochs, request.eval_every, request.resume, request.accept_legacy_resume
+            ),
             "cpu",
             evaluate=lambda split: {},
             checkpoint_path=tmp_path / "tokenizer.pt",

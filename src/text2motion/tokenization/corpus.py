@@ -12,7 +12,7 @@ from tqdm import tqdm
 from text2motion.motion.contracts import MotionClip
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.storage import sha256_file
-from text2motion.tokenization.contracts import TokenizeRequest
+from text2motion.tokenization.contracts import TokenPackPlan
 from text2motion.tokenization.nn_model import FrozenMotionTokenizer
 
 PACK_IDENTITY_KEY = "__identity__"
@@ -68,14 +68,14 @@ def check_pack_precision(identity: dict[str, object], precision: str) -> None:
 def build_token_pack(
     tokenizer: FrozenMotionTokenizer,
     scaler: MotionScaler,
-    request: TokenizeRequest,
+    plan: TokenPackPlan,
     excluded: set[str],
     identity: dict[str, object],
 ) -> dict[str, float]:
-    feature_paths = sorted(Path(request.features_dir).glob("*.npy"))
+    feature_paths = sorted(Path(plan.features_dir).glob("*.npy"))
     if not feature_paths:
         raise FileNotFoundError(
-            f"no features under {request.features_dir} -- build the pretraining corpus first"
+            f"no features under {plan.features_dir} -- build the pretraining corpus first"
         )
     kept = [path for path in feature_paths if path.name not in excluded]
 
@@ -85,15 +85,15 @@ def build_token_pack(
         raise ValueError(
             f"{tokenizer.codebook_size} codes do not fit the int16 token pack (at most {INT16_CODES})"
         )
-    if request.segment_frames % tokenizer.downsample:
+    if plan.segment_frames % tokenizer.downsample:
         raise ValueError(
-            f"segment_frames {request.segment_frames} is not a multiple of the downsample "
+            f"segment_frames {plan.segment_frames} is not a multiple of the downsample "
             f"{tokenizer.downsample}; the encoder would cut each window"
         )
     for path in tqdm(kept, desc="encode"):
         normalized = scaler.normalize(np.load(path).astype(np.float32))
-        for start in window_starts(normalized.shape[0], request.segment_frames, request.stride):
-            window = normalized[start : start + request.segment_frames]
+        for start in window_starts(normalized.shape[0], plan.segment_frames, plan.stride):
+            window = normalized[start : start + plan.segment_frames]
             clip_id = f"{path.stem}__{start}"
             clip = MotionClip(
                 features=torch.from_numpy(window),
@@ -106,7 +106,7 @@ def build_token_pack(
     if not pack:
         raise ValueError(
             f"no clip of {len(kept)} kept clips ({len(feature_paths) - len(kept)} excluded) has "
-            f"{request.segment_frames} frames; the token pack would be empty"
+            f"{plan.segment_frames} frames; the token pack would be empty"
         )
 
     record = {
@@ -117,13 +117,13 @@ def build_token_pack(
         "source_sha256": source_digest(kept),
         "excluded_present": len(feature_paths) - len(kept),
         "excluded_names": len(excluded),
-        "segment_frames": request.segment_frames,
-        "stride": request.stride,
+        "segment_frames": plan.segment_frames,
+        "stride": plan.stride,
         "tail": "end_aligned",
     }
     pack[PACK_IDENTITY_KEY] = np.array(json.dumps(record, sort_keys=True))
 
-    out_path = Path(request.token_pack)
+    out_path = Path(plan.token_pack)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = out_path.with_name(f".{out_path.stem}.{os.getpid()}.tmp.npz")
     try:

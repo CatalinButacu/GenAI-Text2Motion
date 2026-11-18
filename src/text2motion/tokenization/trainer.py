@@ -23,7 +23,7 @@ from text2motion.motion.storage import (
     is_legacy_resume,
     restore_rng_state,
 )
-from text2motion.tokenization.contracts import TrainTokenizerRequest
+from text2motion.tokenization.contracts import TokenizerSchedule
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_model import (
     TokenizerNetwork,
@@ -181,7 +181,7 @@ class TokenizerTrainer:
 def train_tokenizer(
     trainer: TokenizerTrainer,
     loader,
-    request: TrainTokenizerRequest,
+    schedule: TokenizerSchedule,
     device: str,
     evaluate: Evaluator,
     checkpoint_path: Path,
@@ -191,21 +191,21 @@ def train_tokenizer(
     best_fid = float("inf")
     start_epoch = 0
 
-    if request.resume and not resume_path.is_file():
+    if schedule.resume and not resume_path.is_file():
         raise FileNotFoundError(
             f"--resume continues from {resume_path}, which does not exist; start without --resume"
         )
-    if request.resume:
+    if schedule.resume:
         state = torch.load(resume_path, map_location=device, weights_only=True)
         legacy = is_legacy_resume(
-            state, resume_path, TOKENIZER_RESUME_FORMAT, request.accept_legacy_resume
+            state, resume_path, TOKENIZER_RESUME_FORMAT, schedule.accept_legacy_resume
         )
         start_epoch, best_fid = trainer.load_resume_state(state, legacy)
         logger.info(
             f"resumed from {resume_path} at epoch {start_epoch} (best recon-FID {best_fid:.4f})"
         )
 
-    for epoch in range(start_epoch, request.epochs):
+    for epoch in range(start_epoch, schedule.epochs):
         loader.dataset.set_epoch(epoch)
         with dump_on_failure(
             outputs.failure_dump_path,
@@ -224,7 +224,7 @@ def train_tokenizer(
             f"commit {means['commit']:.4f}"
         )
 
-        if (epoch + 1) % request.eval_every and epoch + 1 != request.epochs:
+        if (epoch + 1) % schedule.eval_every and epoch + 1 != schedule.epochs:
             continue
 
         with trainer.ema_weights():
