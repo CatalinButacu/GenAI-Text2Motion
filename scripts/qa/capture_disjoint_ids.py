@@ -8,8 +8,8 @@ from pathlib import Path
 from text2motion.motion.contracts import Split
 from text2motion.motion.storage import SPLIT_FILES, listed_clip_ids
 
-ROOT = Path("data/HumanML3D_official")
-OUT = Path("doc/notes")
+ROOT = Path("data/processed/humanml3d")
+OUT = Path("docs/notes")
 SEED = 2026
 POPULATION = (("val", Split.VALIDATION, False), ("test", Split.TEST, True))
 

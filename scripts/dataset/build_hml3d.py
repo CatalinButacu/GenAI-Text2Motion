@@ -15,7 +15,7 @@ from text2motion.dataset.preparation import (
 from text2motion.motion.contracts import PreparationStage
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-PATHS = DatasetPaths(REPO, pathlib.Path(r"D:\Facultate\dissertation\data\amass"))
+PATHS = DatasetPaths(REPO, REPO / "data" / "amass")
 CLOCK_CSV = PATHS.notes / "amass_clock_check.csv"
 STAGES = ("clock", "joints", "features", "all")
 

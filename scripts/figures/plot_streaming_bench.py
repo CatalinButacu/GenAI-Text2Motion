@@ -1,4 +1,4 @@
-# python scripts/figures/plot_streaming_bench.py --bench artifacts/outputs/figures/streaming_bench_long.json --out doc/paper/pics/streaming.png
+# python scripts/figures/plot_streaming_bench.py --bench runs/outputs/figures/streaming_bench_long.json --out docs/paper/pics/streaming.png
 from __future__ import annotations
 
 import argparse
@@ -29,8 +29,8 @@ def write_source_record(bench: Path, out: Path) -> Path:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Plot the streaming benchmark figure.")
-    p.add_argument("--bench", default="artifacts/outputs/figures/streaming_bench_long.json")
-    p.add_argument("--out", default="doc/paper/pics/streaming.png")
+    p.add_argument("--bench", default="runs/outputs/figures/streaming_bench_long.json")
+    p.add_argument("--out", default="docs/paper/pics/streaming.png")
     a = p.parse_args()
 
     data = json.loads(Path(a.bench).read_text())["results"]

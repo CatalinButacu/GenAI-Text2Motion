@@ -1,4 +1,4 @@
-# python scripts/qa/action_group_motion_check.py --out doc/notes/action_group_merges.csv
+# python scripts/qa/action_group_motion_check.py --out docs/notes/action_group_merges.csv
 from __future__ import annotations
 
 import argparse
@@ -40,7 +40,7 @@ def worker_groups(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", type=Path, default=Path("doc/notes/action_group_merges.csv"))
+    parser.add_argument("--out", type=Path, default=Path("docs/notes/action_group_merges.csv"))
     arguments = parser.parse_args()
 
     rows = list(csv.DictReader(INVENTORY.open(encoding="utf-8")))

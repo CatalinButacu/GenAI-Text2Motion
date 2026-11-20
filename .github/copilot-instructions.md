@@ -31,8 +31,8 @@
 - `configs/<stage>/`: run configs.
 - `tests/<stage>/`: tests, in the same layout as `src`.
 - `scripts/<task>/`: entry scripts.
-- `.claude/decisions/`: the ADRs.
-- `.claude/docs/STATUS.md`: the current numbers.
+- `docs/decisions/`: the ADRs.
+- `docs/project/STATUS.md`: the current numbers.
 
 ## Language
 - Use short, plain sentences.

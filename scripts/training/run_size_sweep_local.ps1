@@ -4,7 +4,7 @@ param([double]$BudgetHoursPerRun = 6, [int]$StaleMinutes = 45, [int]$Epochs = 20
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
-$tokenizer = "artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
+$tokenizer = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"
 Write-Host "=== size sweep start $(Get-Date -Format u) ==="
 if ($ResumePilot -and -not $Pilot) {
     throw "-ResumePilot requires -Pilot"
@@ -12,7 +12,7 @@ if ($ResumePilot -and -not $Pilot) {
 
 function __GatePath([string]$width, [string]$backbone) {
     $prefix = if ($Pilot) { $Tag } else { "size_sweep" }
-    return "artifacts/outputs/gates/${prefix}_${backbone}_w${width}_overfit.json"
+    return "runs/outputs/gates/${prefix}_${backbone}_w${width}_overfit.json"
 }
 
 function Invoke-SweepGate([string]$width, [string]$backbone) {
@@ -22,7 +22,7 @@ function Invoke-SweepGate([string]$width, [string]$backbone) {
         return 0
     }
     $logPrefix = if ($Pilot) { "${Tag}_gate" } else { "size_sweep_gate" }
-    return Invoke-TrainingStep -Tag "gate_${backbone}_w$width" -LogFile "artifacts/outputs/${logPrefix}_${backbone}_w$width.log" `
+    return Invoke-TrainingStep -Tag "gate_${backbone}_w$width" -LogFile "runs/outputs/${logPrefix}_${backbone}_w$width.log" `
         -MaxHours 1 -StreamLogs:$Pilot -PollSeconds 5 -Arguments @(
             "-m", "text2motion.app.cli", "sanity-overfit", "--config", "configs/generator/size_sweep/width_$width.yaml",
             "--backbone", $backbone, "--tokenizer_ckpt", $tokenizer, "--overfit_gate", $gate
@@ -31,13 +31,13 @@ function Invoke-SweepGate([string]$width, [string]$backbone) {
 
 function Invoke-SweepRun([string]$width, [string]$backbone) {
     $name = "generator_${backbone}_w${width}_${Tag}.pt"
-    $resume = "artifacts/checkpoints/generator/$([IO.Path]::GetFileNameWithoutExtension($name))_last.pt"
+    $resume = "runs/checkpoints/generator/$([IO.Path]::GetFileNameWithoutExtension($name))_last.pt"
     if ((Test-Path $resume) -and -not $ResumePilot) {
         Write-Host "SKIP run $backbone w$width ($resume exists; a sweep run is never resumed)"
         return 0
     }
     $staleCode = if ($Pilot) { 125 } else { 124 }
-    $logFile = "artifacts/outputs/${Tag}_${backbone}_w$width.log"
+    $logFile = "runs/outputs/${Tag}_${backbone}_w$width.log"
     if ($ResumePilot -and (Test-Path $resume) -and -not (Test-Path $logFile)) {
         throw "recovery checkpoint exists without the original budget log: $resume"
     }
@@ -55,7 +55,7 @@ function Invoke-SweepRun([string]$width, [string]$backbone) {
             throw "recovery requires the interrupted pilot's durable checkpoint: $resume"
         }
         $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
-        $logFile = "artifacts/outputs/${Tag}_${backbone}_w${width}_resume_${stamp}.log"
+        $logFile = "runs/outputs/${Tag}_${backbone}_w${width}_resume_${stamp}.log"
         Write-Host "RECOVERY: $backbone w$width has $remainingHours h remaining; original logs preserved"
     }
     return Invoke-TrainingStep -Tag "${Tag}_${backbone}_w$width" -LogFile $logFile `
@@ -71,10 +71,10 @@ function Invoke-SweepRun([string]$width, [string]$backbone) {
 
 $codes = @()
 if ($Pilot -and -not $ResumePilot) {
-    $previous = @(Get-ChildItem "artifacts/outputs" -File -Filter "${Tag}*")
+    $previous = @(Get-ChildItem "runs/outputs" -File -Filter "${Tag}*")
     foreach ($width in $Widths) {
         foreach ($backbone in @("transformer", "mamba")) {
-            $previous += @(Get-ChildItem "artifacts/checkpoints/generator" -File -Filter "generator_${backbone}_w${width}_${Tag}*")
+            $previous += @(Get-ChildItem "runs/checkpoints/generator" -File -Filter "generator_${backbone}_w${width}_${Tag}*")
             if (Test-Path (__GatePath $width $backbone)) {
                 throw "pilot gate already exists; choose a fresh Tag: $Tag"
             }
@@ -123,10 +123,10 @@ foreach ($width in $Widths) {
 
 if ($Pilot -and $codes -contains 124) {
     "partial $((Get-Date).ToUniversalTime().ToString('u')); exit codes $($codes -join ','); time capped, not converged" |
-        Out-File "artifacts/outputs/$($Tag.ToUpper())_PARTIAL.txt" -Encoding utf8
+        Out-File "runs/outputs/$($Tag.ToUpper())_PARTIAL.txt" -Encoding utf8
     Write-Warning "Pilot finished with time-capped runs; no DONE marker"
     exit 124
 }
-if (-not (Write-DoneMarker -Path "artifacts/outputs/$($Tag.ToUpper())_DONE.txt" -ExitCodes $codes)) {
+if (-not (Write-DoneMarker -Path "runs/outputs/$($Tag.ToUpper())_DONE.txt" -ExitCodes $codes)) {
     exit 1
 }

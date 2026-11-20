@@ -5,11 +5,11 @@ Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $start = Get-Date
 $config = "configs/generator/gen_pilot_rvq8x1024.yaml"
-$tokenizer = "artifacts/checkpoints/tokenizer/rvq_l8_1024.pt"
-$pretrained = "artifacts/checkpoints/generator/generator_transformer_rvq_pretrained.pt"
-$pretrainResume = "artifacts/checkpoints/generator/generator_transformer_rvq_pretrained_last.pt"
-$finetuneResume = "artifacts/checkpoints/generator/generator_transformer_rvq_bs8_last.pt"
-$gate = "artifacts/outputs/gates/transformer_rvq_34m_overfit.json"
+$tokenizer = "runs/checkpoints/tokenizer/rvq_l8_1024.pt"
+$pretrained = "runs/checkpoints/generator/generator_transformer_rvq_pretrained.pt"
+$pretrainResume = "runs/checkpoints/generator/generator_transformer_rvq_pretrained_last.pt"
+$finetuneResume = "runs/checkpoints/generator/generator_transformer_rvq_bs8_last.pt"
+$gate = "runs/outputs/gates/transformer_rvq_34m_overfit.json"
 Write-Host "=== transformer+RVQ downstream-generation ablation start $(Get-Date -Format u)  budget ${BudgetHours}h ==="
 
 function Get-HoursLeft {
@@ -24,7 +24,7 @@ function Stop-OnFailure([int]$code, [string]$stage) {
 }
 
 if (-not (Test-RunComplete -ResumePath $pretrainResume -Epochs 20)) {
-    Stop-OnFailure (Invoke-TrainingStep -Tag "pretrain_transformer_rvq" -LogFile "artifacts/outputs/rvq_ablation_pretrain.log" `
+    Stop-OnFailure (Invoke-TrainingStep -Tag "pretrain_transformer_rvq" -LogFile "runs/outputs/rvq_ablation_pretrain.log" `
             -MaxHours (Get-HoursLeft) -StaleMinutes $StaleMinutes -Arguments @(
                 "-m", "text2motion.app.cli", "pretrain", "--config", $config, "--backbone", "transformer",
                 "--token_pack", "data/amass_tokens_rvq8x1024.npz", "--epochs", "20", "--batch_size", "64",
@@ -33,7 +33,7 @@ if (-not (Test-RunComplete -ResumePath $pretrainResume -Epochs 20)) {
 }
 
 if (-not (Test-Path $gate)) {
-    Stop-OnFailure (Invoke-TrainingStep -Tag "gate_transformer_rvq" -LogFile "artifacts/outputs/rvq_ablation_gate.log" `
+    Stop-OnFailure (Invoke-TrainingStep -Tag "gate_transformer_rvq" -LogFile "runs/outputs/rvq_ablation_gate.log" `
             -MaxHours 2 -Arguments @(
                 "-m", "text2motion.app.cli", "sanity-overfit", "--config", $config,
                 "--backbone", "transformer", "--tokenizer_ckpt", $tokenizer, "--overfit_gate", $gate
@@ -41,7 +41,7 @@ if (-not (Test-Path $gate)) {
 }
 
 if (-not (Test-RunComplete -ResumePath $finetuneResume -Epochs 18)) {
-    Stop-OnFailure (Invoke-TrainingStep -Tag "train_transformer_rvq" -LogFile "artifacts/outputs/rvq_ablation_finetune.log" `
+    Stop-OnFailure (Invoke-TrainingStep -Tag "train_transformer_rvq" -LogFile "runs/outputs/rvq_ablation_finetune.log" `
             -MaxHours (Get-HoursLeft) -StaleMinutes $StaleMinutes -Arguments @(
                 "-m", "text2motion.app.cli", "train-generator", "--config", $config, "--backbone", "transformer",
                 "--tokenizer_ckpt", $tokenizer, "--overfit_gate", $gate, "--init_ckpt", $pretrained,
@@ -51,4 +51,4 @@ if (-not (Test-RunComplete -ResumePath $finetuneResume -Epochs 18)) {
             )) "fine-tune"
 }
 
-$null = Write-DoneMarker -Path "artifacts/outputs/RVQ_ABLATION_DONE.txt" -ExitCodes @(0)
+$null = Write-DoneMarker -Path "runs/outputs/RVQ_ABLATION_DONE.txt" -ExitCodes @(0)

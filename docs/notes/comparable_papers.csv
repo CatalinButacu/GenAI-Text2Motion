@@ -1,0 +1,9 @@
+method,bib_key,venue,generation,causal_streaming,size_note,humanml3d_test_fid,r_precision_top1,r_precision_top3,number_status,source
+T2M-GPT,zhang2023t2mgpt,CVPR 2023,VQ tokens + GPT,causal (left to right; no bounded-state stream),9 layers x 1024 width; batch 128; 300K iterations; pkeep 0.5,0.116,0.491,0.775,verified in 2 tables (some tables list 0.141),https://arxiv.org/abs/2301.06052
+MoMask,guo2024momask,CVPR 2024,RVQ tokens + masked transformer,no (bidirectional masked),verify,0.045,verify,verify,FID from the paper; one reproduction got 0.093,https://arxiv.org/pdf/2411.16575
+MDM,verify,ICLR 2023,diffusion,no,verify,0.544,verify,0.611,verified in 2 tables (a 50-step variant lists 0.489),https://arxiv.org/pdf/2505.10810
+Mogo,fu2024mogo,arXiv 2024,RQ hierarchical causal transformer,causal; claims real-time streaming,verify,verify,verify,verify,numbers not yet checked,https://papers.cool/arxiv/2506.05952
+MotionStreamer,xiao2025motionstreamer,ICCV 2025,diffusion AR in causal latent space,streaming,verify,verify,verify,verify,uses its own evaluator; may not be comparable,https://www.sourcepulse.org/projects/24173447
+CMDM,missing,CVPR 2026,causal diffusion transformer,causal AR,verify,verify,verify,verify,secondary summary only; read the paper before use,https://arxiv.org/html/2602.22594v1
+ours transformer P1,-,this thesis,FSQ 8x1024 tokens + causal transformer,streaming with bounded state,15.3M params; batch 8; 84K steps at best,0.272 (VALIDATION),0.510 (VALIDATION),-,validation split only; not comparable until G6 runs the test split,artifacts/outputs/p1_transformer_w320.log
+ours mamba P1,-,this thesis,FSQ 8x1024 tokens + Mamba,streaming with constant state,width 320; batch 8,0.316 (VALIDATION),0.502 (VALIDATION),-,validation split only; not comparable until G6 runs the test split,artifacts/outputs/p1_mamba_w320.log

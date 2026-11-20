@@ -97,7 +97,7 @@ def main() -> None:
     parser.add_argument(
         "--tokenizer_ckpt",
         type=Path,
-        default=Path("artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"),
+        default=Path("runs/checkpoints/tokenizer/fsq_g8_v1024.pt"),
     )
     parser.add_argument("--checkpoint_pattern", default="generator_{backbone}_bs8_e60.pt")
     parser.add_argument("--captions", type=int, default=32)

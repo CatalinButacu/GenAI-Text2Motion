@@ -1,5 +1,5 @@
 fit:
-  model_dir: data/smplx_models
+  model_dir: data/models/smplx_models
   device: cpu
   threads: 4
   num_betas: 10

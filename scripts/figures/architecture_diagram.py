@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 SRC = Path("src/text2motion")
-FIG = Path("doc/paper/pics")
-DIAGRAMS = Path("doc/notes/diagrams")
+FIG = Path("docs/paper/pics")
+DIAGRAMS = Path("docs/notes/diagrams")
 
 WIDTH, HEIGHT = 900, 570
 INK = "#111417"

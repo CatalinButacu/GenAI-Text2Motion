@@ -9,7 +9,7 @@ description: Critic for the generator and tokenizer design. Finds unfair twin co
 - `src/text2motion/{generation,tokenization}/nn_*.py`
 - `src/text2motion/{generation,tokenization}/contracts.py`
 - `configs/{generator,tokenizer}/`
-- `.claude/decisions/`
+- `docs/decisions/`
 
 ## You attack
 - A twin difference that is not the sequence mixer.
@@ -22,4 +22,4 @@ description: Critic for the generator and tokenizer design. Finds unfair twin co
 - The tokenizer is frozen. Do not propose to retrain it.
 - Measure, do not estimate. Compare A and B in one process.
 - Never state a published number from memory. Give the source.
-- Read the current numbers in `.claude/docs/STATUS.md`.
+- Read the current numbers in `docs/project/STATUS.md`.

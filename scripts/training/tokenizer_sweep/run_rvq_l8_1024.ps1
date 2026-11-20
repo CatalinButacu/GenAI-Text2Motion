@@ -2,7 +2,7 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
-$done = Invoke-TokenizerSweep -DoneMarker "artifacts/outputs/RVQ_L8_1024_DONE.txt" -Variants @(
+$done = Invoke-TokenizerSweep -DoneMarker "runs/outputs/RVQ_L8_1024_DONE.txt" -Variants @(
     @{ cfg = "configs/tokenizer/rvq_l8_1024.yaml"; mech = "rvq"; name = "rvq_l8_1024.pt" }
 )
 if (-not $done) {

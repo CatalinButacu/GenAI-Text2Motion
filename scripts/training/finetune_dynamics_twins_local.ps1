@@ -10,8 +10,8 @@ $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $config = "configs/generator/gen_pilot_fsq8x1024_dynamics.yaml"
-$tokenizer = "artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
-$checkpoints = "artifacts/checkpoints/generator"
+$tokenizer = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"
+$checkpoints = "runs/checkpoints/generator"
 Write-Host "=== dynamics fine-tune, both twins, from $SeedFrom -> epoch $Epochs, continue selection $ContinueSelection, start $(Get-Date -Format u) ==="
 
 function Invoke-FineTune([string]$backbone, [int]$numWorkers) {
@@ -33,11 +33,11 @@ function Invoke-FineTune([string]$backbone, [int]$numWorkers) {
         Write-Host "seeded $resume from $seed"
     }
     $selection = if ($seeded -and -not $ContinueSelection) { "--fresh_selection" } else { "" }
-    return Invoke-TrainingStep -Tag $label -LogFile "artifacts/outputs/$label.log" `
+    return Invoke-TrainingStep -Tag $label -LogFile "runs/outputs/$label.log" `
         -MaxHours $BudgetHoursPerRun -StaleMinutes $StaleMinutes -Arguments @(
             "-m", "text2motion.app.cli", "train-generator", "--config", $config,
             "--backbone", $backbone, "--tokenizer_ckpt", $tokenizer,
-            "--overfit_gate", "artifacts/outputs/gates/${backbone}_34m_dynamics_overfit.json",
+            "--overfit_gate", "runs/outputs/gates/${backbone}_34m_dynamics_overfit.json",
             "--ckpt_name", $name, "--epochs", "$Epochs", "--batch_size", "8",
             "--num_workers", "$numWorkers", "--eval_every", "6", "--cfg_scale", "6.0",
             "--temperature", "1.0", "--resume", "--accept_legacy_resume", "--extend_schedule",
@@ -49,6 +49,6 @@ $codes = @()
 $codes += Invoke-FineTune "transformer" 4
 $codes += Invoke-FineTune "mamba" 2
 
-if (-not (Write-DoneMarker -Path "artifacts/outputs/FINETUNE_DYNAMICS_DONE.txt" -ExitCodes $codes)) {
+if (-not (Write-DoneMarker -Path "runs/outputs/FINETUNE_DYNAMICS_DONE.txt" -ExitCodes $codes)) {
     exit 1
 }

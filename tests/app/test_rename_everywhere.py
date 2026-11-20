@@ -1,8 +1,8 @@
 def test_a_file_rename_reaches_code_documents_and_the_assistant_folder(tmp_path, rename_everywhere):
     code = tmp_path / "src" / "text2motion" / "generation" / "trainer.py"
-    note = tmp_path / "doc" / "note.md"
+    note = tmp_path / "docs" / "note.md"
     agent = tmp_path / ".claude" / "agents" / "architect.md"
-    history = tmp_path / ".claude" / "docs" / "STATUS.md"
+    history = tmp_path / "docs" / "project" / "STATUS.md"
     for path in (code, note, agent, history):
         path.parent.mkdir(parents=True)
     (code.parent / "fresh.py").write_text("", encoding="utf-8")
@@ -15,10 +15,10 @@ def test_a_file_rename_reaches_code_documents_and_the_assistant_folder(tmp_path,
     changed, kept = rename_everywhere.rename_in_text(tmp_path, old, new)
     assert sorted(changed) == [
         ".claude/agents/architect.md",
-        "doc/note.md",
+        "docs/note.md",
         "src/text2motion/generation/trainer.py",
     ]
-    assert kept == [".claude/docs/STATUS.md"]
+    assert kept == ["docs/project/STATUS.md"]
     assert code.read_text(encoding="utf-8") == "from text2motion.generation.fresh import X\n"
     assert "generation/fresh.py:12" in note.read_text(encoding="utf-8")
     assert agent.read_text(encoding="utf-8") == "owns generation/fresh.py and motion/stale.py\n"

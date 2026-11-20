@@ -7,7 +7,7 @@ import hashlib
 from pathlib import Path
 
 SOURCE_ROOT = Path("src/text2motion")
-LEDGER = Path("doc/notes/module_ledger.csv")
+LEDGER = Path("docs/notes/module_ledger.csv")
 FREEZE_KINDS = frozenset({"freeze", "unfreeze"})
 
 

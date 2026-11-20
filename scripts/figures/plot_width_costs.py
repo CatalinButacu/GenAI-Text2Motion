@@ -1,4 +1,4 @@
-# python scripts/figures/plot_width_costs.py --out doc/paper/pics/width_costs.pdf
+# python scripts/figures/plot_width_costs.py --out docs/paper/pics/width_costs.pdf
 from __future__ import annotations
 
 import argparse
@@ -13,8 +13,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-STEP_TIMES = Path("artifacts/outputs/qa/size_sweep_step_times.txt")
-STATE_BYTES = Path("artifacts/outputs/qa/width_state_bytes.csv")
+STEP_TIMES = Path("runs/outputs/qa/size_sweep_step_times.txt")
+STATE_BYTES = Path("runs/outputs/qa/width_state_bytes.csv")
 STEP_LINE = re.compile(
     r"width (\d+)\s+(\w+)\s+batch \d+\s+frames \d+\s+([\d.]+) ms/step.*peak\s+([\d.]+) GB"
 )
@@ -75,7 +75,7 @@ def draw_series(axis, widths: list[int], values: dict[str, list[float]]) -> None
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", type=Path, default=Path("doc/paper/pics/width_costs.pdf"))
+    parser.add_argument("--out", type=Path, default=Path("docs/paper/pics/width_costs.pdf"))
     return parser.parse_args()
 
 

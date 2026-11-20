@@ -6,9 +6,9 @@
 - Owner: approves each epic plan once and decides at the stop points.
 
 ## Where the state is
-- Epics: `.claude/docs/epics.csv`. Tasks: `.claude/docs/epic_tasks.csv`. One line each: id, epic, status, agent, model, task, finish_criterion, evidence, depends_on, updated.
-- History: `.claude/docs/STATUS.md`, newest entry on top.
-- `artifacts/` is git-ignored, so search tools skip it. Open its files by their full path. Each paper figure has a tracked CSV next to it in `doc/paper/pics/`.
+- Epics: `docs/project/epics.csv`. Tasks: `docs/project/epic_tasks.csv`. One line each: id, epic, status, agent, model, task, finish_criterion, evidence, depends_on, updated.
+- History: `docs/project/STATUS.md`, newest entry on top.
+- `runs/` is git-ignored, so search tools skip it. Open its files by their full path. Each paper figure has a tracked CSV next to it in `docs/paper/pics/`.
 
 ## The unit of work: an epic
 - An epic has a name, a question, use cases, a time box, a budget (GPU hours, Copilot calls) and tasks with a measurable finish criterion.

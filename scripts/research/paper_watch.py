@@ -1,4 +1,4 @@
-# python scripts/research/paper_watch.py --out_dir doc/notes/paper-watch
+# python scripts/research/paper_watch.py --out_dir docs/notes/paper-watch
 from __future__ import annotations
 
 import argparse
@@ -297,7 +297,7 @@ def collect_papers(max_results: int, since: datetime.date, api_key: str) -> list
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out_dir", type=Path, default=Path("doc/notes/paper-watch"))
+    parser.add_argument("--out_dir", type=Path, default=Path("docs/notes/paper-watch"))
     parser.add_argument("--max_results", type=int, default=20)
     parser.add_argument("--days", type=int, default=30)
     return parser.parse_args()

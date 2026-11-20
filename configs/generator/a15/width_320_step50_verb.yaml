@@ -8,13 +8,13 @@ data:
   max_motion_len: 196
   min_motion_len: 40
 paths:
-  eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
-  eval_stats_dir: data/eval_stats
-  hml3d_out_dir: data/HumanML3D_official
-  hml3d_index_csv: data/HumanML3D_official/index.csv
-  texts_dir: data/HumanML3D_official/texts
-  checkpoints_dir: artifacts/checkpoints
-  outputs_dir: artifacts/outputs
+  eval_matcher: data/models/evaluator/extracted/text_mot_match/model/finest.tar
+  eval_stats_dir: data/processed/eval_stats
+  hml3d_out_dir: data/processed/humanml3d
+  hml3d_index_csv: data/processed/humanml3d/index.csv
+  texts_dir: data/processed/humanml3d/texts
+  checkpoints_dir: runs/checkpoints
+  outputs_dir: runs/outputs
 tokenizer:
   in_dim: 263
   width: 512

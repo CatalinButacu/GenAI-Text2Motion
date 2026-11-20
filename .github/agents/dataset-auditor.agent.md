@@ -17,15 +17,15 @@ You are an external reviewer for a master's thesis on text-to-motion generation.
 - An earlier test (epic A14) rejected AIST++ and 100STYLE: the frozen tokenizer reconstructs them with 3.67x and 7.43x the HumanML3D validation error (limit 2.0x).
 
 ## Files you check
-- `doc/notes/verb_inventory.csv`, `doc/notes/verb_calibration.csv`: verb counts per split.
-- `doc/notes/verb_labels_data.csv`, `doc/notes/verb_labels_eval.csv`: two independent label lists (status and group for 442 verbs with 5 or more train clips).
-- `doc/notes/verb_labels_tiebreak.csv`: a third list that decides the 95 verbs where the group differs.
-- `doc/notes/verb_vocabulary.csv`, `doc/notes/action_groups.csv`: the merged result (186 groups).
-- `doc/notes/action_group_merges.csv`: a motion-space check of the merges. Its controls failed (55.7% of agreed merges accepted, limit 80%).
+- `docs/notes/verb_inventory.csv`, `docs/notes/verb_calibration.csv`: verb counts per split.
+- `docs/notes/verb_labels_data.csv`, `docs/notes/verb_labels_eval.csv`: two independent label lists (status and group for 442 verbs with 5 or more train clips).
+- `docs/notes/verb_labels_tiebreak.csv`: a third list that decides the 95 verbs where the group differs.
+- `docs/notes/verb_vocabulary.csv`, `docs/notes/action_groups.csv`: the merged result (186 groups).
+- `docs/notes/action_group_merges.csv`: a motion-space check of the merges. Its controls failed (55.7% of agreed merges accepted, limit 80%).
 - `scripts/qa/action_vocabulary.py`, `scripts/qa/action_group_motion_check.py`: how the files were made.
-- `doc/notes/extra_motion_gate.csv`, `doc/notes/extra_motion_compat.csv`: the A14 compatibility result.
-- `.claude/docs/STATUS.md` (newest entry on top) and `.claude/docs/epic_tasks.csv` (task A15 and V1 to V4).
-- Raw data: `data/HumanML3D_official/texts/<clip>.txt` (one caption per line: `caption#word/TAG ...#start#end`), `data/HumanML3D_official/train.txt`, `val.txt`, `test.txt`.
+- `docs/notes/extra_motion_gate.csv`, `docs/notes/extra_motion_compat.csv`: the A14 compatibility result.
+- `docs/project/STATUS.md` (newest entry on top) and `docs/project/epic_tasks.csv` (task A15 and V1 to V4).
+- Raw data: `data/processed/humanml3d/texts/<clip>.txt` (one caption per line: `caption#word/TAG ...#start#end`), `data/processed/humanml3d/train.txt`, `val.txt`, `test.txt`.
 
 ## Rules
 - Cite each claim with `file:line` or a URL. Mark each claim that you did not check as an assumption.

@@ -1,0 +1,4 @@
+﻿o problema la care sa gasim o solutie 
+
+
+dupa ce formulam problema care sa dea tema proiectului , formulam si o solutie (ne ducumentam sa vedem ce au facut altii ca sa rezolve problema respectiva si ar trebui ca a noastra sa aduca ceva in plus), dupa ( facem si arhitectura solutiei), dupa asta identificam componentele sistemului bazandu-ne pe arhitectura, pentru fiecare componenta fecem design si dupa facem implementarea.

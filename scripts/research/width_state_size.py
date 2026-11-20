@@ -1,4 +1,4 @@
-# python scripts/research/width_state_size.py --out artifacts/outputs/qa/width_state_bytes.csv
+# python scripts/research/width_state_size.py --out runs/outputs/qa/width_state_bytes.csv
 from __future__ import annotations
 
 import argparse
@@ -37,9 +37,7 @@ def state_rows(width: int, backbone: Backbone) -> list[dict[str, int | str | flo
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--out", type=Path, default=Path("artifacts/outputs/qa/width_state_bytes.csv")
-    )
+    parser.add_argument("--out", type=Path, default=Path("runs/outputs/qa/width_state_bytes.csv"))
     return parser.parse_args()
 
 

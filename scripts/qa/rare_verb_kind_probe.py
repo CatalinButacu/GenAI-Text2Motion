@@ -1,4 +1,4 @@
-# python scripts/qa/rare_verb_kind_probe.py --out doc/paper/pics/rare_verb_kind.csv
+# python scripts/qa/rare_verb_kind_probe.py --out docs/paper/pics/rare_verb_kind.csv
 from __future__ import annotations
 
 import argparse
@@ -37,7 +37,7 @@ def nearest_cover(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbs", type=int, default=100)
-    parser.add_argument("--out", type=Path, default=Path("doc/paper/pics/rare_verb_kind.csv"))
+    parser.add_argument("--out", type=Path, default=Path("docs/paper/pics/rare_verb_kind.csv"))
     arguments = parser.parse_args()
 
     app = ApplicationBootstrap.from_config(CONFIG, seed=SEED)

@@ -1,4 +1,4 @@
-# python scripts/benchmarks/service_latency.py --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --ckpt artifacts/checkpoints/generator/generator_mamba_bs8_e60.pt
+# python scripts/benchmarks/service_latency.py --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba --ckpt runs/checkpoints/generator/generator_mamba_bs8_e60.pt
 from __future__ import annotations
 
 import argparse
@@ -36,16 +36,14 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--config", required=True)
     parser.add_argument("--backbone", required=True, choices=["mamba", "transformer"])
     parser.add_argument("--ckpt", required=True)
-    parser.add_argument(
-        "--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
-    )
+    parser.add_argument("--tokenizer_ckpt", default="runs/checkpoints/tokenizer/fsq_g8_v1024.pt")
     parser.add_argument("--service_config", default="configs/service.yml")
     parser.add_argument("--steps", type=int, default=40)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top_p", type=float, default=0.9)
     parser.add_argument("--cfg_scale", type=float, default=6.0)
-    parser.add_argument("--out", default="artifacts/outputs/figures/service_latency.json")
+    parser.add_argument("--out", default="runs/outputs/figures/service_latency.json")
     return parser.parse_args()
 
 

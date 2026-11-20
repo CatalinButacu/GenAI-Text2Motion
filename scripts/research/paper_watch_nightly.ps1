@@ -1,7 +1,7 @@
 # powershell -NoProfile -ExecutionPolicy Bypass -File scripts/research/paper_watch_nightly.ps1
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$watch = Join-Path $repo "doc\notes\paper-watch"
+$watch = Join-Path $repo "docs\notes\paper-watch"
 $day = Get-Date -Format "yyyy-MM-dd"
 $report = Join-Path $watch "$day.md"
 $marks = Join-Path $watch "$day-marks.md"

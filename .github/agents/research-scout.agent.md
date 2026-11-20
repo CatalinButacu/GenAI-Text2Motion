@@ -6,10 +6,10 @@ description: Critic for claims and sources. Finds false citations, numbers with 
 # Research scout
 
 ## You check
-- `doc/paper/` (the thesis and `cls/bib.bib`)
-- `.claude/docs/references.md`
-- `doc/notes/paper-watch/`
-- `.claude/decisions/`
+- `docs/paper/` (the thesis and `cls/bib.bib`)
+- `docs/project/references.md`
+- `docs/notes/paper-watch/`
+- `docs/decisions/`
 
 ## You attack
 - A citation with a wrong author, title, venue or year.

@@ -15,7 +15,7 @@ from verb_generation_probe import CONFIG, MAX_FRAMES, MIN_FRAMES, SEED
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.evaluation.embeddings import compute_guo_text_embeddings
 
-VOCABULARY = Path("doc/notes/verb_vocabulary.csv")
+VOCABULARY = Path("docs/notes/verb_vocabulary.csv")
 CHUNK = 512
 BOTTOM_UP = "bottom_up"
 TOP_DOWN = "top_down"
@@ -282,7 +282,7 @@ def motion_points(clip_sets: list[frozenset[str]], embedded: dict[str, np.ndarra
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--min_clips", type=int, default=50)
-    parser.add_argument("--out", type=Path, default=Path("doc/notes"))
+    parser.add_argument("--out", type=Path, default=Path("docs/notes"))
     parser.add_argument("--pick", type=int, default=0)
     arguments = parser.parse_args()
 

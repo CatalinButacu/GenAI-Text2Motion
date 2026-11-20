@@ -104,6 +104,6 @@ class StreamingBenchmarkProtocol:
     warmup: int = 32
     streams: tuple[int, ...] = ()
     streams_horizon: int = 256
-    out_path: Path = Path("artifacts/outputs/streaming_bench.json")
+    out_path: Path = Path("runs/outputs/streaming_bench.json")
     label: str = "streaming_bench"
     headroom: int = 8

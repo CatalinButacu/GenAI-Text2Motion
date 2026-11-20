@@ -101,11 +101,11 @@ class ProjectPathsConfig:
     hml3d_index_csv: Path | None = None
     hml3d_out_dir: Path | None = None
     texts_dir: Path | None = None
-    our_vab_dir: Path = Path("data/t2m_glove/glove")
+    our_vab_dir: Path = Path("data/models/glove/glove")
     cache_dir: Path = Path("data/.cache")
-    checkpoints_dir: Path = Path("artifacts/checkpoints")
-    outputs_dir: Path = Path("artifacts/outputs")
-    logs_dir: Path = Path("artifacts/logs")
+    checkpoints_dir: Path = Path("runs/checkpoints")
+    outputs_dir: Path = Path("runs/outputs")
+    logs_dir: Path = Path("runs/logs")
     tokenizer_checkpoint_path: Path | None = None
     generator_checkpoint_paths: dict[str, Path] = field(default_factory=dict)
 

@@ -1,4 +1,4 @@
-# python scripts/qa/verb_generation_probe.py --verbs 100 --samples 32 --out doc/paper/pics/verb_generation_validation_32.csv
+# python scripts/qa/verb_generation_probe.py --verbs 100 --samples 32 --out docs/paper/pics/verb_generation_validation_32.csv
 from __future__ import annotations
 
 import argparse
@@ -16,13 +16,13 @@ from text2motion.generation.contracts import Backbone, SamplingConfig
 
 SEED = 2026
 CONFIG = "configs/generator/size_sweep/width_320.yaml"
-TOKENIZER = "artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
+TOKENIZER = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"
 GENERATORS = (
-    (Backbone.TRANSFORMER, "artifacts/checkpoints/generator/generator_transformer_w320_p1.pt"),
-    (Backbone.MAMBA, "artifacts/checkpoints/generator/generator_mamba_w320_p1.pt"),
+    (Backbone.TRANSFORMER, "runs/checkpoints/generator/generator_transformer_w320_p1.pt"),
+    (Backbone.MAMBA, "runs/checkpoints/generator/generator_mamba_w320_p1.pt"),
 )
-INVENTORY = Path("doc/notes/verb_inventory.csv")
-ROOT = Path("data/HumanML3D_official")
+INVENTORY = Path("docs/notes/verb_inventory.csv")
+ROOT = Path("data/processed/humanml3d")
 NOT_MOTION = frozenset(
     {
         "left",
@@ -147,7 +147,7 @@ def main() -> None:
     parser.add_argument("--transformer_ckpt", default=dict(GENERATORS)[Backbone.TRANSFORMER])
     parser.add_argument("--mamba_ckpt", default=dict(GENERATORS)[Backbone.MAMBA])
     parser.add_argument(
-        "--out", type=Path, default=Path("doc/paper/pics/verb_generation_validation.csv")
+        "--out", type=Path, default=Path("docs/paper/pics/verb_generation_validation.csv")
     )
     arguments = parser.parse_args()
 

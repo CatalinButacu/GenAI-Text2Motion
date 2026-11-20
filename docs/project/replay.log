@@ -1,0 +1,86 @@
+2026-10-12 19:04 6214625 Add a script that merges the run folders of one training
+2026-10-12 19:13 23df9f0 Add the PolyForm Noncommercial licence and the notices of ported code
+2026-10-12 19:31 fa612b1 Add the third-party licence record and the script that generates it
+2026-10-12 19:41 8fe54ed Add short make targets for each step of the project
+2026-10-12 19:55 41ca559 Add pydantic and jsonargparse to the dependencies
+2026-10-12 20:07 d262383 Add the logging setup and one log file for each run
+2026-10-12 20:22 52bc11b Define the command requests of motion, tokenization and evaluation as pydantic models
+2026-10-12 20:34 d209b97 Define the command requests of generation and streaming as pydantic models
+2026-10-12 20:52 50ff5a8 Build each command line parser from its request model with jsonargparse
+2026-10-12 21:01 7b259d9 Give each command its typed request
+2026-10-12 21:12 3eed99a Test the parse of each command request
+2026-10-12 21:28 423b653 Send bootstrap and config messages to the logger
+2026-10-12 21:48 b2861b8 Use the compiled selective-scan kernel when the config asks for it
+2026-10-12 22:04 5652257 Add the dynamics loss terms and the fresh selection of the best checkpoint
+2026-10-12 22:25 cb63286 Test the dynamics losses, the fresh selection and the overfit gate
+2026-10-12 22:47 5bd5e8b Add the physical plausibility measures and log the evaluation steps
+2026-10-12 23:04 5b6be5b Add the paired analysis of the two twins
+2026-10-12 23:27 d828d85 Send the motion data messages to the logger
+2026-10-12 23:36 88beb2f Send the tokenizer messages to the logger
+2026-10-12 23:51 6a5786e Add re-anchoring of long streams to the streaming service
+2026-10-13 00:12 11a8a77 Test the streaming service with re-anchoring
+2026-10-13 00:32 c874f6a Solve the studio body pose analytically and play it back
+2026-10-13 00:48 bfaa0ba Test the analytic body solve and the body playback
+2026-10-13 01:05 cdc19b0 Stream long motion in the studio with re-anchoring
+2026-10-13 01:27 8b3486f Update the studio tests and the studio settings
+2026-10-13 01:44 d701378 Put the full command on the first line of each script
+2026-10-13 01:52 2c1360a Add the long-stream probe
+2026-10-13 02:13 8e592cf Add the probes for motion glitches and motion naturalness
+2026-10-13 02:35 9601397 Add the test of the studio controls
+2026-10-13 02:51 d70aaeb Add the studio test with a human operator
+2026-10-13 03:06 95d0561 Add the script that renames private functions
+2026-10-13 03:24 40c9ae6 Add the local drivers for the matched 60-epoch twin run and its resume
+2026-10-13 03:34 7a26ee7 Add the local drivers for the 100-epoch, dynamics and RVQ runs
+2026-10-13 03:50 06d0ab3 Update the cloud drivers for the unified flag names
+2026-10-13 04:13 a3c9349 Reorder the README: problem, demo, features, setup
+2026-10-13 04:32 e1cfdb0 Move the working notes and lessons from paper to doc/notes
+2026-10-13 04:42 24249ba Add the LaTeX frame of the thesis: class, bibliography and figures
+2026-10-13 05:04 9a8bb60 Add the abstract and chapters 1 to 3 of the thesis
+2026-10-13 05:20 5150ce5 Add chapter 4 of the thesis
+2026-10-13 05:29 79cdb46 Add chapter 5 of the thesis
+2026-10-13 05:49 1cf9743 Add chapters 6 to 8 of the thesis
+2026-10-13 06:00 c8ba7dd Add the two appendices of the thesis
+2026-10-13 06:17 e2c484e Add the mamba-ssm 2.3.2 source with the two changes for MSVC
+DONE 2026-10-13 06:17: the replay tree is identical to abf5004
+2026-10-13 06:17 snapshot of the new work: 7faaf29df45c0bcb8d3532e0b213dc9df4fd2623
+2026-10-13 06:25 2f1ef5e Add mlflow-skinny and the SQLite store to the dependencies
+2026-10-13 06:47 a1bf11e Validate the config with pydantic and keep the loader in config.py
+2026-10-13 07:03 cca9575 Keep the logging setup in run_log.py and add the optional mlflow record
+2026-10-13 07:15 e45c54d Move the seed, precision and device setup into bootstrap.py
+2026-10-13 07:26 1733a9f Give each command function one objective and a typed request
+2026-10-13 07:39 4ace06b Split the generator into nn_model.py, nn_backbones.py and nn_text.py
+2026-10-13 07:58 5e4ad98 Split the tokenizer into nn_model.py and nn_quantizers.py
+2026-10-13 08:18 a11e168 Name the evaluator networks nn_matcher.py and keep the plausibility measures in metrics.py
+2026-10-13 08:38 614e0c6 Keep the annotation reader and the data module in datasets.py
+2026-10-13 08:42 snapshot of the new work: 7faaf29df45c0bcb8d3532e0b213dc9df4fd2623
+2026-10-13 08:47 8ac984d Name the streaming requests pydant_requests.py and give the service client one objective
+2026-10-13 08:52 9ee3421 Update the tests for the new module names
+2026-10-13 08:58 4fb3411 Test each metric formula against a value known by hand
+2026-10-13 09:03 44c4003 Test the change of text at a reset of the stream
+2026-10-13 09:08 d3add63 Update the benchmark, evaluation and render scripts for the new module names
+2026-10-13 09:13 94539de Update the probes for the new module names
+2026-10-13 09:17 419bf1a Add the action-list probe for long motion
+2026-10-13 09:22 fa5d7a4 Add the probe for the memory of the two generators
+2026-10-13 09:27 2621095 Add a tool that renames a file or a name in the full project
+2026-10-13 09:33 1bdf28a Update the notes and the notice for the new module names
+2026-10-13 09:38 0e1b9c2 Add the action-list result to the chapter on streaming
+LEFTOVER 2026-10-13 09:38: not in a commit: src/text2motion/studio/actions.py src/text2motion/studio/avatar.py src/text2motion/studio/generation.py src/text2motion/studio/viewer.py tests/studio/test_analytic_body_solve.py 
+2026-10-13 09:41 d8ba021 Keep the studio log helpers in generation.py
+2026-10-13 09:45 6e77e75 Use the rotation functions of roma and early returns in the avatar code
+DONE-NEW-WORK 2026-10-13 09:45: the replay tree is identical to the snapshot
+2026-10-13 22:25 5b86191 Add matplotlib to the dependencies
+2026-10-13 22:30 d4b5818 Add a script that checks and repairs the problems of changed files
+2026-10-13 22:36 336972d Declare the types of the quantizer buffers and units
+2026-10-13 22:40 775ce41 Give the two backbones a common base class and remove the type errors of the generator
+2026-10-13 22:44 8281933 Remove the type errors of the motion code
+2026-10-13 22:50 f251426 Remove the type errors of the evaluation and streaming code
+2026-10-13 22:54 46651e6 Remove the type errors of the app code
+2026-10-13 22:58 4479644 Split the complex studio functions and type the launch arguments
+2026-10-13 23:03 ef1d26e Repair the benchmark, evaluation and figure scripts that the type check reported
+2026-10-13 23:08 3ffbe3b Repair the probes and the render scripts that the type check reported
+2026-10-13 23:12 7871b0f Use the enum members in the generator tests
+2026-10-13 23:17 dab61c8 Type the test doubles of the streaming, studio and tokenization tests
+LEFTOVER 2026-10-13 23:17: not in a commit: configs/generator/gen_pilot_fsq8x1024_kernel_seed2027.yaml 
+2026-10-13 23:22 471cef2 Add the kernel training config for seed 2027
+2026-10-13 23:22 training of the Mamba with seed 2027 starts at commit 471cef2
+2026-10-14 09:02 training of the Mamba with seed 2027 ended with exit code 0

@@ -14,7 +14,7 @@ from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.contracts import Split
 
 SEED = 2026
-TOKENIZER = Path("artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt")
+TOKENIZER = Path("runs/checkpoints/tokenizer/fsq_g8_v1024.pt")
 SAMPLING = SamplingConfig(temperature=1.0, cfg_scale=6.0)
 
 
@@ -50,7 +50,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--large", type=int, default=320)
     parser.add_argument("--checkpoint_pattern", default="generator_{backbone}_w{width}_sweep.pt")
     parser.add_argument("--resamples", type=int, default=1000)
-    parser.add_argument("--out_dir", type=Path, default=Path("artifacts/outputs/qa"))
+    parser.add_argument("--out_dir", type=Path, default=Path("runs/outputs/qa"))
     return parser.parse_args()
 
 

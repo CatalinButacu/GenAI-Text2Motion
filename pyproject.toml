@@ -2,7 +2,7 @@
 name = "text2motion"
 version = "0.1.0"
 description = "Streaming text to whole-body SMPL-X motion (master's thesis, clean rebuild)"
-requires-python = "==3.12.*"
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "torch",
     "numpy",
@@ -14,11 +14,13 @@ dependencies = [
     "tqdm",
     "transformers",  # CLIP ViT-B/32 text encoder (caption conditioning); see model/text_encoder.py
     "aitviewer>=1.14.2",
+    "imgui==2.0.0",  # aitviewer's GUI; the 3.14 wheel comes from third_party/wheels (see its README)
     "pydantic>=2",
     "jsonargparse>=4",
     "roma>=1.5.6",
     "matplotlib>=3.11.2",
     "scikit-learn>=1.9.1",
+    "triton-windows>=3.8,<3.9 ; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -52,6 +54,15 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu132" }
+imgui = [
+    { path = "third_party/wheels/imgui-2.0.0-cp314-cp314-win_amd64.whl", marker = "python_version >= '3.14'" },
+    { index = "pypi", marker = "python_version < '3.14'" },
+]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+explicit = true
 
 [tool.ruff]
 line-length = 100

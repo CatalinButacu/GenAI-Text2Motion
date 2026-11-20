@@ -1,0 +1,3 @@
+arm,backbone,patience3_stop_reached,patience3_stop_epoch,best_val_fid,best_val_fid_epoch,best_val_fid_r1,control_best_val_fid,control_best_val_fid_epoch,control_best_val_fid_r1,best_val_ce_epoch,control_best_val_ce_epoch,patience6_last_epoch,patience6_best_val_fid,patience6_best_val_fid_epoch,pass
+a7_step50,transformer,False,60,0.14910158491956788,60,0.49835526315789475,0.2719049851002146,30,0.5098684210526315,58,29,60,0.14910158491956788,60,True
+a7_step50,mamba,True,38,0.1525505683160709,24,0.506578947368421,0.3159196999137883,24,0.5016447368421053,35,21,41,0.1525505683160709,24,True

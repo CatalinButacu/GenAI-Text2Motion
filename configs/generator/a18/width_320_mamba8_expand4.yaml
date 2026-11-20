@@ -1,0 +1,34 @@
+seed: 2026
+device: cuda
+data:
+  track: hml3d263
+  sources: [humanml3d]
+  mirror_augment: true
+  max_motion_len: 196
+  min_motion_len: 40
+paths:
+  eval_matcher: data/models/evaluator/extracted/text_mot_match/model/finest.tar
+  eval_stats_dir: data/processed/eval_stats
+  hml3d_out_dir: data/processed/humanml3d
+  hml3d_index_csv: data/processed/humanml3d/index.csv
+  texts_dir: data/processed/humanml3d/texts
+  checkpoints_dir: runs/checkpoints
+  outputs_dir: runs/outputs
+tokenizer:
+  in_dim: 263
+  width: 512
+  downsample: 4
+  num_quantizers: 8
+  fsq_levels: [8, 8, 4, 4]
+  quantizer: grouped
+  n_resblocks: 3
+generator:
+  use_end_token: true
+  use_kernel: true
+  d_model: 320
+  dt_rank: 20
+  expand: 4
+  mamba_n_layers: 8
+train:
+  pkeep: 0.5
+  pkeep_whole_step: true

@@ -9,10 +9,10 @@ from types import MappingProxyType
 
 from text2motion.motion.storage import base_clip_ids, parse_text_file
 
-ROOT = Path("data/HumanML3D_official")
-INVENTORY = Path("doc/notes/verb_inventory.csv")
-LABELS = (Path("doc/notes/verb_labels_data.csv"), Path("doc/notes/verb_labels_eval.csv"))
-TIEBREAK = Path("doc/notes/verb_labels_tiebreak.csv")
+ROOT = Path("data/processed/humanml3d")
+INVENTORY = Path("docs/notes/verb_inventory.csv")
+LABELS = (Path("docs/notes/verb_labels_data.csv"), Path("docs/notes/verb_labels_eval.csv"))
+TIEBREAK = Path("docs/notes/verb_labels_tiebreak.csv")
 ACTION = "action"
 TYPO = "typo"
 RARE_CLIPS = 150
@@ -175,8 +175,8 @@ def clip_groups(names: dict[str, str]) -> dict[str, set[str]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--vocabulary", type=Path, default=Path("doc/notes/verb_vocabulary.csv"))
-    parser.add_argument("--groups", type=Path, default=Path("doc/notes/action_groups.csv"))
+    parser.add_argument("--vocabulary", type=Path, default=Path("docs/notes/verb_vocabulary.csv"))
+    parser.add_argument("--groups", type=Path, default=Path("docs/notes/action_groups.csv"))
     parser.add_argument("--tiebreak", action="store_true")
     arguments = parser.parse_args()
 

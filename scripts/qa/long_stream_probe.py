@@ -1,4 +1,4 @@
-# .\.venv\Scripts\python.exe scripts/qa/long_stream_probe.py --backbone mamba --ckpt artifacts/checkpoints/generator/generator_mamba_bs8_e60.pt
+# .\.venv\Scripts\python.exe scripts/qa/long_stream_probe.py --backbone mamba --ckpt runs/checkpoints/generator/generator_mamba_bs8_e60.pt
 from __future__ import annotations
 
 import argparse
@@ -1469,7 +1469,7 @@ def main() -> None:
     parser.add_argument(
         "--tokenizer_ckpt",
         type=Path,
-        default=Path("artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"),
+        default=Path("runs/checkpoints/tokenizer/fsq_g8_v1024.pt"),
     )
     parser.add_argument("--prompts", type=int, default=32)
     parser.add_argument("--segments", type=int, default=4)

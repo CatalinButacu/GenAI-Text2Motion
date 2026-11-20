@@ -26,5 +26,5 @@ description: Critic for the measured numbers. Finds numbers that you cannot trus
 - Evaluation must stay deterministic. The same weights give the same FID.
 - Compare timings A and B in one process.
 - Fetch each published number in the same session. Give the arXiv id or URL.
-- Find the runs in `artifacts/logs/train/` and `artifacts/outputs/runs/`.
-- Read the current results in `.claude/docs/STATUS.md`.
+- Find the runs in `runs/logs/train/` and `runs/outputs/runs/`.
+- Read the current results in `docs/project/STATUS.md`.

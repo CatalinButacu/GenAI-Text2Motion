@@ -24,7 +24,7 @@ from text2motion.dataset.resample import cubic_resample, downsample, lowpass
 from text2motion.motion.representation import FeatureParams
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-PATHS = DatasetPaths(REPO, pathlib.Path(r"D:\Facultate\dissertation\data\amass"))
+PATHS = DatasetPaths(REPO, REPO / "data" / "amass")
 REFERENCE_JOINTS = REPO / "data" / "HumanML3D_263" / "joints" / "000021.npy"
 SOURCES = ("amass_extra", "motionx_official")
 FPS_CHOICES = (20, 60)

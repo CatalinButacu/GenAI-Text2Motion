@@ -82,8 +82,8 @@ class PreparationRequest:
 ############################################################
 @dataclass(frozen=True)
 class CorpusLayout:
-    official_dir: Path = Path("data/HumanML3D_official")
-    regen_dir: Path = Path("data/HumanML3D_263")
+    official_dir: Path = Path("data/processed/humanml3d")
+    regen_dir: Path = Path("data/processed/humanml3d_263")
     amass_corpus_dir: Path = Path("data/AMASS_263")
     amass_features_dir: Path = Path("data/AMASS_263/new_joint_vecs")
     amass_token_pack: Path = Path("data/amass_tokens.npz")

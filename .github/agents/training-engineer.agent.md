@@ -24,8 +24,8 @@ description: Critic for the training runs. Finds runs that cannot prove anything
 - Both twins get identical optimizer, schedule, data, budget and seed.
 - Run `sanity-overfit` before each full run.
 - Guard each long run with `scripts/training/local_guard.ps1`.
-- Read `artifacts/outputs/GUARD_KILL.txt` before a relaunch.
+- Read `runs/outputs/GUARD_KILL.txt` before a relaunch.
 - One run directory per training. Resume into the same directory.
 - Do not re-run `scripts/training/tokenizer_sweep/`. The tokenizer is frozen.
 - Never state a published hyperparameter from memory. Give the source.
-- Read the current recipe in `configs/generator/` and the numbers in `.claude/docs/STATUS.md`.
+- Read the current recipe in `configs/generator/` and the numbers in `docs/project/STATUS.md`.

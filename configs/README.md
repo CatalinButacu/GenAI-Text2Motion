@@ -1,6 +1,6 @@
 # configs/ -- layout
 
-Sorted into subfolders by role (2026-06-29). All path references in scripts/src/infra/paper were
+Sorted into subfolders by role (2026-06-29). All path references in scripts/src/deploy/paper were
 updated to match. Base configs stay at the root.
 
 ```

@@ -31,7 +31,7 @@ from text2motion.dataset.quality import (
 from text2motion.motion.storage import base_clip_ids
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-PATHS = DatasetPaths(REPO, pathlib.Path(r"D:\Facultate\dissertation\data\amass"))
+PATHS = DatasetPaths(REPO, REPO / "data" / "amass")
 NEWTON = NewtonLimits()
 QUALITY = QualityLimits()
 HML3D_TRAIN, HML3D_VAL = "hml3d_train", "hml3d_val"

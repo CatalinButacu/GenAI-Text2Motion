@@ -135,11 +135,14 @@ def test_motion_class_weighting_without_a_verb_map_stops():
 def test_yaml_values_select_motion_class_weighting():
     data = from_mapping(
         MotionDataConfig,
-        {"clip_weighting": "motion_class", "motion_classes": "doc/paper/pics/verb_cluster_map.csv"},
+        {
+            "clip_weighting": "motion_class",
+            "motion_classes": "docs/paper/pics/verb_cluster_map.csv",
+        },
     )
 
     assert data.clip_weighting is ClipWeighting.MOTION_CLASS
-    assert Path(data.motion_classes or "") == Path("doc/paper/pics/verb_cluster_map.csv")
+    assert Path(data.motion_classes or "") == Path("docs/paper/pics/verb_cluster_map.csv")
 
 
 WALK_KICK = "a person walks and kicks#a/DET person/NOUN walk/VERB and/CCONJ kick/VERB#0.0#0.0"

@@ -30,8 +30,8 @@ The studio shows the motion while the model generates it. Type a caption in the 
 
 ```bash
 text2motion studio --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba \
-                   --ckpt artifacts/checkpoints/generator/generator_mamba_bs8_e60.pt \
-                   --tokenizer_ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt
+                   --ckpt runs/checkpoints/generator/generator_mamba_bs8_e60.pt \
+                   --tokenizer_ckpt runs/checkpoints/tokenizer/fsq_g8_v1024.pt
 ```
 
 The studio starts the generation service in a second process. The viewer paces the stream, so the
@@ -112,10 +112,10 @@ pytest                               # shape and parity contracts
 Use `uv sync --inexact` (as `make install` does). A plain `uv sync` removes every package that
 `uv.lock` does not name, and the optional Mamba CUDA kernel (`mamba-ssm`, used when a config sets
 `use_kernel: true`) is not in the lock: it is a 46-minute MSVC build of the patched source in
-`third_party/mamba_ssm-2.3.2.post1-msvc` (see `doc/notes/implementation-difficulties.md`).
+`third_party/mamba_ssm-2.3.2.post1-msvc` (see `docs/notes/implementation-difficulties.md`).
 
 ```bash
-make kernel-restore   # copy back the saved working build from dist/mamba_kernel (torch 2.12+cu132)
+make kernel-restore   # copy back the saved working build from third_party/mamba_kernel (torch 2.12+cu132)
 make kernel-build     # rebuild from source; the MSVC/NVCC flags are a reconstruction, UNTESTED
 ```
 
@@ -131,11 +131,11 @@ text2motion train-tokenizer  --config configs/tokenizer/fsq_g8_v1024.yaml --toke
 text2motion tokenize         --config configs/generator/gen_pilot_fsq8x1024.yaml \
                              --token_pack data/amass_tokens_fsq8x1024.npz
 text2motion sanity-overfit   --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba \
-                             --tokenizer_ckpt artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt \
-                             --overfit_gate artifacts/outputs/gates/mamba.json
+                             --tokenizer_ckpt runs/checkpoints/tokenizer/fsq_g8_v1024.pt \
+                             --overfit_gate runs/outputs/gates/mamba.json
 text2motion pretrain         --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba
 text2motion train-generator  --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone mamba \
-                             --overfit_gate artifacts/outputs/gates/mamba.json
+                             --overfit_gate runs/outputs/gates/mamba.json
 text2motion evaluate         --config configs/generator/gen_pilot_fsq8x1024.yaml --backbone both \
                              --split test --cfg_scale 6.0
 text2motion benchmark        --config configs/generator/final100m_fsq8x1024.yaml
@@ -157,7 +157,7 @@ src/text2motion/
 configs/          YAML settings
 scripts/          training drivers, evaluation, benchmarks, figures, rendering
 tests/            source-package tests plus the retained streaming test folder
-doc/              thesis (LaTeX) and notes
+docs/              thesis (LaTeX) and notes
 ```
 
 ### Containers

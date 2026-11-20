@@ -75,16 +75,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/generator/gen_pilot_fsq8x1024.yaml")
     parser.add_argument("--backbone", default="mamba", type=Backbone)
-    parser.add_argument(
-        "--ckpt", default="artifacts/checkpoints/generator/generator_mamba_bs8_e60.pt"
-    )
-    parser.add_argument(
-        "--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
-    )
+    parser.add_argument("--ckpt", default="runs/checkpoints/generator/generator_mamba_bs8_e60.pt")
+    parser.add_argument("--tokenizer_ckpt", default="runs/checkpoints/tokenizer/fsq_g8_v1024.pt")
     parser.add_argument("--steps", type=int, default=160)
     parser.add_argument("--cfg_scale", type=float, default=6.0)
     parser.add_argument("--spike_m_per_frame2", type=float, default=0.08)
-    parser.add_argument("--out", default="artifacts/outputs/qa/motion_glitch_probe.json")
+    parser.add_argument("--out", default="runs/outputs/qa/motion_glitch_probe.json")
     args = parser.parse_args()
 
     app = ApplicationBootstrap.from_config(args.config)

@@ -1,0 +1,994 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (MiKTeX 26.5) (preloaded format=pdflatex 2026.6.4)  15 NOV 2026 13:25
+entering extended mode
+ restricted \write18 enabled.
+ %&-line parsing enabled.
+**./thesis.tex
+(thesis.tex
+LaTeX2e <2025-11-01>
+L3 programming layer <2026-04-28>
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrrepr
+t.cls
+Document Class: scrreprt 2026/02/02 v3.49.2 KOMA-Script document class (report)
+
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrkbas
+e.sty
+Package: scrkbase 2026/02/02 v3.49.2 KOMA-Script package (KOMA-Script-dependent
+ basics and keyval usage)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrbase
+.sty
+Package: scrbase 2026/02/02 v3.49.2 KOMA-Script package (KOMA-Script-independen
+t basics and keyval usage)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrlfil
+e.sty
+Package: scrlfile 2026/02/02 v3.49.2 KOMA-Script package (file load hooks)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrlfil
+e-hook.sty
+Package: scrlfile-hook 2026/02/02 v3.49.2 KOMA-Script package (using LaTeX hook
+s)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrlogo
+.sty
+Package: scrlogo 2026/02/02 v3.49.2 KOMA-Script package (logo)
+)))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/graphics\keyval.sty
+Package: keyval 2022/05/29 v1.15 key=value parser (DPC)
+\KV@toks@=\toks17
+)
+Applying: [2021/05/01] Usage of raw or classic option list on input line 254.
+Already applied: [0000/00/00] Usage of raw or classic option list on input line
+ 370.
+))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\tocbasi
+c.sty
+Package: tocbasic 2026/02/02 v3.49.2 KOMA-Script package (handling toc-files)
+\scr@dte@tocline@numberwidth=\skip49
+\scr@dte@tocline@numbox=\box53
+)
+Package tocbasic Info: omitting babel extension for `toc'
+(tocbasic)             because of feature `nobabel' available
+(tocbasic)             for `toc' on input line 143.
+Package scrreprt Info: You've used standard option `11pt'.
+(scrreprt)             This is correct!
+(scrreprt)             Internally I'm using `fontsize=11pt'.
+(scrreprt)             If you'd like to set the option with \KOMAoptions,
+(scrreprt)             you'd have to use `fontsize=11pt' there
+(scrreprt)             instead of `11pt', too.
+Class scrreprt Info: File `scrsize11pt.clo' used to setup font sizes on input l
+ine 2710.
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\scrsize
+11pt.clo
+File: scrsize11pt.clo 2026/02/02 v3.49.2 KOMA-Script font size class option (11
+pt)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/koma-script\typeare
+a.sty
+Package: typearea 2026/02/02 v3.49.2 KOMA-Script package (type area)
+\ta@bcor=\skip50
+\ta@div=\count276
+Package typearea Info: You've used standard option `a4paper'.
+(typearea)             This is correct!
+(typearea)             Internally I'm using `paper=a4'.
+(typearea)             If you'd like to set the option with \KOMAoptions,
+(typearea)             you'd have to use `paper=a4' there
+(typearea)             instead of `a4paper', too.
+\ta@hblk=\skip51
+\ta@vblk=\skip52
+\ta@temp=\skip53
+\footheight=\skip54
+Package typearea Info: These are the values describing the layout:
+(typearea)             DIV  = 10
+(typearea)             BCOR = 0.0pt
+(typearea)             \paperwidth      = 597.50793pt
+(typearea)              \textwidth      = 418.25555pt
+(typearea)              DIV departure   = -6%
+(typearea)              \evensidemargin = 17.3562pt
+(typearea)              \oddsidemargin  = 17.3562pt
+(typearea)             \paperheight     = 845.04694pt
+(typearea)              \textheight     = 595.80026pt
+(typearea)              \topmargin      = -25.16531pt
+(typearea)              \headheight     = 17.0pt
+(typearea)              \headsep        = 20.40001pt
+(typearea)              \topskip        = 11.0pt
+(typearea)              \footskip       = 47.6pt
+(typearea)              \baselineskip   = 13.6pt
+(typearea)              on input line 1810.
+)
+\c@part=\count277
+\c@chapter=\count278
+\c@section=\count279
+\c@subsection=\count280
+\c@subsubsection=\count281
+\c@paragraph=\count282
+\c@subparagraph=\count283
+\scr@dte@chapter@maxnumwidth=\skip55
+Class scrreprt Info: using compatibility default `afterindent=bysign'
+(scrreprt)           for `\chapter on input line 5934.
+\scr@dte@section@maxnumwidth=\skip56
+Class scrreprt Info: using compatibility default `runin=bysign'
+(scrreprt)           for `\section on input line 5945.
+Class scrreprt Info: using compatibility default `afterindent=bysign'
+(scrreprt)           for `\section on input line 5945.
+\scr@dte@part@maxnumwidth=\skip57
+Class scrreprt Info: using compatibility default `afterindent=true'
+(scrreprt)           for `\part on input line 5954.
+\scr@dte@subsection@maxnumwidth=\skip58
+Class scrreprt Info: using compatibility default `runin=bysign'
+(scrreprt)           for `\subsection on input line 5964.
+Class scrreprt Info: using compatibility default `afterindent=bysign'
+(scrreprt)           for `\subsection on input line 5964.
+\scr@dte@subsubsection@maxnumwidth=\skip59
+Class scrreprt Info: using compatibility default `runin=bysign'
+(scrreprt)           for `\subsubsection on input line 5974.
+Class scrreprt Info: using compatibility default `afterindent=bysign'
+(scrreprt)           for `\subsubsection on input line 5974.
+\scr@dte@paragraph@maxnumwidth=\skip60
+Class scrreprt Info: using compatibility default `runin=bysign'
+(scrreprt)           for `\paragraph on input line 5985.
+Class scrreprt Info: using compatibility default `afterindent=bysign'
+(scrreprt)           for `\paragraph on input line 5985.
+\scr@dte@subparagraph@maxnumwidth=\skip61
+Class scrreprt Info: using compatibility default `runin=bysign'
+(scrreprt)           for `\subparagraph on input line 5995.
+Class scrreprt Info: using compatibility default `afterindent=bysign'
+(scrreprt)           for `\subparagraph on input line 5995.
+\abovecaptionskip=\skip62
+\belowcaptionskip=\skip63
+\c@pti@nb@sid@b@x=\box54
+Package tocbasic Info: omitting babel extension for `lof'
+(tocbasic)             because of feature `nobabel' available
+(tocbasic)             for `lof' on input line 7225.
+\scr@dte@figure@maxnumwidth=\skip64
+\c@figure=\count284
+Package tocbasic Info: omitting babel extension for `lot'
+(tocbasic)             because of feature `nobabel' available
+(tocbasic)             for `lot' on input line 7238.
+\scr@dte@table@maxnumwidth=\skip65
+\c@table=\count285
+Class scrreprt Info: Redefining `\numberline' on input line 7409.
+\bibindent=\dimen150
+) (cls/standard.sty
+Package: ./cls/standard 2013/06/07 Standard LaTeX utilities
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/etoolbox\etoolbox.s
+ty
+Package: etoolbox 2025/10/02 v2.5m e-TeX tools for LaTeX (JAW)
+\etb@tempcnta=\count286
+) (C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/base\ifthen.sty
+Package: ifthen 2024/03/16 v1.1e Standard LaTeX ifthen package (DPC)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/kvoptions\kvoptions
+.sty
+Package: kvoptions 2022-06-15 v3.15 Key value format for package options (HO)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/ltxcmds\ltxcmds.s
+ty
+Package: ltxcmds 2023-12-04 v1.26 LaTeX kernel commands for general use (HO)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/kvsetkeys\kvsetkeys
+.sty
+Package: kvsetkeys 2022-10-05 v1.19 Key value parser (HO)
+))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.s
+ty
+Package: geometry 2026/03/07 v6.0 Page Geometry
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/iftex\ifvtex.sty
+Package: ifvtex 2019/10/25 v1.7 ifvtex legacy package. Use iftex instead.
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/iftex\iftex.sty
+Package: iftex 2024/12/12 v1.0g TeX engine tests
+))
+\Gm@cnth=\count287
+\Gm@cntv=\count288
+\c@Gm@tempcnt=\count289
+\Gm@bindingoffset=\dimen151
+\Gm@wd@mp=\dimen152
+\Gm@odd@mp=\dimen153
+\Gm@even@mp=\dimen154
+\Gm@layoutwidth=\dimen155
+\Gm@layoutheight=\dimen156
+\Gm@layouthoffset=\dimen157
+\Gm@layoutvoffset=\dimen158
+\Gm@dimlist=\toks18
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/geometry\geometry.c
+fg))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/setspace\setspace.s
+ty
+Package: setspace 2022/12/04 v6.7b set line spacing
+)
+
+Class scrreprt Warning: Usage of package `fancyhdr' together
+(scrreprt)              with a KOMA-Script class is not recommended.
+(scrreprt)              I'd suggest to use 
+(scrreprt)              package `scrlayer' or `scrlayer-scrpage', because
+(scrreprt)              they support KOMA-Script classes.
+(scrreprt)              With `fancyhdr' several features of class `scrreprt'
+(scrreprt)              like options `headsepline', `footsepline' or command
+(scrreprt)              `\MakeMarkcase' and the commands `\setkomafont' and
+(scrreprt)              `\addtokomafont' for the page style elements need
+(scrreprt)              explicite user intervention to work.
+(scrreprt)              Nevertheless, using requested
+(scrreprt)              package `fancyhdr' on input line 48.
+
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/fancyhdr\fancyhdr.s
+ty
+Package: fancyhdr 2025/02/07 v5.2 Extensive control of page headers and footers
+
+\f@nch@headwidth=\skip66
+\f@nch@offset@elh=\skip67
+\f@nch@offset@erh=\skip68
+\f@nch@offset@olh=\skip69
+\f@nch@offset@orh=\skip70
+\f@nch@offset@elf=\skip71
+\f@nch@offset@erf=\skip72
+\f@nch@offset@olf=\skip73
+\f@nch@offset@orf=\skip74
+\f@nch@height=\skip75
+\f@nch@footalignment=\skip76
+\f@nch@widthL=\skip77
+\f@nch@widthC=\skip78
+\f@nch@widthR=\skip79
+\@temptokenb=\toks19
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/appendix\appendix.s
+ty
+Package: appendix 2020/02/08 v1.2c extra appendix facilities
+\c@@pps=\count290
+\c@@ppsavesec=\count291
+\c@@ppsaveapp=\count292
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/lettrine\lettrine.s
+ty
+File: lettrine.sty 2025-12-06 v2.83 (Daniel Flipo)
+\c@DefaultLines=\count293
+\c@DefaultDepth=\count294
+\DefaultFindent=\dimen159
+\DefaultNindent=\dimen160
+\DefaultSlope=\dimen161
+\DiscardVskip=\dimen162
+\L@lbox=\box55
+\c@L@lines=\count295
+\c@L@depth=\count296
+\L@Pindent=\dimen163
+\L@Findent=\dimen164
+\L@Nindent=\dimen165
+\L@lraise=\dimen166
+\L@first=\dimen167
+\L@next=\dimen168
+\L@slope=\dimen169
+\L@height=\dimen170
+\L@novskip=\dimen171
+\L@target@ht=\dimen172
+\L@target@dp=\dimen173
+\L@target@tht=\dimen174
+\LettrineWidth=\dimen175
+\LettrineHeight=\dimen176
+\LettrineDepth=\dimen177
+\L@finalht=\dimen178
+\L@finaldp=\dimen179
+
+Loading lettrine.cfg
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/lettrine\lettrine.c
+fg)
+\Lettrine@tweaks=\toks20
+\Llist@everypar=\toks21
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/silence\silence.sty
+Package: silence 2012/07/02 v1.5b Selective filtering of warnings and error mes
+sages
+\sl@Save=\count297
+\sl@StateNumber=\count298
+\sl@MessageCount=\count299
+\sl@Casualties=\count300
+\sl@Filter=\toks22
+\sl@Message=\toks23
+\sl@UnexpandedMessage=\toks24
+\sl@Mess@ge=\toks25
+\sl@WarningCount=\count301
+\sl@WarningNumber=\count302
+\sl@WarningCasualties=\count303
+\sl@TempBOW=\toks26
+\sl@BankOfWarnings=\toks27
+LaTeX Info: Redefining \GenericWarning on input line 433.
+\sl@ErrorCount=\count304
+\sl@ErrorNumber=\count305
+\sl@ErrorCasualties=\count306
+\sl@TempBOE=\toks28
+\sl@BankOfErrors=\toks29
+LaTeX Info: Redefining \GenericError on input line 601.
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/pgf/frontendlayer\t
+ikz.sty
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/pgf/basiclayer\pgf.
+sty
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/pgf/utilities\pgfrc
+s.sty
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgf
+util-common.tex
+\pgfutil@everybye=\toks30
+\pgfutil@tempdima=\dimen180
+\pgfutil@tempdimb=\dimen181
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgf
+util-latex.def
+\pgfutil@abb=\box56
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgf
+rcs.code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf\pgf.revision.
+tex)
+Package: pgfrcs 2025-08-29 v3.1.11a (3.1.11a)
+))
+Package: pgf 2025-08-29 v3.1.11a (3.1.11a)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/pgf/basiclayer\pgfc
+ore.sty
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphicx.s
+ty
+Package: graphicx 2024/12/31 v1.2e Enhanced LaTeX Graphics (DPC,SPQR)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/graphics\graphics.s
+ty
+Package: graphics 2024/08/06 v1.4g Standard LaTeX Graphics (DPC,SPQR)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/graphics\trig.sty
+Package: trig 2023/12/02 v1.11 sin cos tan (DPC)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\graphi
+cs.cfg
+File: graphics.cfg 2016/06/04 v1.11 sample graphics configuration
+)
+Package graphics Info: Driver file: pdftex.def on input line 106.
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/graphics-def\pdftex
+.def
+File: pdftex.def 2025/09/29 v1.2d Graphics/color driver for pdftex
+))
+\Gin@req@height=\dimen182
+\Gin@req@width=\dimen183
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/pgf/systemlayer\pgf
+sys.sty
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\p
+gfsys.code.tex
+Package: pgfsys 2025-08-29 v3.1.11a (3.1.11a)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgf
+keys.code.tex
+\pgfkeys@pathtoks=\toks31
+\pgfkeys@temptoks=\toks32
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgf
+keyslibraryfiltered.code.tex
+\pgfkeys@tmptoks=\toks33
+))
+\pgf@x=\dimen184
+\pgf@y=\dimen185
+\pgf@xa=\dimen186
+\pgf@ya=\dimen187
+\pgf@xb=\dimen188
+\pgf@yb=\dimen189
+\pgf@xc=\dimen190
+\pgf@yc=\dimen191
+\pgf@xd=\dimen192
+\pgf@yd=\dimen193
+\w@pgf@writea=\write3
+\r@pgf@reada=\read2
+\c@pgf@counta=\count307
+\c@pgf@countb=\count308
+\c@pgf@countc=\count309
+\c@pgf@countd=\count310
+\t@pgf@toka=\toks34
+\t@pgf@tokb=\toks35
+\t@pgf@tokc=\toks36
+\pgf@sys@id@count=\count311
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\p
+gf.cfg
+File: pgf.cfg 2025-08-29 v3.1.11a (3.1.11a)
+)
+Driver file for pgf: pgfsys-pdftex.def
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\p
+gfsys-pdftex.def
+File: pgfsys-pdftex.def 2025-08-29 v3.1.11a (3.1.11a)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\p
+gfsys-common-pdf.def
+File: pgfsys-common-pdf.def 2025-08-29 v3.1.11a (3.1.11a)
+)))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\p
+gfsyssoftpath.code.tex
+File: pgfsyssoftpath.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgfsyssoftpath@smallbuffer@items=\count312
+\pgfsyssoftpath@bigbuffer@items=\count313
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/systemlayer\p
+gfsysprotocol.code.tex
+File: pgfsysprotocol.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/xcolor\xcolor.sty
+Package: xcolor 2024/09/29 v3.02 LaTeX color extensions (UK)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/graphics-cfg\color.
+cfg
+File: color.cfg 2016/01/02 v1.6 sample color configuration
+)
+Package xcolor Info: Driver file: pdftex.def on input line 274.
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/graphics\mathcolor.
+ltx)
+Package xcolor Info: Model `cmy' substituted by `cmy0' on input line 1349.
+Package xcolor Info: Model `hsb' substituted by `rgb' on input line 1353.
+Package xcolor Info: Model `RGB' extended on input line 1365.
+Package xcolor Info: Model `HTML' substituted by `rgb' on input line 1367.
+Package xcolor Info: Model `Hsb' substituted by `hsb' on input line 1368.
+Package xcolor Info: Model `tHsb' substituted by `hsb' on input line 1369.
+Package xcolor Info: Model `HSB' substituted by `hsb' on input line 1370.
+Package xcolor Info: Model `Gray' substituted by `gray' on input line 1371.
+Package xcolor Info: Model `wave' substituted by `hsb' on input line 1372.
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcore.code.tex
+Package: pgfcore 2025-08-29 v3.1.11a (3.1.11a)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmath.
+code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathu
+til.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathp
+arser.code.tex
+\pgfmath@dimen=\dimen194
+\pgfmath@count=\count314
+\pgfmath@box=\box57
+\pgfmath@toks=\toks37
+\pgfmath@stack@operand=\toks38
+\pgfmath@stack@operation=\toks39
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathf
+unctions.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathf
+unctions.basic.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathf
+unctions.trigonometric.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathf
+unctions.random.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathf
+unctions.comparison.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathf
+unctions.base.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathf
+unctions.round.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathf
+unctions.misc.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathf
+unctions.integerarithmetics.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathc
+alc.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmathf
+loat.code.tex
+\c@pgfmathroundto@lastzeros=\count315
+))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfint.c
+ode.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcorepoints.code.tex
+File: pgfcorepoints.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgf@picminx=\dimen195
+\pgf@picmaxx=\dimen196
+\pgf@picminy=\dimen197
+\pgf@picmaxy=\dimen198
+\pgf@pathminx=\dimen199
+\pgf@pathmaxx=\dimen256
+\pgf@pathminy=\dimen257
+\pgf@pathmaxy=\dimen258
+\pgf@xx=\dimen259
+\pgf@xy=\dimen260
+\pgf@yx=\dimen261
+\pgf@yy=\dimen262
+\pgf@zx=\dimen263
+\pgf@zy=\dimen264
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcorepathconstruct.code.tex
+File: pgfcorepathconstruct.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgf@path@lastx=\dimen265
+\pgf@path@lasty=\dimen266
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcorepathusage.code.tex
+File: pgfcorepathusage.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgf@shorten@end@additional=\dimen267
+\pgf@shorten@start@additional=\dimen268
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcorescopes.code.tex
+File: pgfcorescopes.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgfpic=\box58
+\pgf@hbox=\box59
+\pgf@layerbox@main=\box60
+\pgf@picture@serial@count=\count316
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcoregraphicstate.code.tex
+File: pgfcoregraphicstate.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgflinewidth=\dimen269
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcoretransformations.code.tex
+File: pgfcoretransformations.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgf@pt@x=\dimen270
+\pgf@pt@y=\dimen271
+\pgf@pt@temp=\dimen272
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcorequick.code.tex
+File: pgfcorequick.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcoreobjects.code.tex
+File: pgfcoreobjects.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcorepathprocessing.code.tex
+File: pgfcorepathprocessing.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcorearrows.code.tex
+File: pgfcorearrows.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgfarrowsep=\dimen273
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcoreshade.code.tex
+File: pgfcoreshade.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgf@max=\dimen274
+\pgf@sys@shading@range@num=\count317
+\pgf@shadingcount=\count318
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcoreimage.code.tex
+File: pgfcoreimage.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcoreexternal.code.tex
+File: pgfcoreexternal.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgfexternal@startupbox=\box61
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcorelayers.code.tex
+File: pgfcorelayers.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcoretransparency.code.tex
+File: pgfcoretransparency.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcorepatterns.code.tex
+File: pgfcorepatterns.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/basiclayer\pg
+fcorerdf.code.tex
+File: pgfcorerdf.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/modules\pgfmo
+duleshapes.code.tex
+File: pgfmoduleshapes.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgfnodeparttextbox=\box62
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/modules\pgfmo
+duleplot.code.tex
+File: pgfmoduleplot.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/pgf/compatibility\p
+gfcomp-version-0-65.sty
+Package: pgfcomp-version-0-65 2025-08-29 v3.1.11a (3.1.11a)
+\pgf@nodesepstart=\dimen275
+\pgf@nodesepend=\dimen276
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/pgf/compatibility\p
+gfcomp-version-1-18.sty
+Package: pgfcomp-version-1-18 2025-08-29 v3.1.11a (3.1.11a)
+))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/pgf/utilities\pgffo
+r.sty
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/pgf/utilities\pgfke
+ys.sty
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgf
+keys.code.tex))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/pgf/math\pgfmath.st
+y
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/math\pgfmath.
+code.tex))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/utilities\pgf
+for.code.tex
+Package: pgffor 2025-08-29 v3.1.11a (3.1.11a)
+\pgffor@iter=\dimen277
+\pgffor@skip=\dimen278
+\pgffor@stack=\toks40
+\pgffor@toks=\toks41
+))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/frontendlayer
+/tikz\tikz.code.tex
+Package: tikz 2025-08-29 v3.1.11a (3.1.11a)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/libraries\pgf
+libraryplothandlers.code.tex
+File: pgflibraryplothandlers.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgf@plot@mark@count=\count319
+\pgfplotmarksize=\dimen279
+)
+\tikz@lastx=\dimen280
+\tikz@lasty=\dimen281
+\tikz@lastxsaved=\dimen282
+\tikz@lastysaved=\dimen283
+\tikz@lastmovetox=\dimen284
+\tikz@lastmovetoy=\dimen285
+\tikzleveldistance=\dimen286
+\tikzsiblingdistance=\dimen287
+\tikz@figbox=\box63
+\tikz@figbox@bg=\box64
+\tikz@tempbox=\box65
+\tikz@tempbox@bg=\box66
+\tikztreelevel=\count320
+\tikznumberofchildren=\count321
+\tikznumberofcurrentchild=\count322
+\tikz@fig@count=\count323
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/modules\pgfmo
+dulematrix.code.tex
+File: pgfmodulematrix.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgfmatrixcurrentrow=\count324
+\pgfmatrixcurrentcolumn=\count325
+\pgf@matrix@numberofcolumns=\count326
+)
+\tikz@expandcount=\count327
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/frontendlayer
+/tikz/libraries\tikzlibrarytopaths.code.tex
+File: tikzlibrarytopaths.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/pgfplots\pgfplots.s
+ty
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+.revision.tex)
+Package: pgfplots 2021/05/15 v1.18.1 Data Visualization (1.18.1)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+.code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+core.code.tex
+\t@pgfplots@toka=\toks42
+\t@pgfplots@tokb=\toks43
+\t@pgfplots@tokc=\toks44
+\pgfplots@tmpa=\dimen288
+\c@pgfplots@coordindex=\count328
+\c@pgfplots@scanlineindex=\count329
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/sys\pgfp
+lotssysgeneric.code.tex))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/libs\pgf
+plotslibrary.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/oldpgfco
+mpatib\pgfplotsoldpgfsupp_loader.code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/libraries\pgf
+libraryfpu.code.tex)
+Package pgfplots: loading complementary utilities for your pgf version...
+\t@pgf@toka=\toks45
+\t@pgf@tokb=\toks46
+\t@pgf@tokc=\toks47
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/oldpgfco
+mpatib\pgfplotsoldpgfsupp_pgfutil-common-lists.tex))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/util\pgf
+plotsutil.code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/liststru
+cture\pgfplotsliststructure.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/liststru
+cture\pgfplotsliststructureext.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/liststru
+cture\pgfplotsarray.code.tex
+\c@pgfplotsarray@tmp=\count330
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/liststru
+cture\pgfplotsmatrix.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/numtable
+\pgfplotstableshared.code.tex
+\c@pgfplotstable@counta=\count331
+\t@pgfplotstable@a=\toks48
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/liststru
+cture\pgfplotsdeque.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/util\pgf
+plotsbinary.code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/util\pgf
+plotsbinary.data.code.tex))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/util\pgf
+plotsutil.verb.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/libs\pgf
+librarypgfplots.surfshading.code.tex
+\c@pgfplotslibrarysurf@no=\count332
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/sys\pgfl
+ibrarypgfplots.surfshading.pgfsys-pdftex.def)))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/util\pgf
+plotscolormap.code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/util\pgf
+plotscolor.code.tex))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+stackedplots.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+plothandlers.code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+meshplothandler.code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+meshplotimage.code.tex)))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+.scaling.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+coordprocessing.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+.errorbars.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+.markers.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+ticks.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots\pgfplots
+.paths.code.tex)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/frontendlayer
+/tikz/libraries\tikzlibrarydecorations.code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/modules\pgfmo
+duledecorations.code.tex
+\pgfdecoratedcompleteddistance=\dimen289
+\pgfdecoratedremainingdistance=\dimen290
+\pgfdecoratedinputsegmentcompleteddistance=\dimen291
+\pgfdecoratedinputsegmentremainingdistance=\dimen292
+\pgf@decorate@distancetomove=\dimen293
+\pgf@decorate@repeatstate=\count333
+\pgfdecorationsegmentamplitude=\dimen294
+\pgfdecorationsegmentlength=\dimen295
+)
+\tikz@lib@dec@box=\box67
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/frontendlayer
+/tikz/libraries\tikzlibrarydecorations.pathmorphing.code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/libraries/dec
+orations\pgflibrarydecorations.pathmorphing.code.tex))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/frontendlayer
+/tikz/libraries\tikzlibrarydecorations.pathreplacing.code.tex
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/libraries/dec
+orations\pgflibrarydecorations.pathreplacing.code.tex))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgfplots/libs\tik
+zlibrarypgfplots.contourlua.code.tex)
+\pgfplots@numplots=\count334
+\pgfplots@xmin@reg=\dimen296
+\pgfplots@xmax@reg=\dimen297
+\pgfplots@ymin@reg=\dimen298
+\pgfplots@ymax@reg=\dimen299
+\pgfplots@zmin@reg=\dimen300
+\pgfplots@zmax@reg=\dimen301
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/frontendlayer
+/tikz/libraries\tikzlibraryplotmarks.code.tex
+File: tikzlibraryplotmarks.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/libraries\pgf
+libraryplotmarks.code.tex
+File: pgflibraryplotmarks.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/frontendlayer
+/tikz/libraries\tikzlibraryshapes.geometric.code.tex
+File: tikzlibraryshapes.geometric.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/libraries/sha
+pes\pgflibraryshapes.geometric.code.tex
+File: pgflibraryshapes.geometric.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/libraries\pgf
+libraryarrows.meta.code.tex
+File: pgflibraryarrows.meta.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+\pgfarrowinset=\dimen302
+\pgfarrowlength=\dimen303
+\pgfarrowwidth=\dimen304
+\pgfarrowlinewidth=\dimen305
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/generic/pgf/frontendlayer
+/tikz/libraries\tikzlibrarypositioning.code.tex
+File: tikzlibrarypositioning.code.tex 2025-08-29 v3.1.11a (3.1.11a)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsmath.sty
+Package: amsmath 2025/07/09 v2.17z AMS math features
+\@mathmargin=\skip80
+For additional information on amsmath, use the `?' option.
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amstext.sty
+Package: amstext 2024/11/17 v2.01 AMS text
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsgen.sty
+File: amsgen.sty 1999/11/30 v2.0 generic functions
+\@emptytoks=\toks49
+\ex@=\dimen306
+))
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsbsy.sty
+Package: amsbsy 1999/11/29 v1.2d Bold Symbols
+\pmbraise@=\dimen307
+) (C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/amsmath\amsopn.st
+y
+Package: amsopn 2022/04/08 v2.04 operator names
+)
+\inf@bad=\count335
+LaTeX Info: Redefining \frac on input line 233.
+\uproot@=\count336
+\leftroot@=\count337
+LaTeX Info: Redefining \overline on input line 398.
+LaTeX Info: Redefining \colon on input line 409.
+\classnum@=\count338
+\DOTSCASE@=\count339
+LaTeX Info: Redefining \ldots on input line 495.
+LaTeX Info: Redefining \dots on input line 498.
+LaTeX Info: Redefining \cdots on input line 619.
+\Mathstrutbox@=\box68
+\strutbox@=\box69
+LaTeX Info: Redefining \big on input line 721.
+LaTeX Info: Redefining \Big on input line 722.
+LaTeX Info: Redefining \bigg on input line 723.
+LaTeX Info: Redefining \Bigg on input line 724.
+\big@size=\dimen308
+LaTeX Font Info:    Redeclaring font encoding OML on input line 742.
+LaTeX Font Info:    Redeclaring font encoding OMS on input line 743.
+\macc@depth=\count340
+LaTeX Info: Redefining \bmod on input line 904.
+LaTeX Info: Redefining \pmod on input line 909.
+LaTeX Info: Redefining \smash on input line 939.
+LaTeX Info: Redefining \relbar on input line 969.
+LaTeX Info: Redefining \Relbar on input line 970.
+\c@MaxMatrixCols=\count341
+\dotsspace@=\muskip17
+\c@parentequation=\count342
+\dspbrk@lvl=\count343
+\tag@help=\toks50
+\row@=\count344
+\column@=\count345
+\maxfields@=\count346
+\andhelp@=\toks51
+\eqnshift@=\dimen309
+\alignsep@=\dimen310
+\tagshift@=\dimen311
+\tagwidth@=\dimen312
+\totwidth@=\dimen313
+\lineht@=\dimen314
+\@envbody=\toks52
+\multlinegap=\skip81
+\multlinetaggap=\skip82
+\mathdisplay@stack=\toks53
+LaTeX Info: Redefining \[ on input line 2950.
+LaTeX Info: Redefining \] on input line 2951.
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/tools\longtable.sty
+Package: longtable 2025-10-13 v4.24 Multi-page Table package (DPC)
+\LTleft=\skip83
+\LTright=\skip84
+\LTpre=\skip85
+\LTpost=\skip86
+\LTchunksize=\count347
+\LTcapwidth=\dimen315
+\LT@head=\box70
+\LT@firsthead=\box71
+\LT@foot=\box72
+\LT@lastfoot=\box73
+\LT@gbox=\box74
+\LT@cols=\count348
+\LT@rows=\count349
+\c@LT@tables=\count350
+\c@LT@chunks=\count351
+\LT@p@ftn=\toks54
+)
+Class scrreprt Info: longtable captions redefined on input line 57.
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/algorithmicx\algpse
+udocode.sty
+Package: algpseudocode 
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/algorithmicx\algori
+thmicx.sty
+Package: algorithmicx 2005/04/27 v1.2 Algorithmicx
+
+Document Style algorithmicx 1.2 - a greatly improved `algorithmic' style
+\c@ALG@line=\count352
+\c@ALG@rem=\count353
+\c@ALG@nested=\count354
+\ALG@tlm=\skip87
+\ALG@thistlm=\skip88
+\c@ALG@Lnr=\count355
+\c@ALG@blocknr=\count356
+\c@ALG@storecount=\count357
+\c@ALG@tmpcounter=\count358
+\ALG@tmplength=\skip89
+)
+Document Style - pseudocode environments for use with the `algorithmicx' style
+) (C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/float\float.sty
+Package: float 2001/11/08 v1.3d Float enhancements (AL)
+\c@float@type=\count359
+\float@exts=\toks55
+\float@box=\box75
+\@float@everytoks=\toks56
+\@floatcapt=\box76
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/tools\xspace.sty
+Package: xspace 2014/10/28 v1.13 Space after command names (DPC,MH)
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/enumitem\enumitem.s
+ty
+Package: enumitem 2025/02/06 v3.11 Customized lists
+\labelindent=\skip90
+\enit@outerparindent=\dimen316
+\enit@toks=\toks57
+\enit@inbox=\box77
+\enit@count@id=\count360
+\enitdp@description=\count361
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/fancyvrb\fancyvrb.s
+ty
+Package: fancyvrb 2026/08/13 4.7 verbatim text (tvz,hv)
+\FV@CodeLineNo=\count362
+\FV@InFile=\read3
+\FV@TabBox=\box78
+\c@FancyVerbLine=\count363
+\FV@StepNumber=\count364
+\FV@OutFile=\write4
+)
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/fontspec\fontspec.s
+ty
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/l3packages/xparse\x
+parse.sty
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/l3kernel\expl3.sty
+Package: expl3 2026-04-28 L3 programming layer (loader) 
+
+(C:\Users\ic.butacu\AppData\Local\Programs\MiKTeX\tex/latex/l3backend\l3backend
+-pdftex.def
+File: l3backend-pdftex.def 2026-02-18 L3 backend support: PDF output (pdfTeX)
+\l__color_backend_stack_int=\count365
+))
+Package: xparse 2025-10-09 L3 Experimental document command parser
+)
+Package: fontspec 2025/09/29 v2.9g Font selection for XeLaTeX and LuaLaTeX
+
+
+! Fatal Package fontspec Error: The fontspec package requires either XeTeX or
+(fontspec)                      LuaTeX.
+(fontspec)                      
+(fontspec)                      You must change your typesetting engine to,
+(fontspec)                      e.g., "xelatex" or "lualatex" instead of
+(fontspec)                      "latex" or "pdflatex".
+
+Type <return> to continue.
+ ...                                              
+                                                  
+l.101 \msg_fatal:nn {fontspec} {cannot-use-pdftex}
+                                                  
+
+LaTeX does not know anything more about this error, sorry.
+
+Try typing <return> to proceed.
+If that doesn't work, type X <return> to quit.
+
+This is a fatal error: LaTeX will abort.
+
+
+ 
+Here is how much of TeX's memory you used:
+ 29801 strings out of 467683
+ 760574 string characters out of 5412786
+ 1368165 words of memory out of 5000000
+ 58442 multiletter control sequences out of 15000+600000
+ 628571 words of font info for 42 fonts, out of 8000000 for 9000
+ 1141 hyphenation exceptions out of 8191
+ 125i,1n,121p,11211b,609s stack positions out of 10000i,1000n,20000p,200000b,200000s
+!  ==> Fatal error occurred, no output PDF file produced!

@@ -24,7 +24,7 @@ MAP_LEVELS = (10, 20, 50, 100)
 TEST_LEVELS = (5, 10, 15, 20, 30, 40, 50, 60, 80, 100)
 FOLDS = 5
 NAME_VERBS = 2
-OUT = Path("doc/paper/pics")
+OUT = Path("docs/paper/pics")
 
 
 def level_labels(steps: list[dict], levels: tuple[int, ...]) -> dict[int, np.ndarray]:

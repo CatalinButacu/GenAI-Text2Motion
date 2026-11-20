@@ -612,16 +612,12 @@ PANELS = MappingProxyType(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/generator/gen_pilot_fsq8x1024.yaml")
-    parser.add_argument(
-        "--ckpt", default="artifacts/checkpoints/generator/generator_mamba_bs8_e60.pt"
-    )
-    parser.add_argument(
-        "--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
-    )
+    parser.add_argument("--ckpt", default="runs/checkpoints/generator/generator_mamba_bs8_e60.pt")
+    parser.add_argument("--tokenizer_ckpt", default="runs/checkpoints/tokenizer/fsq_g8_v1024.pt")
     parser.add_argument("--studio_config", default="configs/studio.yml")
     parser.add_argument("--port", type=int, default=8797)
     parser.add_argument("--panels", nargs="*", default=list(PANELS))
-    parser.add_argument("--out", default="artifacts/outputs/qa/studio_controls")
+    parser.add_argument("--out", default="runs/outputs/qa/studio_controls")
     parser.add_argument("--visible", action="store_true")
     parser.add_argument("--pace", type=float, default=1.0)
     args = parser.parse_args()

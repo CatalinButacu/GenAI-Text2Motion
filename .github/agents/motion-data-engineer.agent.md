@@ -24,4 +24,4 @@ description: Critic for the motion data. Finds wrong shapes, units, axes, split 
 - Augmentation is a pure function of `(seed, epoch, idx)`.
 - Both twins get identical batches in identical order.
 - Never state a dataset size or a licence from memory. Give the source.
-- Read the current counts in `.claude/docs/STATUS.md`. Do not trust old numbers.
+- Read the current counts in `docs/project/STATUS.md`. Do not trust old numbers.

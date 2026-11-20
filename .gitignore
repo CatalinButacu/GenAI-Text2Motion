@@ -1,8 +1,8 @@
 # data & licensed assets -- never commit (290 GB donor corpus, SMPL-X bodies).
 # Root-anchored: the unanchored `data/` silently ignored src/text2motion/data/ (found 2026-06-10).
 /data/
-/graphify-out/
-/artifacts/
+/.graph/
+/runs/
 *.zip
 *.npz
 *.pkl
@@ -41,29 +41,32 @@ imgui.ini
 _*.json
 _cmdid.txt
 
-# secrets & terraform state (infra/aws) + the S3 bundle
+# secrets & terraform state (deploy/aws) + the S3 bundle
 *.pem
 *.pub
 bundle.tar
-infra/aws/.terraform/
-infra/aws/*.tfstate
-infra/aws/*.tfstate.*
-infra/aws/terraform.tfvars
-infra/aws/.terraform.lock.hcl
+deploy/aws/.terraform/
+deploy/aws/*.tfstate
+deploy/aws/*.tfstate.*
+deploy/aws/terraform.tfvars
+deploy/aws/.terraform.lock.hcl
 code_patch.tar
 
 # build artifacts (Kaggle/cloud bundles)
-dist/
-infra/azure/.terraform/
-infra/azure/*.tfstate
-infra/azure/*.tfstate.*
-infra/azure/terraform.tfvars
-infra/azure/.terraform.lock.hcl
+build/
+deploy/azure/.terraform/
+deploy/azure/*.tfstate
+deploy/azure/*.tfstate.*
+deploy/azure/terraform.tfvars
+deploy/azure/.terraform.lock.hcl
 .ropeproject/
 CLAUDE.md
 .claude/hooks/.graph_last
 
 # LaTeX build output
-doc/paper/build/
-.archify/
-doc/notes/paper-watch/
+docs/paper/build/
+docs/architecture/
+docs/notes/paper-watch/
+
+# compiled Mamba CUDA kernel (about 326 MB binary; restored by make kernel-restore)
+/third_party/mamba_kernel/

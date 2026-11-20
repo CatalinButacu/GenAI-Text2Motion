@@ -1,4 +1,4 @@
-# python scripts/research/diffusion_decoder_pilot.py --minutes 60 --out_dir artifacts/outputs/qa/diffusion_decoder_pilot
+# python scripts/research/diffusion_decoder_pilot.py --minutes 60 --out_dir runs/outputs/qa/diffusion_decoder_pilot
 from __future__ import annotations
 
 import argparse
@@ -324,7 +324,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--sample_steps", type=int, nargs="+", default=[1, 4])
     parser.add_argument("--sample_starts", type=int, nargs="+", default=[999, 250])
     parser.add_argument(
-        "--out_dir", type=Path, default=Path("artifacts/outputs/qa/diffusion_decoder_pilot")
+        "--out_dir", type=Path, default=Path("runs/outputs/qa/diffusion_decoder_pilot")
     )
     return parser.parse_args()
 

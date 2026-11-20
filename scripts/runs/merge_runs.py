@@ -9,11 +9,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 RUN_FOLDERS = (
-    Path("artifacts/logs/train"),
-    Path("artifacts/outputs/runs"),
-    Path("artifacts/outputs/runs/generator"),
-    Path("artifacts/outputs/runs/tokenizer"),
-    Path("artifacts/outputs/runs/evaluate"),
+    Path("runs/logs/train"),
+    Path("runs/outputs/runs"),
+    Path("runs/outputs/runs/generator"),
+    Path("runs/outputs/runs/tokenizer"),
+    Path("runs/outputs/runs/evaluate"),
 )
 CHECKPOINT_KEYS = ("ckpt_name", "out", "out_path", "ckpt", "name")
 SEGMENTS_FOLDER = "segments"

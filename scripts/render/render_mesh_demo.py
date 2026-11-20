@@ -1,4 +1,4 @@
-# python scripts/render/render_mesh_demo.py --prompt "a person waves" --tag wave --ckpt artifacts/checkpoints/generator/generator_transformer_bs8_e60.pt
+# python scripts/render/render_mesh_demo.py --prompt "a person waves" --tag wave --ckpt runs/checkpoints/generator/generator_transformer_bs8_e60.pt
 from __future__ import annotations
 
 import argparse
@@ -118,9 +118,9 @@ def main():
     )
     p.add_argument("--config", default="configs/generator/final100m_fsq8x1024.yaml")
     p.add_argument(
-        "--ckpt", default="artifacts/checkpoints/generator/generator_transformer_100m_val163.pt"
+        "--ckpt", default="runs/checkpoints/generator/generator_transformer_100m_val163.pt"
     )
-    p.add_argument("--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt")
+    p.add_argument("--tokenizer_ckpt", default="runs/checkpoints/tokenizer/fsq_g8_v1024.pt")
     p.add_argument("--backbone", default="transformer", choices=["transformer", "mamba"])
     p.add_argument("--model_dir")
     p.add_argument("--prompt", required=True)

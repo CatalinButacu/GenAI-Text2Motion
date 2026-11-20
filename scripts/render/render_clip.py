@@ -1,4 +1,4 @@
-# python scripts/render/render_clip.py --prompt "a person walks forward" --out artifacts/outputs/figures/demo_clip.png
+# python scripts/render/render_clip.py --prompt "a person walks forward" --out runs/outputs/figures/demo_clip.png
 from __future__ import annotations
 
 import argparse
@@ -295,13 +295,13 @@ def main() -> None:
     )
     p.add_argument("--config", default="configs/generator/gen_pilot_fsq8x1024.yaml")
     p.add_argument("--backbone", default="transformer", choices=["transformer", "mamba"])
-    p.add_argument("--ckpt", default="artifacts/checkpoints/generator/generator_transformer.pt")
-    p.add_argument("--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt")
+    p.add_argument("--ckpt", default="runs/checkpoints/generator/generator_transformer.pt")
+    p.add_argument("--tokenizer_ckpt", default="runs/checkpoints/tokenizer/fsq_g8_v1024.pt")
     inputs = p.add_mutually_exclusive_group(required=True)
     inputs.add_argument("--prompt")
     inputs.add_argument("--review", type=Path)
     p.add_argument(
-        "--review_out", type=Path, default=Path("artifacts") / "outputs" / "qa" / "review_media"
+        "--review_out", type=Path, default=Path("runs") / "outputs" / "qa" / "review_media"
     )
     p.add_argument("--model_dir", default="data\\smplx_models")
     p.add_argument("--steps", type=int)
@@ -310,8 +310,8 @@ def main() -> None:
     p.add_argument("--top_p", type=float, default=0.9)
     p.add_argument("--fixed_length", action="store_true")
     p.add_argument("--frames", type=int, default=6)
-    p.add_argument("--npy", default="artifacts/outputs/demo_joints.npy")
-    p.add_argument("--out", default="artifacts/outputs/figures/demo_clip.png")
+    p.add_argument("--npy", default="runs/outputs/demo_joints.npy")
+    p.add_argument("--out", default="runs/outputs/figures/demo_clip.png")
     run(p.parse_args())
 
 

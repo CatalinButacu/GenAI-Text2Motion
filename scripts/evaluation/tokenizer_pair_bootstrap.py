@@ -1,4 +1,4 @@
-# python scripts/evaluation/tokenizer_pair_bootstrap.py --split val --resamples 1000 --pair fsq_g8_v1024_c1b rvq_l8_1024_c1b --out artifacts/outputs/qa/tokenizer_pair_bootstrap_c1b.json
+# python scripts/evaluation/tokenizer_pair_bootstrap.py --split val --resamples 1000 --pair fsq_g8_v1024_c1b rvq_l8_1024_c1b --out runs/outputs/qa/tokenizer_pair_bootstrap_c1b.json
 from __future__ import annotations
 
 import argparse
@@ -90,7 +90,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--resamples", type=int, default=1000)
     parser.add_argument("--pair", nargs=2, metavar=("FSQ_STEM", "RVQ_STEM"))
     parser.add_argument(
-        "--out", type=Path, default=Path("artifacts/outputs/qa/tokenizer_pair_bootstrap.json")
+        "--out", type=Path, default=Path("runs/outputs/qa/tokenizer_pair_bootstrap.json")
     )
     return parser.parse_args()
 

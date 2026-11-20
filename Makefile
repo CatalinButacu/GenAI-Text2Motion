@@ -12,9 +12,9 @@ B ?= mamba
 E ?= 60
 NAME ?= dev
 CFG ?= configs/generator/gen_pilot_fsq8x1024.yaml
-TOK ?= artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt
-GATE ?= artifacts/outputs/gates/$(B)_34m_overfit.json
-CKPT ?= artifacts/checkpoints/generator/generator_$(B)_bs8_e60.pt
+TOK ?= runs/checkpoints/tokenizer/fsq_g8_v1024.pt
+GATE ?= runs/outputs/gates/$(B)_34m_overfit.json
+CKPT ?= runs/checkpoints/generator/generator_$(B)_bs8_e60.pt
 LEVEL ?= INFO
 
 .DEFAULT_GOAL := help
@@ -27,7 +27,7 @@ help:
 	@echo "Variables: B=mamba|transformer  E=epochs  NAME=run name  CFG=config  CKPT=checkpoint  LEVEL=DEBUG|INFO"
 	@echo ""
 	@echo "SETUP     install    sync the environment from uv.lock"
-	@echo "          kernel-restore  put back the saved Mamba CUDA kernel (dist/mamba_kernel)"
+	@echo "          kernel-restore  put back the saved Mamba CUDA kernel (third_party/mamba_kernel)"
 	@echo "          kernel-build    rebuild the Mamba CUDA kernel, about 46 min (UNTESTED flags)"
 	@echo "          check      lint and tests (the green gate)"
 	@echo "          test lint fix types clean gpu"
@@ -48,7 +48,7 @@ help:
 	@echo "          bench      streaming state and latency benchmark"
 	@echo "RUN       studio     interactive viewer                              make studio B=mamba"
 	@echo "          serve health"
-	@echo "THESIS    pdf        build doc/paper/thesis.pdf"
+	@echo "THESIS    pdf        build docs/paper/thesis.pdf"
 	@echo "          figs       regenerate the figures"
 	@echo "UPKEEP    runs       show which run folders continue which (dry run)"
 	@echo "          runs-apply merge them"
@@ -60,7 +60,7 @@ install:
 	uv sync --inexact --extra dev --extra prep --extra tracking
 
 kernel-restore:
-	Copy-Item dist/mamba_kernel/selective_scan_cuda.cp312-win_amd64.pyd, dist/mamba_kernel/mamba_ssm, dist/mamba_kernel/mamba_ssm-2.3.2.post1.dist-info .venv/Lib/site-packages -Recurse -Force; uv pip install einops
+	Copy-Item third_party/mamba_kernel/selective_scan_cuda.cp312-win_amd64.pyd, third_party/mamba_kernel/mamba_ssm, third_party/mamba_kernel/mamba_ssm-2.3.2.post1.dist-info .venv/Lib/site-packages -Recurse -Force; uv pip install einops
 
 kernel-build:
 	$$env:CL = '/std:c++17 /Zc:preprocessor /D_USE_MATH_DEFINES'; $$env:NVCC_APPEND_FLAGS = '-Xcompiler /Zc:preprocessor -Xcompiler /D_USE_MATH_DEFINES'; $$env:MAMBA_FORCE_BUILD = 'TRUE'; uv pip install --no-build-isolation --no-deps ./third_party/mamba_ssm-2.3.2.post1-msvc; uv pip install einops
@@ -141,7 +141,7 @@ health:
 	$(CLI) health
 
 pdf:
-	Push-Location doc/paper; xelatex -interaction=nonstopmode -output-directory=build thesis.tex | Out-Null; biber --input-directory build --output-directory build thesis | Out-Null; xelatex -interaction=nonstopmode -output-directory=build thesis.tex | Out-Null; xelatex -interaction=nonstopmode -output-directory=build thesis.tex | Select-String 'Output written'; Copy-Item build/thesis.pdf thesis.pdf -Force; Pop-Location
+	Push-Location docs/paper; xelatex -interaction=nonstopmode -output-directory=build thesis.tex | Out-Null; biber --input-directory build --output-directory build thesis | Out-Null; xelatex -interaction=nonstopmode -output-directory=build thesis.tex | Out-Null; xelatex -interaction=nonstopmode -output-directory=build thesis.tex | Select-String 'Output written'; Copy-Item build/thesis.pdf thesis.pdf -Force; Pop-Location
 
 figs:
 	$(PY) scripts/figures/plot_streaming_bench.py
@@ -154,10 +154,10 @@ runs-apply:
 	$(PY) scripts/runs/merge_runs.py --apply
 
 lic:
-	$(PY) scripts/licenses/collect_licenses.py
+	$(PY) scripts/third_party/licenses/collect_licenses.py
 
 last:
-	Get-ChildItem artifacts/logs/train -Directory | Where-Object { Test-Path (Join-Path $$_.FullName 'metrics.jsonl') } | Sort-Object LastWriteTime | Select-Object -Last 1 | ForEach-Object { $$_.Name; Get-Content (Join-Path $$_.FullName 'metrics.jsonl') -Tail 5 }
+	Get-ChildItem runs/logs/train -Directory | Where-Object { Test-Path (Join-Path $$_.FullName 'metrics.jsonl') } | Sort-Object LastWriteTime | Select-Object -Last 1 | ForEach-Object { $$_.Name; Get-Content (Join-Path $$_.FullName 'metrics.jsonl') -Tail 5 }
 
 graph:
 	graphify update .

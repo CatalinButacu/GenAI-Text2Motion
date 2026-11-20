@@ -1,4 +1,4 @@
-# python scripts/qa/class_precision_probe.py --config configs/generator/a7/width_320_step50.yaml --backbone transformer --ckpt artifacts/checkpoints/generator/generator_transformer_w320_a7_step50.pt --out doc/paper/pics/class_precision_g4_transformer.csv
+# python scripts/qa/class_precision_probe.py --config configs/generator/a7/width_320_step50.yaml --backbone transformer --ckpt runs/checkpoints/generator/generator_transformer_w320_a7_step50.pt --out docs/paper/pics/class_precision_g4_transformer.csv
 from __future__ import annotations
 
 import argparse
@@ -17,8 +17,8 @@ from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.contracts import Split
 
 SEED = 2026
-TOKENIZER = "artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
-CLASS_MAP = Path("doc/paper/pics/verb_cluster_map.csv")
+TOKENIZER = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"
+CLASS_MAP = Path("docs/paper/pics/verb_cluster_map.csv")
 CLASS_COLUMN = "class_10"
 SAMPLING = SamplingConfig(temperature=1.0, cfg_scale=6.0)
 BATCH = 32

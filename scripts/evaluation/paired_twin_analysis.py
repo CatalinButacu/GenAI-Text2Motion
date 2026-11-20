@@ -27,7 +27,7 @@ from text2motion.motion.representation import recover_skeleton
 
 logger = logging.getLogger(__name__)
 SEED = 2026
-PAPER_PICS = Path("doc/paper/pics")
+PAPER_PICS = Path("docs/paper/pics")
 PLAUSIBILITY_KEYS = (
     "foot_skate_m_per_s",
     "mean_acceleration_cm_per_frame2",
@@ -108,7 +108,7 @@ def main() -> None:
     parser.add_argument(
         "--tokenizer_ckpt",
         type=Path,
-        default=Path("artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"),
+        default=Path("runs/checkpoints/tokenizer/fsq_g8_v1024.pt"),
     )
     parser.add_argument("--checkpoint_pattern", default="generator_{backbone}_w320_a7_step50.pt")
     parser.add_argument("--split", type=Split, default=Split.VALIDATION)

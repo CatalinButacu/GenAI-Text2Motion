@@ -1,4 +1,4 @@
-# python scripts/evaluation/pretrain_generalization.py --config configs/generator/gen_pilot_fsq8x1024.yaml --ckpt artifacts/checkpoints/generator/pretrain.pt
+# python scripts/evaluation/pretrain_generalization.py --config configs/generator/gen_pilot_fsq8x1024.yaml --ckpt runs/checkpoints/generator/pretrain.pt
 from __future__ import annotations
 
 import argparse
@@ -153,9 +153,7 @@ def main() -> None:
     parser.add_argument("--config", required=True)
     parser.add_argument("--ckpt", required=True)
     parser.add_argument("--backbone", default="transformer", choices=["transformer", "mamba"])
-    parser.add_argument(
-        "--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
-    )
+    parser.add_argument("--tokenizer_ckpt", default="runs/checkpoints/tokenizer/fsq_g8_v1024.pt")
     parser.add_argument("--token_pack", default="data/amass_tokens_fsq8x1024.npz")
     parser.add_argument("--features_dir", default="data/AMASS_263/new_joint_vecs")
     parser.add_argument("--num_clips", type=int, default=300)

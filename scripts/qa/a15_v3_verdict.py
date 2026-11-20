@@ -1,4 +1,4 @@
-# python scripts/qa/a15_v3_verdict.py --uniform doc/paper/pics/a15_v3_verbs_uniform.csv --rareverb doc/paper/pics/a15_v3_verbs_rareverb.csv --out doc/paper/pics/a15_v3_kill_test.csv
+# python scripts/qa/a15_v3_verdict.py --uniform docs/paper/pics/a15_v3_verbs_uniform.csv --rareverb docs/paper/pics/a15_v3_verbs_rareverb.csv --out docs/paper/pics/a15_v3_kill_test.csv
 from __future__ import annotations
 
 import argparse
@@ -89,7 +89,7 @@ def main() -> None:
     parser.add_argument("--uniform", type=Path, required=True)
     parser.add_argument("--rareverb", type=Path, required=True)
     parser.add_argument("--arm", default=RAREVERB)
-    parser.add_argument("--out", type=Path, default=Path("doc/paper/pics/a15_v3_kill_test.csv"))
+    parser.add_argument("--out", type=Path, default=Path("docs/paper/pics/a15_v3_kill_test.csv"))
     arguments = parser.parse_args()
     rows = [
         twin_row(backbone, arguments.uniform, arguments.rareverb, arguments.arm)

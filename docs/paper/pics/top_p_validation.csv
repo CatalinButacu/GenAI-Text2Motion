@@ -1,0 +1,41 @@
+backbone,setting,quantity,value,ci_lo,ci_hi
+transformer,top_p 0.9,fid,0.24850454059485383,,
+transformer,top_p 0.9,r_top1,0.5180921052631579,,
+transformer,top_p 0.9,diversity,9.712898254394531,,
+transformer,top_p 0.9,peak_speed_m_per_s_ratio_to_real,0.8295502906775181,0.7961461076103634,0.8605575297890755
+transformer,top_p 0.9,peak_acceleration_m_per_s2_ratio_to_real,0.7376393562152126,0.6928443453088076,0.7794399670612241
+transformer,top_p 0.9,mean_jerk_m_per_s3_ratio_to_real,0.7606267247260753,0.7015983257536432,0.8196027193068464
+transformer,top_p 0.9,foot_skate_m_per_s_ratio_to_real,1.6244960895519451,1.4977925626468727,1.7694420485420517
+transformer,top_p 1.0,fid,0.22097288499051318,,
+transformer,top_p 1.0,r_top1,0.5,,
+transformer,top_p 1.0,diversity,9.718143463134766,,
+transformer,top_p 1.0,peak_speed_m_per_s_ratio_to_real,0.8485005110941486,0.8160005003028831,0.8791384982761792
+transformer,top_p 1.0,peak_acceleration_m_per_s2_ratio_to_real,0.7545899221739686,0.7088762890899476,0.7961438607871995
+transformer,top_p 1.0,mean_jerk_m_per_s3_ratio_to_real,0.7847045824874794,0.7219044487419822,0.84454032662616
+transformer,top_p 1.0,foot_skate_m_per_s_ratio_to_real,1.7046093566596199,1.5741992024945635,1.848185961192287
+transformer,top_p 1.0 minus top_p 0.9,fid_delta,-0.029051922250466676,-0.10160193456677236,0.0528746089771528
+transformer,top_p 1.0 over top_p 0.9,peak_speed_m_per_s_ratio,1.0228439681470707,1.0008801935034912,1.0455586679620679
+transformer,top_p 1.0 over top_p 0.9,peak_acceleration_m_per_s2_ratio,1.0229794761029678,0.9967809836426492,1.0488713382050192
+transformer,top_p 1.0 over top_p 0.9,mean_jerk_m_per_s3_ratio,1.0316552876446397,1.0039635068422308,1.0586361270187123
+transformer,top_p 1.0 over top_p 0.9,foot_skate_m_per_s_ratio,1.04931576482266,1.015456033790245,1.084749533143309
+transformer,both,clips,628,,
+mamba,top_p 0.9,fid,0.3646930632649769,,
+mamba,top_p 0.9,r_top1,0.5098684210526315,,
+mamba,top_p 0.9,diversity,9.773884773254395,,
+mamba,top_p 0.9,peak_speed_m_per_s_ratio_to_real,0.7832983140159885,0.7521873596551026,0.8117797666673257
+mamba,top_p 0.9,peak_acceleration_m_per_s2_ratio_to_real,0.6699600937264101,0.6309260812519348,0.7104337565141259
+mamba,top_p 0.9,mean_jerk_m_per_s3_ratio_to_real,0.6697674287758156,0.6222112003236354,0.7228669163400004
+mamba,top_p 0.9,foot_skate_m_per_s_ratio_to_real,1.4733080568686001,1.3585185609007264,1.6027384941403078
+mamba,top_p 1.0,fid,0.3000208413237779,,
+mamba,top_p 1.0,r_top1,0.4819078947368421,,
+mamba,top_p 1.0,diversity,9.961669921875,,
+mamba,top_p 1.0,peak_speed_m_per_s_ratio_to_real,0.7943719704746459,0.7658339838140833,0.8218566937739347
+mamba,top_p 1.0,peak_acceleration_m_per_s2_ratio_to_real,0.6878696514499704,0.6496701398448356,0.7265305193348289
+mamba,top_p 1.0,mean_jerk_m_per_s3_ratio_to_real,0.7085620940686224,0.6570716210590536,0.7673624699509052
+mamba,top_p 1.0,foot_skate_m_per_s_ratio_to_real,1.5506722622057434,1.4356699237504638,1.6762793501082207
+mamba,top_p 1.0 minus top_p 0.9,fid_delta,-0.06393593063672925,-0.16338251219387995,0.045107482749735445
+mamba,top_p 1.0 over top_p 0.9,peak_speed_m_per_s_ratio,1.0141372147245953,0.9895842853799909,1.0385750116260704
+mamba,top_p 1.0 over top_p 0.9,peak_acceleration_m_per_s2_ratio,1.0267322753866501,0.997178006806997,1.0601005107204406
+mamba,top_p 1.0 over top_p 0.9,mean_jerk_m_per_s3_ratio,1.0579225916729253,1.0314223430516822,1.086566912285427
+mamba,top_p 1.0 over top_p 0.9,foot_skate_m_per_s_ratio,1.0525105425009178,1.0075093172854301,1.0967038677172174
+mamba,both,clips,628,,

@@ -1,0 +1,954 @@
+thessis/   (generated tree; .venv, .git and caches omitted; large data folders show one level of subfolders)
+|-- .archify/  [9 files]
+|   +-- architecture-text2motion-20261022-062645/  [9 files]
+|       |-- review-2/  [3 files]
+|       |   |-- text2motion.browser-check.json
+|       |   |-- text2motion.finalize.json
+|       |   +-- text2motion.finalize-summary.json
+|       |-- candidate.json
+|       |-- text2motion.browser-check.json
+|       |-- text2motion.delivery.json
+|       |-- text2motion.finalize.json
+|       |-- text2motion.finalize-summary.json
+|       +-- text2motion.html
+|-- .claude/  [74 files]
+|   |-- _archive/  [12 files]
+|   |   |-- agents/  [6 files]
+|   |   |   |-- eval-metrics-engineer.md
+|   |   |   |-- motion-data-engineer.md
+|   |   |   |-- motion-model-architect.md
+|   |   |   |-- research-scout.md
+|   |   |   |-- smplx-render-engineer.md
+|   |   |   +-- training-engineer.md
+|   |   |-- skills/  [5 files]
+|   |   |   |-- arch-decision/  [1 files]
+|   |   |   |   +-- SKILL.md
+|   |   |   |-- azure/  [1 files]
+|   |   |   |   +-- SKILL.md
+|   |   |   |-- dataset-unified/  [1 files]
+|   |   |   |   +-- SKILL.md
+|   |   |   |-- port-from-donor/  [1 files]
+|   |   |   |   +-- SKILL.md
+|   |   |   +-- repo-scaffold/  [1 files]
+|   |   |       +-- SKILL.md
+|   |   +-- TASKS_epics_2026-11-04.md
+|   |-- agents/  [0 files]
+|   |-- decisions/  [4 files]
+|   |   |-- 0001-baseline-and-reuse-strategy.md
+|   |   |-- 0002-generator-architecture.md
+|   |   |-- 0003-text-encoder.md
+|   |   +-- 0004-local-clean-architecture.md
+|   |-- docs/  [13 files]
+|   |   |-- plans/  [3 files]
+|   |   |   |-- A25_data_expansion.md
+|   |   |   |-- A25_processing_plan.md
+|   |   |   +-- A26_structure_and_runs.md
+|   |   |-- ARCHITECTURE.md
+|   |   |-- DISSERTATION_PLAN.md
+|   |   |-- epic_tasks.csv
+|   |   |-- epics.csv
+|   |   |-- PROJECT_TREE.txt
+|   |   |-- references.md
+|   |   |-- replay.log
+|   |   |-- research-tricks.md
+|   |   |-- STATUS.md
+|   |   +-- TASKS.md
+|   |-- hooks/  [16 files]
+|   |   |-- .graph_last
+|   |   |-- .problems_checked
+|   |   |-- code_rules_check.py
+|   |   |-- git_guard.py
+|   |   |-- hook_input.py
+|   |   |-- ide_problems_check.py
+|   |   |-- licenses_refresh.py
+|   |   |-- post_edit.py
+|   |   |-- problems_sweep.py
+|   |   |-- prose_tells_check.py
+|   |   |-- pyright_baseline.json
+|   |   |-- pyright_check.py
+|   |   |-- rename_guard.py
+|   |   |-- ste100_prompt.py
+|   |   |-- training_watch.py
+|   |   +-- understanding_check.py
+|   |-- skills/  [22 files]
+|   |   |-- aitviewer-studio/  [1 files]
+|   |   |   +-- SKILL.md
+|   |   |-- anti-waste/  [1 files]
+|   |   |   +-- SKILL.md
+|   |   |-- cpp-pro/  [6 files]
+|   |   |   |-- references/  [5 files]
+|   |   |   |   |-- build-tooling.md
+|   |   |   |   |-- concurrency.md
+|   |   |   |   |-- memory-performance.md
+|   |   |   |   |-- modern-cpp.md
+|   |   |   |   +-- templates.md
+|   |   |   +-- SKILL.md
+|   |   |-- motion-representation/  [1 files]
+|   |   |   +-- SKILL.md
+|   |   |-- motion-tokenizer/  [1 files]
+|   |   |   +-- SKILL.md
+|   |   |-- pylance/  [1 files]
+|   |   |   +-- SKILL.md
+|   |   |-- sanity-overfit/  [1 files]
+|   |   |   +-- SKILL.md
+|   |   |-- streaming-decode/  [1 files]
+|   |   |   +-- SKILL.md
+|   |   |-- systematic-debugging/  [4 files]
+|   |   |   |-- condition-based-waiting.md
+|   |   |   |-- defense-in-depth.md
+|   |   |   |-- root-cause-tracing.md
+|   |   |   +-- SKILL.md
+|   |   |-- t2m-eval/  [1 files]
+|   |   |   +-- SKILL.md
+|   |   |-- t2m-losses/  [1 files]
+|   |   |   +-- SKILL.md
+|   |   |-- test-driven-development/  [2 files]
+|   |   |   |-- SKILL.md
+|   |   |   +-- writing-good-tests.md
+|   |   +-- verification-before-completion/  [1 files]
+|   |       +-- SKILL.md
+|   |-- ai_fingerprint_report.txt
+|   |-- ai_fingerprint_scan.py
+|   |-- ascii_sanitizer.py
+|   |-- scheduled_tasks.lock
+|   |-- settings.json
+|   |-- settings.local.json
+|   +-- strip_comments.py
+|-- .github/  [12 files]
+|   |-- agents/  [8 files]
+|   |   |-- dataset-auditor.agent.md
+|   |   |-- eval-metrics-engineer.agent.md
+|   |   |-- gpu-kernel-engineer.agent.md
+|   |   |-- motion-data-engineer.agent.md
+|   |   |-- motion-model-architect.agent.md
+|   |   |-- research-scout.agent.md
+|   |   |-- smplx-render-engineer.agent.md
+|   |   +-- training-engineer.agent.md
+|   |-- copilot/  [2 files]
+|   |   |-- settings.json
+|   |   +-- settings.json.lock
+|   |-- prompts/  [1 files]
+|   |   +-- dataset-audit.prompt.md
+|   +-- copilot-instructions.md
+|-- .vscode/  [1 files]
+|   +-- tasks.json
+|-- artifacts/  [1815 files, 0.51 GB]
+|   |-- checkpoints/  [0 files, 0 GB]
+|   |-- logs/  [567 files, 0 GB]
+|   +-- outputs/  [1248 files, 0.51 GB]
+|-- configs/  [50 files]
+|   |-- generator/  [27 files]
+|   |   |-- a15/  [4 files]
+|   |   |   |-- width_320_step50_motionclass.yaml
+|   |   |   |-- width_320_step50_rareverb.yaml
+|   |   |   |-- width_320_step50_replacement.yaml
+|   |   |   +-- width_320_step50_verb.yaml
+|   |   |-- a18/  [1 files]
+|   |   |   +-- width_320_mamba8_expand4.yaml
+|   |   |-- a7/  [4 files]
+|   |   |   |-- width_320_clipfrozen.yaml
+|   |   |   |-- width_320_pkeep50.yaml
+|   |   |   |-- width_320_step50.yaml
+|   |   |   +-- width_320_wholestep.yaml
+|   |   |-- a8/  [4 files]
+|   |   |   |-- width_320_f0.yaml
+|   |   |   |-- width_320_f1.yaml
+|   |   |   |-- width_320_f2.yaml
+|   |   |   +-- width_320_prior.yaml
+|   |   |-- size_sweep/  [5 files]
+|   |   |   |-- width_256.yaml
+|   |   |   |-- width_320.yaml
+|   |   |   |-- width_384.yaml
+|   |   |   |-- width_448.yaml
+|   |   |   +-- width_512.yaml
+|   |   |-- eval_pilot31m.yaml
+|   |   |-- final100m.yaml
+|   |   |-- final100m_fsq8x1024.yaml
+|   |   |-- gen_34m_prefix16.yaml
+|   |   |-- gen_pilot_fsq8x1024.yaml
+|   |   |-- gen_pilot_fsq8x1024_dynamics.yaml
+|   |   |-- gen_pilot_fsq8x1024_kernel.yaml
+|   |   |-- gen_pilot_fsq8x1024_kernel_seed2027.yaml
+|   |   +-- gen_pilot_rvq8x1024.yaml
+|   |-- tokenizer/  [17 files]
+|   |   |-- fsq_g4_v1024.yaml
+|   |   |-- fsq_g4_v512.yaml
+|   |   |-- fsq_g6_v1024.yaml
+|   |   |-- fsq_g8_v1024.yaml
+|   |   |-- fsq_g8_v512.yaml
+|   |   |-- rvq_l4_1024.yaml
+|   |   |-- rvq_l4_512.yaml
+|   |   |-- rvq_l6_1024.yaml
+|   |   |-- rvq_l6_512.yaml
+|   |   |-- rvq_l8_1024.yaml
+|   |   |-- rvq_l8_512.yaml
+|   |   |-- tok_g4_v1000.yaml
+|   |   |-- tok_g6_v1000.yaml
+|   |   |-- tok_g6_v2560.yaml
+|   |   |-- tok_g8_v1000.yaml
+|   |   |-- tok_rvq.yaml
+|   |   +-- tokenizer_isovocab.yaml
+|   |-- aws.yaml
+|   |-- default.yaml
+|   |-- demo_models.yaml
+|   |-- README.md
+|   |-- service.yml
+|   +-- studio.yml
+|-- data/  [99342 files, 197.8 GB]
+|   |-- .cache/  [1 files, 0 GB]
+|   |-- _restore_backup/  [13 files, 0 GB]
+|   |-- amass/  [24 files, 0 GB]
+|   |-- babel_v1-0_release/  [5 files, 0.03 GB]
+|   |-- ehf/  [604 files, 1.19 GB]
+|   |-- eval_stats/  [2 files, 0 GB]
+|   |-- extra_motion/  [6291 files, 0.05 GB]
+|   |-- extra_text/  [35 files, 0.07 GB]
+|   |-- grab_raw/  [0 files, 0 GB]
+|   |-- hml3d_official/  [26 files, 4.06 GB]
+|   |-- HumanML3D_263/  [8 files, 0 GB]
+|   |-- HumanML3D_60fps/  [9 files, 0 GB]
+|   |-- HumanML3D_official/  [58468 files, 4.06 GB]
+|   |-- official_evaluator/  [21 files, 0.44 GB]
+|   |-- raw/  [17781 files, 167.15 GB]
+|   |-- renders/  [16024 files, 17.64 GB]
+|   |-- smplx_models/  [26 files, 3.08 GB]
+|   +-- t2m_glove/  [4 files, 0.02 GB]
+|-- dist/  [73 files, 0.32 GB]
+|   |-- bundle/  [1 files, 0 GB]
+|   |-- kaggle/  [1 files, 0 GB]
+|   |-- kaggle_dataset/  [2 files, 0 GB]
+|   |-- kaggle_kernel/  [2 files, 0 GB]
+|   +-- mamba_kernel/  [67 files, 0.32 GB]
+|-- doc/  [242 files]
+|   |-- notes/  [132 files]
+|   |   |-- diagrams/  [9 files]
+|   |   |   |-- architecture.dot
+|   |   |   |-- data-pipeline.dot
+|   |   |   |-- demo.dot
+|   |   |   |-- evaluation.dot
+|   |   |   |-- generator-twins.dot
+|   |   |   |-- README.md
+|   |   |   |-- tokenizer.dot
+|   |   |   |-- training-data.dot
+|   |   |   +-- training-loop.dot
+|   |   |-- figures/  [7 files]
+|   |   |   |-- architecture.png
+|   |   |   |-- architecture.svg
+|   |   |   |-- demo_clip.png
+|   |   |   |-- generalization.png
+|   |   |   |-- pilot_progress.png
+|   |   |   |-- streaming.png
+|   |   |   +-- tokenizer_matrix.png
+|   |   |-- lessons/  [25 files]
+|   |   |   |-- 00-roadmap.md
+|   |   |   |-- 01-pose-joints-and-rotations.md
+|   |   |   |-- 02-from-pose-to-motion.md
+|   |   |   |-- 03-opening-the-263-vector.md
+|   |   |   |-- 04a-the-data-pipeline.md
+|   |   |   |-- 04-from-motion-to-tokens.md
+|   |   |   |-- 05-rvq-tokenizer.md
+|   |   |   |-- 06-fsq-tokenizer.md
+|   |   |   |-- 07-tokenizer-results.md
+|   |   |   |-- 08-the-autoregressive-generator.md
+|   |   |   |-- 09-generator-training-trace.md
+|   |   |   |-- 10-generator-inference-trace.md
+|   |   |   |-- 11-the-transformer-twin.md
+|   |   |   |-- 12-the-ssm-mamba-generator.md
+|   |   |   |-- 13-streaming-and-complexity.md
+|   |   |   |-- 14-evaluation-metrics.md
+|   |   |   |-- 15-streaming-decode-and-demo.md
+|   |   |   |-- 16-related-work-and-positioning.md
+|   |   |   |-- 17-limitations-and-conclusion.md
+|   |   |   |-- 18-scaling-the-tokenizer-with-data.md
+|   |   |   |-- 19-results-tables-and-figures.md
+|   |   |   |-- 20-long-streams-and-the-restart.md
+|   |   |   |-- A-loss-and-optimizer.md
+|   |   |   |-- B-escaping-the-plateau.md
+|   |   |   +-- C-contracts-and-configuration-correctness.md
+|   |   |-- paper-watch/  [38 files]
+|   |   |   |-- a1-surveys/  [6 files]
+|   |   |   |   |-- R2_motion-model-architect.md
+|   |   |   |   |-- R2_research-scout.md
+|   |   |   |   |-- R3_research-scout.md
+|   |   |   |   |-- R3_smplx-render-engineer.md
+|   |   |   |   |-- R4_motion-data-engineer.md
+|   |   |   |   +-- R4_research-scout.md
+|   |   |   |-- a2-surveys/  [6 files]
+|   |   |   |   |-- K3_gpu-kernel-engineer.md
+|   |   |   |   |-- K3_graph.md
+|   |   |   |   |-- K3_research-scout.md
+|   |   |   |   |-- R8_graph.md
+|   |   |   |   |-- R8_motion-model-architect.md
+|   |   |   |   +-- R8_research-scout.md
+|   |   |   |-- council-2026-11-04-phase4/  [15 files]
+|   |   |   |   |-- answer_A.md
+|   |   |   |   |-- answer_B.md
+|   |   |   |   |-- answer_C.md
+|   |   |   |   |-- answer_D.md
+|   |   |   |   |-- brief.md
+|   |   |   |   |-- brief_A.md
+|   |   |   |   |-- brief_B.md
+|   |   |   |   |-- brief_C.md
+|   |   |   |   |-- brief_D.md
+|   |   |   |   |-- order.txt
+|   |   |   |   |-- review.md
+|   |   |   |   |-- review_A.md
+|   |   |   |   |-- review_B.md
+|   |   |   |   |-- review_C.md
+|   |   |   |   +-- review_D.md
+|   |   |   |-- 2026-11-04.md
+|   |   |   |-- 2026-11-04-marks.md
+|   |   |   |-- 2026-11-05.md
+|   |   |   |-- 2026-11-05-marks.md
+|   |   |   |-- 2026-11-10.md
+|   |   |   |-- 2026-11-10-marks.md
+|   |   |   |-- 2026-11-18.md
+|   |   |   |-- 2026-11-18-marks.md
+|   |   |   |-- nightly.log
+|   |   |   |-- nightly_utf8.log
+|   |   |   +-- seen.json
+|   |   |-- action_group_merges.csv
+|   |   |-- action_groups.csv
+|   |   |-- action_groups_tiebreak.csv
+|   |   |-- amass_clock_check.csv
+|   |   |-- amass_clock_gravity.csv
+|   |   |-- amass_subset_verdict.csv
+|   |   |-- amass_timing_audit.csv
+|   |   |-- capture_disjoint_summary.csv
+|   |   |-- capture_disjoint_test.txt
+|   |   |-- capture_disjoint_val.txt
+|   |   |-- capture_matched_random_test.txt
+|   |   |-- capture_matched_random_val.txt
+|   |   |-- comparable_papers.csv
+|   |   |-- contact_cleanup_test.csv
+|   |   |-- data_extension_inventory.csv
+|   |   |-- data_extension_tests.csv
+|   |   |-- dataset_audit.md
+|   |   |-- dissertation_draft.md
+|   |   |-- extra_motion_compat.csv
+|   |   |-- extra_motion_gate.csv
+|   |   |-- f4_figure_inventory.csv
+|   |   |-- FEEDBACK.md
+|   |   |-- fps_study.csv
+|   |   |-- glide_check.csv
+|   |   |-- humman_mogen_check.csv
+|   |   |-- implementation-difficulties.md
+|   |   |-- interpolation_test.csv
+|   |   |-- METRICS.md
+|   |   |-- module_ledger.csv
+|   |   |-- motion_quality_metrics.csv
+|   |   |-- newton_check.csv
+|   |   |-- noisy_data_methods.csv
+|   |   |-- PROJECT_AUDIT.pdf
+|   |   |-- proposal.md
+|   |   |-- quality_forest.csv
+|   |   |-- research-log.md
+|   |   |-- streaming-decision.md
+|   |   |-- text_encoder_probe.csv
+|   |   |-- THESIS_UPGRADE_PLAN.md
+|   |   |-- tokenizer-matrix-status.md
+|   |   |-- TRAINING_DATA_CHAPTER_DRAFT.pdf
+|   |   |-- TRAINING_REMEDIATION_TASKS.csv
+|   |   |-- verb_calibration.csv
+|   |   |-- verb_cluster_agreement.csv
+|   |   |-- verb_cluster_best.csv
+|   |   |-- verb_cluster_steps.csv
+|   |   |-- verb_inventory.csv
+|   |   |-- verb_labels_data.csv
+|   |   |-- verb_labels_eval.csv
+|   |   |-- verb_labels_tiebreak.csv
+|   |   |-- verb_vocabulary.csv
+|   |   |-- verb_vocabulary_tiebreak.csv
+|   |   +-- VISUALIZATION_ROADMAP.md
+|   |-- paper/  [106 files]
+|   |   |-- build/  [14 files]
+|   |   |   |-- a1_pass1.log
+|   |   |   |-- a1_pass2.log
+|   |   |   |-- a1_pass3.log
+|   |   |   |-- thesis.aux
+|   |   |   |-- thesis.bbl
+|   |   |   |-- thesis.bcf
+|   |   |   |-- thesis.blg
+|   |   |   |-- thesis.fdb_latexmk
+|   |   |   |-- thesis.fls
+|   |   |   |-- thesis.log
+|   |   |   |-- thesis.pdf
+|   |   |   |-- thesis.run.xml
+|   |   |   |-- thesis.toc
+|   |   |   +-- thesis.xdv
+|   |   |-- chapters/  [11 files]
+|   |   |   |-- 00_abstract.tex
+|   |   |   |-- 01_chapter.tex
+|   |   |   |-- 02_chapter.tex
+|   |   |   |-- 03_chapter.tex
+|   |   |   |-- 04_chapter.tex
+|   |   |   |-- 05_chapter.tex
+|   |   |   |-- 06_chapter.tex
+|   |   |   |-- 07_chapter.tex
+|   |   |   |-- 08_chapter.tex
+|   |   |   |-- anexa1.tex
+|   |   |   +-- anexa2.tex
+|   |   |-- cls/  [2 files]
+|   |   |   |-- bib.bib
+|   |   |   +-- standard.sty
+|   |   |-- pics/  [72 files]
+|   |   |   |-- logo/  [2 files]
+|   |   |   |   |-- cropped-logo_ac_iasi.png
+|   |   |   |   +-- logo-tuiasi_1.png
+|   |   |   |-- a15_v10_ema_small_class.csv
+|   |   |   |-- a15_v11_class_vs_g4.csv
+|   |   |   |-- a15_v11_full_vs_g4.csv
+|   |   |   |-- a15_v12_kill_test.csv
+|   |   |   |-- a15_v12_verbs_verb.csv
+|   |   |   |-- a15_v3_verbs_rareverb.csv
+|   |   |   |-- a15_v3_verbs_uniform.csv
+|   |   |   |-- a15_v6_kill_test.csv
+|   |   |   |-- a15_v6_kill_test_verdict.csv
+|   |   |   |-- a15_v6_verbs_motionclass.csv
+|   |   |   |-- a15_v8_fid_confirm.csv
+|   |   |   |-- a15_v8_fid_confirm_verdict.csv
+|   |   |   |-- a15_v9_replacement.csv
+|   |   |   |-- a7_screen_validation.csv
+|   |   |   |-- a7_step50_extend_validation.csv
+|   |   |   |-- a7_step50_full_validation.csv
+|   |   |   |-- a9_f2_paired_twin_test.csv
+|   |   |   |-- a9_f2_paired_twin_val.csv
+|   |   |   |-- a9_f3_long_stream_7seg.csv
+|   |   |   |-- a9_f3_streaming_bench.csv
+|   |   |   |-- a9_f4_action_list.csv
+|   |   |   |-- a9_f4_long_stream_7seg_policies.csv
+|   |   |   |-- a9_verbs_step50.csv
+|   |   |   |-- architecture.png
+|   |   |   |-- architecture.svg
+|   |   |   |-- caption_switch_validation.csv
+|   |   |   |-- capture_leak_validation.csv
+|   |   |   |-- class_precision_ema_e6_motionclass_mamba.csv
+|   |   |   |-- class_precision_ema_e6_motionclass_transformer.csv
+|   |   |   |-- class_precision_ema_e6_replacement_mamba.csv
+|   |   |   |-- class_precision_ema_e6_replacement_transformer.csv
+|   |   |   |-- class_precision_ema_e6_uniform_mamba.csv
+|   |   |   |-- class_precision_ema_e6_uniform_transformer.csv
+|   |   |   |-- class_precision_ema_full_motionclass_mamba.csv
+|   |   |   |-- class_precision_ema_full_motionclass_transformer.csv
+|   |   |   |-- class_precision_g4_mamba.csv
+|   |   |   |-- class_precision_g4_transformer.csv
+|   |   |   |-- class_precision_g4_vs_real.csv
+|   |   |   |-- class_precision_motionclass_e6_mamba.csv
+|   |   |   |-- class_precision_motionclass_e6_transformer.csv
+|   |   |   |-- class_precision_real.csv
+|   |   |   |-- class_precision_uniform_e6_mamba.csv
+|   |   |   |-- class_precision_uniform_e6_transformer.csv
+|   |   |   |-- long_stream_policy_offset0.csv
+|   |   |   |-- long_stream_policy_offset32.csv
+|   |   |   |-- long_stream_validation.csv
+|   |   |   |-- long_stream_validation_7seg.csv
+|   |   |   |-- motion_sharpness_validation.csv
+|   |   |   |-- precision_costs.csv
+|   |   |   |-- rare_verb_kind.csv
+|   |   |   |-- speed_augmentation_validation.csv
+|   |   |   |-- speed_word_probe.csv
+|   |   |   |-- streaming.png
+|   |   |   |-- streaming.source.json
+|   |   |   |-- switch_controls_validation.csv
+|   |   |   |-- switch_history_validation.csv
+|   |   |   |-- switch_review_pairs.csv
+|   |   |   |-- top_p_validation.csv
+|   |   |   |-- training_curves.csv
+|   |   |   |-- training_curves.pdf
+|   |   |   |-- training_curves.png
+|   |   |   |-- transition_quality.csv
+|   |   |   |-- verb_cluster_classes.csv
+|   |   |   |-- verb_cluster_map.csv
+|   |   |   |-- verb_cluster_separability.csv
+|   |   |   |-- verb_generation_validation.csv
+|   |   |   |-- verb_generation_validation_32.csv
+|   |   |   |-- width_costs.csv
+|   |   |   |-- width_costs.pdf
+|   |   |   +-- width_costs.png
+|   |   |-- preprocessing_draft.md
+|   |   |-- thesis.aux
+|   |   |-- thesis.fdb_latexmk
+|   |   |-- thesis.fls
+|   |   |-- thesis.log
+|   |   |-- thesis.pdf
+|   |   +-- thesis.tex
+|   +-- template/  [4 files]
+|       |-- 976a5633-8140-42d3-b919-e4a15610310f.jpg
+|       |-- orca_share_media1793396602509_7522050543494088615.txt
+|       |-- Structura proiectului de diplomă v1.0-1 (1).pdf
+|       +-- Template_licenta_master_v0_99_2026 (1).pdf
+|-- graphify-out/  [1367 files, 0.1 GB]
+|   |-- 2026-09-14/  [5 files, 0 GB]
+|   |-- 2026-09-15/  [5 files, 0 GB]
+|   |-- 2026-09-19/  [5 files, 0 GB]
+|   |-- 2026-09-20/  [5 files, 0 GB]
+|   |-- 2026-09-23/  [5 files, 0 GB]
+|   |-- 2026-09-25/  [5 files, 0 GB]
+|   |-- 2026-09-30/  [5 files, 0 GB]
+|   |-- 2026-10-01/  [5 files, 0 GB]
+|   |-- 2026-10-03/  [5 files, 0 GB]
+|   |-- 2026-10-10/  [5 files, 0 GB]
+|   |-- 2026-10-12/  [5 files, 0 GB]
+|   |-- 2026-10-13/  [5 files, 0 GB]
+|   |-- 2026-10-24/  [5 files, 0 GB]
+|   |-- 2026-10-25/  [5 files, 0 GB]
+|   |-- 2026-10-26/  [5 files, 0 GB]
+|   |-- 2026-11-04/  [3 files, 0 GB]
+|   |-- 2026-11-17/  [5 files, 0 GB]
+|   |-- cache/  [1275 files, 0.03 GB]
+|-- infra/  [30 files]
+|   |-- aws/  [16 files]
+|   |   |-- .gitignore
+|   |   |-- .terraform.lock.hcl
+|   |   |-- dissertation_v2.pem
+|   |   |-- dissertation_v2.pub
+|   |   |-- main.tf
+|   |   |-- outputs.tf
+|   |   |-- README.md
+|   |   |-- run.sh
+|   |   |-- run_canary.sh
+|   |   |-- run_mamba100m.sh
+|   |   |-- terraform.tfstate
+|   |   |-- terraform.tfstate.backup
+|   |   |-- terraform.tfvars
+|   |   |-- terraform.tfvars.example
+|   |   |-- user_data.sh.tftpl
+|   |   +-- variables.tf
+|   |-- azure/  [11 files]
+|   |   |-- .terraform.lock.hcl
+|   |   |-- main.tf
+|   |   |-- outputs.tf
+|   |   |-- provision_platform.ps1
+|   |   |-- README.md
+|   |   |-- request_gpu_quota.ps1
+|   |   |-- run_twins.sh
+|   |   |-- terraform.tfvars.example
+|   |   |-- train_on_demand.ps1
+|   |   |-- variables.tf
+|   |   +-- watch_quota_and_launch.ps1
+|   |-- kaggle/  [1 files]
+|   |   +-- README.md
+|   |-- kernel_canary.sh
+|   +-- make_bundle.sh
+|-- licenses/  [5 files]
+|   |-- third_party/  [4 files]
+|   |   |-- aitviewer-MIT.txt
+|   |   |-- CLIP-MIT.txt
+|   |   |-- HumanML3D-MIT.txt
+|   |   +-- text-to-motion-MIT.txt
+|   +-- verified_assets.json
+|-- scripts/  [104 files]
+|   |-- benchmarks/  [6 files]
+|   |   |-- kernel_probe.py
+|   |   |-- mem_probe.py
+|   |   |-- param_count_100m.py
+|   |   |-- perf_probe.py
+|   |   |-- scaling_budget.py
+|   |   +-- service_latency.py
+|   |-- data/  [2 files]
+|   |   |-- extract_inbox.py
+|   |   +-- fetch_sources.py
+|   |-- dataset/  [3 files]
+|   |   |-- build_hml3d.py
+|   |   |-- check_quality.py
+|   |   +-- prepare_source.py
+|   |-- demos/  [1 files]
+|   |   +-- stream_viewer.py
+|   |-- evaluation/  [10 files]
+|   |   |-- dynamics_ablation_eval.ps1
+|   |   |-- eval_generalization.py
+|   |   |-- l2_ground_truth.py
+|   |   |-- paired_twin_analysis.py
+|   |   |-- pretrain_generalization.py
+|   |   |-- size_pair_bootstrap.py
+|   |   |-- streaming_decode_fidelity.py
+|   |   |-- tokenizer_pair_bootstrap.py
+|   |   |-- twin_eval.py
+|   |   +-- twin_test_eval.ps1
+|   |-- figures/  [4 files]
+|   |   |-- architecture_diagram.py
+|   |   |-- plot_streaming_bench.py
+|   |   |-- plot_training_curves.py
+|   |   +-- plot_width_costs.py
+|   |-- licenses/  [1 files]
+|   |   +-- collect_licenses.py
+|   |-- maintenance/  [4 files]
+|   |   |-- add_class_separators.py
+|   |   |-- check_problems.py
+|   |   |-- module_freeze.py
+|   |   +-- rename_everywhere.py
+|   |-- qa/  [26 files]
+|   |   |-- a15_v3_verdict.py
+|   |   |-- a7_screen_verdict.py
+|   |   |-- a8_kill_tests.py
+|   |   |-- action_group_motion_check.py
+|   |   |-- action_list_probe.py
+|   |   |-- action_vocabulary.py
+|   |   |-- capture_disjoint_ids.py
+|   |   |-- checkpoint_audit.py
+|   |   |-- class_precision_probe.py
+|   |   |-- data_gallery_render.py
+|   |   |-- golden_outputs.py
+|   |   |-- long_stream_probe.py
+|   |   |-- memory_probe.py
+|   |   |-- motion_glitch_probe.py
+|   |   |-- motion_naturalness_probe.py
+|   |   |-- motion_sharpness_probe.py
+|   |   |-- rare_verb_kind_probe.py
+|   |   |-- speed_augmentation_probe.py
+|   |   |-- speed_word_probe.py
+|   |   |-- studio_controls_test.py
+|   |   |-- studio_human_test.py
+|   |   |-- top_p_probe.py
+|   |   |-- verb_cluster_map.py
+|   |   |-- verb_clusters.py
+|   |   |-- verb_generation_probe.py
+|   |   +-- visual_check_render.py
+|   |-- render/  [2 files]
+|   |   |-- render_clip.py
+|   |   +-- render_mesh_demo.py
+|   |-- research/  [7 files]
+|   |   |-- diffusion_decoder_pilot.py
+|   |   |-- paper_watch.py
+|   |   |-- paper_watch_marks.md
+|   |   |-- paper_watch_nightly.ps1
+|   |   |-- segment_coverage.py
+|   |   |-- verb_inventory.py
+|   |   +-- width_state_size.py
+|   |-- runs/  [1 files]
+|   |   +-- merge_runs.py
+|   |-- training/  [36 files]
+|   |   |-- tokenizer_sweep/  [10 files]
+|   |   |   |-- fsq_sweep.ps1
+|   |   |   |-- matrix_complete.ps1
+|   |   |   |-- matrix_remaining.ps1
+|   |   |   |-- run_fsq_g4_v1000.ps1
+|   |   |   |-- run_fsq_g4_v1024.ps1
+|   |   |   |-- run_fsq_g8_v1000.ps1
+|   |   |   |-- run_fsq_g8_v1024.ps1
+|   |   |   |-- run_rvq_l8_1024.ps1
+|   |   |   |-- rvq_sweep.ps1
+|   |   |   +-- tokenizer_sweep.ps1
+|   |   |-- extend_twin_to_100ep_local.ps1
+|   |   |-- finetune_dynamics_twins_local.ps1
+|   |   |-- local_guard.ps1
+|   |   |-- resume_mamba60.ps1
+|   |   |-- run_3day_local.ps1
+|   |   |-- run_a15_full_motionclass_local.ps1
+|   |   |-- run_a15_v12_kill_test_local.ps1
+|   |   |-- run_a15_v3_kill_test_local.ps1
+|   |   |-- run_a15_v5_kill_test_local.ps1
+|   |   |-- run_a15_v9_kill_test_local.ps1
+|   |   |-- run_a18_equal_depth_local.ps1
+|   |   |-- run_a7_factor_split_local.ps1
+|   |   |-- run_a7_g9_step50_100ep_local.ps1
+|   |   |-- run_a7_screen_local.ps1
+|   |   |-- run_a7_step50_extend_local.ps1
+|   |   |-- run_a7_step50_full_local.ps1
+|   |   |-- run_a8_f0_step50_local.ps1
+|   |   |-- run_a8_kill_tests_local.ps1
+|   |   |-- run_c1b_local.ps1
+|   |   |-- run_matched_twin_60ep_local.ps1
+|   |   |-- run_rvq_ablation_local.ps1
+|   |   |-- run_size_sweep_local.ps1
+|   |   |-- tokenizer_preflight.py
+|   |   |-- train_tokenizer_challenger.py
+|   |   |-- TrainingRun.psm1
+|   |   +-- watch_training.ps1
+|   +-- README.md
+|-- src/  [117 files]
+|   |-- text2motion/  [111 files]
+|   |   |-- app/  [18 files]
+|   |   |   |-- __init__.py
+|   |   |   |-- bootstrap.py
+|   |   |   |-- checkpoint.py
+|   |   |   |-- cli.py
+|   |   |   |-- cli_requests.py
+|   |   |   |-- config.py
+|   |   |   |-- run_log.py
+|   |   |   |-- service.py
+|   |   |   |-- serving.py
+|   |   |   +-- training.py
+|   |   |-- dataset/  [18 files]
+|   |   |   |-- __init__.py
+|   |   |   |-- amass.py
+|   |   |   |-- clock.py
+|   |   |   |-- contracts.py
+|   |   |   |-- datasets.py
+|   |   |   |-- features.py
+|   |   |   |-- motionx.py
+|   |   |   |-- preparation.py
+|   |   |   |-- quality.py
+|   |   |   +-- resample.py
+|   |   |-- evaluation/  [13 files]
+|   |   |   |-- __init__.py
+|   |   |   |-- benchmark.py
+|   |   |   |-- contracts.py
+|   |   |   |-- embeddings.py
+|   |   |   |-- evaluator.py
+|   |   |   |-- metrics.py
+|   |   |   +-- nn_matcher.py
+|   |   |-- generation/  [19 files]
+|   |   |   |-- __init__.py
+|   |   |   |-- contracts.py
+|   |   |   |-- decoder.py
+|   |   |   |-- generator_trainer.py
+|   |   |   |-- losses.py
+|   |   |   |-- nn_backbones.py
+|   |   |   |-- nn_generator.py
+|   |   |   |-- pipeline.py
+|   |   |   |-- pretrain.py
+|   |   |   +-- token_datasets.py
+|   |   |-- motion/  [14 files]
+|   |   |   |-- __init__.py
+|   |   |   |-- contracts.py
+|   |   |   |-- geometry.py
+|   |   |   |-- kinematics.py
+|   |   |   |-- normalization.py
+|   |   |   |-- representation.py
+|   |   |   +-- storage.py
+|   |   |-- studio/  [10 files]
+|   |   |   |-- __init__.py
+|   |   |   |-- avatar.py
+|   |   |   |-- contracts.py
+|   |   |   |-- fitting.py
+|   |   |   |-- generation.py
+|   |   |   |-- panels.py
+|   |   |   |-- scene.py
+|   |   |   |-- session.py
+|   |   |   |-- studio_config.py
+|   |   |   +-- viewer.py
+|   |   |-- tokenization/  [17 files]
+|   |   |   |-- __init__.py
+|   |   |   |-- contracts.py
+|   |   |   |-- corpus.py
+|   |   |   |-- ema.py
+|   |   |   |-- nn_quantizers.py
+|   |   |   |-- nn_tokenizer.py
+|   |   |   |-- README.md
+|   |   |   |-- reconstruction_metrics.py
+|   |   |   +-- tokenizer_trainer.py
+|   |   +-- __init__.py
+|   +-- text2motion.egg-info/  [6 files]
+|       |-- dependency_links.txt
+|       |-- entry_points.txt
+|       |-- PKG-INFO
+|       |-- requires.txt
+|       |-- SOURCES.txt
+|       +-- top_level.txt
+|-- tests/  [80 files]
+|   |-- app/  [16 files]
+|   |   |-- conftest.py
+|   |   |-- test_add_class_separators.py
+|   |   |-- test_check_problems.py
+|   |   |-- test_checkpoint_bundle.py
+|   |   |-- test_cli_requests.py
+|   |   |-- test_compile_flag.py
+|   |   |-- test_config_root_keys.py
+|   |   |-- test_deployment_config.py
+|   |   |-- test_import_boundaries.py
+|   |   |-- test_optional_dependencies.py
+|   |   |-- test_overfit_gate.py
+|   |   |-- test_prepare_output.py
+|   |   |-- test_rename_everywhere.py
+|   |   |-- test_resume_run_dir.py
+|   |   |-- test_run_log_mlflow.py
+|   |   +-- test_text_cache.py
+|   |-- benchmarks/  [1 files]
+|   |   +-- test_perf_probe.py
+|   |-- evaluation/  [5 files]
+|   |   |-- test_eval.py
+|   |   |-- test_known_values.py
+|   |   |-- test_long_stream_probe.py
+|   |   |-- test_protocol.py
+|   |   +-- test_sharpness.py
+|   |-- generation/  [10 files]
+|   |   |-- test_clean_ce.py
+|   |   |-- test_dropout_policy.py
+|   |   |-- test_dynamics_losses.py
+|   |   |-- test_fresh_selection.py
+|   |   |-- test_generator.py
+|   |   |-- test_generator_upgrades.py
+|   |   |-- test_per_step_text.py
+|   |   |-- test_reference_init.py
+|   |   |-- test_text_encoder.py
+|   |   +-- test_training.py
+|   |-- golden/  [5 files]
+|   |   |-- generator_golden.json
+|   |   |-- test_generator_golden.py
+|   |   |-- test_module_freeze.py
+|   |   |-- test_tokenizer_golden.py
+|   |   +-- tokenizer_golden.json
+|   |-- motion/  [18 files]
+|   |   |-- conftest.py
+|   |   |-- test_amass_paths.py
+|   |   |-- test_caption_weighting.py
+|   |   |-- test_clip_index.py
+|   |   |-- test_clip_weighting.py
+|   |   |-- test_corpus_manifest.py
+|   |   |-- test_data_prep_guards.py
+|   |   |-- test_datamodule.py
+|   |   |-- test_hml3d_263_contract.py
+|   |   |-- test_hml3d_stages.py
+|   |   |-- test_input_checks.py
+|   |   |-- test_missing_clip_files.py
+|   |   |-- test_pose_manifest.py
+|   |   |-- test_raw_pose.py
+|   |   |-- test_representation_recovery.py
+|   |   |-- test_scaler.py
+|   |   |-- test_storage.py
+|   |   +-- test_worker_epochs.py
+|   |-- scripts/  [6 files]
+|   |   |-- test_a7_screen_verdict.py
+|   |   |-- test_checkpoint_audit.py
+|   |   |-- test_paper_watch.py
+|   |   |-- test_render_clip.py
+|   |   |-- test_tokenizer_preflight.py
+|   |   +-- test_training_run.py
+|   |-- streaming/  [3 files]
+|   |   |-- test_service.py
+|   |   |-- test_streaming.py
+|   |   +-- test_warm_reuse.py
+|   |-- studio/  [5 files]
+|   |   |-- test_analytic_body_solve.py
+|   |   |-- test_body_playback.py
+|   |   |-- test_scene_nodes.py
+|   |   |-- test_studio_composition.py
+|   |   +-- test_studio_config_scope.py
+|   |-- tokenization/  [9 files]
+|   |   |-- test_corpus.py
+|   |   |-- test_ema.py
+|   |   |-- test_metrics.py
+|   |   |-- test_pretrain_data.py
+|   |   |-- test_rvq_baseline.py
+|   |   |-- test_tokenizer.py
+|   |   |-- test_tokenizer_contract.py
+|   |   |-- test_trainer.py
+|   |   +-- test_validation.py
+|   |-- README.md
+|   +-- test_package_layers.py
+|-- third_party/  [82 files]
+|   |-- mamba_ssm-2.3.2.post1-msvc/  [80 files]
+|   |   |-- csrc/  [17 files]
+|   |   |   +-- selective_scan/  [17 files]
+|   |   |       |-- reverse_scan.cuh
+|   |   |       |-- selective_scan.cpp
+|   |   |       |-- selective_scan.h
+|   |   |       |-- selective_scan_bwd_bf16_complex.cu
+|   |   |       |-- selective_scan_bwd_bf16_real.cu
+|   |   |       |-- selective_scan_bwd_fp16_complex.cu
+|   |   |       |-- selective_scan_bwd_fp16_real.cu
+|   |   |       |-- selective_scan_bwd_fp32_complex.cu
+|   |   |       |-- selective_scan_bwd_fp32_real.cu
+|   |   |       |-- selective_scan_bwd_kernel.cuh
+|   |   |       |-- selective_scan_common.h
+|   |   |       |-- selective_scan_fwd_bf16.cu
+|   |   |       |-- selective_scan_fwd_fp16.cu
+|   |   |       |-- selective_scan_fwd_fp32.cu
+|   |   |       |-- selective_scan_fwd_kernel.cuh
+|   |   |       |-- static_switch.h
+|   |   |       +-- uninitialized_copy.cuh
+|   |   |-- mamba_ssm/  [53 files]
+|   |   |   |-- distributed/  [3 files]
+|   |   |   |   |-- __init__.py
+|   |   |   |   |-- distributed_utils.py
+|   |   |   |   +-- tensor_parallel.py
+|   |   |   |-- models/  [3 files]
+|   |   |   |   |-- __init__.py
+|   |   |   |   |-- config_mamba.py
+|   |   |   |   +-- mixer_seq_simple.py
+|   |   |   |-- modules/  [9 files]
+|   |   |   |   |-- __init__.py
+|   |   |   |   |-- block.py
+|   |   |   |   |-- mamba_simple.py
+|   |   |   |   |-- mamba2.py
+|   |   |   |   |-- mamba2_simple.py
+|   |   |   |   |-- mamba3.py
+|   |   |   |   |-- mha.py
+|   |   |   |   |-- mlp.py
+|   |   |   |   +-- ssd_minimal.py
+|   |   |   |-- ops/  [32 files]
+|   |   |   |   |-- cute/  [3 files]
+|   |   |   |   |   |-- mamba3/  [2 files]
+|   |   |   |   |   |   |-- __init__.py
+|   |   |   |   |   |   +-- mamba3_step_fn.py
+|   |   |   |   |   +-- __init__.py
+|   |   |   |   |-- tilelang/  [7 files]
+|   |   |   |   |   |-- mamba3/  [6 files]
+|   |   |   |   |   |   |-- __init__.py
+|   |   |   |   |   |   |-- mamba3_mimo.py
+|   |   |   |   |   |   |-- mamba3_mimo_bwd.py
+|   |   |   |   |   |   |-- mamba3_mimo_bwd_varlen.py
+|   |   |   |   |   |   |-- mamba3_mimo_fwd.py
+|   |   |   |   |   |   +-- mamba3_mimo_fwd_varlen.py
+|   |   |   |   |   +-- __init__.py
+|   |   |   |   |-- triton/  [20 files]
+|   |   |   |   |   |-- mamba3/  [9 files]
+|   |   |   |   |   |   |-- __init__.py
+|   |   |   |   |   |   |-- angle_dt.py
+|   |   |   |   |   |   |-- mamba3_mimo_rotary_step.py
+|   |   |   |   |   |   |-- mamba3_mimo_utils.py
+|   |   |   |   |   |   |-- mamba3_siso_bwd.py
+|   |   |   |   |   |   |-- mamba3_siso_combined.py
+|   |   |   |   |   |   |-- mamba3_siso_fwd.py
+|   |   |   |   |   |   |-- mamba3_siso_step.py
+|   |   |   |   |   |   +-- utils.py
+|   |   |   |   |   |-- __init__.py
+|   |   |   |   |   |-- k_activations.py
+|   |   |   |   |   |-- layer_norm.py
+|   |   |   |   |   |-- layernorm_gated.py
+|   |   |   |   |   |-- selective_state_update.py
+|   |   |   |   |   |-- softplus.py
+|   |   |   |   |   |-- ssd_bmm.py
+|   |   |   |   |   |-- ssd_chunk_scan.py
+|   |   |   |   |   |-- ssd_chunk_state.py
+|   |   |   |   |   |-- ssd_combined.py
+|   |   |   |   |   +-- ssd_state_passing.py
+|   |   |   |   |-- __init__.py
+|   |   |   |   +-- selective_scan_interface.py
+|   |   |   |-- utils/  [5 files]
+|   |   |   |   |-- __init__.py
+|   |   |   |   |-- determinism.py
+|   |   |   |   |-- generation.py
+|   |   |   |   |-- hf.py
+|   |   |   |   +-- torch.py
+|   |   |   +-- __init__.py
+|   |   |-- tests/  [2 files]
+|   |   |   |-- test_determinism.py
+|   |   |   +-- test_generation.py
+|   |   |-- AUTHORS
+|   |   |-- LICENSE
+|   |   |-- MANIFEST.in
+|   |   |-- PKG-INFO
+|   |   |-- pyproject.toml
+|   |   |-- README.md
+|   |   |-- setup.cfg
+|   |   +-- setup.py
+|   +-- wheels/  [2 files]
+|       |-- imgui-2.0.0-cp314-cp314-win_amd64.whl
+|       +-- README.md
+|-- typings/  [3 files]
+|   |-- imgui/  [1 files]
+|   |   +-- __init__.pyi
+|   +-- pyarrow/  [2 files]
+|       |-- __init__.pyi
+|       +-- parquet.pyi
+|-- .dockerignore
+|-- .env.example
+|-- .gitignore
+|-- .graphifyignore
+|-- .mailmap
+|-- AGENTS.md
+|-- CLAUDE.md
+|-- compose.yaml
+|-- DOCKER.md
+|-- Dockerfile
+|-- imgui.ini
+|-- LICENSE
+|-- Makefile
+|-- NOTICE
+|-- pyproject.toml
+|-- README.md
+|-- RESTORE_TODO.md
+|-- THIRD_PARTY_LICENSES.md
++-- uv.lock

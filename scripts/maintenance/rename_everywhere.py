@@ -20,9 +20,9 @@ SKIPPED_FOLDERS = frozenset(
 )
 KEPT_FILES = frozenset(
     {
-        ".claude/docs/STATUS.md",
-        ".claude/docs/replay.log",
-        "doc/notes/research-log.md",
+        "docs/project/STATUS.md",
+        "docs/project/replay.log",
+        "docs/notes/research-log.md",
         "tests/app/test_rename_everywhere.py",
     }
 )

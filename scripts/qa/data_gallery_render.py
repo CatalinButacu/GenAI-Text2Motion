@@ -14,7 +14,7 @@ from text2motion.motion.representation import KINEMATIC_CHAINS
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 EXTRA = REPO / "data" / "extra_motion"
-OUT_DIR = REPO / "artifacts" / "outputs" / "data_gallery_60fps"
+OUT_DIR = REPO / "runs" / "outputs" / "data_gallery_60fps"
 SHEET = OUT_DIR / "gallery.csv"
 FPS = 60
 SEED = 2026

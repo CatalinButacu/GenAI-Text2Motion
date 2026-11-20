@@ -12,7 +12,7 @@ function Enter-RepoRoot {
     }
     Set-Location $root
     $env:PYTHONPATH = "src"
-    New-Item -ItemType Directory -Force "artifacts/outputs" | Out-Null
+    New-Item -ItemType Directory -Force "runs/outputs" | Out-Null
     return $root
 }
 
@@ -56,7 +56,7 @@ function Join-QuotedArguments {
 
 function Get-NewestHeartbeat {
     param([Parameter(Mandatory = $true)][datetime]$Since)
-    return Get-ChildItem "artifacts/logs/train" -Recurse -Filter "heartbeat" -File -ErrorAction SilentlyContinue |
+    return Get-ChildItem "runs/logs/train" -Recurse -Filter "heartbeat" -File -ErrorAction SilentlyContinue |
         Where-Object { $_.LastWriteTime -ge $Since } |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
@@ -154,7 +154,7 @@ function Invoke-TrainingStep {
         }
         if ($reason) {
             $stamp = (Get-Date).ToUniversalTime().ToString("u")
-            "$stamp  $Tag KILLED: $reason" | Out-File -Append "artifacts/outputs/GUARD_KILL.txt" -Encoding utf8
+            "$stamp  $Tag KILLED: $reason" | Out-File -Append "runs/outputs/GUARD_KILL.txt" -Encoding utf8
             Write-Host "KILLED ${Tag}: $reason"
             return $stopCode
         }
@@ -207,13 +207,13 @@ function Invoke-TokenizerSweep {
     $codes = @()
     foreach ($variant in $Variants) {
         $stem = [IO.Path]::GetFileNameWithoutExtension($variant.name)
-        $resume = "artifacts/checkpoints/tokenizer/${stem}_last.pt"
+        $resume = "runs/checkpoints/tokenizer/${stem}_last.pt"
         if (Test-RunComplete -ResumePath $resume -Epochs $Epochs) {
             Write-Host "SKIP $stem (all $Epochs epochs are in $resume)"
             $codes += 0
             continue
         }
-        $code = Invoke-TrainingStep -Tag "sweep_$stem" -LogFile "artifacts/outputs/sweep_$stem.log" `
+        $code = Invoke-TrainingStep -Tag "sweep_$stem" -LogFile "runs/outputs/sweep_$stem.log" `
             -MaxHours $MaxHoursPerRun -Arguments @(
                 "-m", "text2motion.app.cli", "train-tokenizer", "--config", $variant.cfg,
                 "--tokenizer", $variant.mech, "--epochs", "$Epochs", "--batch_size", "128",

@@ -389,7 +389,7 @@ def register_package_without_triton() -> None:
     if package_spec is None or package_spec.origin is None:
         raise ModuleNotFoundError(
             "use_kernel needs the mamba_ssm package; build it from third_party/ "
-            "(see doc/notes/implementation-difficulties.md)"
+            "(see docs/notes/implementation-difficulties.md)"
         )
     package_dir = Path(package_spec.origin).parent
     for name, folder in (("mamba_ssm", package_dir), ("mamba_ssm.ops", package_dir / "ops")):

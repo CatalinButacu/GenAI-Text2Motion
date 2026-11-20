@@ -10,7 +10,7 @@ from text2motion.studio.fitting import (
 )
 from text2motion.studio.studio_config import SmplxFitConfig
 
-MODEL_DIR = Path("data/smplx_models")
+MODEL_DIR = Path("data/models/smplx_models")
 
 
 @pytest.mark.skipif(not MODEL_DIR.exists(), reason="SMPL-X model files not installed")

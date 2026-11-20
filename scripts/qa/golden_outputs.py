@@ -20,30 +20,30 @@ from text2motion.tokenization.nn_tokenizer import TokenizerNetwork, build_tokeni
 
 TOKENIZER_GOLDEN_PATH = Path("tests/golden/tokenizer_golden.json")
 FSQ_CONFIG = Path("configs/tokenizer/fsq_g8_v1024.yaml")
-FSQ_CHECKPOINT = Path("artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt")
+FSQ_CHECKPOINT = Path("runs/checkpoints/tokenizer/fsq_g8_v1024.pt")
 RVQ_CONFIG = Path("configs/tokenizer/rvq_l8_1024.yaml")
-RVQ_CHECKPOINT = Path("artifacts/checkpoints/tokenizer/rvq_l8_1024.pt")
+RVQ_CHECKPOINT = Path("runs/checkpoints/tokenizer/rvq_l8_1024.pt")
 TOKENIZER_INPUTS = (FSQ_CONFIG, FSQ_CHECKPOINT, RVQ_CONFIG, RVQ_CHECKPOINT)
 GENERATOR_GOLDEN_PATH = Path("tests/golden/generator_golden.json")
 GENERATOR_CONFIG = Path("configs/generator/gen_pilot_fsq8x1024.yaml")
 GENERATOR_CASES = (
     (
         Backbone.TRANSFORMER,
-        Path("artifacts/checkpoints/generator/generator_transformer_bs8_e60.pt"),
+        Path("runs/checkpoints/generator/generator_transformer_bs8_e60.pt"),
     ),
-    (Backbone.MAMBA, Path("artifacts/checkpoints/generator/generator_mamba_bs8_e60.pt")),
+    (Backbone.MAMBA, Path("runs/checkpoints/generator/generator_mamba_bs8_e60.pt")),
 )
 GOLDEN_CLIPS = 32
 GENERATOR_INPUTS = (
     GENERATOR_CONFIG,
     FSQ_CHECKPOINT,
     *(checkpoint for _, checkpoint in GENERATOR_CASES),
-    Path("data/official_evaluator/extracted/text_mot_match/model/finest.tar"),
-    Path("data/eval_stats/mean.npy"),
-    Path("data/eval_stats/std.npy"),
-    Path("data/HumanML3D_official/Mean.npy"),
-    Path("data/HumanML3D_official/Std.npy"),
-    Path("data/HumanML3D_official/val.txt"),
+    Path("data/models/evaluator/extracted/text_mot_match/model/finest.tar"),
+    Path("data/processed/eval_stats/mean.npy"),
+    Path("data/processed/eval_stats/std.npy"),
+    Path("data/processed/humanml3d/Mean.npy"),
+    Path("data/processed/humanml3d/Std.npy"),
+    Path("data/processed/humanml3d/val.txt"),
 )
 
 

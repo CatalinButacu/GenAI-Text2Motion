@@ -41,7 +41,7 @@ def step(tmp_path: Path, code: str, max_hours: float = 1.0) -> str:
 
 @pytest.fixture
 def workdir(tmp_path: Path) -> Path:
-    (tmp_path / "artifacts" / "outputs").mkdir(parents=True)
+    (tmp_path / "runs" / "outputs").mkdir(parents=True)
     return tmp_path
 
 
@@ -64,7 +64,7 @@ def test_a_step_over_its_time_budget_is_killed_and_logged(workdir):
     output = powershell(step(workdir, "import time; time.sleep(60)", max_hours=0.0005), workdir)
 
     assert "code=124 ok=False" in output
-    assert "KILLED" in (workdir / "artifacts" / "outputs" / "GUARD_KILL.txt").read_text("utf-8-sig")
+    assert "KILLED" in (workdir / "runs" / "outputs" / "GUARD_KILL.txt").read_text("utf-8-sig")
 
 
 def test_time_cap_stops_the_actual_python_child_not_only_its_venv_launcher(workdir):
@@ -170,8 +170,8 @@ def pilot(
     recover: bool = False,
     default_recipe: bool = False,
 ):
-    (workdir / "artifacts" / "checkpoints" / "generator").mkdir(parents=True, exist_ok=True)
-    (workdir / "artifacts" / "outputs" / "gates").mkdir(exist_ok=True)
+    (workdir / "runs" / "checkpoints" / "generator").mkdir(parents=True, exist_ok=True)
+    (workdir / "runs" / "outputs" / "gates").mkdir(exist_ok=True)
     driver = workdir / DRIVER.name
     driver.write_text(DRIVER.read_text(encoding="utf-8"), encoding="utf-8")
     module = f"""
@@ -246,13 +246,13 @@ def test_pilot_gates_both_twins_before_training_and_only_continues_time_caps(
             assert "--val_ce_patience 3" in call and "--epochs 60" in call
             assert "--batch_size 8" in call and "--num_workers 0" in call
             assert "--resume" not in call and "--init_ckpt" not in call
-    outputs = workdir / "artifacts" / "outputs"
+    outputs = workdir / "runs" / "outputs"
     assert (outputs / "PILOT_TEST_DONE.txt").exists() == (expected_code == 0)
     assert (outputs / "PILOT_TEST_PARTIAL.txt").exists() == (expected_code == 124)
 
 
 def test_pilot_refuses_existing_outputs_before_launching_a_gate(workdir):
-    (workdir / "artifacts" / "outputs" / "pilot_test_existing.log").write_text("preserve")
+    (workdir / "runs" / "outputs" / "pilot_test_existing.log").write_text("preserve")
     result = pilot(workdir, 0, 0)
 
     assert result.returncode != 0
@@ -272,12 +272,12 @@ def test_default_recipe_is_width320_with_six_epoch_ce_patience_for_both_twins(wo
 
 
 def test_recovery_keeps_original_time_budget_and_does_not_resume_the_unstarted_twin(workdir):
-    outputs = workdir / "artifacts" / "outputs"
+    outputs = workdir / "runs" / "outputs"
     (outputs / "gates").mkdir()
     for backbone in ("transformer", "mamba"):
         (outputs / "gates" / f"pilot_test_{backbone}_w256_overfit.json").write_text("passed")
     (outputs / "pilot_test_transformer_w256.log").write_text("original evidence")
-    checkpoints = workdir / "artifacts" / "checkpoints" / "generator"
+    checkpoints = workdir / "runs" / "checkpoints" / "generator"
     checkpoints.mkdir(parents=True)
     (checkpoints / "generator_transformer_w256_pilot_test_last.pt").write_bytes(b"checkpoint")
     result = pilot(workdir, 124, 124, recover=True)
@@ -292,7 +292,7 @@ def test_recovery_keeps_original_time_budget_and_does_not_resume_the_unstarted_t
 
 
 def test_recovery_refuses_to_restart_an_interrupted_run_without_its_checkpoint(workdir):
-    outputs = workdir / "artifacts" / "outputs"
+    outputs = workdir / "runs" / "outputs"
     (outputs / "gates").mkdir()
     for backbone in ("transformer", "mamba"):
         (outputs / "gates" / f"pilot_test_{backbone}_w256_overfit.json").write_text("passed")
@@ -305,7 +305,7 @@ def test_recovery_refuses_to_restart_an_interrupted_run_without_its_checkpoint(w
 
 
 def test_recovery_skips_an_expired_original_budget_but_runs_the_unstarted_twin(workdir):
-    outputs = workdir / "artifacts" / "outputs"
+    outputs = workdir / "runs" / "outputs"
     (outputs / "gates").mkdir()
     for backbone in ("transformer", "mamba"):
         (outputs / "gates" / f"pilot_test_{backbone}_w256_overfit.json").write_text("passed")

@@ -26,4 +26,4 @@ description: Critic for the body model and the visuals. Finds bodies that look w
 - SMPL-X files have a licence. Load them from the configured path. Never commit them.
 - Prove a change on one clip first: one headless render and one number, such as fit error in cm or frames per second.
 - Never state an aitviewer or SMPL-X API detail from memory. Open the source.
-- Read the current studio state in `.claude/docs/STATUS.md`.
+- Read the current studio state in `docs/project/STATUS.md`.

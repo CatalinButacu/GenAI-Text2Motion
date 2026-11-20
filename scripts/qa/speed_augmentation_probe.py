@@ -1,4 +1,4 @@
-# python scripts/qa/speed_augmentation_probe.py --out doc/paper/pics/speed_augmentation_validation.csv
+# python scripts/qa/speed_augmentation_probe.py --out docs/paper/pics/speed_augmentation_validation.csv
 from __future__ import annotations
 
 import argparse
@@ -38,7 +38,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbs", type=int, default=100)
     parser.add_argument(
-        "--out", type=Path, default=Path("doc/paper/pics/speed_augmentation_validation.csv")
+        "--out", type=Path, default=Path("docs/paper/pics/speed_augmentation_validation.csv")
     )
     arguments = parser.parse_args()
 

@@ -26,15 +26,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/generator/gen_pilot_fsq8x1024.yaml")
     parser.add_argument("--backbone", default="mamba", type=Backbone)
-    parser.add_argument(
-        "--ckpt", default="artifacts/checkpoints/generator/generator_mamba_bs8_e60.pt"
-    )
-    parser.add_argument(
-        "--tokenizer_ckpt", default="artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt"
-    )
+    parser.add_argument("--ckpt", default="runs/checkpoints/generator/generator_mamba_bs8_e60.pt")
+    parser.add_argument("--tokenizer_ckpt", default="runs/checkpoints/tokenizer/fsq_g8_v1024.pt")
     parser.add_argument("--clips", type=int, default=64)
     parser.add_argument("--mesh_clips", type=int, default=12)
-    parser.add_argument("--out", default="artifacts/outputs/qa/motion_naturalness.json")
+    parser.add_argument("--out", default="runs/outputs/qa/motion_naturalness.json")
     args = parser.parse_args()
 
     app = ApplicationBootstrap.from_config(args.config)
@@ -57,7 +53,7 @@ def main() -> None:
     }
     fit_config = replace(
         load_dataclass(StudioConfig, "configs/studio.yml").fit,
-        model_dir="data/smplx_models",
+        model_dir="data/models/smplx_models",
         gender="neutral",
     )
     used = 0

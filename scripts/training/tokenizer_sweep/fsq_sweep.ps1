@@ -2,7 +2,7 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
-$done = Invoke-TokenizerSweep -DoneMarker "artifacts/outputs/FSQ_SWEEP_DONE.txt" -Variants @(
+$done = Invoke-TokenizerSweep -DoneMarker "runs/outputs/FSQ_SWEEP_DONE.txt" -Variants @(
     @{ cfg = "configs/tokenizer/tokenizer_isovocab.yaml"; mech = "fsq"; name = "fsq_g6_v512.pt" },
     @{ cfg = "configs/tokenizer/fsq_g6_v1024.yaml"; mech = "fsq"; name = "fsq_g6_v1024.pt" },
     @{ cfg = "configs/tokenizer/fsq_g4_v512.yaml"; mech = "fsq"; name = "fsq_g4_v512.pt" },

@@ -11,34 +11,34 @@ data:
 paths:
   donor_root: null
   humanml3d_dir: null
-  eval_matcher: data/official_evaluator/extracted/text_mot_match/model/finest.tar
+  eval_matcher: data/models/evaluator/extracted/text_mot_match/model/finest.tar
 
-  eval_stats_dir: data/eval_stats
+  eval_stats_dir: data/processed/eval_stats
   t2m_vqvae: null
-  glove_dir: data/t2m_glove
+  glove_dir: data/models/glove
   amass_dir: null
-  smplx_models: data/smplx_models
-  stats_dir: data/eval_stats
+  smplx_models: data/models/smplx_models
+  stats_dir: data/processed/eval_stats
   cache_dir: data/.cache
-  checkpoints_dir: artifacts/checkpoints
-  outputs_dir: artifacts/outputs
-  tokenizer_checkpoint_path: artifacts/checkpoints/tokenizer/fsq_g8_v1024.pt
+  checkpoints_dir: runs/checkpoints
+  outputs_dir: runs/outputs
+  tokenizer_checkpoint_path: runs/checkpoints/tokenizer/fsq_g8_v1024.pt
   generator_checkpoint_paths:
-    transformer: artifacts/checkpoints/generator/generator_transformer_bs8_enc_last.pt
-    mamba: artifacts/checkpoints/generator/generator_mamba_bs8_last.pt
+    transformer: runs/checkpoints/generator/generator_transformer_bs8_enc_last.pt
+    mamba: runs/checkpoints/generator/generator_mamba_bs8_last.pt
 
   body_model_dir: null
   smplh_dir: null
   dmpl_dir: null
 
-  hml3d_out_dir: data/HumanML3D_official
-  hml3d_index_csv: data/HumanML3D_official/index.csv
-  texts_dir: data/HumanML3D_official/texts
+  hml3d_out_dir: data/processed/humanml3d
+  hml3d_index_csv: data/processed/humanml3d/index.csv
+  texts_dir: data/processed/humanml3d/texts
 
 avatar:
   model_type: smplx
   gender: neutral
   use_pca: false
   up_axis: z
-  models_path: data/smplx_models
+  models_path: data/models/smplx_models
 

@@ -1,4 +1,4 @@
-# python scripts/figures/plot_training_curves.py --out doc/paper/pics/training_curves.pdf
+# python scripts/figures/plot_training_curves.py --out docs/paper/pics/training_curves.pdf
 from __future__ import annotations
 
 import argparse
@@ -21,7 +21,7 @@ RUNS: MappingProxyType[str, tuple[str, LineStyleType]] = MappingProxyType(
         "pair 1 w320 (CE stop)": ("p1_{backbone}_w320.log", "-"),
     }
 )
-LOG_DIR = Path("artifacts/outputs")
+LOG_DIR = Path("runs/outputs")
 BACKBONES = ("transformer", "mamba")
 COLORS = MappingProxyType({"transformer": "#2a78d6", "mamba": "#eb6834"})
 CE_LINE = re.compile(r"clean-ce\] train ([\d.]+)\s+val ([\d.]+)\s+gap ([+\-\d.]+)")
@@ -64,7 +64,7 @@ def style_axis(axis, title: str) -> None:
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", type=Path, default=Path("doc/paper/pics/training_curves.pdf"))
+    parser.add_argument("--out", type=Path, default=Path("docs/paper/pics/training_curves.pdf"))
     return parser.parse_args()
 
 
