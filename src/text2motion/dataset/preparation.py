@@ -4,6 +4,7 @@ import csv
 import json
 import logging
 import os
+import random
 import shutil
 from collections import Counter
 from dataclasses import dataclass
@@ -52,6 +53,7 @@ CORPUS_FORMAT = "text2motion.amass_corpus"
 CORPUS_VERSION = 2
 POSE_MANIFEST = "pose_manifest.json"
 INDEX_MANIFEST = "index_manifest.json"
+DROPPED_INDEX_LOG = "dropped_index_rows.csv"
 FEATURES_MANIFEST = "features_manifest.json"
 POSE_FORMAT = "text2motion.amass_poses"
 POSE_VERSION = 2
@@ -272,7 +274,7 @@ def build_indexed_joint_clips(
 
     written = 0
     missing: list[str] = []
-    invalid: list[str] = []
+    invalid: list[tuple[str, str, str]] = []
     for i in tqdm(range(index_file.shape[0]), desc="index->joints"):
         source_path = index_file.loc[i]["source_path"]
         new_name = index_file.loc[i]["new_name"]
@@ -290,12 +292,12 @@ def build_indexed_joint_clips(
             if trim:
                 data = data[trim:]
             if start_frame < 0 or end_frame <= start_frame:
-                invalid.append(str(new_name))
+                invalid.append((str(new_name), source_path, "bad crop bounds"))
                 continue
             data = data[start_frame:end_frame]
             data[..., 0] *= -1
         if data.shape[0] < 2:
-            invalid.append(str(new_name))
+            invalid.append((str(new_name), source_path, "fewer than 2 frames"))
             continue
 
         data_m = swap_left_right(data)
@@ -308,14 +310,19 @@ def build_indexed_joint_clips(
         "written": written,
         "missing": len(missing),
         "missing_names": missing,
-        "invalid_names": invalid,
+        "invalid": len(invalid),
+        "invalid_names": [name for name, _, _ in invalid],
         "complete": not missing and not invalid,
     }
     write_manifest(layout.out_dir / INDEX_MANIFEST, recipe, status)
+    with open(layout.out_dir / DROPPED_INDEX_LOG, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["new_name", "source_path", "reason"])
+        writer.writerows(invalid)
     if invalid:
-        raise ValueError(
-            f"index->joints: {len(invalid)} rows have bad crop bounds or fewer than 2 frames "
-            f"(names in {INDEX_MANIFEST}); first: {invalid[:3]}"
+        logger.warning(
+            f"index->joints: dropped {len(invalid)} rows with invalid crop bounds or too few "
+            f"frames (log: {DROPPED_INDEX_LOG}); first: {[name for name, _, _ in invalid[:3]]}"
         )
     if missing:
         logger.warning(
@@ -440,6 +447,43 @@ def heldout_feature_names(index_csv: Path, out_dir: Path, pose_root: Path) -> se
         if path.stat().st_size in heldout_sizes and sha256_file(path) in heldout_hashes:
             names.add(corpus_feature_name(path, pose_root))
     return names
+
+
+def write_grouped_split(
+    index_csv: Path, dataset_dir: Path, features_dir: Path, seed: int, targets: dict[str, float]
+) -> dict[str, int]:
+    with index_csv.open(encoding="utf-8", newline="") as handle:
+        base = {Path(row["new_name"]).stem: row["source_path"] for row in csv.DictReader(handle)}
+    groups: dict[str, list[str]] = {}
+    for clip, source in base.items():
+        groups.setdefault(source, []).append(clip)
+    order = list(groups)
+    random.Random(seed).shuffle(order)
+    order.sort(key=lambda source: -len(groups[source]))
+    total = len(base)
+    counts = {name: 0 for name in targets}
+    assignment: dict[str, str] = {}
+    for source in order:
+        name = max(targets, key=lambda split: targets[split] * total - counts[split])
+        assignment[source] = name
+        counts[name] += len(groups[source])
+    lines: dict[str, list[str]] = {name: [] for name in targets}
+    for source, name in assignment.items():
+        for clip in groups[source]:
+            for variant in MIRROR_PREFIXES:
+                if (features_dir / f"{variant}{clip}.npy").is_file():
+                    lines[name].append(f"{variant}{clip}")
+    owners: dict[str, set[str]] = {}
+    for name, names in lines.items():
+        for line in names:
+            owners.setdefault(line.lstrip("M"), set()).add(name)
+    shared = sorted(clip for clip, names in owners.items() if len(names) > 1)
+    if shared:
+        raise RuntimeError(f"{len(shared)} clips are in more than one split; first: {shared[:5]}")
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    for name, names in lines.items():
+        (dataset_dir / f"{name}.txt").write_text("\n".join(sorted(names)) + "\n", encoding="utf-8")
+    return {name: len(names) for name, names in lines.items()}
 
 
 def reference_joints_path(joints_dir: Path) -> Path:

@@ -3,6 +3,24 @@
 Companion to `proposal.md`. Source of truth: `.claude/docs/STATUS.md` + `outputs/runs/` manifests.
 Convention: **bold** = a result that survives into the dissertation tables.
 
+## 2026-11-20 -- literature check and conclusions so far
+
+Method: three web searches (standard mode) on HumanML3D state of the art, tokenizer comparisons, and data scaling. Numbers below come from search snippets, not from the papers' tables. Verify each number in the original paper before it enters the thesis.
+
+Findings:
+
+1. Evaluators and protocols differ between papers. One 2025 paper reports FID 0.035 on HumanML3D. Another paper reports that the evaluator choice moves the scores. No shared leaderboard was found. A fair claim needs a re-run of each baseline under our protocol.
+2. Tokenizers: one paper (Being-M0.5, Table 4) reports body MPJPE on HumanML3D of 35.04 for a single-layer FSQ with 65 536 codes, and 14.06 for a 4-layer residual quantizer. This suggests that residual quantization beats single-layer FSQ on reconstruction. Our tokenizer is grouped FSQ, which is closer to a multi-level code. The thesis must compare grouped FSQ with a residual baseline at matched bits. The project already has residual configs.
+3. Data scale: dataset papers report better generalization with more data, but without controlled comparisons. One 2026 paper reports leakage between HumanML3D and Motion-X splits, and a drop after removing the overlap. Our 639 of 2 122 source file overlap is the same type of problem. The leak check is correct and must be reported.
+4. Metrics: absolute MPJPE is dominated by root drift in our checkpoints (about 460 mm absolute, about 109 mm root-aligned). Report both.
+
+Conclusion so far: no best solution can be named yet. We have no protocol-trained generator and no protocol-trained tokenizer. The two decisive experiments are:
+
+- E-R1: grouped FSQ against residual quantization at matched bits, under the protocol, seed 2026.
+- E-R2: data scale with full training length, with the test split fixed, and the leak check applied.
+
+The thesis question is streaming state (Mamba against transformer), not peak FID. The best solution for this question is the one with the best quality at a fixed streaming cost, not the highest FID.
+
 ## 2026-06-03 -- Foundations, faithful port, first validations
 
 - Clean repo scaffolded (typed dataclass configs, snake_case, ruff, fail-loud rules) after the

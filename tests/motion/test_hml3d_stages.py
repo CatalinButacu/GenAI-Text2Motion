@@ -100,11 +100,17 @@ def test_the_index_stage_refuses_bad_crop_bounds_and_marks_missing_files(tmp_pat
     )
     request = PreparationRequest(out_dir=tmp_path, index_csv=index)
 
-    with pytest.raises(ValueError, match="bad crop bounds"):
-        preparation.build_indexed_joint_clips(request, layout)
+    preparation.build_indexed_joint_clips(request, layout)
 
     manifest = read_manifest(tmp_path / preparation.INDEX_MANIFEST)
     assert manifest["invalid_names"] == ["000102.npy", "000103.npy", "000104.npy"]
     assert manifest["missing_names"] == ["000101.npy"]
     assert manifest["complete"] is False
     assert (layout.joints / "000100.npy").is_file()
+    dropped = (tmp_path / preparation.DROPPED_INDEX_LOG).read_text(encoding="utf-8").splitlines()
+    assert dropped[0] == "new_name,source_path,reason"
+    assert dropped[1:] == [
+        "000102.npy,./pose_data/ACCAD/walk.npy,bad crop bounds",
+        "000103.npy,./pose_data/ACCAD/walk.npy,bad crop bounds",
+        "000104.npy,./pose_data/ACCAD/walk.npy,fewer than 2 frames",
+    ]

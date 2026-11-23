@@ -48,6 +48,7 @@ class ApplicationContext:
     config: ApplicationConfig
     device: str
     config_path: Path
+    seed: int
 
     def create_motion_repository(self) -> MotionDataModule:
         root = self.config.paths.hml3d_out_dir
@@ -214,6 +215,7 @@ class ApplicationContext:
             config=replace(self.config, service=service),
             device=self.device,
             config_path=self.config_path,
+            seed=self.seed,
         )
 
     def with_service_file(self, service_config: str | Path) -> ApplicationContext:
@@ -255,6 +257,7 @@ class ApplicationBootstrap:
             config=config,
             device=resolved_device,
             config_path=Path(config_path),
+            seed=resolved_seed,
         )
 
 

@@ -32,6 +32,8 @@ class TokenizerNetwork(nn.Module):
     pre_q: nn.Module
     post_q: nn.Module
     downsample: int
+    heading_weight: float = 0.0
+    heading_head: nn.Linear | None
 
     def checked_frame_count(self, motion: torch.Tensor) -> torch.Tensor:
         def reject_non_finite_motion(motion: torch.Tensor) -> torch.Tensor:
@@ -90,11 +92,33 @@ def downsample_stage_count(downsample: int) -> int:
 ############################################################
 #       TemporalResidualBlock
 ############################################################
+class CausalConvolution1d(nn.Module):
+    def __init__(
+        self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1
+    ) -> None:
+        super().__init__()
+        self.left_padding = kernel_size - 1
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size, stride=stride)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.conv(F.pad(x, (self.left_padding, 0)))
+
+
+def frame_convolution(
+    in_channels: int, out_channels: int, kernel_size: int, stride: int, causal: bool
+) -> nn.Module:
+    if causal:
+        return CausalConvolution1d(in_channels, out_channels, kernel_size, stride)
+    return nn.Conv1d(
+        in_channels, out_channels, kernel_size, stride=stride, padding=(kernel_size - 1) // 2
+    )
+
+
 class TemporalResidualBlock(nn.Module):
-    def __init__(self, channels: int) -> None:
+    def __init__(self, channels: int, causal: bool = False) -> None:
         super().__init__()
         self.net = nn.Sequential(
-            nn.Conv1d(channels, channels, 3, padding=1),
+            frame_convolution(channels, channels, 3, 1, causal),
             nn.ReLU(),
             nn.Conv1d(channels, channels, 1),
         )
@@ -118,17 +142,25 @@ class FrameSequenceConvolution(nn.Module):
 ############################################################
 class MotionFeatureEncoder(FrameSequenceConvolution):
     def __init__(
-        self, feature_count: int, width: int, downsample: int, residual_block_count: int
+        self,
+        feature_count: int,
+        width: int,
+        downsample: int,
+        residual_block_count: int,
+        causal: bool = False,
     ) -> None:
         super().__init__()
         downsample_stages = downsample_stage_count(downsample)
-        layers: list[nn.Module] = [nn.Conv1d(feature_count, width, 3, padding=1), nn.ReLU()]
+        layers: list[nn.Module] = [
+            frame_convolution(feature_count, width, 3, 1, causal),
+            nn.ReLU(),
+        ]
 
         for _ in range(downsample_stages):
-            layers += [nn.Conv1d(width, width, 4, stride=2, padding=1), nn.ReLU()]
+            layers += [frame_convolution(width, width, 4, 2, causal), nn.ReLU()]
 
         for _ in range(residual_block_count):
-            layers.append(TemporalResidualBlock(width))
+            layers.append(TemporalResidualBlock(width, causal))
 
         self.net = nn.Sequential(*layers)
 
@@ -138,19 +170,31 @@ class MotionFeatureEncoder(FrameSequenceConvolution):
 ############################################################
 class MotionFeatureDecoder(FrameSequenceConvolution):
     def __init__(
-        self, feature_count: int, width: int, downsample: int, residual_block_count: int
+        self,
+        feature_count: int,
+        width: int,
+        downsample: int,
+        residual_block_count: int,
+        causal: bool = False,
     ) -> None:
         super().__init__()
         upsample_stages = downsample_stage_count(downsample)
         layers: list[nn.Module] = []
 
         for _ in range(residual_block_count):
-            layers.append(TemporalResidualBlock(width))
+            layers.append(TemporalResidualBlock(width, causal))
 
         for _ in range(upsample_stages):
-            layers += [nn.ConvTranspose1d(width, width, 4, stride=2, padding=1), nn.ReLU()]
+            if causal:
+                layers += [
+                    nn.Upsample(scale_factor=2, mode="nearest"),
+                    frame_convolution(width, width, 3, 1, causal),
+                    nn.ReLU(),
+                ]
+            else:
+                layers += [nn.ConvTranspose1d(width, width, 4, stride=2, padding=1), nn.ReLU()]
 
-        layers.append(nn.Conv1d(width, feature_count, 3, padding=1))
+        layers.append(frame_convolution(width, feature_count, 3, 1, causal))
         self.net = nn.Sequential(*layers)
 
 
@@ -164,10 +208,10 @@ class FiniteScalarQuantizationTokenizer(TokenizerNetwork):
         super().__init__()
         self.downsample = config.downsample
         self.encoder = MotionFeatureEncoder(
-            config.in_dim, config.width, config.downsample, config.n_resblocks
+            config.in_dim, config.width, config.downsample, config.n_resblocks, config.causal
         )
         self.decoder = MotionFeatureDecoder(
-            config.in_dim, config.width, config.downsample, config.n_resblocks
+            config.in_dim, config.width, config.downsample, config.n_resblocks, config.causal
         )
 
         levels = config.fsq_levels
@@ -185,22 +229,80 @@ class FiniteScalarQuantizationTokenizer(TokenizerNetwork):
 
         self.pre_q = nn.Linear(config.width, latent_width)
         self.post_q = nn.Linear(latent_width, config.width)
+        self.heading_weight = config.heading_weight if config.heading_correction else 0.0
+        self.heading_head = None
+        if config.heading_correction:
+            head = nn.Linear(config.width, 1)
+            nn.init.zeros_(head.weight)
+            nn.init.zeros_(head.bias)
+            self.heading_head = head
+
+    def correct_heading(self, reconstruction: torch.Tensor, latent: torch.Tensor) -> torch.Tensor:
+        if self.heading_head is None:
+            return reconstruction
+        correction = self.heading_head(latent).repeat_interleave(self.downsample, dim=1)
+        turning = reconstruction[..., :1] + correction
+        return torch.cat([turning, reconstruction[..., 1:]], dim=-1)
+
+    def forward(self, motion: torch.Tensor) -> TokenizerReconstruction:
+        latent = self.pre_q(self.encoder(self.checked_frame_count(motion)))
+        quantized, indices, commitment_loss = self.quantizer_stack()(latent)
+        decoded_latent = self.post_q(quantized)
+        reconstruction = self.decoder(decoded_latent)
+        return TokenizerReconstruction(
+            reconstruction=self.correct_heading(reconstruction, decoded_latent),
+            token_indices=indices,
+            commitment_loss=commitment_loss,
+        )
+
+
+def heading_reconstruction_loss(
+    reconstruction: torch.Tensor,
+    target: torch.Tensor,
+    lengths: torch.Tensor | None = None,
+) -> torch.Tensor:
+    frames = target.shape[1]
+    if lengths is None:
+        mask = torch.ones(target.shape[:2], device=target.device, dtype=target.dtype)
+    else:
+        mask = (
+            torch.arange(frames, device=target.device)[None, :] < lengths.to(target.device)[:, None]
+        ).to(target.dtype)
+    turning_error = (reconstruction[..., 0] - target[..., 0]) * mask
+    accumulated = torch.cumsum(turning_error, dim=1)
+    return (accumulated.abs() * mask).sum() / mask.sum().clamp(min=1.0)
 
 
 def feature_velocity_reconstruction_loss(
-    reconstruction: torch.Tensor, target: torch.Tensor
+    reconstruction: torch.Tensor,
+    target: torch.Tensor,
+    lengths: torch.Tensor | None = None,
 ) -> torch.Tensor:
     if reconstruction.shape != target.shape or target.shape[0] == 0 or target.shape[1] < 2:
         raise ValueError(
             f"the reconstruction loss needs equal shapes with at least 2 frames, got "
             f"{tuple(reconstruction.shape)} and {tuple(target.shape)}"
         )
-    feature_loss = F.l1_loss(reconstruction, target)
+    if lengths is None:
+        feature_loss = F.l1_loss(reconstruction, target)
+        reconstruction_velocity = reconstruction[:, 1:] - reconstruction[:, :-1]
+        target_velocity = target[:, 1:] - target[:, :-1]
+        return feature_loss + F.l1_loss(reconstruction_velocity, target_velocity)
+    frame_mask = (
+        torch.arange(target.shape[1], device=target.device)[None, :]
+        < lengths.to(target.device)[:, None]
+    ).to(target.dtype)
+    feature_loss = masked_mean_abs(reconstruction - target, frame_mask)
     reconstruction_velocity = reconstruction[:, 1:] - reconstruction[:, :-1]
     target_velocity = target[:, 1:] - target[:, :-1]
-    velocity_loss = F.l1_loss(reconstruction_velocity, target_velocity)
-
+    velocity_mask = frame_mask[:, 1:] * frame_mask[:, :-1]
+    velocity_loss = masked_mean_abs(reconstruction_velocity - target_velocity, velocity_mask)
     return feature_loss + velocity_loss
+
+
+def masked_mean_abs(difference: torch.Tensor, frame_mask: torch.Tensor) -> torch.Tensor:
+    per_frame = difference.abs().mean(-1)
+    return (per_frame * frame_mask).sum() / frame_mask.sum().clamp(min=1.0)
 
 
 ############################################################

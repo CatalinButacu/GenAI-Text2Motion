@@ -57,11 +57,15 @@ class TokenizerConfig:
     quantizer: FiniteScalarStackLayout = FiniteScalarStackLayout.GROUPED
     quant_dropout: float = 0.2
     n_resblocks: int = 3
+    causal: bool = False
+    heading_correction: bool = False
+    heading_weight: float = 0.1
 
     def __post_init__(self) -> None:
         check_network_ranges(self.in_dim, self.width, self.downsample, self.num_quantizers)
         check_fraction("quant_dropout", self.quant_dropout)
         check_not_negative("n_resblocks", self.n_resblocks)
+        check_not_negative("heading_weight", self.heading_weight)
 
 
 ############################################################
@@ -120,3 +124,10 @@ class TokenizerSchedule:
     eval_every: int
     resume: bool = False
     accept_legacy_resume: bool = False
+    max_steps: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_steps is not None and self.max_steps <= 0:
+            raise ValueError(f"max_steps must be positive, got {self.max_steps}")
+        if self.max_steps is not None and self.resume:
+            raise ValueError("max_steps counts from the first step; it cannot resume a run")

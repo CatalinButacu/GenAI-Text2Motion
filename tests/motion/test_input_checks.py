@@ -203,7 +203,18 @@ def test_a_caption_with_nan_times_keeps_the_official_zero(tmp_path):
     assert (annotation.start_time, annotation.end_time) == (0.0, 0.0)
 
 
-def test_a_window_dataset_records_the_clips_it_drops(tmp_path):
+def test_a_window_dataset_records_the_clips_below_the_minimum_length(tmp_path):
+    dataset = MotionWindowDataset(
+        small_dataset_root(tmp_path),
+        MotionDataConfig(mirror_augment=False, min_motion_len=70),
+        Split.TRAIN,
+        70,
+        seed=2026,
+    )
+    assert dataset.dropped_clip_ids == ["A"]
+
+
+def test_a_short_clip_above_the_minimum_is_padded_and_keeps_its_length(tmp_path):
     dataset = MotionWindowDataset(
         small_dataset_root(tmp_path),
         MotionDataConfig(mirror_augment=False),
@@ -211,7 +222,10 @@ def test_a_window_dataset_records_the_clips_it_drops(tmp_path):
         70,
         seed=2026,
     )
-    assert dataset.dropped_clip_ids == ["A"]
+    assert dataset.dropped_clip_ids == []
+    clips = {dataset[index].clip_id: dataset[index] for index in range(len(dataset))}
+    assert clips["A"].frame_count == 60
+    assert clips["B"].frame_count == 70
 
 
 def test_the_frame_count_cache_rereads_an_equal_size_replacement(tmp_path):

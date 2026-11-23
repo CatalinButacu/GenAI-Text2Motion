@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 from dataclasses import replace
 from pathlib import Path
@@ -71,6 +72,43 @@ from text2motion.tokenization.tokenizer_trainer import (
 )
 
 logger = logging.getLogger(__name__)
+
+PROTOCOL_SEED = 2026
+PROTOCOL_SPLIT_RECORD = "protocol_splits.json"
+
+
+def require_protocol_run(seed: int, exploratory: bool, command: str) -> None:
+    if exploratory:
+        logger.warning(f"{command}: exploratory run with seed {seed}; the result is not citable")
+        return
+    if seed != PROTOCOL_SEED:
+        raise ValueError(
+            f"{command} would use seed {seed}; a protocol run uses seed {PROTOCOL_SEED} "
+            "(pass --exploratory to record a non-protocol run)"
+        )
+
+
+def freeze_protocol_splits(dataset_dir: Path) -> dict[str, str]:
+    record = {name: sha256_file(dataset_dir / name) for name in SPLIT_FILES.values()}
+    (dataset_dir / PROTOCOL_SPLIT_RECORD).write_text(json.dumps(record, indent=2), encoding="utf-8")
+    return record
+
+
+def verify_protocol_splits(dataset_dir: Path, exploratory: bool) -> None:
+    if exploratory:
+        return
+    record_path = dataset_dir / PROTOCOL_SPLIT_RECORD
+    if not record_path.is_file():
+        raise FileNotFoundError(
+            f"{record_path} is missing; freeze the splits before a protocol run"
+        )
+    frozen = json.loads(record_path.read_text(encoding="utf-8"))
+    for name in SPLIT_FILES.values():
+        actual = sha256_file(dataset_dir / name)
+        if frozen.get(name) != actual:
+            raise ValueError(
+                f"split file {name} changed since it was frozen (hash is now {actual})"
+            )
 
 
 def run_prepare(app: ApplicationContext, args: PrepareRequest) -> None:
@@ -156,14 +194,29 @@ def create_tokenizer_trainer(
 def run_train_tokenizer(
     app: ApplicationContext, args: TrainTokenizerRequest, final_split: Split = Split.TEST
 ) -> None:
+    require_protocol_run(app.seed, args.exploratory, "train-tokenizer")
+    verify_protocol_splits(
+        required_path(app.config.paths.hml3d_out_dir, "hml3d_out_dir"), args.exploratory
+    )
     app = with_tokenizer_kind(app, args.tokenizer)
     config = app.config
     trainer = create_tokenizer_trainer(app, args)
     module = trainer.tokenizer_network
     repository = app.create_motion_repository()
-    loader = repository.window_batch_loader(
-        Split.TRAIN, args.window, args.batch_size, num_workers=args.num_workers
-    )
+    if args.amass_share > 0:
+        if args.amass_features is None:
+            raise ValueError("amass_features must be set when amass_share is above 0")
+        loader = repository.mixed_window_batch_loader(
+            args.window,
+            args.batch_size,
+            args.amass_features,
+            args.amass_share,
+            num_workers=args.num_workers,
+        )
+    else:
+        loader = repository.window_batch_loader(
+            Split.TRAIN, args.window, args.batch_size, num_workers=args.num_workers
+        )
     evaluator = app.create_humanml3d_generation_evaluator()
     scaler = repository.load_scaler()
 
@@ -199,7 +252,13 @@ def run_train_tokenizer(
     train_tokenizer(
         trainer,
         loader,
-        TokenizerSchedule(args.epochs, args.eval_every, args.resume, args.accept_legacy_resume),
+        TokenizerSchedule(
+            args.epochs,
+            args.eval_every,
+            args.resume,
+            args.accept_legacy_resume,
+            args.max_steps,
+        ),
         device=app.device,
         evaluate=evaluate,
         checkpoint_path=checkpoint_dir / name,
@@ -252,6 +311,10 @@ def overfit_criteria(init_ckpt: Path | None) -> OverfitCriteria:
 
 
 def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> None:
+    require_protocol_run(app.seed, args.exploratory, "sanity-overfit")
+    verify_protocol_splits(
+        required_path(app.config.paths.hml3d_out_dir, "hml3d_out_dir"), args.exploratory
+    )
     repository = app.create_motion_repository()
     batch = next(iter(repository.captioned_batch_loader(Split.TRAIN, args.batch_size)))
     tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
@@ -302,6 +365,10 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
 
 
 def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) -> None:
+    require_protocol_run(app.seed, args.exploratory, "train-generator")
+    verify_protocol_splits(
+        required_path(app.config.paths.hml3d_out_dir, "hml3d_out_dir"), args.exploratory
+    )
     tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
     tokenizer = app.load_tokenizer(tokenizer_ckpt)
     architecture = app.resolve_generator_spec(args.backbone, tokenizer.codebook_size)
@@ -444,6 +511,11 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
 
 def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
     from text2motion.tokenization.contracts import TokenizerKind
+
+    require_protocol_run(app.seed, args.exploratory, "pretrain")
+    verify_protocol_splits(
+        required_path(app.config.paths.hml3d_out_dir, "hml3d_out_dir"), args.exploratory
+    )
 
     tokenizer_checkpoint = app.config.paths.tokenizer_checkpoint
     pack_identity = read_pack_identity(args.token_pack)

@@ -81,7 +81,17 @@ def pose_folders(source_path: str, pose_root: Path) -> list[Path]:
     if not parts:
         return []
     datasets = list(dict.fromkeys([_FOLDER_NAMES.get(parts[0], parts[0]), parts[0]]))
-    return [pose_root / Path(dataset, *parts[1:-1]) for dataset in datasets]
+    return list(
+        dict.fromkeys(
+            folder
+            for dataset in datasets
+            for folder in (
+                pose_root / Path(dataset, *parts[1:-1]),
+                pose_root / Path(dataset, dataset, *parts[1:-1]),
+                pose_root / Path(dataset, parts[0], *parts[1:-1]),
+            )
+        )
+    )
 
 
 def pose_candidates(source_path: str, pose_root: Path) -> list[Path]:

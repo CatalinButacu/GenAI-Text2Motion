@@ -36,7 +36,9 @@ def training_request(tmp_path, resume=False) -> TrainTokenizerRequest:
 
 
 class _FakeTrainer:
-    def train_epoch(self, loader, device):
+    steps_taken = 0
+
+    def train_epoch(self, loader, device, max_steps=None):
         return {"recon": 1.0, "total": 1.0, "perplexity": 1.0, "usage_frac": 1.0, "commit": 0.0}
 
     @contextmanager

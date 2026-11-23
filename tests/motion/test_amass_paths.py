@@ -29,17 +29,53 @@ def test_pose_candidates_follow_the_fixed_spelling_order(tmp_path, monkeypatch):
         resolve_pose_path("pose_data/BMLrub/rub001/0001_treadmill_slow_poses.npy", pose_root)
         is None
     )
-    assert checked == [
+    doubled = pose_root / "BMLrub" / "BMLrub" / "rub001"
+    assert checked[:5] == [
         folder / "0001_treadmill_slow_stageii.npy",
         folder / "0001_treadmill_slow_poses.npy",
         folder / "0001_treadmill_slow.npy",
         folder / "0001_treadmill_slow_poses_stageii.npy",
         folder / "0001_treadmill_slow_poses_poses.npy",
     ]
+    assert checked[5:10] == [
+        doubled / "0001_treadmill_slow_stageii.npy",
+        doubled / "0001_treadmill_slow_poses.npy",
+        doubled / "0001_treadmill_slow.npy",
+        doubled / "0001_treadmill_slow_poses_stageii.npy",
+        doubled / "0001_treadmill_slow_poses_poses.npy",
+    ]
+    assert len(checked) == 10
 
     checked.clear()
     assert resolve_pose_path("", pose_root) is None
     assert checked == []
+
+
+def test_an_official_dataset_name_inside_its_folder_resolves(tmp_path):
+    nested = tmp_path / "pose_data" / "EyesJapanDataset" / "Eyes_Japan_Dataset" / "aita"
+    nested.mkdir(parents=True)
+    expected = nested / "accident-02-dodge_fast-aita_stageii.npy"
+    expected.write_bytes(b"")
+
+    found = resolve_pose_path(
+        "./pose_data/Eyes_Japan_Dataset/aita/accident-02-dodge_fast-aita_poses.npy",
+        tmp_path / "pose_data",
+    )
+
+    assert found == expected
+
+
+def test_a_pose_folder_with_a_doubled_dataset_name_resolves(tmp_path):
+    doubled = tmp_path / "pose_data" / "KIT" / "KIT" / "3"
+    doubled.mkdir(parents=True)
+    expected = doubled / "kick_high_left02_stageii.npy"
+    expected.write_bytes(b"")
+
+    found = resolve_pose_path(
+        "./pose_data/KIT/3/kick_high_left02_poses.npy", tmp_path / "pose_data"
+    )
+
+    assert found == expected
 
 
 @pytest.mark.parametrize(

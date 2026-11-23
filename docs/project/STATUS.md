@@ -1,5 +1,275 @@
 # STATUS -- session checkpoint (2026-11-08, updated)
 
+## Update (2026-11-22, T2 stopped; Mamba kernel rebuild for this environment)
+
+- T2 (t2_mamba_causal_heading) stopped at your request. Cause of the slow steps: the probe config runs the Mamba scan in plain Python (use_kernel false, with activation recomputation). The GPU load swings between 0 and 100 percent between steps.
+- The saved compiled kernel (third_party/mamba_kernel) is built for Python 3.12 and cannot load in this environment, which runs Python 3.14. Environment note: the project rules say Python 3.12, but the venv runs 3.14.10.
+- Rebuild started: Mamba CUDA kernel for Python 3.14, torch 2.12.0+cu132, CUDA architecture 8.9 (RTX 4050). Log: runs/logs/kernel_build_py314_sm89.log. Expected about 46 minutes.
+- Next: equivalence test (kernel against Python scan, same inputs, tolerance), then the speed test, then T2 restart with the kernel only if both pass.
+- Build attempt 1 failed: missing setting DISTUTILS_USE_SDK=1. Attempt 2 failed: the CUDA compiler ran out of memory with too many parallel jobs. Attempt 3 started 20:54 with MAX_JOBS=3.
+
+## Update (2026-11-22 late, T2 kernel run finished; validation only)
+
+- Run t2k_mamba_causal_heading (kernel on, seed 2026, causal tokenizer r11): early stop at epoch 25 of 40 (validation cross-entropy did not fall for 6 epochs; best 3.84).
+- Epoch time: about 2.5 minutes (earlier runs: 13 to 21 minutes). Whole run: about 70 minutes.
+- Validation text-to-motion scores (628 clips), by evaluation epoch:
+  - epoch 5: FID 16.1, R@1 0.110
+  - epoch 10: FID 3.85, R@1 0.181
+  - epoch 15: FID 3.04, R@1 0.268
+  - epoch 20: FID 2.13, R@1 0.311 (best FID, saved as the best checkpoint)
+  - epoch 25: FID 2.42, R@1 0.273
+- Clean cross-entropy at the stop: train 2.83, validation 3.86, gap +1.04. Overfitting starts after epoch 20.
+- Caution: FID 2.1 is far below the 33.9 of the 2-epoch probe. Before any claim, check the evaluator on real motion and check the split.
+- Evaluator check (2026-11-22, 23:03, validation split, all 765 segments, best checkpoint):
+  - A. FID generated vs real, same metric: 2.03 (training log 2.13; the gap comes from the clip subset and sampling).
+  - B. Floor: FID real vs real, random halves, 5 splits: mean 0.68, range 0.29 to 1.15. The model FID is about 3 times the floor.
+  - C. Memorisation: nearest real distance for generated median 1.03, real-to-other-real median 0.88. 6.4 percent of generated segments lie closer than half the real median. No copy of a validation clip is visible.
+  - D. Lengths: generated and real mean 143.0 frames.
+  - Subset note: training scores the first 600 clip IDs (max_eval_clips), which gives 628 segments. The probe numbers use the same subset, so the comparison is fair.
+- Source overlap (2026-11-22, by source path from index.csv; clip ids from the split files):
+  - Validation: 224 of 720 source files, and 458 of 1460 clips, also appear in training.
+  - Test: 639 of 2122 source files, and 1336 of 4384 clips, also appear in training (matches the earlier record).
+  - Validation scoring subset (600 IDs, 628 segments): 201 segments have a shared source, 427 do not.
+- Overlap effect on the score (validation, best checkpoint, 628 segments):
+  - FID, shared-source segments: 3.05.
+  - FID, other segments: 2.21.
+  - FID, other segments subsampled to 201 (20 draws): mean 2.46, range 1.87 to 3.14.
+  - Result: shared-source segments score worse, not better. The overlap does not inflate the validation FID in this check. Small sample sizes: treat as a sign, not a proof.
+- The T6 decision still matters for the test split, because the test overlap is 30 percent of clips.
+
+## Update (2026-11-23 03:35): E2 started (grouped tokenizer, AMASS share 0.25, equal steps)
+
+- E1 steps: 154 per epoch, 15400 in total (100 epochs), counted from the grouped loader.
+- E2 settings: same config and seed, AMASS share 0.25 from the listed training clips (data/processed/amass_263/train.txt, 9417 clips), step limit 15400 (about 75 epochs, 206 steps per epoch with AMASS). Validation every 5 epochs. Test scored once at the end, on the best validation checkpoint.
+- Run: tok_grouped_e2_amass25_causal_heading_w001. Log: runs/outputs/research/tok_grouped_e2_amass25.out.log. Guard 6 hours.
+- Comparison rule: E1 and E2 share the grouped validation and test sets, and the same step count. The E2 result answers only one question: does AMASS help at equal steps.
+
+## Update (2026-11-23 03:30): grouped tokenizer E1 finished (protocol v2, grouped split, HumanML3D only)
+
+- Run tok_grouped_r11_causal_heading_w001 (run dir 20261122T220439Z_tokenizer_tok_grouped_r11_causal_heading_w001): 100 epochs, seed 2026, window 256, batch 128, causal, heading weight 0.01, no AMASS. Finished normally, no guard kill.
+- Validation recon-FID (2191 segments), selected by this value: epoch 5 18.32 (MPJPE 318 mm), epoch 10 1.82, epoch 20 0.57, epoch 50 0.15, epoch 100 0.0917 (MPJPE 72.1 mm). The curve was still falling slowly at epoch 100, so the run is not fully converged.
+- Test (2190 segments), best validation checkpoint, scored once at the end of the run: recon-FID 0.0777, MPJPE 72.3 mm.
+- Checkpoint: runs/checkpoints/tokenizer/tok_grouped_r11_causal_heading_w001 (best), and the resume file of epoch 100.
+- Comparison caution: this test set is the grouped test split. The r11 test value (0.0887, 83.2 mm) is on the official test split. The two numbers are not comparable. This is L1.
+- Next: E2 (AMASS share 0.25, equal steps to E1). The step count of E1 is not logged; it is calculated from the loader before E2 starts.
+
+## Update (2026-11-23 00:45): raw AMASS removed (owner approval); processed copy kept
+
+- Removed: data/raw/amass (147 GB, 16429 files, 23 dataset folders: ACCAD, BMLmovi, BMLrub, CMU, CNRS, DanceDB, DFaust, EKUT, EyesJapanDataset, HDM05, HUMAN4D, HumanEva, KIT, MoSh, PosePrior, SFU, SOMA, SSM, TCDHands, TotalCapture, Transitions, WEIZMANN). No archive files existed.
+- Kept (processed, the only AMASS input from now on):
+  - data/processed/amass_regen/pose_data: 15927 pose files (path source for the source links).
+  - data/processed/amass_regen/joints, new_joints, new_joint_vecs, index_manifest.json, dropped_index_rows.csv.
+  - data/processed/amass_263/new_joint_vecs: 12377 features; corpus_manifest.json (complete true, 0 failed, 40.68 hours); train.txt (9417 usable names, see L2).
+- Check before removal: no config and no code path reads the raw folder. Processed pose files are the input of the link check.
+- Raw data cannot be rebuilt from this project. If the raw files are needed again, download them from the AMASS source again, and check the corpus manifest.
+
+## Update (2026-11-23 00:30): disk space breakdown (system drive, 476 GB total, about 4.5 GB free)
+
+- Thesis folder, 231 GB: raw data 172 GB (AMASS 147, GRAB 20, HumanML3D 4, EHF 1); processed data 9 GB; renders 18 GB; runs 18 GB (resume files about 0.65 to 0.8 GB each); virtual environment 4 GB; models 3.5 GB; other 3 GB.
+- Documents, other folder: Work 40 GB (not thesis data).
+- AppData, 29 GB: uv cache (pruned now, 1.2 GB freed), Programs 5.4, Microsoft 4.5, Temp 3.5, Brave 2.1.
+- OneDrive 4.6 GB.
+- Cleaned without approval: uv cache prune (1.2 GB) and pip cache purge (caches only, regenerable).
+- Owner decisions needed (candidates, nothing deleted):
+  1. Raw AMASS, 147 GB: the processed corpus exists. Move the raw files to external storage, or delete them after a checksum record. Rebuilding needs the raw files.
+  2. Renders, 18 GB: regenerable outputs.
+  3. Resume files of finished runs, about 13 GB: keep the best checkpoints, delete the resume files.
+  4. Documents\Work, 40 GB: outside this project.
+- Process fix (proposed code change): fail loud at run start when free space is below the resume file size plus a margin; keep only the newest resume file per run.
+
+## Update (2026-11-23 00:10): grouped tokenizer run crashed (disk full), restarted
+
+- The first grouped tokenizer run (tok_grouped_r11_causal_heading_w001) crashed at the end of epoch 5, when it saved the resume file. Cause: the system drive had 3.7 GB free. The write failed, and a leftover temporary file stayed locked.
+- Epoch 5 values match run r11 (training recon 0.451 against 0.443; validation MPJPE 318 mm against 277 mm on a larger validation set of 2191 segments). No sign of a code error.
+- Action: deleted the two failed-write leftovers (about 0.65 GB). Free space now 4.35 GB. The run restarted from epoch 1 (no resume file exists), guard 6 hours. Log: runs/outputs/research/tok_grouped_r11_run2.out.log.
+- Blocker for the generator runs: each resume file is about 0.8 GB, and the disk has little room. Owner decision needed on which old checkpoints may be deleted (candidates: the eq_s2027 to eq_s2030 off-protocol checkpoints, about 1.4 GB, and the older resume files of finished tokenizer runs, about 4 GB). Nothing else was deleted.
+
+## Update (2026-11-22 evening): grouped split built, tokenizer retraining started, AMASS mapping verified
+
+- Owner approved the tokenizer retraining. Owner rule: experiments are autonomous; decisions on the big project need the owner. Cross-split contamination is a red flag at every step.
+- Grouped dataset: data/processed/humanml3d_grouped. Built with the existing function text2motion.dataset.preparation.write_grouped_split (new function, no new script). The old script was removed. Lists include mirrored copies, as in the official lists. Base clips: train 10230, val 2192, test 2192. Lines: 20460, 4384, 4384. Two base clips have no mirror file.
+- Normalisation (Mean, Std) refitted on the grouped training list only (existing fit_train_stats). Feature folder: junction to the official feature folder.
+- Protocol record for the grouped dataset: data/processed/humanml3d_grouped/protocol_splits.json, and docs/project/protocol_split_grouped.json.
+- Contamination check (independent of the build function): shared source files between splits: 0 (train-val, train-test, val-test). Shared clip ids: 0.
+- Tokenizer retraining: configs/tokenizer/grouped/fsq_g8_w1024_causal_heading_w001.yaml (same settings as r11, grouped dataset). Run tok_grouped_r11_causal_heading_w001, guard 10 hours, log runs/outputs/research/tok_grouped_r11.out.log. Epoch 1: recon 0.6297.
+- AMASS mapping (L2): verified. Links 6590 train, 1869 val, 1905 test pose files. Copies of val or test sequences: 0. AMASS corpus: 9417 usable clips, 2960 blocked.
+- Code change: the AMASS extension loader reads data/processed/amass_263/train.txt (fails loud if a name has no feature file). The list is a data file, not a script.
+- Next: E2 = grouped tokenizer plus AMASS share 0.25, with the same number of steps as E1 (equal-step control). Then decide.
+
+## KNOWN PROBLEM FOR THE PAPER (2026-11-22): source overlap in the official split (limitation L1)
+
+- The official HumanML3D split assigns clips by base clip. Source files appear in more than one split.
+- Overlap: test 639 of 2122 source files (1336 of 4384 clips) are also in training. Validation 224 of 720 source files (458 of 1460 clips).
+- Checked effect: on the generator validation score, shared-source segments scored worse (3.05 against 2.21). Effect on the tokenizer choices and the other parameters: not measured.
+- All results on the official split are provisional. The list is in docs/project/LIMITATIONS.md, L1. Refer to it as L1 in the final paper.
+- Decision (owner, 2026-11-22): the grouped split is the protocol. Record: docs/project/protocol_split_grouped.json. Build: scripts/maintenance/build_grouped_split.py.
+- Still open: retraining of the tokenizer and the generators on the grouped training split (needs owner approval); AMASS mapping (L2).
+- Script rewritten for lint (functions, sorted imports, no unused variables, a real disjointness check). Re-run: the three split hashes are identical to the record. Ruff: all checks passed. Pyright: 0 errors. The editor Problems tool is not available in this session; ruff and pyright were used instead.
+
+## Proposal (2026-11-22): leakage-free grouped split (adopted, see above)
+
+- New folder: data/processed/humanml3d_grouped (train.txt, val.txt, test.txt, grouped_split.json). The frozen official files are unchanged.
+- Rule: group key is the source file (source_path in index.csv). Each group goes to exactly one split. Seed 2026. Target 70/15/15 by clip count.
+- Sizes (base clips, 14616 total, 11715 source files): train 10231 (70.0 percent), val 2193 (15.0), test 2192 (15.0). Zero groups in two splits.
+- Consequence 1: 80.7 percent of the new validation clips and 81.5 percent of the new test clips were in the old training split. The tokenizer r11 and the generator t2k were trained on them. Both must be retrained on the new training split before any new score counts.
+- Consequence 2: the scores cannot be compared with published HumanML3D numbers, which use the official split. Report both, with the reason.
+- AMASS: the AMASS corpus (12377 clips) excluded the old validation and test sources (2525 skipped). It must be grouped with the new split too: each AMASS clip goes to the split of its source file. This mapping is not verified yet.
+- Needs owner decision: (1) adopt the grouped split as the protocol; (2) retrain the tokenizer (this changes the rule that the tokenizer is frozen) and the generators.
+- Test split: not scored. It waits for the owner decision on the split (T6).
+- Guard: no kill record for this run.
+
+## Update (2026-11-22, kernel fixed and verified; performance issue addressed)
+
+- Kernel rewritten (plain template dispatch, both kernel files). Build for Python 3.14, exit 0 at 21:37.
+- Kernel against the reference scan: relative error 4e-7 to 4e-6 (forward and gradients, lengths 128 to 1000).
+- Speed, one backbone training step: Python scan median 49.9 s, peak GPU memory 10.6 GB (the 6 GB GPU spilled to system memory, which explains the 0 to 100 percent spikes). Kernel median 2.9 s, peak 1.7 GB. About 17 times faster.
+- Config with the kernel on: configs/generator/t2_causal_heading_kernel/gen_t2_causal_heading_kernel.yaml. Overfit gate with the kernel: PASS (runs/outputs/gates/t2_kernel_causal_heading.json, step 201, token accuracy 1.000).
+- T2 restarted with the kernel at 21:49: run t2k_mamba_causal_heading, 40 epochs, seed 2026, protocol flags. Guard: 16 hours. Log: runs/outputs/research/t2k_mamba_causal_heading.out.log.
+- Decision: keep PyTorch. CNTK is not an option (maintenance only, no CUDA 11 or later).
+- Details: third_party/mamba_ssm-2.3.2.post1-msvc/MSVC_PORT.md.
+
+## Update (2026-11-22, T2 stopped; Mamba kernel rebuild for this environment)
+
+- Attempt 3 failed at selective_scan_fwd_kernel.cuh line 315 (MSVC C2131). Cause: a named constant from an outer lambda used as a template argument in a nested lambda (upstream pattern, not changed by us).
+- Fix tests (small MSVC files, not the kernel): four lambda capture variants fail. Plain template functions with the constants as template parameters compile. Next: rewrite the switch launch in the forward and backward kernels with plain template functions, then rebuild. Not applied yet.
+
+## Update (2026-11-22, T2 started: full Mamba generator run)
+
+- Run t2_mamba_causal_heading: Mamba backbone, causal tokenizer r11, seed 2026, protocol settings. Epochs 40 (budget about 9 to 13 hours). Validation every 5 epochs. Patience 6 on validation FID and on validation cross-entropy.
+- Overfit gate: probe_mamba_causal_heading.json (same configuration, PASS).
+- Log: runs/outputs/research/t2_mamba_causal_heading.log.
+- Test split scored once, after selection, as the protocol requires.
+
+## Update (2026-11-22, T1 result: generator probe on the chosen tokenizer)
+
+- Mamba generator, causal tokenizer r11, 2 epochs, validation split (628 clips scored): text-to-motion FID 33.9, R@1 0.036, R@3 0.095, MM 7.75, Diversity 3.30. Epoch 1 took 20.9 minutes; epoch 2 took 13.2 minutes.
+- Training cross-entropy fell from 6.64 (epoch 1) to 5.94 (epoch 2). The generator learns.
+- Compared with the probe on the non-causal tokenizer r6 (2 epochs): FID 38.6, R@1 0.038, R@3 0.107, MM 7.89, Diversity 3.17. The causal tokenizer gives a lower FID, and similar retrieval.
+- Limit: one evaluation point after 2 epochs. The FID trend is not yet known. The result does not support a thesis claim.
+
+## Update (2026-11-22, tokenizer decision: r11, heading weight 0.01)
+
+- Decision: the tokenizer is causal grouped FSQ, width 1024, 256-frame windows, heading correction with weight 0.01 (run r11_causal_heading_w001_e100). Chosen for bounded heading and root-aligned error on long sequences. Cost: test recon-FID 0.089 (against 0.058 without heading loss), test MPJPE 83 mm.
+- Generator config for this tokenizer: configs/generator/probe_causal_heading/gen_probe_causal_heading.yaml (causal, heading correction on, weight 0.01).
+- Overfit gate (Mamba): PASS. Written to runs/outputs/gates/probe_mamba_causal_heading.json. Step 26: cross-entropy 0.0045, token accuracy 1.000.
+- Generator probe (Mamba, 2 epochs) started. Log: runs/outputs/research/probe_mamba_causal_heading.log.
+
+## Update (2026-11-22, heading correction result and weight check)
+
+- r10 (causal, 256-frame windows, heading weight 0.1, 100 epochs): test recon-FID 0.540, test MPJPE 131 mm. Compared with r9 (no heading loss): 0.058 and 105 mm. The heading loss at weight 0.1 dominates training: reconstruction loss 0.29 against about 0.15, and codebook usage fell to 42 percent (about 92 percent in r9). Result: weight 0.1 is too large.
+- r11 (same model, heading weight 0.01, 100 epochs), seed 2026: test recon-FID 0.0887, test MPJPE 83.2 mm. Config configs/tokenizer/causal/fsq_g8_w1024_causal_heading_w001.yaml.
+- Long sequences (10 AMASS clips, at least 800 frames), r11: heading error per 200-frame bin 2.4, 5.5, 5.2, 5.9 degrees; root-aligned MPJPE per bin 57, 78, 66, 69 mm. Both stay flat over the sequence. Compare r9 (no heading loss): heading 9.9 to 18.0 degrees and root-aligned 88 to 123 mm. r9 had not stabilised.
+- r12 (heading weight 0.03, 100 epochs), seed 2026: test recon-FID 0.162, test MPJPE 94.7 mm. Long sequences: heading error per bin 2.1, 4.9, 5.3, 7.0 degrees; root-aligned MPJPE per bin 66, 84, 74, 90 mm. Both stay roughly flat, but the test FID is worse than r11. Test FID against heading weight: 0.01 gives 0.089, 0.03 gives 0.162, 0.1 gives 0.540. Lower weight is better for FID; the heading error is bounded at all three weights tested.
+- Trade-off: r11 gives bounded error on long sequences and a lower test MPJPE (83 against 105 mm), but a higher test recon-FID (0.089 against 0.058). The FID and the MPJPE disagree; the choice needs the owner's decision.
+
+## Update (2026-11-22, heading correction, hybrid step 4)
+
+- Implementation: a learned head predicts a per-token correction of the turning feature from the decoder latent. The correction is causal (it uses only the current and past tokens). The head starts at zero, so the untrained model equals the model without correction.
+- Training loss: a heading loss on the accumulated turning error over each training window (teacher-forced start). Weight 0.1 (config heading_weight). It is added to the reconstruction loss and the commitment loss.
+- Config: configs/tokenizer/causal/fsq_g8_w1024_causal_heading.yaml. Run r10_causal_heading_w256_e100 (causal, 256-frame windows, 100 epochs, seed 2026), in progress.
+- Tests: zero-start identity, zero heading loss for exact motion, positive loss for accumulating error, causality with a random head. 434 tests pass.
+- Next: compare r10 with r9 on test recon-FID and on the long-sequence heading error.
+
+## Update (2026-11-21, causal tokenizer with 256-frame windows, hybrid step 3)
+
+- Causal grouped FSQ, width 1024, 256-frame windows, 100 epochs, seed 2026 (r9): test recon-FID 0.0577, test MPJPE 104.6 mm. The 64-frame causal run gave 0.0708 and 141 mm.
+- Long sequences (10 AMASS clips, at least 800 frames): root-aligned MPJPE 88 mm to 123 mm, against 83 mm to 139 mm for the 64-frame causal run. Absolute MPJPE still grows: 208 mm to 648 mm.
+- Heading error per 200-frame bin: 9.9, 24.5, 20.9, 18.0 degrees. It no longer grows steadily, but it stays near 20 degrees. Longer windows stop the drift, but they leave a large heading offset. Part 4 of the hybrid design (learned heading correction) is needed for a bounded error.
+
+## Update (2026-11-21, 500-epoch tokenizer, causal results, long sequences)
+
+- Non-causal grouped FSQ, width 1024, 500 epochs: test recon-FID 0.0178, test MPJPE 103 mm. Gap train to validation on 40 clips each: absolute 91 against 96 mm; root-aligned 21 against 26 mm. The validation curve has been flat since about epoch 300. Mild overfitting has started, and the gap is still small.
+- Causal grouped FSQ, width 1024, 100 epochs: test recon-FID 0.0708, test MPJPE 141 mm. The non-causal 100-epoch run gives 0.0240. Causality costs about three times the FID at equal epochs.
+- Long sequences (10 AMASS clips of at least 800 frames, scripts/checks/long_sequence_check.py): error grows with length. Non-causal 500 epochs: root-aligned MPJPE 63 mm in the first 200 frames, 132 mm in the last bin. Causal 100 epochs: 83 mm to 139 mm. Absolute MPJPE: 158 to 542 mm and 189 to 623 mm.
+- Cause (measured): heading error. Heading is the running sum of predicted turning speed. Heading error grows from 5.7 to 20.8 degrees over the 800 frames (non-causal 500 epochs). Infinite-time streaming needs a heading correction or a window reset.
+- Decision needed: heading correction (window reset with measured seam error), a heading-invariant representation, or longer training windows.
+
+## Update (2026-11-21, causal tokenizer, option 3)
+
+- Design: causal encoder and causal decoder. Each convolution looks only at past frames. The decoder repeats each token in time, then applies a causal convolution. The non-causal path is unchanged, and its checkpoints still load.
+- Setting: TokenizerConfig.causal (default off). Config: configs/tokenizer/causal/fsq_g8_w1024_causal.yaml.
+- Tests: encoder token and decoder frame do not read later frames (causal). Control tests show the non-causal model does read later frames. Full suite: 429 passed. Type and lint checks clean.
+- Quantization makes a plain output comparison weak. The encoder and decoder are therefore tested before quantization.
+- Training: causal grouped FSQ, width 1024, 100 epochs, seed 2026 (run r8_causal_fsq_w1024_e100). It starts after the 500-epoch non-causal run (r7), which has about one hour left.
+- Still open: long-sequence test beyond 196 frames (drift), root-relative error for infinite streams, and the generator on the causal decoder.
+
+## Update (2026-11-21, overfit check of the 100-epoch tokenizer)
+
+- Same metric on training and validation clips (40 each, 100-epoch grouped FSQ, width 1024, best validation checkpoint): training absolute MPJPE 110.3 mm, root-aligned 24.2 mm; validation 111.8 mm, root-aligned 28.1 mm. Gap small: the tokenizer generalizes at 100 epochs. Small sample; the 500-epoch run is the next check.
+- Generator probe (Mamba, 2 epochs): validation text-to-motion FID 38.6, retrieval at 1 0.038. Speed 12 to 15 minutes per epoch.
+- 500-epoch tokenizer run (r7_fsq_w1024_e500) restarted after a file-lock failure caused by a concurrent job. Speed about 25 seconds per epoch; about 3.6 hours expected.
+
+## Update (2026-11-21, step 1 decision and generator probe start)
+
+- Step 1, 100 epochs, seed 2026, width 1024. Best validation recon-FID: grouped FSQ 0.0318, residual 0.0335. Choice by validation: grouped FSQ. Test scores (not used for the choice): FSQ 0.0240 and 106 to 109 mm MPJPE, residual 0.0249 and 106 mm MPJPE. The validation gap is small and comes from one seed.
+- Generator config for the chosen tokenizer: configs/generator/probe_fsq_w1024/gen_probe_fsq_w1024.yaml (tokenizer width 1024).
+- Overfit gate (Mamba): PASS. Written to runs/outputs/gates/probe_mamba_fsq_w1024.json. Step 26: cross-entropy 0.0105, token accuracy 0.997.
+- Generator timing probe (Mamba, 2 epochs) started. Its log is runs/outputs/research/probe_mamba_fsq_w1024.log.
+
+## Update (2026-11-20, width sweep and step 1 candidates)
+
+- Width sweep, grouped FSQ, 50 epochs, seed 2026, current code. Parameters, best validation recon-FID, test recon-FID, test MPJPE: width 256, 3.0 M, 0.267, 0.223, 241 mm. Width 512, 11.3 M, 0.072, 0.059, 142 mm. Width 1024, 43.6 M, 0.043, 0.035, 119 mm.
+- Choice by validation only: width 1024.
+- Reproducibility check: width 512 rerun under the current code gives test recon-FID 0.0586, the same as the earlier run.
+- Step 1 candidates, 100 epochs, seed 2026, width 1024: grouped FSQ (r6_fsq_w1024_e100) and residual quantization at matched bits (r6_rvq_w1024_e100). The choice between them uses validation reconstruction only, then the generator probe in step 2.
+
+## Update (2026-11-20, data quality hypothesis)
+
+- Diagnostic (scripts/checks/data_quality_diagnostic.py, 2 105 test clips, 50-epoch grouped FSQ): Spearman rank correlation between root-aligned error and the project quality measures. Skating 0.27, floating 0.32, jerk 0.40, yaw (turning speed) 0.63. Fast turning explains most of the error. Data artifacts correlate, but more weakly.
+- Filtered training split (scripts/maintenance/build_clean_train_split.py, existing project quality model fitted on the training clips only): 1 349 of 11 692 base clips flagged. Kept clips have lower jerk (28.8 against 32.3) and lower skating. Test and validation splits are unchanged. Folder data/processed/humanml3d_clean, with a protocol record.
+- Runs in the queue: r4_clean_fsq (50 epochs, 7 900 steps) and r4_base_eq_clean (no AMASS, stopped at 7 900 steps). Result: the clean-data gain at equal steps. Known confound: the normalization statistics are still the full-training statistics.
+- Not yet proven: that preprocessing is the main lever. The turning-speed result suggests that motion content limits the error.
+- Result at equal steps (7 900 steps, seed 2026). Full data, no filtering: test recon-FID 0.0638, test MPJPE 146.6 mm, final validation recon-FID 0.0777. Filtered data: test recon-FID 0.0671, test MPJPE 147.8 mm, final validation recon-FID 0.0860. The filtering did not improve the result. The removed clips probably include valid hard motions, which reduces variety. One seed; the gap is small. Verdict: the filtering hypothesis is not supported.
+
+## Update (2026-11-20, equal-step controls and run report hook)
+
+- Test set, seed 2026, 50 epochs unless stated. Recon-FID and absolute MPJPE.
+  - Grouped FSQ, no AMASS, 50 epochs (8 750 steps at 175 per epoch): 0.0586, 141.8 mm.
+  - Residual tokenizer, matched bits, 50 epochs: 0.0478, 128.2 mm.
+  - Grouped FSQ, AMASS share 0.25, 50 epochs (11 650 steps): 0.0430, 126.7 mm.
+  - Grouped FSQ, AMASS share 0.5, 50 epochs (17 500 steps): 0.0349, 117.7 mm.
+  - Equal-step control for share 0.25, no AMASS, 11 650 steps: 0.0433, 131.6 mm.
+  - Equal-step control for share 0.5, no AMASS, 17 500 steps: 0.0304, 121.3 mm.
+- Reading: at equal steps, the AMASS share does not change the recon-FID. The share 0.25 run has a lower MPJPE (126.7 against 131.6 mm). The share 0.5 run has a higher recon-FID (0.0349 against 0.0304) and a lower MPJPE (117.7 against 121.3 mm). Most of the gain in the earlier table came from the extra steps. The result is mixed and rests on one seed.
+- Residual tokenizer against grouped FSQ at matched bits (80 bits per token): residual is better on both measures (0.0478 against 0.0586; 128.2 against 141.8 mm). This is one seed.
+- Run report hook: .claude/hooks/run_report.py runs after each shell command. It reports each finished training run once, with its test recon-FID and MPJPE. The first run marks all existing runs as reported. Its list is runs/outputs/reported_runs.json.
+- MLflow web view: http://127.0.0.1:5001 (version 3.17.0, full package). The older view on port 5000 is still running and shows no interface. It can be closed once the process can be stopped.
+
+## Update (2026-11-20, MLflow view of the local runs)
+
+- Local MLflow store: runs/logs/mlflow.db, experiment "tokenizer". It holds 23 tokenizer runs, backfilled from the saved metrics and manifests by scripts/maintenance/backfill_mlflow.py. Each run records its seed, precision, git commit and start time.
+- Web view: http://127.0.0.1:5000 (this machine only). It was started with the flask, flask-cors and aiohttp packages added to the project environment. These packages are not in the project dependency list yet.
+- Off-protocol runs (seeds 2027 to 2030) appear in the store. Filter on the seed parameter, and exclude them from the paper.
+- New runs are not logged to MLflow yet. The project flag mlflow_tracking is off by default.
+
+## Update (2026-11-20, epics A25 and A26, 50-epoch tokenizers, seed 2026)
+
+- Test set, 2 189 clips, recon-FID and absolute MPJPE. Grouped FSQ, no AMASS: 0.059, 142 mm. Residual tokenizer at matched bits (80 bits per token): 0.048, 128 mm. Grouped FSQ with AMASS share 0.25: 0.043, 127 mm. Share 0.5 run: queued or running.
+- Caveat: the AMASS runs take more steps (233 steps per epoch for share 0.25, against 175 for no AMASS). The gain may come from the extra steps. Equal-step controls are queued: no AMASS for 67 epochs with the step cap at 11 650 (share 0.25 steps), and no AMASS for 100 epochs with the step cap at 17 500 (share 0.5 steps).
+- One seed. Claims need the controls and, if possible, more seeds under the protocol.
+
+## Update (2026-11-20, epics A23 and A24)
+
+- A23 protocol guard: every training command checks the effective seed. Seed 2026 is the protocol seed. Other seeds are refused unless the run is marked exploratory. The split files are frozen with hashes and checked before each protocol run. A seed 2027 config was refused by the command line. 424 tests pass.
+- A24 metric check: the project joint recovery and a second implementation agree to 2.8e-7 m on 20 validation clips. This checks the code path. It does not check the formula against the official HumanML3D code.
+- Metric definitions used in this project. Absolute MPJPE: mean distance between reference and reconstructed joints, all 22 joints, all frames, in mm. Root-aligned MPJPE: the same, after subtracting the root joint from every joint in each frame.
+- Seed 2026 checkpoint results, 20 validation clips: base (2 epochs, 350 steps) absolute 460 mm and root-aligned 109 mm; share 0.25 absolute 456 mm and root-aligned 110 mm. Most of the absolute error comes from the root trajectory, which drifts over the clip. The root-aligned value is the better measure of pose quality. The earlier figures of 500 to 700 mm are absolute values.
+- Off-protocol checkpoints (seeds 2027 to 2030) are in the checkpoint folder. They are not used for any claim.
+
+## Update (2026-11-20, AMASS extension, padding, equal-step runs)
+
+- Data: the SMPL-X v1.0 body models are in place. The AMASS pose stage converted 15 927 sequences. The feature corpus has 12 377 clips, about 40.7 hours, with 2 525 clips skipped because HumanML3D uses the same source file.
+- Path fix: pose files live in doubled or nested folders for some datasets. The lookup now tries these layouts. Tests added.
+- Dropped clips: 109 index rows have fewer than 2 frames after the head trim. They are listed in a log file, and 20 of them are in the official test split.
+- Padding: clips of 40 frames or more are kept and padded to the window. The loss ignores padded frames.
+- Mixing: the tokenizer stream can add AMASS windows at a fixed share per epoch. Option 2 was chosen: the AMASS share is a separate setting from the verb balance.
+- Step limit: the tokenizer command has a max-steps option. It cannot be used with resume.
+- Smoke runs (one epoch, one seed): no AMASS 22 418 windows per epoch; share 0.25 29 891; share 0.5 44 836. Test recon-FID 51.9, 41.6, 22.8. The step counts differ, so these runs do not compare the share.
+- Equal-step runs (350 steps): no AMASS, 2 epochs, test recon-FID 21.3; share 0.5, 1 epoch, test recon-FID 22.8. At equal steps the AMASS mix is slightly worse, and no claim about AMASS benefit is supported yet.
+- Equal-step runs (350 steps, all with the step limit): no AMASS test recon-FID 21.3 and MPJPE 511 mm; share 0.25 test recon-FID 20.1 and MPJPE 518 mm; share 0.5 test recon-FID 22.8 and MPJPE 525 mm. The 0.25 share is slightly better on recon-FID and slightly worse on MPJPE. One seed: no claim.
+- OFF-PROTOCOL, NOT CITABLE: runs with seeds 2027, 2028, 2029 and 2030 were started by mistake. The project rule is seed 2026 only, for every run and every paper figure. These runs are kept in the logs as exploratory records. They must not appear in the paper, in tables or in claims. The only protocol-compliant equal-step results are the seed 2026 runs listed above.
+- Open: the health statistics still count padded frames (logs only). The test split decision (report the overlap, or add a source-level split) is not made.
+
 ## Update (2026-11-18, A24 names, moves, torch.compile, roma)
 
 - f9e05ad: 7 file renames (nn_generator, nn_tokenizer, generator_trainer, tokenizer_trainer, reconstruction_metrics, token_datasets, studio_config); git sees pure renames.

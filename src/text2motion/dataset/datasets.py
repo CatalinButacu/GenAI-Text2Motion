@@ -24,12 +24,15 @@ from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import (
     FEATURES_DIR,
+    SPLIT_FILES,
     TEXTS_DIR,
     base_clip_ids,
+    listed_clip_ids,
     parse_text_file,
 )
 
 CLIP_LENGTHS_FILE = "clip_lengths.json"
+EXTENSION_PLAN_STREAM = 1
 RARE_VERB_MIN_CLIPS = 5
 RARE_VERB_POWER = 0.5
 MOTION_CLASS_COLUMN = "class_10"
@@ -386,35 +389,42 @@ class MotionWindowDataset(Dataset):
         window: int,
         *,
         seed: int,
+        names: list[str] | None = None,
+        scaler: MotionScaler | None = None,
     ) -> None:
         split = Split(split)
         if window <= 0:
             raise ValueError(f"the window must be a positive frame count, got {window}")
         self._window = window
         self._train = split == Split.TRAIN
-        self._mirror = data.mirror_augment and self._train
+        self._mirror = data.mirror_augment and self._train and names is None
         self._seed = seed
         self._epoch = RawValue("q", 0)
 
         root = Path(root)
         self._vec_dir = root / FEATURES_DIR
-        self.scaler = MotionScaler.load(root, dim=DIM)
-        self._ids, self._cache, self.dropped_clip_ids = self.load_windowable_clips(
-            base_clip_ids(root, split)
+        self.scaler = MotionScaler.load(root, dim=DIM) if scaler is None else scaler
+        self._min_len = data.min_motion_len
+        clip_names = base_clip_ids(root, split) if names is None else names
+        self._ids, self._cache, self._frames, self.dropped_clip_ids = self.load_windowable_clips(
+            clip_names
         )
-        log_dropped_clips(self.dropped_clip_ids, f"shorter than the window of {window} frames")
+        log_dropped_clips(self.dropped_clip_ids, f"shorter than {self._min_len} frames")
         if not self._ids:
-            raise RuntimeError(f"no clips >= window {window} for split {split!r}")
-        self._overflows = np.array([clip.shape[0] - window for clip in self._cache], np.int64)
+            raise RuntimeError(f"no clips >= {self._min_len} frames for split {split!r}")
+        self._overflows = np.array(
+            [max(clip.shape[0] - window, 0) for clip in self._cache], np.int64
+        )
         self._starts = self._overflows // 2
         self._starts_epoch = -1
 
     def load_windowable_clips(
         self, names: list[str]
-    ) -> tuple[list[str], list[np.ndarray], list[str]]:
+    ) -> tuple[list[str], list[np.ndarray], list[int], list[str]]:
         ids: list[str] = []
         short: list[str] = []
         clips: list[np.ndarray] = []
+        frames: list[int] = []
         non_finite: list[str] = []
         variants = [v for name in names for v in ([name, f"M{name}"] if self._mirror else [name])]
         check_no_missing_files(
@@ -422,21 +432,23 @@ class MotionWindowDataset(Dataset):
         )
         for clip_id in variants:
             feat = np.load(self._vec_dir / f"{clip_id}.npy").astype(np.float32)
-            if feat.shape[0] < self._window:
+            if feat.shape[0] < self._min_len:
                 short.append(clip_id)
                 continue
             if not np.isfinite(feat).all():
                 non_finite.append(clip_id)
                 continue
+            normalized = np.asarray(self.scaler.normalize(feat), np.float32)
             ids.append(clip_id)
-            clips.append(np.asarray(self.scaler.normalize(feat), np.float32))
+            frames.append(min(normalized.shape[0], self._window))
+            clips.append(pad_to_window(normalized, self._window))
         if non_finite:
             suffix = " ..." if len(non_finite) > 20 else ""
             raise ValueError(
                 f"{len(non_finite)} non-finite clips in this split; drop them from the split list: "
                 f"{non_finite[:20]}{suffix}"
             )
-        return ids, clips, short
+        return ids, clips, frames, short
 
     def set_epoch(self, epoch: int) -> None:
         self._epoch.value = int(epoch)
@@ -466,12 +478,54 @@ class MotionWindowDataset(Dataset):
 
     def __getitem__(self, idx: int) -> MotionClip:
         start = int(self.window_starts()[idx])
-        window = self._cache[idx][start : start + self._window]
+        window = self._cache[idx][start : start + int(self._frames[idx])]
         return MotionClip(
             features=torch.from_numpy(window),
             frame_count=window.shape[0],
             clip_id=self._ids[idx],
         )
+
+
+class MixedWindowDataset(Dataset):
+    def __init__(
+        self,
+        primary: MotionWindowDataset,
+        extension: MotionWindowDataset,
+        share: float,
+        *,
+        seed: int,
+    ) -> None:
+        if not 0.0 <= share < 1.0:
+            raise ValueError(f"the extension share must be in [0, 1), got {share}")
+        self._primary = primary
+        self._extension = extension
+        self._share = share
+        self._seed = seed
+        self._plan: list[tuple[int, int]] = []
+        self.set_epoch(0)
+
+    @property
+    def scaler(self) -> MotionScaler:
+        return self._primary.scaler
+
+    @property
+    def extension_count(self) -> int:
+        return round(len(self._primary) * self._share / (1.0 - self._share))
+
+    def set_epoch(self, epoch: int) -> None:
+        self._primary.set_epoch(epoch)
+        self._extension.set_epoch(epoch)
+        rng = np.random.default_rng((self._seed, epoch, EXTENSION_PLAN_STREAM))
+        primary = [(0, index) for index in range(len(self._primary))]
+        extension = rng.integers(len(self._extension), size=self.extension_count)
+        self._plan = primary + [(1, int(index)) for index in extension]
+
+    def __len__(self) -> int:
+        return len(self._plan)
+
+    def __getitem__(self, index: int) -> MotionClip:
+        source, position = self._plan[index]
+        return (self._primary if source == 0 else self._extension)[position]
 
 
 def dataset_size(loader: DataLoader) -> int:
@@ -516,6 +570,14 @@ def collate_motion_clips(clips: list[MotionClip]) -> MotionBatch:
     )
 
 
+def pad_to_window(clip: np.ndarray, window: int) -> np.ndarray:
+    if clip.shape[0] >= window:
+        return clip
+    padded = np.zeros((window, clip.shape[1]), np.float32)
+    padded[: clip.shape[0]] = clip
+    return padded
+
+
 def log_dropped_clips(dropped: list[str], reason: str) -> None:
     if dropped:
         logger.info(f"dropped {len(dropped)} clips {reason} (first: {dropped[:5]})")
@@ -555,6 +617,49 @@ class MotionDataModule:
 
     def window_dataset(self, split: Split | str, window: int) -> MotionWindowDataset:
         return MotionWindowDataset(self.root, self.data, split, window, seed=self.seed)
+
+    def extension_window_dataset(
+        self, extension_root: Path, window: int, scaler: MotionScaler
+    ) -> MotionWindowDataset:
+        vec_dir = Path(extension_root) / FEATURES_DIR
+        names = listed_clip_ids(Path(extension_root) / SPLIT_FILES[Split.TRAIN])
+        missing = [name for name in names if not (vec_dir / f"{name}.npy").is_file()]
+        if not names or missing:
+            raise FileNotFoundError(
+                f"extension train list has {len(missing)} names without a feature file under {vec_dir}"
+                f" (first: {missing[:3]}); the list is required so that no split leaks in"
+            )
+        return MotionWindowDataset(
+            extension_root,
+            self.data,
+            Split.TRAIN,
+            window,
+            seed=self.seed,
+            names=names,
+            scaler=scaler,
+        )
+
+    def mixed_window_batch_loader(
+        self,
+        window: int,
+        batch_size: int,
+        extension_root: Path,
+        share: float,
+        num_workers: int = 0,
+    ) -> DataLoader:
+        primary = self.window_dataset(Split.TRAIN, window)
+        extension = self.extension_window_dataset(extension_root, window, primary.scaler)
+        return DataLoader(
+            MixedWindowDataset(primary, extension, share, seed=self.seed),
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            collate_fn=collate_motion_clips,
+            drop_last=True,
+            pin_memory=True,
+            persistent_workers=num_workers > 0,
+            prefetch_factor=2 if num_workers > 0 else None,
+        )
 
     def captioned_batch_loader(
         self,

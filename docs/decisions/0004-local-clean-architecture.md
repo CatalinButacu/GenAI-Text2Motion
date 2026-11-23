@@ -146,3 +146,83 @@ must not be renamed merely for symmetry.
   per-class ceremony is introduced.
 - Some classes remain in operational modules when the class itself is the operation (`Trainer`,
   `Decoder`, PyTorch `Module`). This is intentional encapsulation, not a violation.
+
+## Blueprint (2026-11-23)
+
+This section adds the project charter to this ADR. It replaces the layer diagram and the
+dependency rule above where they differ. The target structure above is historical. The current
+package list is the `ALLOWED` map in `tests/test_package_layers.py`.
+
+### One sentence
+
+A modular monolith of stage packages under `src/text2motion/`. Dependencies point one way. Each fact
+has one owner. `app` is the only package that wires everything together.
+
+### Layer edges
+
+The `ALLOWED` map is the only source of layer edges. A change to an edge needs an ADR and a test update
+in the same commit. The current edges are:
+
+- `common` imports nothing from `text2motion`. See [ADR 0005](0005-generic-helpers-placement.md).
+- `motion` imports `common` only.
+- `dataset` imports `motion` and `common`.
+- `tokenization` imports `motion`, `dataset` and `common`.
+- `generation` imports `motion`, `dataset`, `tokenization` and `common`.
+- `evaluation` imports `motion`, `generation` and `common`.
+- `studio` imports `motion` and `common`. It talks to inference through its own port,
+  `MotionInferenceClientPort`. It never imports `app`.
+- `app` imports every stage package. Nothing imports `app`, except entry points.
+
+### Roles
+
+Each module states one role in one word:
+
+- **Contracts** (`contracts.py`): frozen dataclasses, enums, protocols and request or result types.
+- **Model** (`nn_*.py`, `representation.py`, `kinematics.py`): stateful domain objects and PyTorch modules.
+- **Operations** (concept names such as `preparation.py`, `corpus.py`, `*_trainer.py`): stateless functions. Dependencies are parameters.
+- **Composition** (`app/bootstrap.py`, `app/config.py`, `app/cli.py`): wiring, factories and parsing.
+
+Other packages import a package through its contracts and at most one factory or entry module. They do
+not import its internal modules.
+
+### Naming and size
+
+- Never create `utils.py`, `helpers.py`, `managers.py`, `services.py` or `classes.py`.
+- Each package holds at most 10 top-level `.py` files. This limit is enforced by the layer test.
+- A subpackage needs two independently changing responsibilities. A subpackage must not only avoid the file limit.
+
+### Contracts
+
+A `contracts.py` module must be declarative. It holds no file I/O, no process start and no model loading.
+Existing torch and pathlib imports in current contracts modules stay until a later ADR removes them.
+No automated check enforces this rule yet.
+
+### Single source of truth
+
+- Each constant, formula, file format and config field has one owner module. Other modules import it.
+- Shared logic moves down the layer order. It goes to `common` when no stage package owns it.
+  It never gets a second copy.
+
+### Composition root
+
+`app/bootstrap.py` is the only module that knows concrete classes from several stages. Other modules
+receive dependencies as parameters or protocols.
+
+### Numerical invariance
+
+A change to `representation.py`, `normalization.py`, `features.py`, `metrics.py`, a checkpoint format
+or scaler loading needs an equality check on a fixed sample. A code review alone is not enough.
+A pure move (same code, new file, updated imports) needs no equality check. It must go in its own commit.
+
+### Change process
+
+1. Commit the working tree before any structural move.
+2. A layer change, a new package or a new edge needs an ADR and an `ALLOWED` update in one commit.
+3. Make one move per commit. Run `make check` after each move.
+4. Reject a change when a file cannot state its role, a fact gains a second owner, a layer edge appears
+   without an ADR, or numbers change without an equality check.
+
+### Enforcement status
+
+The layer test checks the import edges and the file count. The name rule, the role rule and the
+contracts rule are not checked by a test yet.

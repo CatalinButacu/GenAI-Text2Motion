@@ -28,9 +28,17 @@ from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_tokenizer import (
     TokenizerNetwork,
     feature_velocity_reconstruction_loss,
+    heading_reconstruction_loss,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def pad_to_multiple(motion: torch.Tensor, multiple: int) -> torch.Tensor:
+    remainder = motion.shape[1] % multiple
+    if remainder == 0:
+        return motion
+    return torch.nn.functional.pad(motion, (0, 0, 0, multiple - remainder))
 
 
 TOKENIZER_RESUME_FORMAT = "text2motion.tokenizer_resume"
@@ -60,6 +68,7 @@ class TokenizerTrainer:
         )
         self.current_inputs: dict[str, torch.Tensor] = {}
         self.current_step = 0
+        self.steps_taken = 0
 
     def code_statistics(self, indices: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         codebook_size = self.tokenizer_network.codebook_size
@@ -80,11 +89,18 @@ class TokenizerTrainer:
         usage_fraction = (used_fraction * active).sum() / active_count
         return perplexity, usage_fraction
 
-    def train_step(self, motion: torch.Tensor) -> dict[str, torch.Tensor]:
+    def train_step(
+        self, motion: torch.Tensor, lengths: torch.Tensor | None = None
+    ) -> dict[str, torch.Tensor]:
         reconstruction, indices, commitment_loss = self.tokenizer_network(motion)
 
-        reconstruction_loss = feature_velocity_reconstruction_loss(reconstruction, motion)
-        total = reconstruction_loss + self.commitment_beta * commitment_loss
+        reconstruction_loss = feature_velocity_reconstruction_loss(reconstruction, motion, lengths)
+        heading_loss = heading_reconstruction_loss(reconstruction, motion, lengths)
+        total = (
+            reconstruction_loss
+            + self.commitment_beta * commitment_loss
+            + self.tokenizer_network.heading_weight * heading_loss
+        )
 
         self.optimizer.zero_grad()
         total.backward()
@@ -106,26 +122,23 @@ class TokenizerTrainer:
             "commit": commitment_loss.detach(),
         }
 
-    def train_epoch(self, loader, device: str) -> dict[str, float]:
+    def train_epoch(self, loader, device: str, max_steps: int | None = None) -> dict[str, float]:
         self.tokenizer_network.train()
         totals: dict[str, torch.Tensor] = {}
         steps = 0
         for batch in loader:
-            if (
-                isinstance(batch, MotionBatch)
-                and int(batch.lengths.min()) < batch.features.shape[1]
-            ):
-                raise ValueError(
-                    "the tokenizer trains on fixed windows; this batch is padded, and the padding "
-                    "would enter the loss"
-                )
+            if max_steps is not None and self.steps_taken >= max_steps:
+                break
             motion = batch.features if isinstance(batch, MotionBatch) else batch
+            motion = pad_to_multiple(motion, self.tokenizer_network.downsample)
+            lengths = batch.lengths.to(device) if isinstance(batch, MotionBatch) else None
             self.current_inputs = {"motion": motion}
             self.current_step = steps
-            parts = self.train_step(motion.to(device, non_blocking=True))
+            parts = self.train_step(motion.to(device, non_blocking=True), lengths)
             for key, value in parts.items():
                 totals[key] = totals[key] + value if key in totals else value
             steps += 1
+            self.steps_taken += 1
         if steps == 0:
             raise ValueError("the loader gave no batch; check the split and the window length")
         return {key: value.item() / steps for key, value in totals.items()}
@@ -216,15 +229,22 @@ def train_tokenizer(
                 trainer.tokenizer_network,
             ),
         ):
-            means = trainer.train_epoch(loader, device)
+            means = trainer.train_epoch(loader, device, schedule.max_steps)
         outputs.on_metrics({"epoch": epoch + 1, **means})
         logger.info(
             f"epoch {epoch + 1:3d}  [common] recon {means['recon']:.4f} total {means['total']:.4f}  "
             f"[health] perplexity {means['perplexity']:.1f} usage {means['usage_frac']:.1%} "
             f"commit {means['commit']:.4f}"
         )
+        step_budget_done = (
+            schedule.max_steps is not None and trainer.steps_taken >= schedule.max_steps
+        )
 
-        if (epoch + 1) % schedule.eval_every and epoch + 1 != schedule.epochs:
+        if (
+            (epoch + 1) % schedule.eval_every
+            and epoch + 1 != schedule.epochs
+            and not step_budget_done
+        ):
             continue
 
         with trainer.ema_weights():
@@ -245,5 +265,8 @@ def train_tokenizer(
             logger.info(f"  saved best (val) -> {checkpoint_path} (val recon-FID {best_fid:.4f})")
 
         atomic_torch_save(trainer.resume_state(epoch, best_fid, outputs.run_dir), resume_path)
+        if step_budget_done:
+            logger.info(f"  step budget of {schedule.max_steps} steps reached; the run stops")
+            break
 
     return best_fid

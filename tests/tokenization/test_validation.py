@@ -1,3 +1,4 @@
+import math
 from dataclasses import replace
 from types import SimpleNamespace
 from typing import cast
@@ -12,6 +13,7 @@ from text2motion.motion.normalization import MotionScaler
 from text2motion.tokenization.contracts import (
     ResidualVectorQuantizationConfig,
     TokenizerConfig,
+    TokenizerSchedule,
     TokenPackPlan,
 )
 from text2motion.tokenization.corpus import build_token_pack
@@ -90,15 +92,48 @@ def test_the_token_pack_refuses_overflow_and_unaligned_windows(
         )
 
 
-def test_a_padded_batch_is_refused_by_the_tokenizer_trainer():
+def test_the_reconstruction_loss_ignores_the_padded_frames():
+    target = torch.zeros(2, 16, 263)
+    reconstruction = torch.zeros(2, 16, 263)
+    reconstruction[1, 8:] = 5.0
+    loss = feature_velocity_reconstruction_loss(reconstruction, target, torch.tensor([16, 8]))
+    assert loss.item() == pytest.approx(0.0)
+
+
+def test_an_epoch_stops_at_the_step_limit():
+    trainer = TokenizerTrainer(
+        FiniteScalarQuantizationTokenizer(FSQ), lr=1e-3, weight_decay=0.0, ema_decay=0.9
+    )
+    loader = [torch.zeros(2, 16, 263) for _ in range(5)]
+    trainer.train_epoch(loader, "cpu", max_steps=3)
+    assert trainer.steps_taken == 3
+
+
+def test_a_step_limit_cannot_resume_a_run():
+    with pytest.raises(ValueError, match="cannot resume"):
+        TokenizerSchedule(epochs=2, eval_every=1, resume=True, max_steps=10)
+
+
+def test_a_batch_length_that_is_not_a_multiple_of_the_downsample_trains():
+    trainer = TokenizerTrainer(
+        FiniteScalarQuantizationTokenizer(FSQ), lr=1e-3, weight_decay=0.0, ema_decay=0.9
+    )
+    batch = MotionBatch(
+        features=torch.zeros(2, 5, 263), lengths=torch.tensor([5, 3]), captions=["a", "b"]
+    )
+    parts = trainer.train_epoch([batch], "cpu")
+    assert math.isfinite(parts["recon"])
+
+
+def test_a_padded_batch_trains_on_its_valid_frames():
     trainer = TokenizerTrainer(
         FiniteScalarQuantizationTokenizer(FSQ), lr=1e-3, weight_decay=0.0, ema_decay=0.9
     )
     batch = MotionBatch(
         features=torch.zeros(2, 16, 263), lengths=torch.tensor([16, 8]), captions=["a", "b"]
     )
-    with pytest.raises(ValueError, match="padded"):
-        trainer.train_epoch([batch], "cpu")
+    parts = trainer.train_epoch([batch], "cpu")
+    assert math.isfinite(parts["recon"])
 
 
 def test_a_direct_forward_with_nan_leaves_the_rvq_codebooks_unchanged():

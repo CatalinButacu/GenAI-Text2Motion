@@ -188,6 +188,10 @@ class PrepareRequest(DefaultConfigRequest):
 #       SanityOverfitRequest
 ############################################################
 class SanityOverfitRequest(CommandRequest):
+    exploratory: bool = Field(
+        default=False,
+        description="record a non-protocol run that is not citable; protocol runs use seed 2026",
+    )
     backbone: Backbone = Field(
         description="sequence mixer: mamba has a fixed-size state, transformer has a cache that grows"
     )
@@ -219,6 +223,10 @@ class SanityOverfitRequest(CommandRequest):
 #       TrainGeneratorRequest
 ############################################################
 class TrainGeneratorRequest(CommandRequest):
+    exploratory: bool = Field(
+        default=False,
+        description="record a non-protocol run that is not citable; protocol runs use seed 2026",
+    )
     backbone: Backbone = Field(
         description="sequence mixer: mamba has a fixed-size state, transformer has a cache that grows"
     )
@@ -342,6 +350,10 @@ class TrainGeneratorRequest(CommandRequest):
 #       PretrainRequest
 ############################################################
 class PretrainRequest(CommandRequest):
+    exploratory: bool = Field(
+        default=False,
+        description="record a non-protocol run that is not citable; protocol runs use seed 2026",
+    )
     backbone: Backbone = Field(
         description="sequence mixer: mamba has a fixed-size state, transformer has a cache that grows"
     )
@@ -520,6 +532,10 @@ class TokenizeRequest(CommandRequest):
 #       TrainTokenizerRequest
 ############################################################
 class TrainTokenizerRequest(CommandRequest):
+    exploratory: bool = Field(
+        default=False,
+        description="record a non-protocol run that is not citable; protocol runs use seed 2026",
+    )
     tokenizer: TokenizerKind = Field(
         description="quantizer family: fsq has no learned codebook, rvq is the baseline"
     )
@@ -544,10 +560,25 @@ class TrainTokenizerRequest(CommandRequest):
         gt=0,
         description="cap on evaluation clips; a low cap is faster and gives a noisier FID",
     )
+    max_steps: int | None = Field(
+        default=None,
+        gt=0,
+        description="stop after this many optimizer steps, for equal-step comparisons; not with --resume",
+    )
     num_workers: int = Field(
         default=0,
         ge=0,
         description="data loader processes; 0 loads in the training process and needs the least RAM",
+    )
+    amass_share: float = Field(
+        default=0.0,
+        ge=0.0,
+        lt=1.0,
+        description="share of AMASS clips in each epoch; 0 trains on HumanML3D only",
+    )
+    amass_features: Path | None = Field(
+        default=None,
+        description="folder with the AMASS 263 features; required when amass_share is above 0",
     )
     ckpt_name: str | None = Field(
         default=None,
