@@ -116,6 +116,7 @@ def test_a_flag_without_a_value_is_true():
 
 def test_every_command_parses_its_defaults_or_asks_for_required_flags():
     required = {
+        "run": ["--workflow", "data", "--root", "r"],
         "tokenize": ["--config", "c.yaml"],
         "train-tokenizer": ["--config", "c.yaml", "--tokenizer", "fsq"],
         "sanity-overfit": [

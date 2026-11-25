@@ -94,6 +94,11 @@ COMMANDS = MappingProxyType(
             "text2motion.app.serving:run_studio",
             "interactive aitviewer studio",
         ),
+        "run": Command(
+            "text2motion.app.workflows.requests:RunRequest",
+            "text2motion.app.workflows.run:run_workflow",
+            "run a workflow: data, tokenizer, generator or evaluate",
+        ),
         "health": Command(
             "text2motion.app.cli_requests:HealthRequest",
             "text2motion.app.serving:run_health",
@@ -112,6 +117,7 @@ def register_value_enum(enum_class: type[Enum]) -> None:
 
 @functools.cache
 def register_command_enums() -> None:
+    from text2motion.app.workflows.requests import Workflow
     from text2motion.evaluation.contracts import GenerationLengthPolicy
     from text2motion.generation.contracts import Backbone, BackboneChoice
     from text2motion.motion.contracts import PreparationStage, Split
@@ -124,6 +130,7 @@ def register_command_enums() -> None:
         PreparationStage,
         Split,
         TokenizerKind,
+        Workflow,
     ):
         register_value_enum(command_enum)
 
