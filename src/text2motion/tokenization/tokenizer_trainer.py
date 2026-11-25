@@ -8,6 +8,7 @@ from pathlib import Path
 import torch
 from torch import nn
 
+from text2motion.common.engine import run_epochs
 from text2motion.motion.contracts import (
     NO_RUN_OUTPUTS,
     Evaluator,
@@ -218,18 +219,23 @@ def train_tokenizer(
             f"resumed from {resume_path} at epoch {start_epoch} (best recon-FID {best_fid:.4f})"
         )
 
-    for epoch in range(start_epoch, schedule.epochs):
-        loader.dataset.set_epoch(epoch)
-        with dump_on_failure(
+    def guard(epoch: int):
+        return dump_on_failure(
             outputs.failure_dump_path,
-            lambda epoch=epoch, best_fid=best_fid: (
+            lambda best_fid=best_fid: (
                 trainer.resume_state(epoch, best_fid, outputs.run_dir),
                 trainer.current_inputs,
                 trainer.current_step,
                 trainer.tokenizer_network,
             ),
-        ):
-            means = trainer.train_epoch(loader, device, schedule.max_steps)
+        )
+
+    def train_epoch(epoch: int) -> dict[str, float]:
+        loader.dataset.set_epoch(epoch)
+        return trainer.train_epoch(loader, device, schedule.max_steps)
+
+    def after_epoch(epoch: int, means: dict[str, float]) -> str:
+        nonlocal best_fid
         outputs.on_metrics({"epoch": epoch + 1, **means})
         logger.info(
             f"epoch {epoch + 1:3d}  [common] recon {means['recon']:.4f} total {means['total']:.4f}  "
@@ -245,7 +251,7 @@ def train_tokenizer(
             and epoch + 1 != schedule.epochs
             and not step_budget_done
         ):
-            continue
+            return ""
 
         with trainer.ema_weights():
             metrics = evaluate(Split.VALIDATION)
@@ -266,7 +272,9 @@ def train_tokenizer(
 
         atomic_torch_save(trainer.resume_state(epoch, best_fid, outputs.run_dir), resume_path)
         if step_budget_done:
-            logger.info(f"  step budget of {schedule.max_steps} steps reached; the run stops")
-            break
+            return f"  step budget of {schedule.max_steps} steps reached; the run stops"
+        return ""
+
+    run_epochs(start_epoch, schedule.epochs, train_epoch, after_epoch, guard)
 
     return best_fid
