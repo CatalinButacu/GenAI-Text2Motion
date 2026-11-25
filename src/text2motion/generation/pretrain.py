@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import torch
 from torch import nn
 
-from text2motion.dataset.datasets import dataset_size
+from text2motion.common.engine import run_epochs
+from text2motion.dataset.training.batching import dataset_size
 from text2motion.generation.contracts import (
     GeneratorPretrainingRequest,
     GeneratorTrainingConfig,
@@ -25,9 +27,9 @@ from text2motion.motion.storage import (
     RESUME_VERSION,
     atomic_torch_save,
     capture_rng_state,
+    dump_on_failure,
     is_legacy_resume,
     restore_rng_state,
-    write_failure_dump,
 )
 
 logger = logging.getLogger(__name__)
@@ -87,6 +89,32 @@ def pretraining_state(
     }
 
 
+############################################################
+#       PretrainProgress
+############################################################
+@dataclass
+class PretrainProgress:
+    step: int
+    seen: int = 0
+    inputs: dict[str, torch.Tensor] = field(default_factory=dict)
+
+
+def validation_ce(generator, val_loader, null_condition, device: str, amp_on: bool) -> float:
+    val_total = 0.0
+    val_seen = 0
+    with torch.no_grad():
+        for tokens, lengths in val_loader:
+            tokens, lengths = tokens.to(device), lengths.to(device)
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):
+                val_total += float(
+                    token_ce_loss(
+                        generator(tokens, null_condition(tokens.size(0))), tokens, lengths
+                    )
+                )
+            val_seen += 1
+    return val_total / val_seen
+
+
 def pretrain_generator(
     architecture: GeneratorModelSpec,
     generator,
@@ -143,83 +171,76 @@ def pretrain_generator(
             device=device,
         )
 
-    for epoch in range(start_epoch, request.epochs):
+    progress = PretrainProgress(step=step)
+
+    def guard(epoch: int):
+        return dump_on_failure(
+            outputs.failure_dump_path,
+            lambda: (
+                pretraining_state(
+                    generator, opt, total_steps, outputs.run_dir, progress.step, epoch
+                ),
+                progress.inputs,
+                progress.seen,
+                generator,
+            ),
+        )
+
+    def train_epoch(epoch: int) -> dict[str, float]:
         generator.train()
         running = 0.0
-        seen = 0
+        progress.seen = 0
         opt.zero_grad(set_to_none=True)
-        inputs: dict[str, torch.Tensor] = {}
+        progress.inputs = {}
+        for microbatch_index, (tokens, lengths) in enumerate(loader):
+            if microbatch_index >= budget.microbatches:
+                break
+            tokens, lengths = tokens.to(device), lengths.to(device)
+            progress.inputs = {"tokens": tokens, "lengths": lengths}
+            with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):
+                raw_loss = token_ce_loss(
+                    generator(tokens, null_condition(tokens.size(0))), tokens, lengths
+                )
+                loss = raw_loss / request.grad_accum
+            loss.backward()
+            if (microbatch_index + 1) % request.grad_accum == 0:
+                torch.nn.utils.clip_grad_norm_(
+                    generator.parameters(), train.grad_clip, error_if_nonfinite=True
+                )
+                for group in opt.param_groups:
+                    group["lr"] = train.lr * lr_multiplier(progress.step)
+                opt.step()
+                opt.zero_grad(set_to_none=True)
+                progress.step += 1
+            running += raw_loss.item()
+            progress.seen += 1
+        return {"ce": running / progress.seen}
 
-        try:
-            for microbatch_index, (tokens, lengths) in enumerate(loader):
-                if microbatch_index >= budget.microbatches:
-                    break
-                tokens, lengths = tokens.to(device), lengths.to(device)
-                inputs = {"tokens": tokens, "lengths": lengths}
-                with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):
-                    raw_loss = token_ce_loss(
-                        generator(tokens, null_condition(tokens.size(0))), tokens, lengths
-                    )
-                    loss = raw_loss / request.grad_accum
-                loss.backward()
-                if (microbatch_index + 1) % request.grad_accum == 0:
-                    torch.nn.utils.clip_grad_norm_(
-                        generator.parameters(), train.grad_clip, error_if_nonfinite=True
-                    )
-                    for group in opt.param_groups:
-                        group["lr"] = train.lr * lr_multiplier(step)
-                    opt.step()
-                    opt.zero_grad(set_to_none=True)
-                    step += 1
-                running += raw_loss.item()
-                seen += 1
-        except Exception as error:
-            write_failure_dump(
-                outputs.failure_dump_path,
-                pretraining_state(generator, opt, total_steps, outputs.run_dir, step, epoch),
-                inputs,
-                seen,
-                generator,
-                error,
-            )
-            raise
-
-        if step != (epoch + 1) * budget.optimizer_steps:
+    def after_epoch(epoch: int, means: dict[str, float]) -> str:
+        if progress.step != (epoch + 1) * budget.optimizer_steps:
             raise RuntimeError(
                 "pretraining optimizer-step budget drifted: "
-                f"got {step}, expected {(epoch + 1) * budget.optimizer_steps}"
+                f"got {progress.step}, expected {(epoch + 1) * budget.optimizer_steps}"
             )
-
-        record = {"epoch": epoch + 1, "ce": running / seen}
-        line = f"pretrain ep {epoch + 1:3d}  ce {running / seen:.4f}"
-
+        record = {"epoch": epoch + 1, "ce": means["ce"]}
+        line = f"pretrain ep {epoch + 1:3d}  ce {means['ce']:.4f}"
         if val_loader is not None:
             generator.eval()
-            val_total = 0.0
-            val_seen = 0
-            with torch.no_grad():
-                for tokens, lengths in val_loader:
-                    tokens, lengths = tokens.to(device), lengths.to(device)
-                    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=amp_on):
-                        val_total += float(
-                            token_ce_loss(
-                                generator(tokens, null_condition(tokens.size(0))), tokens, lengths
-                            )
-                        )
-                    val_seen += 1
-            record["val_ce"] = val_total / val_seen
+            record["val_ce"] = validation_ce(generator, val_loader, null_condition, device, amp_on)
             record["gap"] = record["val_ce"] - record["ce"]
             line += f"  val_ce {record['val_ce']:.4f}  gap {record['gap']:+.4f}"
-
         outputs.on_metrics(record)
         logger.info(line)
         atomic_torch_save(generator.state_dict(), out_path)
         atomic_torch_save(
-            pretraining_state(generator, opt, total_steps, outputs.run_dir, step, epoch),
+            pretraining_state(generator, opt, total_steps, outputs.run_dir, progress.step, epoch),
             resume_path,
         )
         if device == "cuda":
             torch.cuda.empty_cache()
+        return ""
+
+    run_epochs(start_epoch, request.epochs, train_epoch, after_epoch, guard)
 
     out_path.with_suffix(out_path.suffix + ".done").write_text(
         f"epochs {request.epochs}", encoding="utf-8"

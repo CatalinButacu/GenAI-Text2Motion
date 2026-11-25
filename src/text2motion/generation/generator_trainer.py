@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import math
 import time
@@ -14,6 +13,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from text2motion.common.engine import CleanCrossEntropyProgress, restore_clean_ce, run_epochs
 from text2motion.generation.contracts import (
     DEFAULT_OVERFIT_CRITERIA,
     GeneratorFreeze,
@@ -61,75 +61,6 @@ GENERATOR_RESUME_FORMAT = "text2motion.generator_resume"
 class CleanCrossEntropyLoaders:
     train: object
     validation: object
-
-
-############################################################
-#       CleanCrossEntropyProgress
-############################################################
-@dataclass(frozen=True)
-class CleanCrossEntropyProgress:
-    best: float
-    stale: int
-
-    def observe(self, value: float) -> CleanCrossEntropyProgress:
-        if not math.isfinite(value) or value < 0:
-            raise ValueError(f"invalid clean validation CE: {value}")
-        if value < self.best:
-            return CleanCrossEntropyProgress(best=value, stale=0)
-        return CleanCrossEntropyProgress(best=self.best, stale=self.stale + 1)
-
-
-def restore_clean_ce(
-    state: dict, completed_epochs: int, request: GeneratorTrainingRequest
-) -> CleanCrossEntropyProgress:
-    if request.fresh_selection or not request.val_ce_patience:
-        return CleanCrossEntropyProgress(best=float("inf"), stale=0)
-    saved = state.get("clean_ce_progress")
-    if saved is not None:
-        progress = CleanCrossEntropyProgress(best=float(saved["best"]), stale=saved["stale"])
-    else:
-        recorded_dir = state.get("run_dir")
-        if recorded_dir is None:
-            raise ValueError(
-                "resume lacks validation-CE patience and a recorded run directory; "
-                "use --fresh_selection only if intentionally resetting selection"
-            )
-        metrics_path = Path(recorded_dir) / "metrics.jsonl"
-        history: dict[int, float] = {}
-        with metrics_path.open(encoding="utf-8") as handle:
-            for line in handle:
-                record = json.loads(line)
-                if "val_ce" not in record:
-                    continue
-                epoch = record["epoch"]
-                if type(epoch) is not int or epoch < 1:
-                    raise ValueError(f"invalid clean-CE epoch in {metrics_path}: {epoch}")
-                if epoch > completed_epochs:
-                    continue
-                if epoch in history:
-                    logger.warning(
-                        f"duplicate clean CE for epoch {epoch} in {metrics_path}; using the latest"
-                    )
-                history[epoch] = float(record["val_ce"])
-        expected = set(range(1, completed_epochs + 1))
-        if set(history) != expected:
-            raise ValueError(
-                f"cannot restore validation-CE patience: {metrics_path} lacks completed epochs "
-                f"{sorted(expected - set(history))}; use --fresh_selection only for an intentional reset"
-            )
-        progress = CleanCrossEntropyProgress(best=float("inf"), stale=0)
-        for epoch in range(1, completed_epochs + 1):
-            progress = progress.observe(history[epoch])
-        logger.info(f"restored validation-CE patience from completed epochs in {metrics_path}")
-    if (
-        not math.isfinite(progress.best)
-        or progress.best < 0
-        or type(progress.stale) is not int
-        or not 0 <= progress.stale < completed_epochs
-    ):
-        raise ValueError("invalid saved validation-CE patience state")
-    logger.info(f"validation-CE resume: best {progress.best:.6f}, stale {progress.stale} epochs")
-    return progress
 
 
 ############################################################
@@ -554,6 +485,107 @@ class GeneratorTrainer:
             self.weighter.load_state_dict(weighter_state)
 
 
+############################################################
+#       SelectionState
+############################################################
+@dataclass
+class SelectionState:
+    best_fid: float
+    stale_evaluations: int
+    ce_progress: CleanCrossEntropyProgress
+    epoch_started: float = 0.0
+
+
+def finish_epoch(
+    trainer: GeneratorTrainer,
+    request: GeneratorTrainingRequest,
+    device: str,
+    evaluate: Evaluator,
+    save_best: CheckpointSink,
+    resume_path: Path,
+    outputs: RunOutputs,
+    ce_loaders: CleanCrossEntropyLoaders | None,
+    selection: SelectionState,
+    epoch: int,
+    means: dict[str, float],
+) -> str:
+    epoch_minutes = (time.perf_counter() - selection.epoch_started) / 60
+    learning_rate = trainer.optimizer.param_groups[0]["lr"]
+    outputs.on_metrics(
+        {"epoch": epoch + 1, **means, "lr": learning_rate, "epoch_minutes": epoch_minutes}
+    )
+    logger.info(
+        f"epoch {epoch + 1:3d}/{request.epochs}  ce {means['ce']:.4f}  "
+        f"ric {means['ric']:.4f}  rot6d {means['rot6d']:.4f}  foot {means['foot']:.4f}  "
+        f"total {means['total']:.4f}  lr {learning_rate:.2e}  {epoch_minutes:.1f} min"
+    )
+    logger.debug(f"epoch {epoch + 1} all loss terms {means}")
+
+    selection.ce_progress = advance_clean_ce(
+        trainer,
+        ce_loaders,
+        device,
+        request.ce_batches,
+        epoch,
+        outputs.on_metrics,
+        selection.ce_progress,
+    )
+    save_on_lower_val_ce(trainer, request, selection.ce_progress, epoch, save_best)
+
+    due = (epoch + 1) % request.eval_every == 0 or epoch + 1 in (
+        request.epochs,
+        request.stop_epoch,
+    )
+    if due:
+        evaluate_validation(trainer, request, evaluate, save_best, outputs, selection, epoch)
+
+    state = trainer.resume_state(
+        epoch, selection.best_fid, selection.stale_evaluations, outputs.run_dir
+    )
+    state["clean_ce_progress"] = {
+        "best": selection.ce_progress.best,
+        "stale": selection.ce_progress.stale,
+    }
+    atomic_torch_save(state, resume_path)
+    del state
+
+    if device == "cuda":
+        torch.cuda.empty_cache()
+
+    return early_stop_reason(
+        request, epoch, selection.stale_evaluations, selection.best_fid, selection.ce_progress
+    )
+
+
+def evaluate_validation(
+    trainer: GeneratorTrainer,
+    request: GeneratorTrainingRequest,
+    evaluate: Evaluator,
+    save_best: CheckpointSink,
+    outputs: RunOutputs,
+    selection: SelectionState,
+    epoch: int,
+) -> None:
+    with trainer.ema_weights():
+        metrics = evaluate(Split.VALIDATION)
+    outputs.on_metrics({"epoch": epoch + 1, "split": Split.VALIDATION.value, **metrics})
+    logger.info(
+        f"  [gen-eval:{Split.VALIDATION.value}] clips {metrics['clips']}  "
+        f"FID {metrics['fid']:.4f}  R@1 {metrics['r_top1']:.3f}  "
+        f"R@3 {metrics['r_top3']:.3f}  MM {metrics['mm_dist']:.3f}  "
+        f"Div {metrics['diversity']:.3f}"
+    )
+    not_finite = sorted(name for name, value in metrics.items() if not math.isfinite(value))
+    if not_finite:
+        raise RuntimeError(f"epoch {epoch + 1}: evaluation metrics not finite: {not_finite}")
+    if is_eligible_improvement(metrics, selection.best_fid, request):
+        selection.best_fid = metrics["fid"]
+        selection.stale_evaluations = 0
+        save_on_lower_fid(trainer, request, epoch, selection.best_fid, save_best)
+    else:
+        selection.stale_evaluations += 1
+
+
 def train_generator(
     trainer: GeneratorTrainer,
     loader,
@@ -585,7 +617,9 @@ def train_generator(
         start_epoch, best_fid, stale_evaluations = trainer.load_resume_state(
             state, legacy, request.extend_schedule
         )
-        ce_progress = restore_clean_ce(state, start_epoch, request)
+        ce_progress = restore_clean_ce(
+            state, start_epoch, request.fresh_selection, request.val_ce_patience
+        )
         if request.fresh_selection:
             logger.info(
                 f"fresh selection: ignoring inherited best FID {best_fid:.4f} "
@@ -605,76 +639,43 @@ def train_generator(
             logger.info(reason)
             return best_fid
 
-    for epoch in range(start_epoch, request.epochs):
-        loader.dataset.set_epoch(epoch)
-        epoch_started = time.perf_counter()
-        with dump_on_failure(
+    selection = SelectionState(best_fid, stale_evaluations, ce_progress)
+
+    def guard(epoch: int):
+        return dump_on_failure(
             outputs.failure_dump_path,
-            lambda epoch=epoch, best_fid=best_fid, stale_evaluations=stale_evaluations: (
-                trainer.resume_state(epoch, best_fid, stale_evaluations, outputs.run_dir),
+            lambda: (
+                trainer.resume_state(
+                    epoch, selection.best_fid, selection.stale_evaluations, outputs.run_dir
+                ),
                 trainer.current_inputs,
                 trainer.current_step,
                 trainer.trained_modules(),
             ),
-        ):
-            means = trainer.train_epoch(loader, device, heartbeat=heartbeat)
-        epoch_minutes = (time.perf_counter() - epoch_started) / 60
-        learning_rate = trainer.optimizer.param_groups[0]["lr"]
-        outputs.on_metrics(
-            {"epoch": epoch + 1, **means, "lr": learning_rate, "epoch_minutes": epoch_minutes}
         )
-        logger.info(
-            f"epoch {epoch + 1:3d}/{request.epochs}  ce {means['ce']:.4f}  "
-            f"ric {means['ric']:.4f}  rot6d {means['rot6d']:.4f}  foot {means['foot']:.4f}  "
-            f"total {means['total']:.4f}  lr {learning_rate:.2e}  {epoch_minutes:.1f} min"
+
+    def train_epoch(epoch: int) -> dict[str, float]:
+        loader.dataset.set_epoch(epoch)
+        selection.epoch_started = time.perf_counter()
+        return trainer.train_epoch(loader, device, heartbeat=heartbeat)
+
+    def after_epoch(epoch: int, means: dict[str, float]) -> str:
+        return finish_epoch(
+            trainer,
+            request,
+            device,
+            evaluate,
+            save_best,
+            resume_path,
+            outputs,
+            ce_loaders,
+            selection,
+            epoch,
+            means,
         )
-        logger.debug(f"epoch {epoch + 1} all loss terms {means}")
 
-        ce_progress = advance_clean_ce(
-            trainer, ce_loaders, device, request.ce_batches, epoch, outputs.on_metrics, ce_progress
-        )
-        save_on_lower_val_ce(trainer, request, ce_progress, epoch, save_best)
-
-        due = (epoch + 1) % request.eval_every == 0 or epoch + 1 in (
-            request.epochs,
-            request.stop_epoch,
-        )
-        if due:
-            with trainer.ema_weights():
-                metrics = evaluate(Split.VALIDATION)
-            outputs.on_metrics({"epoch": epoch + 1, "split": Split.VALIDATION.value, **metrics})
-            logger.info(
-                f"  [gen-eval:{Split.VALIDATION.value}] clips {metrics['clips']}  "
-                f"FID {metrics['fid']:.4f}  R@1 {metrics['r_top1']:.3f}  "
-                f"R@3 {metrics['r_top3']:.3f}  MM {metrics['mm_dist']:.3f}  "
-                f"Div {metrics['diversity']:.3f}"
-            )
-            not_finite = sorted(name for name, value in metrics.items() if not math.isfinite(value))
-            if not_finite:
-                raise RuntimeError(
-                    f"epoch {epoch + 1}: evaluation metrics not finite: {not_finite}"
-                )
-            if is_eligible_improvement(metrics, best_fid, request):
-                best_fid = metrics["fid"]
-                stale_evaluations = 0
-                save_on_lower_fid(trainer, request, epoch, best_fid, save_best)
-            else:
-                stale_evaluations += 1
-
-        state = trainer.resume_state(epoch, best_fid, stale_evaluations, outputs.run_dir)
-        state["clean_ce_progress"] = {"best": ce_progress.best, "stale": ce_progress.stale}
-        atomic_torch_save(state, resume_path)
-        del state
-
-        if device == "cuda":
-            torch.cuda.empty_cache()
-
-        reason = early_stop_reason(request, epoch, stale_evaluations, best_fid, ce_progress)
-        if reason:
-            logger.info(reason)
-            break
-
-    return best_fid
+    run_epochs(start_epoch, request.epochs, train_epoch, after_epoch, guard)
+    return selection.best_fid
 
 
 def save_on_lower_val_ce(
