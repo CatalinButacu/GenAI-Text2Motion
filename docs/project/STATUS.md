@@ -1,5 +1,30 @@
 # STATUS -- session checkpoint (2026-11-08, updated)
 
+Master record for the final paper: docs/paper/FINAL_PAPER.md. Use it for every result, contribution and open decision. This file is a diary only.
+
+## Update (2026-11-25, A28-T11 steering joint jump; wiring only)
+
+- No generator checkpoint exists in this environment (runs/checkpoints is missing). The measure used the tiny CPU Mamba (random weights), so it shows wiring only, not quality.
+- Script: scripts/qa/steering_jump.py. CSV: docs/notes/steering_joint_jump.csv. 24 text pairs, seed 2026, one process, switch at token 12 of 24, blend 8 frames.
+- Joint jump: the peak joint step in cm over the window from the switch frame to 8 frames after it. Reference: the same stream with the old text only.
+- Mean jump: (a) re-anchor 14.09 cm, (b) cross-fade 13.55 cm. p95: (a) 16.09 cm, (b) 15.00 cm.
+- Mean excess over the reference: (a) 0.0001 cm, (b) 0.31 cm. p95 excess: (a) 0.00 cm, (b) 2.85 cm.
+- Choice (provisional): option (a) re-anchor. Reason: no excess jump over the reference, and one stream instead of two. Caveat: the tiny model hardly reacts to the text, so (a) shows no change by construction.
+- Next: repeat with the t2k_mamba_causal_heading checkpoint when it is restored. Change the choice only if (b) wins there.
+
+## Decision (2026-11-23, owner): plan change
+
+- Full plan: `docs/project/PLAN_2026-11-23.md`. Papers: `docs/project/references.md`.
+- Causal rule: the generator and every streaming path are causal. The frozen tokenizer `fsq_g8_v1024` is not causal. A causal tokenizer is retrained.
+- Rates: input 60 fps, output 60 fps, interpolated to 120 fps for playback.
+- Data stages: AMASS first (locomotor learning), HumanML3D only at the text stage.
+- Training: evaluate every 5 epochs, stop after 10 epochs without improvement. Old runs are historical and do not enter the paper.
+- Text encoders: test several by a fixed test. CLIP is the baseline.
+- Guidance: sweep scale 1, 2, 3, 4, 6.
+- Engine: Unity. Claude builds 3D objects for the scene. The avatar comes later.
+- X5 is skipped. A19 (hands and face) is approved as part of the model.
+- Blocked: the 60 fps data needs the raw AMASS files, which the owner must download again.
+
 ## Update (2026-11-22, T2 stopped; Mamba kernel rebuild for this environment)
 
 - T2 (t2_mamba_causal_heading) stopped at your request. Cause of the slow steps: the probe config runs the Mamba scan in plain Python (use_kernel false, with activation recomputation). The GPU load swings between 0 and 100 percent between steps.
@@ -36,6 +61,104 @@
   - FID, other segments subsampled to 201 (20 draws): mean 2.46, range 1.87 to 3.14.
   - Result: shared-source segments score worse, not better. The overlap does not inflate the validation FID in this check. Small sample sizes: treat as a sign, not a proof.
 - The T6 decision still matters for the test split, because the test overlap is 30 percent of clips.
+
+## Proposal (2026-11-23): owner chooses Option B, both sources at 60 frames per second (long-term choice)
+
+- Decision: owner selected Option B. Data contract changes from 20 to 60 frames per second for HumanML3D and AMASS.
+- Blocking fact 1 (corrected 2026-11-23): AMASS is not all at 120 frames per second. The clock check (docs/notes/amass_clock_check.csv) gives per clip: 120 for 5049 clips, 100 for 4634, 60 for 681, no match for 94, and a folder rate for 2 (10364 clips linked to HumanML3D sources). Conversion to 60 frames per second is a clean resampling from each rate. The raw AMASS files were removed on 2026-11-23 (owner approval, the processed copy was kept). The processed copy is at 20 frames per second. Real 60 frames per second from AMASS needs the raw files again, downloaded by the owner.
+- Blocking fact 2: HumanML3D is at 20 frames per second in our copy. Its raw source must be checked the same way.
+- Blocking fact 3: interpolation from 20 to 60 frames per second adds no new motion. It only changes the time scale. A tokenizer on interpolated data learns the same motion, with three times more frames.
+- Blocking fact 4: the 263-value representation, the tokenizer, the generator and the text-to-motion evaluator (trained on 20 frames per second) all depend on 20 frames per second. Option B needs a new representation, a new tokenizer, new generators, and a new evaluator model. Published numbers are no longer directly comparable.
+- Plan (proposed, not started):
+  1. Owner: download raw AMASS and check the HumanML3D raw source, and record their frame rates.
+  2. Define the 60 frames per second representation: velocities and the heading feature scaled to the new time step. Write it as a new contract, with a test.
+  3. Rebuild the processed data at 60 frames per second (source rate to 60 by cubic resampling, no interpolation where the source is at 120).
+  4. Retrain the tokenizer, then the generators, on the grouped split. Keep the 20 frames per second results as a separate reference.
+  5. Evaluator: decide whether to retrain the text-motion matcher at 60 frames per second. This is the largest cost. Without it, the text-to-motion FID cannot be read against the literature.
+- Question for owner: re-download raw AMASS and HumanML3D source files (both at their native frame rate), and approve the new contract, including the evaluator decision.
+
+### Preparation done without owner input (2026-11-23, owner gave autonomy)
+
+- Step 7 of the plan (60 frames per second contract): the existing code already takes a frame rate in the feature parameters, and it already has a frame index scale (1 at 20, 3 at 60). Added one test in tests/motion/test_hml3d_263_contract.py: a constant-speed root, resampled from 20 to 60 frames per second, gives a root velocity per frame at 60 that is one third of the value at 20 (within 2 percent). Result: 3 tests pass. Lint and format clean.
+- Open cost for the contract: the global frame rate constant is used in 112 places in src. Changing the data to 60 frames per second means each place must take the rate from the config. This is the main code work of step 8.
+- Not done (needs owner or raw data): download, rebuild, retraining.
+
+### Download plan for Option B (2026-11-23)
+
+- No new script. The existing script scripts/data/fetch_sources.py covers the steps: list, fetch (public Hugging Face sources only), place (copies a folder that you downloaded yourself), verify (checks hashes against a manifest).
+- MPI sites (AMASS, SMPL-X, GRAB, BABEL) need a login. The rule stays: no automated login to MPI sites. You log in in your browser and download the folders yourself.
+- HumanML3D uses 18 source folders. Most are AMASS folders. The folder humanact12 is a separate source, not AMASS. Its licence must be read before use.
+- Blocker: the raw AMASS folders took about 147 GB. Free space on the only drive (C:) is 129.9 GB. No second drive is attached.
+
+Ten steps, in order:
+
+1. Owner: attach an external drive with at least 200 GB free, or free more space on C:.
+2. Owner: download the AMASS folders for the 18 source folders in the browser, into a staging folder.
+3. Run: place amass <staging folder> (existing script).
+4. Run: verify amass (existing script, hash check).
+5. Owner: download humanact12 from its public source after reading the licence; then place and verify it.
+6. Check the clock rate of each clip (120, 100, 60) and decide the 94 clips with no clear match.
+7. Write the 60 frames per second contract as code, with tests.
+8. Rebuild the processed data at 60 frames per second. Re-run the contamination checks.
+9. Retrain the tokenizer at 60 frames per second. Compare with the 20 frames per second run at equal steps.
+10. Train the Mamba and transformer twins with the same recipe. Score at 20 frames per second. Read each test split once. Record everything in STATUS and MLflow.
+
+Steps 1 and 2 are owner actions. Steps 7 to 10 start after the data check in step 4.
+
+### Full plan, Option B (owner decision, long-term)
+
+Owner actions (blocking, in this order):
+
+1. Download the raw source of every dataset that HumanML3D and AMASS use, at native frame rate. This includes the 23 AMASS folders removed on 2026-11-23 and HumanML3D's own pose sources. Place them in data/raw.
+2. Approve the evaluator decision. Recommended: score generated motion after downsampling to 20 frames per second, with the existing matcher, so that published numbers stay comparable.
+
+Plan steps (after owner actions 1 and 2):
+
+1. Contract: define the 60 frames per second representation (time-scaled velocities and heading, length bounds, window length as a candidate of 768 frames). Decide the window with a test. Write the contract as code with tests.
+2. Data: rebuild processed features at 60 frames per second from native sources (cubic resampling, no interpolation from 20). Reuse the grouped split. Re-run the contamination checks: zero shared source files between splits, and no AMASS clip linked to a validation or test source.
+3. Tokenizer: retrain at 60 frames per second on the grouped training split, with the same causal and heading design. Compare the validation curve with the 20 frames per second run at equal steps.
+4. Generator: set the maximum token length for 60 frames per second (about three times the 20 frames per second length). Run the overfit gate, then the Mamba and transformer twins with the same recipe (patience 10 epochs on validation cross-entropy).
+5. Evaluation: downsample generated and reference motion to 20 frames per second, then score with the existing matcher. Read the test split once per twin.
+6. Record every step in STATUS.md and MLflow. Keep the 20 frames per second run as the reference.
+
+## Update (2026-11-23 18:00): Mamba run g_mamba_grouped_p10 finished (validation cross-entropy patience 10)
+
+- Early stop at epoch 30 (10 epochs without a lower validation cross-entropy; best 3.685).
+- Validation FID by evaluation epoch (614 segments): 5 24.87, 10 6.28, 15 3.02, 20 2.62, 25 2.10 (saved best checkpoint), 30 2.62.
+- Test: not yet read. It is read once, on the final selected checkpoint of each twin, after the transformer twin finishes.
+- Next: transformer twin on the grouped tokenizer, same recipe (patience 10), matched parameter count.
+- Logging: this run started before live MLflow logging was on, so it is not in the store yet. Backfill for generator runs is still to be added.
+
+## Update (2026-11-23 14:20): MLflow workflow on the local machine (owner request)
+
+- Store: runs/logs/mlflow.db (SQLite). UI: local server on port 5001, reads that store. Old server on port 5000 is still running (stopping it was denied by the permission system; stop it by hand when convenient).
+- Tracking is on for the grouped tokenizer and grouped generator configs (mlflow_tracking true). Runs started from now on log their metrics live. Runs started before this change (the Mamba p10 run) are not live-logged; backfill them with the same script when they finish.
+- Logging path tested on the CPU with a temporary experiment: one run, six metric points. The test experiment and its run folder were deleted.
+- Backfill script (scripts/maintenance/backfill_mlflow.py) changed: it skips run folders that are already in the store. Before this change it created duplicates on every run. Result of the one run: 42 tokenizer folders found, 23 already logged, 19 added. The store now holds 43 runs.
+- Next for the workflow: add generator runs to the backfill (the script covers tokenizer runs only), then compare runs in the UI and make changes from the comparison.
+
+## Update (2026-11-23 13:00): Mamba run g_mamba_grouped finished at patience 6; new recipe with patience 10 started (owner decision)
+
+- Run g_mamba_grouped (validation cross-entropy patience 6): early stop at epoch 25. Validation FID by evaluation epoch: 5 23.59, 10 6.92, 15 3.31, 20 2.60, 25 2.50 (saved best, FID). Best validation cross-entropy 3.685 at epoch 20. Gap between training and validation cross-entropy grows after epoch 15 (+0.84 at the stop).
+- No test score was written by this run. A test read on its checkpoint was started and then stopped at once, because the recipe is superseded. The completed run keeps its original recipe (rule: completed experiments stay unchanged).
+- Owner decision: the cross-entropy patience is 10 epochs. With evaluation every 5 epochs, this equals 2 evaluation steps without a lower validation cross-entropy. The patience counts epochs, not evaluations.
+- New run g_mamba_grouped_p10: same config, same tokenizer, validation cross-entropy patience 10, FID patience 6 (unchanged). Log: runs/outputs/research/g_mamba_grouped_p10.out.log. Guard 12 hours.
+- The transformer twin must use the same patience (10) so that the two twins follow the same recipe.
+
+## Update (2026-11-23 10:20): Mamba generator on the grouped split started
+
+- Config: configs/generator/grouped/gen_mamba_grouped.yaml (kernel on, dataset folder humanml3d_grouped). Tokenizer: tok_grouped_r11_causal_heading_w001 (E1).
+- Overfit gate: PASS. Cross-entropy 0.00065, token accuracy 1.000, 26 steps. Gate file: runs/outputs/gates/grouped_mamba_gate.json.
+- Run g_mamba_grouped: 40 epochs, seed 2026, validation every 5 epochs, patience 6 on validation FID and on validation cross-entropy. Test scored once, on the selected checkpoint. Log: runs/outputs/research/g_mamba_grouped.out.log. Guard 12 hours.
+- Still to do: the transformer twin on the same grouped tokenizer, with a matched parameter count, before any comparison.
+
+## Update (2026-11-23 10:20): E2 result (AMASS share 0.25) at equal steps: AMASS does not help
+
+- E2 stopped at its step budget of 15400 steps (epoch 75, 206 steps per epoch with AMASS). The label "epoch 100" in the automatic result line is wrong; the run stopped at epoch 75.
+- At 15400 steps, validation recon-FID: E2 0.1158 (MPJPE 69.8 mm), E1 0.0917 (MPJPE 72.1 mm, epoch 100, same steps).
+- Test (best validation checkpoint, scored once): E2 0.0925 (MPJPE 71.8 mm), E1 0.0777 (MPJPE 72.3 mm).
+- Decision for now: AMASS share 0.25 is not used. E1 stays the tokenizer for the generators. AMASS remains a documented option (L2).
+- Caution: E2 validation was still falling at the stop, as E1 was. The comparison is at equal steps, the rule for this project.
 
 ## Update (2026-11-23 03:35): E2 started (grouped tokenizer, AMASS share 0.25, equal steps)
 
@@ -286,7 +409,7 @@
 ## Update (2026-11-17 night, A22 tight code and fast data)
 
 - Owner order: full autonomy for A22; Haiku agents made the code edits, the orchestrator checked each one and committed in the owner's name (14 commits, f5fb97f..df7296a).
-- Speed: the CLIP text encoder now runs only its trainable layer per step; the 11 frozen layers come from a disk cache (data/.cache/clip_frozen_*.npy, 1.44 GiB, built once in 192 s for the 43114 train captions). Train step 88.6 -> 71.0 ms (-20%) on the laptop; 5 seeded steps give loss difference 0.0 and bit-equal weights. Turn off with --text_cache false.
+- Speed: the CLIP text encoder now runs only its trainable layer per step; the 11 frozen layers come from a disk cache (data/.cache/clip*frozen*\*.npy, 1.44 GiB, built once in 192 s for the 43114 train captions). Train step 88.6 -> 71.0 ms (-20%) on the laptop; 5 seeded steps give loss difference 0.0 and bit-equal weights. Turn off with --text_cache false.
 - Speed: caption files are parsed once per dataset (init about 4-5 s faster per loader); `text2motion --help` 6.7 -> 0.6 s.
 - Dropped by measurement: data workers (the loader is 9.5-12.8 ms of a batch; the 65.6 ms reading was a cold file cache) and a packed feature store (about 8 ms per step).
 - Structure: CLI request classes live in app; MotionDataConfig and the weighting enums in dataset; 20 single-use helpers nested in their caller; settings objects for the 9 functions with 9+ parameters; tests/test_package_layers.py enforces the package layers and the 10-file limit. No per-package defaults.yaml: one dataclass per section already holds the defaults.
@@ -378,7 +501,7 @@
 - Leak test (commit ad99355): on val, clips that share no recording with train have a higher FID than a size-matched random set (transformer 0.238 vs 0.202, Mamba 0.252 vs 0.206). R@1 does not drop. Same for both twins.
 - Verb clusters (commits 3a6d355, 57dc2d6): 324 action verbs, 11 191 clips. Both motion trees give the same 10 motion classes (map `doc/paper/pics/verb_cluster_map.csv`, column class_10). A clip classifier tells the 10 classes apart (balanced accuracy 0.854). 100 classes cannot be tested: only 22 have 5 single-class clips.
 - G4 per class (commit 16a940d): val R@1 of G4 is within 0.07 of the real-clip score in each of the 10 classes. The small classes are not behind.
-- Sampler (commit e949662): `clip_weighting: motion_class` draws a train clip with weight n ** -0.5 of its rarest class, with replacement. The rebalance is mild: run/jog 1.75x, jump/hop 1.52x, walk/turn 0.94x.
+- Sampler (commit e949662): `clip_weighting: motion_class` draws a train clip with weight n \*\* -0.5 of its rarest class, with replacement. The rebalance is mild: run/jog 1.75x, jump/hop 1.52x, walk/turn 0.94x.
 - V6 (commit c6aa58e): FAIL by its rule. Small-class R@1 rises for the transformer only. This probe used raw `_last.pt` weights.
 - Lesson: `_last.pt` is the resume state with RAW weights. The in-training evaluation and the best `.pt` bundle use EMA weights. Evaluate the bundle, not `_last.pt`, to compare with in-training numbers.
 - V8 (commit 3125da4): PASS. 20-run val FID of the epoch-6 EMA bundles: transformer 1.112 -> 0.606, Mamba 0.451 -> 0.266. R@1 T +0.034, M 0.000. The verb test shows no change (commit eba1465).
@@ -595,9 +718,9 @@
 - Owner approved the M3 plan and about 22-32 GPU h.
 - Design change from the check: the prior uses the main trainer with cfg_dropout 1.0, not pretrain.py.
   So the prior has end tokens, EMA, the P1 crops and mirrors; its clean CE uses no text.
-- New code: train.freeze (none, backbone, lower_half) in GeneratorTrainer; --select_on_val_ce saves the
+- New code: train.freeze (none, backbone, lower*half) in GeneratorTrainer; --select_on_val_ce saves the
   best bundle at the lowest clean val CE; --init_ckpt reads bundles; sanity-overfit takes --init_ckpt.
-  Configs: configs/generator/a8/width_320_{prior,f0,f1,f2}.yaml. Tests: 7 new; suite 690 passed.
+  Configs: configs/generator/a8/width_320*{prior,f0,f1,f2}.yaml. Tests: 7 new; suite 690 passed.
 - KT2 rule changed before any data: R@1(2) >= P1 R@1(2) - 0.05 replaces the null-text CE test.
 - Deferred: the BMLrub extra (7.7 h) and its leak check; the trainer reads HumanML3D only. Phase 1 = same-data prior.
 - Driver run_a8_kill_tests_local.ps1 started (pid 29196); it waits for G4 (pid 29888), then gates, KT1,
@@ -720,9 +843,9 @@
 ## Update (2026-11-08, verb inventory and "can generate" test)
 
 - `doc/notes/verb_inventory.csv` (script `scripts/research/verb_inventory.py`): 442 verbs with
-  >= 5 train clips, from the HumanML3D POS tags; original clips only (no M mirrors). Bands:
-  10 verbs >= 1000 clips, 71 with 100-999, 141 with 20-99, 220 with 5-19. 65 have 0 test clips.
-  Tagger errors stay in the CSV (left, side, back, clockwise, swinge, outstretche).
+  > = 5 train clips, from the HumanML3D POS tags; original clips only (no M mirrors). Bands:
+  > 10 verbs >= 1000 clips, 71 with 100-999, 141 with 20-99, 220 with 5-19. 65 have 0 test clips.
+  > Tagger errors stay in the CSV (left, side, back, clockwise, swinge, outstretche).
 - "Can generate" test (`scripts/qa/verb_generation_probe.py`): top 100 motion verbs (tagger
   errors and object verbs removed); text "a/DET person/NOUN <verb>/VERB" for the Guo encoder,
   prompt "a person <verb>s" for the generator; 16 seeds, 30 tokens; retrieval of the own verb
@@ -774,9 +897,9 @@
   "slowly" in at least 3 of 4 verbs for a twin.
 - Script: `scripts/qa/speed_word_probe.py`.
 - RESULT (data doc/paper/pics/speed_word_probe.csv). Verbs that follow (limb or root):
-  | twin        | "slowly"                                  | "quickly"                         |
-  | transformer | walk jump turn hop spin climb (not bow)   | walk spin climb                   |
-  | mamba       | walk jump turn spin climb (not bow, hop)  | walk turn climb                   |
+  | twin | "slowly" | "quickly" |
+  | transformer | walk jump turn hop spin climb (not bow) | walk spin climb |
+  | mamba | walk jump turn spin climb (not bow, hop) | walk turn climb |
 - Verdict by the fixed rule (rare group, "slowly"): transformer 3/4 (hop, spin, climb) -> transfer
   HOLDS; Mamba 2/4 (spin, climb) -> transfer FAILS.
 - "slowly" transfers better than "quickly". Walk follows both words strongly (slow 0.61-0.77,
@@ -794,14 +917,14 @@
   1. peak speed ratio (top-p 1.0 over 0.9) > 1 and its 95% interval excludes 1;
   2. the paired FID difference (1.0 minus 0.9) has a 95% upper end <= +0.03 (about 10% of P1);
   3. R@1 does not fall by more than 0.02.
-  Adopt top-p 1.0 only if both twins pass. Otherwise keep top-p 0.9.
+     Adopt top-p 1.0 only if both twins pass. Otherwise keep top-p 0.9.
 - Script: `scripts/qa/top_p_probe.py`. Shared helpers moved to `evaluation/metrics.py`
   (`sharpness_statistics`, `paired_mean_ratio` on scipy.stats.bootstrap); tests in
   `tests/evaluation/test_sharpness.py` (2 pass).
 - RESULT (628 pieces; data doc/paper/pics/top_p_validation.csv):
-  | twin        | peak speed 1.0/0.9   | FID 0.9 -> 1.0 | FID diff [95%]        | R@1 0.9 -> 1.0 |
+  | twin | peak speed 1.0/0.9 | FID 0.9 -> 1.0 | FID diff [95%] | R@1 0.9 -> 1.0 |
   | transformer | 1.023 [1.001; 1.046] | 0.249 -> 0.221 | -0.029 [-0.102; 0.053] | 0.518 -> 0.500 |
-  | mamba       | 1.014 [0.990; 1.039] | 0.365 -> 0.300 | -0.064 [-0.163; 0.045] | 0.510 -> 0.482 |
+  | mamba | 1.014 [0.990; 1.039] | 0.365 -> 0.300 | -0.064 [-0.163; 0.045] | 0.510 -> 0.482 |
   Foot skate rises about 5% with top-p 1.0 for both (intervals exclude 1).
 - Verdict by the fixed rule: FAIL for both twins (FID upper end > +0.03 for both; Mamba peak
   speed interval includes 1 and R@1 falls 0.028). Keep top-p 0.9.
@@ -816,16 +939,16 @@
 - Owner question: would a tokenizer retrained on more data give sharper, more natural motion?
 - Rule fixed BEFORE the run (18:50): on 256 validation clips (seed 2026), the ratio of the
   tokenizer roundtrip to the real motion for peak joint speed (p99, root-relative):
-  >= 0.95 -> the tokenizer keeps the peaks; a tokenizer change has no measured reason.
-  < 0.95 -> the tokenizer smooths the peaks; propose a tokenizer task with its full cost.
-  The same table shows the P1 generators (CFG 6, temperature 1, top-p 0.9) vs the real motion.
+  > = 0.95 -> the tokenizer keeps the peaks; a tokenizer change has no measured reason.
+  > < 0.95 -> the tokenizer smooths the peaks; propose a tokenizer task with its full cost.
+  > The same table shows the P1 generators (CFG 6, temperature 1, top-p 0.9) vs the real motion.
 - Script: `scripts/qa/motion_sharpness_probe.py` (SciPy paired bootstrap, 1000 resamples).
   Smoke test (8 clips) passed; full run detached, pid in artifacts/outputs/motion_sharpness_val.pid.
 - RESULT (256 clips, ratio to real, 95% paired interval). Data: doc/paper/pics/motion_sharpness_validation.csv
-  | source      | peak speed           | peak accel           | mean jerk            | foot skate           |
-  | tokenizer   | 0.956 [0.934; 0.972] | 0.806 [0.746; 0.857] | 0.692 [0.636; 0.753] | 1.132 [1.067; 1.203] |
+  | source | peak speed | peak accel | mean jerk | foot skate |
+  | tokenizer | 0.956 [0.934; 0.972] | 0.806 [0.746; 0.857] | 0.692 [0.636; 0.753] | 1.132 [1.067; 1.203] |
   | transformer | 0.814 [0.761; 0.871] | 0.698 [0.622; 0.776] | 0.708 [0.615; 0.816] | 1.487 [1.316; 1.704] |
-  | mamba       | 0.789 [0.732; 0.848] | 0.647 [0.577; 0.718] | 0.669 [0.586; 0.761] | 1.435 [1.249; 1.684] |
+  | mamba | 0.789 [0.732; 0.848] | 0.647 [0.577; 0.718] | 0.669 [0.586; 0.761] | 1.435 [1.249; 1.684] |
 - Verdict by the fixed rule: tokenizer peak speed 0.956 >= 0.95, so no tokenizer change. Weak
   point: the interval low end (0.934) is below 0.95, so the pass is narrow.
 - The generators lose about 20% of the peak speed; the tokenizer loses about 4%. The main loss
@@ -862,17 +985,17 @@
   and new tokens would force a retrain of both generators.
 - Owner chose P2 (per-step text) first. P2 depends on R7: the owner sets a physical guard,
   then rates the blinded keep0/keep16 review. If keep0 passes, no P2 training is needed.
-  Blank sheet (46 cases, 32 random first, 14 outliers): 
+  Blank sheet (46 cases, 32 random first, 14 outliers):
   `artifacts/outputs/qa/switch_review_ratings_20261108.csv`. Media:
   `artifacts/outputs/qa/switch_review_focus_media_20261108/case_NNN.gif` (panels A and B).
 - GUARD FIXED BY THE OWNER BEFORE ANY RATING (2026-11-08). Counted on the 32 random cases
   only; the 14 outliers do not count. keep0 passes only if both conditions hold:
   1. Text: keep0 follows the new text better or the same in at least 20 of 32 cases.
   2. Physics: (cases with foot slide on keep0) - (cases with foot slide on keep16) <= 4.
-  Pass: adopt keep0 as the switch policy; no P2 training. Fail: propose the P2 pilots
-  (both twins, overfit gates first, 4 h cap) for owner budget approval.
-  Sealed mapping (not opened): `artifacts/outputs/qa/switch_review_20261108/sealed_mapping.json`,
-  sha256 57ead0f1a4ce851bf8906197c8a1ccf6d3aa24515ce4529be1cfe639cc4748d9.
+     Pass: adopt keep0 as the switch policy; no P2 training. Fail: propose the P2 pilots
+     (both twins, overfit gates first, 4 h cap) for owner budget approval.
+     Sealed mapping (not opened): `artifacts/outputs/qa/switch_review_20261108/sealed_mapping.json`,
+     sha256 57ead0f1a4ce851bf8906197c8a1ccf6d3aa24515ce4529be1cfe639cc4748d9.
 
 ## Update (2026-11-08, C1b done: paired bootstraps on validation)
 
@@ -1104,12 +1227,12 @@
   Default/explicit16 parity is tested on both twins; original cohort16 raw features
   reproduce R6 exactly. All12 cells completed in1067.9s,17.8min.
 
-  | Twin | Cohort | Early R@1 keep16 | keep8 | keep0 |
-  |---|---:|---:|---:|---:|
-  | Mamba | 0 | .25000 | .25000 | .50000 |
-  | Mamba | 64 | .40625 | .53125 | .59375 |
-  | Transformer | 0 | .28125 | .43750 | .53125 |
-  | Transformer | 64 | .40625 | .34375 | .56250 |
+  | Twin        | Cohort | Early R@1 keep16 |  keep8 |  keep0 |
+  | ----------- | -----: | ---------------: | -----: | -----: |
+  | Mamba       |      0 |           .25000 | .25000 | .50000 |
+  | Mamba       |     64 |           .40625 | .53125 | .59375 |
+  | Transformer |      0 |           .28125 | .43750 | .53125 |
+  | Transformer |     64 |           .40625 | .34375 | .56250 |
 
 - Zero-history early own-caption margin improves in all four cells with unadjusted
   paired95% intervals above0: Mamba+4.75036[2.64607;7.07174] and
@@ -1178,12 +1301,12 @@
   pair order and fixed32 pools. Both old and new captions are scored; an old-minus-new
   distance margin above0 favors the new caption. Exact distance ties favor neither.
 
-  | Twin | Method | Early new-caption R@1 | Late new-caption R@1 |
-  |---|---|---:|---:|
-  | Mamba | Independent cut | 0.53125 | 0.37500 |
-  | Mamba | Continuous generator | 0.25000 | 0.34375 |
-  | Transformer | Independent cut | 0.62500 | 0.40625 |
-  | Transformer | Continuous generator | 0.28125 | 0.46875 |
+  | Twin        | Method               | Early new-caption R@1 | Late new-caption R@1 |
+  | ----------- | -------------------- | --------------------: | -------------------: |
+  | Mamba       | Independent cut      |               0.53125 |              0.37500 |
+  | Mamba       | Continuous generator |               0.25000 |              0.34375 |
+  | Transformer | Independent cut      |               0.62500 |              0.40625 |
+  | Transformer | Continuous generator |               0.28125 |              0.46875 |
 
 - Early generator-minus-cut R@1 paired95% intervals:
   Mamba -0.28125 [-0.53125;-0.03125];
@@ -1253,16 +1376,16 @@
   reference0.0339601999, not FlowMDM's published test constant. Values use meters/frame^3
   without FPS scaling. These are adapted validation diagnostics, not comparable paper-table scores.
 
-  | Twin | Join | PJ | AUJ | Conditional foot skate (m/s) |
-  |---|---|---:|---:|---:|
-  | Transformer | Cut | 1.201751 | 2.925252 | 0.255800 |
-  | Transformer | Linear | 0.106820 | 1.288303 | 0.230218 |
-  | Transformer | Quintic minimum-jerk | 0.096559 | 1.216105 | 0.230145 |
-  | Transformer | History-conditioned generator | 0.036652 | 0.418906 | 0.273301 |
-  | Mamba | Cut | 1.462913 | 3.569462 | 0.243383 |
-  | Mamba | Linear | 0.084680 | 1.266608 | 0.199652 |
-  | Mamba | Quintic minimum-jerk | 0.079212 | 1.175063 | 0.196215 |
-  | Mamba | History-conditioned generator | 0.025754 | 0.779083 | 0.196797 |
+  | Twin        | Join                          |       PJ |      AUJ | Conditional foot skate (m/s) |
+  | ----------- | ----------------------------- | -------: | -------: | ---------------------------: |
+  | Transformer | Cut                           | 1.201751 | 2.925252 |                     0.255800 |
+  | Transformer | Linear                        | 0.106820 | 1.288303 |                     0.230218 |
+  | Transformer | Quintic minimum-jerk          | 0.096559 | 1.216105 |                     0.230145 |
+  | Transformer | History-conditioned generator | 0.036652 | 0.418906 |                     0.273301 |
+  | Mamba       | Cut                           | 1.462913 | 3.569462 |                     0.243383 |
+  | Mamba       | Linear                        | 0.084680 | 1.266608 |                     0.199652 |
+  | Mamba       | Quintic minimum-jerk          | 0.079212 | 1.175063 |                     0.196215 |
+  | Mamba       | History-conditioned generator | 0.025754 | 0.779083 |                     0.196797 |
 
 - Paired1000-resample generator-minus-quintic AUJ:
   Transformer -0.797199 [95% CI -0.958149;-0.475697];
@@ -1343,10 +1466,10 @@
 - Both own-run resume checkpoints load and match their recorded completed epochs and best FID.
   Training remains partial. P256 is done as a bounded pilot task, not as a convergence run.
 
-  | Twin | Completed epochs | Best validation CE | Best validation FID (epoch) | Median optimizer epoch |
-  |---|---:|---:|---:|---:|
-  | Transformer256 | 8 | 5.05638 (ep8) | 0.82545 (ep8) | 5.504 min |
-  | Mamba256 | 7 | 4.89352 (ep7) | 1.06508 (ep4) | 7.669 min |
+  | Twin           | Completed epochs | Best validation CE | Best validation FID (epoch) | Median optimizer epoch |
+  | -------------- | ---------------: | -----------------: | --------------------------: | ---------------------: |
+  | Transformer256 |                8 |      5.05638 (ep8) |               0.82545 (ep8) |              5.504 min |
+  | Mamba256       |                7 |      4.89352 (ep7) |               1.06508 (ep4) |              7.669 min |
 
 - Last three validation CEs still decrease: Transformer ep6-8 = 5.26843, 5.15135, 5.05638;
   Mamba ep5-7 = 5.15887, 5.01090, 4.89352. This is not a measured plateau.
@@ -1393,9 +1516,9 @@
   both preset architectures and TF32 validated. Built-in test discovery found no tests;
   the explicit integrated pytest task ran all 18 successfully.
 - Initial task: Width256 twin pilot; recovery task: Width256 pilot recovery.
-  Tag p256_pilot_20261106.
-  Logs artifacts/outputs/p256_pilot_20261106_{transformer,mamba}_w256.log(.err);
-  checkpoints generator_{transformer,mamba}_w256_p256_pilot_20261106*.pt.
+  Tag p256*pilot_20261106.
+  Logs artifacts/outputs/p256_pilot_20261106*{transformer,mamba}_w256.log(.err);
+  checkpoints generator_{transformer,mamba}\_w256_p256_pilot_20261106\*.pt.
   Both fresh gates passed:
   Transformer 101 steps, CE 0.09922, token accuracy 99.117%, total-loss ratio 0.04078;
   Mamba 26 steps, CE 0.007365, token accuracy 99.932%, total-loss ratio 0.02975.
@@ -1433,18 +1556,19 @@
   R5b is done; R7 remains running.
 - Late window (49.0-58.8 seconds), restart32-minus-restart8 text distance; positive is worse:
 
-  | Twin | Cohort offset | Difference | 95% prompt-paired interval |
-  |---|---:|---:|---|
-  | Mamba | 0 | +0.253 | [-0.825, 1.166] |
-  | Mamba | 32 | +1.464 | [0.219, 2.905] |
-  | Transformer | 0 | +0.287 | [-0.435, 1.047] |
-  | Transformer | 32 | +0.024 | [-0.708, 0.822] |
+  | Twin        | Cohort offset | Difference | 95% prompt-paired interval |
+  | ----------- | ------------: | ---------: | -------------------------- |
+  | Mamba       |             0 |     +0.253 | [-0.825, 1.166]            |
+  | Mamba       |            32 |     +1.464 | [0.219, 2.905]             |
+  | Transformer |             0 |     +0.287 | [-0.435, 1.047]            |
+  | Transformer |            32 |     +0.024 | [-0.708, 0.822]            |
 
   All four restart-policy R@1 intervals cross zero. This is not a replicated policy winner.
   Mamba restart32 cost 275.4 seconds versus restart8 618.3 seconds across both cohorts;
   Transformer 107.1 versus 113.6 seconds. Total 1114.4 seconds (18.6 minutes) for generation
   plus offline decoding alone, excluding model loading/scoring. Single-pass cost, not a
   repeated speed benchmark or live latency.
+
 - Evidence: [cohort 0 CSV](../../doc/paper/pics/long_stream_policy_offset0.csv),
   [cohort 32 CSV](../../doc/paper/pics/long_stream_policy_offset32.csv) (24 windows each);
   [paired comparisons and archives](../../artifacts/outputs/qa/r5b_20261106/);
@@ -1466,15 +1590,16 @@
   No smaller-model or longer-training causal experiment was run.
 - Preliminary R7 options (not training approval):
 
-  | Option | Measured basis/source | Cost scope | Protocol effect |
-  |---|---|---|---|
-  | Keep frozen width320, restart8 | R5b: Mamba late distances 3.452/3.603; no replicated restart32 advantage | 0.203 h measured generation+decode for both twins/cohorts; loading/scoring extra | Current service baseline retained; quality and R6 joins still need checking |
-  | Adopt restart32 | R5b: Mamba late distances 3.705/5.068; one cohort's paired distance worsens; R@1 inconclusive | 0.106 h measured generation+decode; not live latency | Less frequent text refresh/replay and position resets; not justified by this screen |
-  | Controlled capacity/conditioning retrain later | S3/P1: four-run sweep and one-seed P1; no causal long-horizon capacity result | New cost unmeasured; A4 P1 budget was about 17 GPU h, not a P2 estimate | Requires a separately approved matched-twin plan, overfit gate and validation-only selection; no extra epochs by default |
+  | Option                                         | Measured basis/source                                                                         | Cost scope                                                                       | Protocol effect                                                                                                          |
+  | ---------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+  | Keep frozen width320, restart8                 | R5b: Mamba late distances 3.452/3.603; no replicated restart32 advantage                      | 0.203 h measured generation+decode for both twins/cohorts; loading/scoring extra | Current service baseline retained; quality and R6 joins still need checking                                              |
+  | Adopt restart32                                | R5b: Mamba late distances 3.705/5.068; one cohort's paired distance worsens; R@1 inconclusive | 0.106 h measured generation+decode; not live latency                             | Less frequent text refresh/replay and position resets; not justified by this screen                                      |
+  | Controlled capacity/conditioning retrain later | S3/P1: four-run sweep and one-seed P1; no causal long-horizon capacity result                 | New cost unmeasured; A4 P1 budget was about 17 GPU h, not a P2 estimate          | Requires a separately approved matched-twin plan, overfit gate and validation-only selection; no extra epochs by default |
 
   Assumption (medium confidence): retaining restart8 is the safer baseline, not a proven optimum.
   Blind temporal playback with prompt-following and repetition ratings can overturn that
   recommendation. Keep R7 open for R6/quality evidence and the owner's final choice.
+
 - Resources: about 1.8 GiB free RAM; GPU has graphics processes but no CUDA training process.
   K7 worktree at 0eec5a5: six modified files plus the untracked deterministic-scan test
   confirmed by the existing integrated status task. This resolves the earlier task-creation
@@ -1648,7 +1773,7 @@
   match dropout after it; token-weighted CE; test-split experiment in the evaluation step;
   RVQ is trained again fairly after the RVQ fix (no note-only option).
 - dt A/B (2 epochs, warmup 1000 > 700 steps, so both arms stayed in warmup): no quality
-  difference (CE 6.614 vs 6.617). Memory check (median dt, exp(dt*A) per token):
+  difference (CE 6.614 vs 6.617). Memory check (median dt, exp(dt\*A) per token):
   trained e60 Mamba dt 0.547, keeps 1.4% per token, memory ~1 token in all 15 layers; fresh
   0.691; 2-epoch default arm 0.698 / ~1 token; 2-epoch reference arm 0.010, keeps 93.4%,
   memory ~15 tokens. Weight decay is not a cause (a_log, d_skip and 1-D params are exempt).
@@ -1713,7 +1838,7 @@
 
 - What we found: the tokenizer EMA averaged parameters only. The RVQ codebooks are buffers
   (k-means EMA), so an evaluation paired the averaged encoder with the live codebook. FSQ was
-  not affected. The old RVQ checkpoints (rvq_*.pt) and their scores carry this mismatch.
+  not affected. The old RVQ checkpoints (rvq\_\*.pt) and their scores carry this mismatch.
 - What we changed: `ExponentialMovingAverage(average_buffers=True)` for the tokenizer only,
   the same rule as torch AveragedModel(use_buffers=True); the generator keeps parameters only, so
   its 10 resume files still load. Commit `84f2ebe`, 99 tokenization tests pass.
@@ -1998,6 +2123,7 @@
 ## Update (2026-10-26, hooks: H01 Copilot patches, H05 diagnostics tool, H09 commit marks)
 
 All changes are local hook files (`.claude/` is not in git).
+
 - H01: the Copilot CLI runs these hooks from `.claude/settings.json` fail-closed; a raw patch
   text as `tool_input` crashed 7 hooks (`str` has no `.get`), so Copilot denied each
   `apply_patch` (seen in the Copilot logs, 2026-10-22 to 2026-10-24). New
@@ -2096,7 +2222,7 @@ All changes are local hook files (`.claude/` is not in git).
   has the owner's identity and a clean message, and a force only with `--force-with-lease`
   (9 sample cases checked).
 - Incident: a rebase left unfinished on 2026-09-15 stayed open for six weeks. `git rebase
-  --abort` moved `thesis-v2` back to `e22e735` (files of 15 September). Recovered with
+--abort` moved `thesis-v2` back to `e22e735` (files of 15 September). Recovered with
   `git merge --ff-only efd17e4`; nothing was lost (246 tests pass). Rule: for a stale
   "rebase in progress", use `git rebase --quit`, never `--abort`.
 
@@ -2169,18 +2295,19 @@ All changes are local hook files (`.claude/` is not in git).
   END is masked at step 0; the decoder never receives END. No effect on past numbers: all 56
   recorded evaluations used `length_mode: fixed`, where END is never sampled.
 - F12 `d84903c`: `evaluate --reps R` now generates all clips again in each run (seed
-  `crc32(clip_id) + run`, paired between twins) and reports mean +/- 1.96*sd/sqrt(R) (Guo et al.
+  `crc32(clip_id) + run`, paired between twins) and reports mean +/- 1.96\*sd/sqrt(R) (Guo et al.
   formula, ddof 0) for FID, R@1-3, MM-Dist and Diversity. The bootstrap is a separate field
   (`fid_bootstrap_lo/hi`, run 0 only). Proof on real data: `--reps 1` on 64 val clips gives FID
   0.6781781234317192, bit-identical to the 2026-10-12 run. `--reps 3` on the same clips: FID
   0.678 / 0.764 / 0.967, mean 0.803 +/- 0.137, so one generation run can be far from the mean.
-What it changes for the thesis: every earlier "20-rep" number is ONE generation with 20 caption
-and batch resamples; the +/- values do not include generation variation. Describe them so until
-the test split is evaluated again with `--reps 20` (about 90 min per checkpoint).
+  What it changes for the thesis: every earlier "20-rep" number is ONE generation with 20 caption
+  and batch resamples; the +/- values do not include generation variation. Describe them so until
+  the test split is evaluated again with `--reps 20` (about 90 min per checkpoint).
 
 ## Update (2026-10-24, audit round 1: resume and numerical safety closed)
 
 Fixed, tested and committed (219 tests pass, pyright 0 errors):
+
 - F20 `dbeb7a3`: a NaN/Inf gradient stops all 3 loops before `optimizer.step()`
   (`error_if_nonfinite=True`); the overfit gate rejects non-finite metrics, zero counts and
   out-of-range values; a non-finite evaluation metric stops the run before selection.
@@ -2194,12 +2321,12 @@ Fixed, tested and committed (219 tests pass, pyright 0 errors):
   old effect was small (Adam is almost scale-invariant), so past results change little from it.
 - F08-3 `7628a71`: the resume file records its run directory; all 3 commands continue it.
 - F10 `83ed32d`: `--eval_split` is deleted; selection is always on validation. No past run used test.
-New findings: F27 (residual FSQ with quantizer dropout crashes `__code_stats`; no config uses it);
-H09 (`git_guard` checks the whole command for "claude", so a commit command with a `.claude/` path
-is blocked); H10 (`git_guard` blocks `git rebase --quit`). H08 is fixed: hook paths use
-`$CLAUDE_PROJECT_DIR`. Open: the stale rebase state onto donor `739e3e7` (owner runs
-`git rebase --quit`). Fact for the thesis: grouped-FSQ tokenizer training uses no random numbers.
-Next: F09 (stop tokens), F12 (evaluation repeats), F02, F01, F21, F14, then the P2 items.
+  New findings: F27 (residual FSQ with quantizer dropout crashes `__code_stats`; no config uses it);
+  H09 (`git_guard` checks the whole command for "claude", so a commit command with a `.claude/` path
+  is blocked); H10 (`git_guard` blocks `git rebase --quit`). H08 is fixed: hook paths use
+  `$CLAUDE_PROJECT_DIR`. Open: the stale rebase state onto donor `739e3e7` (owner runs
+  `git rebase --quit`). Fact for the thesis: grouped-FSQ tokenizer training uses no random numbers.
+  Next: F09 (stop tokens), F12 (evaluation repeats), F02, F01, F21, F14, then the P2 items.
 
 ## Update (2026-10-24, audit item F06: each resumed generator run evaluated a frozen EMA)
 
@@ -2207,25 +2334,27 @@ What we found: before commit `98dc4b7`, a resume replaced the EMA dict, but `upd
 changed the old tensors. After a resume, each evaluation and each saved best checkpoint used the
 EMA weights from the resume point. Training after the resume had no effect on the evaluated model.
 Proof (bit equality of all tensors, read-only check):
+
 - `generator_transformer_bs8_e100.pt` (best at epoch 100, FID 0.2304) = the EMA in
   `snapshots_60ep/generator_transformer_bs8_e60_last.pt` (92 of 92 tensors).
 - `generator_mamba_bs8_e60.pt` (best at epoch 30, FID 0.1831) = the EMA in
   `snapshots_60ep/generator_mamba_bs8_e60_last.pt` (177 of 177). That run resumed at epoch 30
   (lineage: segments 1-30, 31-60, 61-100), so its EMA stopped at epoch 30.
-What it changes:
+  What it changes:
 - Mamba e60 (seed 2026) is a 30-epoch model. Transformer e60 (seed 2026) had no resume before
   epoch 60: correct. The twin comparison at 60 epochs is not matched.
 - Both e100 runs and the `dyn_e72` / `dyn_e84` fine-tunes evaluated the frozen resume EMA.
   The claims "more training helps neither twin" (Lesson 17, sec. 6.1) and "the dynamics
   fine-tune does not help" have no support now.
 - Mamba seed 2027 had no resume (60 epochs in one process, best FID 0.2157 at epoch 60): correct.
-Where we stopped: F06 fixed and tested (`98dc4b7`); F20 non-finite stops (`dbeb7a3`). Next: F08
-resume (epoch boundary only, strict `--resume`, old resume files only with a flag), then F11.
-No new run until the audit items are closed; then a matched rerun of the affected runs.
+  Where we stopped: F06 fixed and tested (`98dc4b7`); F20 non-finite stops (`dbeb7a3`). Next: F08
+  resume (epoch boundary only, strict `--resume`, old resume files only with a flag), then F11.
+  No new run until the audit items are closed; then a matched rerun of the affected runs.
 
 ## Update (2026-10-13 22:40, second seed (task E6): Mamba run with seed 2027 is queued)
 
 Owner said "go seed 2". Done in this sequence:
+
 1. `git reset replay` (mixed, no file change): the branch `thesis-v2` now has the replay history
    (65 commits after `e22e735`). NOT pushed; the owner makes the push. Correction: `--soft` was the
    wrong advice, because it leaves the old tree staged; the mixed form is the correct one.
@@ -2239,13 +2368,13 @@ Owner said "go seed 2". Done in this sequence:
    --ckpt_name generator_mamba_bs8_e60_seed2027.pt --epochs 60 --batch_size 8 --num_workers 0
    --eval_every 6 --cfg_scale 6.0 --temperature 1.0 --resume`. Log: `artifacts/outputs/seed2027_mamba.log`.
    Expected: start near 23:30, 60 epochs x 9.3 minutes = about 9.5 hours, end near 09:00.
-Same settings as seed 2026, except: the compiled kernel (same output to 6 decimals),
-`--num_workers 0` (4 before; data order comes from the seed, not from the workers), and the seed.
-Both seeds start from the same pretrained weights, so the seed changes the data order and the
-dropout of the fine-tune, not the pretraining. State this in the thesis.
-Next: the transformer twin with seed 2027 (about 7.5 hours), then the standard test evaluation
-(20 repetitions) for both, then the paired analysis.
-If the run stops: start the same script again; `--resume` continues from the last epoch.
+   Same settings as seed 2026, except: the compiled kernel (same output to 6 decimals),
+   `--num_workers 0` (4 before; data order comes from the seed, not from the workers), and the seed.
+   Both seeds start from the same pretrained weights, so the seed changes the data order and the
+   dropout of the fine-tune, not the pretraining. State this in the thesis.
+   Next: the transformer twin with seed 2027 (about 7.5 hours), then the standard test evaluation
+   (20 repetitions) for both, then the paired analysis.
+   If the run stops: start the same script again; `--resume` continues from the last epoch.
 
 ## Update (2026-10-13 21:40, type errors: 234 -> 0 in the full project; results unchanged)
 
@@ -2256,6 +2385,7 @@ Proof that no result changed: `evaluate` for the Mamba e60 checkpoint on 64 vali
 gives the identical line as before the repair (FID 0.678, R@1 0.418, R@3 0.622, MM 3.583,
 Div 9.073, MModality 1.765).
 Repairs by cause:
+
 - Stored tensors and module lists with no declared type (about 60): class-level type lines for
   buffers; new base classes `QuantizerUnit` and `SequenceBackbone`; helper `typed_modules`;
   method `latent_quantizer()` on the tokenizer network; `codebook_tables` declared.
@@ -2266,12 +2396,12 @@ Repairs by cause:
   figure and render scripts can run; a type stub for `pyarrow.parquet` in `typings/`.
 - `ema.py`: the private PyTorch calls are replaced by public in-place calls with the same
   arithmetic.
-Real defects found by the type check: `scripts/evaluation/eval_generalization.py` used
-`base.paths`, which does not exist (now `base.config.paths`); the studio received a typed request
-where its code declared an untyped one (now the protocol `StudioLaunchArguments`).
-The 1 warning: `pyarrow` is not installed; only the optional parquet import of
-`motion/preparation.py` needs it. Not known: SonarLint warnings in files that are not open.
-All of this is uncommitted work on top of the branch `replay`.
+  Real defects found by the type check: `scripts/evaluation/eval_generalization.py` used
+  `base.paths`, which does not exist (now `base.config.paths`); the studio received a typed request
+  where its code declared an untyped one (now the protocol `StudioLaunchArguments`).
+  The 1 warning: `pyarrow` is not installed; only the optional parquet import of
+  `motion/preparation.py` needs it. Not known: SonarLint warnings in files that are not open.
+  All of this is uncommitted work on top of the branch `replay`.
 
 ## Update (2026-10-13 21:45, CORRECTION: the "0 problems" result was wrong; 234 type errors remain)
 
@@ -2366,6 +2496,7 @@ A1 interval (96 sequences): the 95% bootstrap interval of R@1 with the action li
 caption: exact McNemar p <= 0.003 and Wilcoxon p < 1e-11 for each action and both twins. In the
 thesis. `own_caption_ranks` moved to `evaluation/metrics.py`, so two scripts use one function.
 Task R1, memory of the generators (`scripts/qa/memory_probe.py`, 32 test captions, 48 tokens):
+
 - Change one past token and measure the change of the next-token distribution (KL, nats).
   Mamba: 10.3 at distance 1, 0.26 at 8, 0.053 at 16, 0.015 at 32, 0.14 at 47 (the first token).
   Transformer: 14.5 at 1, 0.087 at 8, 0.026 at 16, 0.022 at 32, 0.28 at 47.
@@ -2373,37 +2504,38 @@ Task R1, memory of the generators (`scripts/qa/memory_probe.py`, 32 test caption
 - Half-life of the Mamba state values, from the mean step size of each layer: median 0.13 to 0.28
   tokens, 90th percentile 0.5 to 2.0 tokens, largest value 27 tokens. No state value has a
   half-life above 48 tokens; at most 1.4% of the values in a layer are above 8 tokens.
-Reading: both twins use mainly the last 8 to 16 tokens. This agrees with "keep 16" as the best
-reset setting. The trained Mamba has no long memory: the state has a fixed size, but its content
-is short. The first token keeps some effect (0.14), so a small part of the state carries the
-position in the clip; this is the probable cause of the failure after the trained length
-(a hypothesis, not measured). For the retrain decision of 2026-10-31: a carried state (T1) gives
-long memory only if the training task needs it; the action list (A1) gives the long structure
-with no training.
-Limits: the half-life uses the mean step size, so moments with a small step keep more; 32
-captions; one random replacement for each position. No figure: matplotlib is not installed.
-Tests: 191 pass. Lint clean.
+  Reading: both twins use mainly the last 8 to 16 tokens. This agrees with "keep 16" as the best
+  reset setting. The trained Mamba has no long memory: the state has a fixed size, but its content
+  is short. The first token keeps some effect (0.14), so a small part of the state carries the
+  position in the clip; this is the probable cause of the failure after the trained length
+  (a hypothesis, not measured). For the retrain decision of 2026-10-31: a carried state (T1) gives
+  long memory only if the training task needs it; the action list (A1) gives the long structure
+  with no training.
+  Limits: the half-life uses the mean step size, so moments with a small step keep more; 32
+  captions; one random replacement for each position. No figure: matplotlib is not installed.
+  Tests: 191 pass. Lint clean.
 
 ## Update (2026-10-12 21:20, boundary test, task A2 negative, A1 in the thesis, editor-problems hook)
 
 Boundary test (action list, reset every 8, 96 sequences). Kept tokens 16 / 24 / 32:
+
 - Mamba: boundary acceleration 0.91 / 0.74 / 0.59 cm/frame^2 (middle of an action: 0.61);
   distance of action 2 to its caption 3.53 / 4.11 / 4.29; R@3 of action 2 0.750 / 0.604 / 0.604.
 - Transformer: boundary acceleration 0.97 / 0.86 / 0.82; distance of action 2 3.54 / 3.62 / 4.08.
-Reading: more kept tokens give a smoother boundary and a slower change to the new action.
-The service setting stays at keep 16. Output files: `action_list_<twin>_keep<k>.json`.
-Task A2 (one-pass rebuild of the Mamba state at a reset): NEGATIVE, code removed.
-The one-pass state was identical to the token-by-token state (test, 1e-5), but slower on this
-GPU: reset every 8 keep 16 went from 47 to 79 ms/token, reset every 1 from 276 to 541. The
-parallel scan of training builds tensors of size batch x length x 1024 x 16 for each of 15 layers,
-and the 4 GB GPU was full (3.8 GB). A possible later test: the compiled kernel with
-`return_last_state`; it needs the hand-built package, so it is not in the plan.
-Thesis: section 6.4 has two new tables (`tab:action_list`, `tab:boundary`) and three paragraphs.
-The PDF builds (44 pages, no undefined reference).
-New hook `ide_problems_check.py` (Stop): if a turn changed a Python file with Edit or Write, the
-assistant must call the editor diagnostics tool for that file before the final reply.
-Limit: the tool returned an empty list for a file that is not open in the editor.
-Tests: 191 pass. Lint clean. Replay: 11 of 43 commits at 21:12. All new work uncommitted.
+  Reading: more kept tokens give a smoother boundary and a slower change to the new action.
+  The service setting stays at keep 16. Output files: `action_list_<twin>_keep<k>.json`.
+  Task A2 (one-pass rebuild of the Mamba state at a reset): NEGATIVE, code removed.
+  The one-pass state was identical to the token-by-token state (test, 1e-5), but slower on this
+  GPU: reset every 8 keep 16 went from 47 to 79 ms/token, reset every 1 from 276 to 541. The
+  parallel scan of training builds tensors of size batch x length x 1024 x 16 for each of 15 layers,
+  and the 4 GB GPU was full (3.8 GB). A possible later test: the compiled kernel with
+  `return_last_state`; it needs the hand-built package, so it is not in the plan.
+  Thesis: section 6.4 has two new tables (`tab:action_list`, `tab:boundary`) and three paragraphs.
+  The PDF builds (44 pages, no undefined reference).
+  New hook `ide_problems_check.py` (Stop): if a turn changed a Python file with Edit or Write, the
+  assistant must call the editor diagnostics tool for that file before the final reply.
+  Limit: the tool returned an empty list for a file that is not open in the editor.
+  Tests: 191 pass. Lint clean. Replay: 11 of 43 commits at 21:12. All new work uncommitted.
 
 ## Update (2026-10-12 20:50, task A1 DONE: the action list keeps text match over 3 actions)
 
@@ -2414,19 +2546,20 @@ with identical random numbers: (a) one joined caption ("c1, then c2, then c3") f
 Each segment is scored against the caption of its action (Guo evaluator, pools of 32).
 Script: `scripts/qa/action_list_probe.py`. Output: `artifacts/outputs/qa/action_list_<twin>.json`.
 What we got (action 1 / 2 / 3):
+
 - Mamba, joined caption: R@1 0.198 / 0.135 / 0.125; text distance 6.30 / 7.07 / 7.95; foot slide 0.37 to 0.42.
-- Mamba, action list:    R@1 0.458 / 0.417 / 0.479; text distance 2.77 / 3.53 / 3.66; foot slide 0.27 to 0.29.
-- Transformer, joined:   R@1 0.240 / 0.104 / 0.094; text distance 6.25 / 7.19 / 7.62; foot slide 0.40 to 0.41.
-- Transformer, list:     R@1 0.448 / 0.427 / 0.521; text distance 2.89 / 3.54 / 3.32; foot slide 0.26 to 0.29.
+- Mamba, action list: R@1 0.458 / 0.417 / 0.479; text distance 2.77 / 3.53 / 3.66; foot slide 0.27 to 0.29.
+- Transformer, joined: R@1 0.240 / 0.104 / 0.094; text distance 6.25 / 7.19 / 7.62; foot slide 0.40 to 0.41.
+- Transformer, list: R@1 0.448 / 0.427 / 0.521; text distance 2.89 / 3.54 / 3.32; foot slide 0.26 to 0.29.
 - Boundary with the action list: mean acceleration 0.91 (Mamba) and 0.97 (transformer) cm/frame^2,
   against 0.61 and 0.62 in the middle of an action. No root jump at a boundary in any sequence.
-Reading: with the action list, actions 2 and 3 keep the text match of a single clip (R@1 of the
-e60 twins on the full test set: 0.418 and 0.395). The joined caption fails from action 1.
-The two twins give the same picture.
-Limits: 96 sequences (3 pools), so R@1 has an error of about 0.05; one seed; the models never
-saw a joined caption in training, so method (a) is a weak baseline; the boundary is about 50%
-rougher than the middle of an action.
-Where we stopped: the result is not yet in the thesis. Uncommitted until the replay ends.
+  Reading: with the action list, actions 2 and 3 keep the text match of a single clip (R@1 of the
+  e60 twins on the full test set: 0.418 and 0.395). The joined caption fails from action 1.
+  The two twins give the same picture.
+  Limits: 96 sequences (3 pools), so R@1 has an error of about 0.05; one seed; the models never
+  saw a joined caption in training, so method (a) is a weak baseline; the boundary is about 50%
+  rougher than the middle of an action.
+  Where we stopped: the result is not yet in the thesis. Uncommitted until the replay ends.
 
 ## Update (2026-10-12 20:40, rename debt repaired, rename guard added, first step of task A1)
 
@@ -2478,21 +2611,23 @@ for the merged files. All of this is uncommitted until the replay ends (7 of 43 
 
 What we tried: three small checks while the replay of the commits runs.
 What we got:
+
 - Real run: `evaluate` for the Mamba e60 checkpoint on 64 validation clips completes with the new
   parser and config loader (FID 0.678, R@1 0.418; a 64-clip FID is not comparable with the tables).
 - Formulas: 7 new tests with answers known by hand (`tests/evaluation/test_known_values.py`):
   Frechet distance, MM-Dist, Diversity, R-precision in one pool, foot slide, acceleration, root jump.
 - Type errors: the three files from step L1 went from 19 errors to 4; each file is at or below
   its baseline.
-Tests: 186 pass. Lint clean.
-Owner rule saved: take each formula from a reference library (scikit-learn first, then SciPy).
-scikit-learn has none of our formulas; SciPy already supplies the statistical tests.
-Where we stopped: all work of today after the replay start is uncommitted, until the replay ends.
+  Tests: 186 pass. Lint clean.
+  Owner rule saved: take each formula from a reference library (scikit-learn first, then SciPy).
+  scikit-learn has none of our formulas; SciPy already supplies the statistical tests.
+  Where we stopped: all work of today after the replay start is uncommitted, until the replay ends.
 
 ## Update (2026-10-12 19:30, library steps L2 to L8: 3 applied, 1 partial, 3 rejected by measurement)
 
 What we tried: each step from L2 to L8, with a measurement before each change.
 What we got:
+
 - L2 APPLIED. pydantic validates the config dataclasses. `schema.py` + `config_loader.py`:
   296 -> 152 lines. All 30 config files load to the identical value. Unknown keys fail at each level.
 - L4 APPLIED. `mlflow-skinny` + SQLite store. Top-level config key `mlflow_tracking: true` sends
@@ -2506,10 +2641,10 @@ What we got:
 - L7 REJECTED. The library schedule is identical up to the planned end, but after it the learning
   rate goes up again (0.145 against our floor 0.05). It saves 7 lines.
 - L8 REJECTED. The message frame is 25 of 209 lines; `websockets` needs a rewrite of both sides.
-Tests: 179 pass. Lint clean.
-Where we stopped: the work is not committed, because the replay of the commits is in progress.
-Open: type errors above the baseline in 3 files from step L1 (`commands/generator.py`,
-`commands/serving.py`, `motion/contracts.py`). The baseline needs entries for the 2 new files.
+  Tests: 179 pass. Lint clean.
+  Where we stopped: the work is not committed, because the replay of the commits is in progress.
+  Open: type errors above the baseline in 3 files from step L1 (`commands/generator.py`,
+  `commands/serving.py`, `motion/contracts.py`). The baseline needs entries for the 2 new files.
 
 ## Update (2026-10-12, all 11 commands on pydantic and jsonargparse; all work committed)
 
@@ -2612,7 +2747,7 @@ solid evaluation (first), long motion without training, research, retrain, final
 It also holds the disk survey: drive D has 5.3 GB free; 136 GB in the donor folder can go
 (inter-x, old checkpoints, the 272-dimension HumanML3D variant, pahoi, arctic). Nothing is
 removed yet; the owner must confirm. Raw AMASS (150.8 GB) stays.
-Checked in the scaling paper (arXiv:2001.08361, eq. 4.4): D >= 5e3 * N^0.74. Our data supports
+Checked in the scaling paper (arXiv:2001.08361, eq. 4.4): D >= 5e3 \* N^0.74. Our data supports
 16k to 64k parameters by that rule, so a 100M model is the wrong direction.
 
 ## Update (2026-10-10, long-stream test: the full Mamba state fails after the trained length)
@@ -2680,15 +2815,16 @@ the change to typed requests and `logging` waits for a go.
 ## Update (2026-10-10, hooks added; skills and agents cleaned)
 
 Hooks (`.claude/settings.json`, scripts in `.claude/hooks/`):
+
 - `ste100_prompt.py` on each prompt: adds the Simplified Technical English rules.
 - `pyright_check.py` after each edit: type errors of the changed Python file. It reports a file
   only above its count in `pyright_baseline.json` (251 old errors in 51 files, not repaired).
 - `prose_tells_check.py` after each edit in `doc/`: humanizer patterns in `.tex` and `.md`.
-Skills: 5 moved to `.claude/_archive/skills/` (arch-decision, azure, port-from-donor,
-repo-scaffold, dataset-unified). The 9 that stay have a current-state note and no donor paths.
-Agents: all 6 stay. Each has the measured results of today, the web tools, and two new duties:
-compare with online sources before a decision, and build a proof of concept before a full change.
-Where we stopped and why: the hooks and agents load at session start. Start a new session.
+  Skills: 5 moved to `.claude/_archive/skills/` (arch-decision, azure, port-from-donor,
+  repo-scaffold, dataset-unified). The 9 that stay have a current-state note and no donor paths.
+  Agents: all 6 stay. Each has the measured results of today, the web tools, and two new duties:
+  compare with online sources before a decision, and build a proof of concept before a full change.
+  Where we stopped and why: the hooks and agents load at session start. Start a new session.
 
 ## Update (2026-10-10, run directories merged: one directory per training)
 
@@ -2701,13 +2837,14 @@ Rule: a resumed launch continues the latest chain with the same checkpoint; epoc
 the crashed tail of the earlier segment. A different checkpoint name continues a chain only when its
 first epoch is exactly the chain's last + 1 on the same tokenizer.
 What we got (current twins, `artifacts/logs/train`):
+
 - transformer trunk `20260920T061001Z` 1-100 (e60 + e100); mamba trunk `20260921T161630Z` 1-100.
 - dynamics branches `20261001T133355Z` (transformer) and `20261001T152447Z` (mamba), 61-84 each,
   parent = their trunk at epoch 60 (a fork, so linked, not merged).
 - RVQ transformer: `20260919T151438Z` 1-18 and `20260920T194019Z` 1-60.
-Open: `tokenizer/20260616T200731Z_tokenizer_fsq_g6_v1000` logs epochs 251-500 only; its first half
-has no run directory. New resumes should pass `--resume_run_dir <home>` so they land in place.
-New rule: every new or edited script starts with a comment holding its full CLI command.
+  Open: `tokenizer/20260616T200731Z_tokenizer_fsq_g6_v1000` logs epochs 251-500 only; its first half
+  has no run directory. New resumes should pass `--resume_run_dir <home>` so they land in place.
+  New rule: every new or edited script starts with a comment holding its full CLI command.
 
 ## Update (2026-10-07, thesis ported to LaTeX: first full compile, 41 pages)
 
@@ -2716,15 +2853,16 @@ What we did: moved `doc/notes/dissertation_draft.md` into `doc/paper/chapters/` 
 dynamics ablation and the e84 negative result. Build: `xelatex -> biber -> xelatex x2` from `doc/paper`
 with `-output-directory=build`; PDF copied to `doc/paper/thesis.pdf`. No undefined refs or citations.
 What we found while checking numbers against the eval logs:
+
 - FID bootstrap intervals of the twins overlap (transformer 0.132 [0.127, 0.230], mamba 0.121
   [0.114, 0.212]); R@1 gap 0.022 is ~3 std of a repetition. Thesis now says: ahead in point estimates
   everywhere, resolved on text matching, on par on FID.
 - Citable 34M twins are 8 / 15 layers, prefix length 1, decay groups ON (a_log, d_skip exempt). The
   draft's "16-token prefix", "12 / 23 layers" and "single decay group" paragraphs describe the 100M cells.
 - Draft slip: FSQ perplexity is higher in 5 of 6 matched cells, not all (8x512: 340 vs 343).
-Where we stopped and why: section 1.2 (research questions + thesis statement) is left for the author.
-Still open: qualitative motion figures, tokenizer/generator diagrams, front matter (declaration,
-acknowledgements), T2M-GPT R@1 pairing to verify against the paper, reconcile 2189 vs 4384 test clips.
+  Where we stopped and why: section 1.2 (research questions + thesis statement) is left for the author.
+  Still open: qualitative motion figures, tokenizer/generator diagrams, front matter (declaration,
+  acknowledgements), T2M-GPT R@1 pairing to verify against the paper, reconcile 2189 vs 4384 test clips.
 
 ## Update (2026-10-07, 72 -> 84 continuation FINISHED: no gain, both twins)
 
@@ -2751,10 +2889,10 @@ epoch 72 -- the epoch-78 val did not beat it). Mamba not started. Resume with ex
 
 User chose the longer fine-tune (same weights). Launched 07:28Z:
 `finetune_dynamics_twins_local.ps1 -Epochs 84 -SeedFrom dyn_e72 -ContinueSelection` (driver log
-`artifacts/outputs/finetune_dynamics_e84_driver.log`). Each twin resumes its dyn_e72 state; best-by-val
+`artifacts/outputs/finetune_dynamics_e84_driver.log`). Each twin resumes its dyn*e72 state; best-by-val
 continues across the whole 60 -> 84 fine-tune (inherited best: transformer 0.2479, mamba 0.2397), so
-`generator_{b}_bs8_dyn_e84.pt` only appears if epochs 73-84 beat it -- otherwise dyn_e72 stays best.
-Done markers now carry the target epoch (`finetune_dynamics_{b}_e72_DONE.txt`, `..._e84_DONE.txt`).
+`generator*{b}_bs8_dyn_e84.pt` only appears if epochs 73-84 beat it -- otherwise dyn_e72 stays best.
+Done markers now carry the target epoch (`finetune_dynamics_{b}\_e72_DONE.txt`, `...\_e84_DONE.txt`).
 Expected: transformer ~1.5 h, Mamba 13-20 h (GPU thermal throttling). Then rerun
 `scripts/evaluation/dynamics_ablation_eval.ps1` adapted to the selected checkpoints.
 
@@ -2799,6 +2937,7 @@ Not yet done (needs both twins): test eval + naturalness probe of the dyn_e72 ch
 
 Rule adopted: everything we do to one twin we do to both.
 What we did before launching:
+
 - Calibrated on 20 real train batches from each twin's epoch-60 state: geometric terms weighted sum
   0.266 / 0.265; raw foot_skate 0.0047 / 0.0046, accel 0.0027 / 0.0028 (transformer / mamba).
   Weights chosen so each new term counts as much as one existing term (~0.05): `w_foot_skate: 10`,
@@ -2812,12 +2951,12 @@ What we did before launching:
   refuses a nested `train.loss_weights` block (it used to pass through as a raw dict).
 - `--fresh_selection` for resumed fine-tunes (best-by-val restarts inside the fine-tune; refuses to
   start without the resume file).
-Run: `scripts/training/finetune_dynamics_twins_local.ps1`, launched detached (driver log
-`artifacts/outputs/finetune_dynamics_driver.log`): each twin resumes its epoch-60 state, 60 -> 72,
-val every 6 (same cadence as the 100-epoch extension = no-penalty reference at 66/72). Transformer
-first (~1.5 h) then Mamba (~13 h). DONE marker only if the checkpoint reached epoch 72.
-Next when done: citable test eval for both (`generator_{b}_bs8_dyn_e72.pt`) + naturalness probe
-(foot skate) for both vs their e60 rows.
+  Run: `scripts/training/finetune_dynamics_twins_local.ps1`, launched detached (driver log
+  `artifacts/outputs/finetune_dynamics_driver.log`): each twin resumes its epoch-60 state, 60 -> 72,
+  val every 6 (same cadence as the 100-epoch extension = no-penalty reference at 66/72). Transformer
+  first (~1.5 h) then Mamba (~13 h). DONE marker only if the checkpoint reached epoch 72.
+  Next when done: citable test eval for both (`generator_{b}_bs8_dyn_e72.pt`) + naturalness probe
+  (foot skate) for both vs their e60 rows.
 
 ## Update (2026-10-01, naturalness: measured, display interpolation, opt-in dynamics losses, visible QA)
 
@@ -2828,13 +2967,14 @@ What we got: the generator does NOT teleport -- generated skeleton is as smooth 
 measured gap is foot skating (+50%, 0.276 vs 0.184 m/s). The analytic IK mesh adds only 2-9% accel at
 chain ends. The likely visible cause: 20 fps motion held 3 refreshes on a 60 Hz screen.
 Done:
+
 1. Studio interpolates streamed joints 3x (20 -> 60 fps, `display.upsample: 3`), causal, ends on each
    source frame, so no added latency; mesh fitted on the 60 fps joints.
 2. Opt-in training terms `foot_skate` (horizontal foot speed while ground truth marks contact) and
    `accel` (L1 between recovered-joint accelerations of prediction and ground truth -- matches dynamics,
    does not over-smooth). Weights default 0: existing recipe and checkpoints unchanged. Not trained yet.
 3. QA scripts: `--visible` (real window, drawn cursor) and `--pace`. Selenium cannot drive ImGui.
-Suites: 164 unit, 36/36 scenario, 57/57 control.
+   Suites: 164 unit, 36/36 scenario, 57/57 control.
 
 Where we stopped and why: a training run with the new terms is a multi-hour local commitment (Mamba
 ~66 min/epoch) and changes the thesis twin comparison unless both twins get it -- user decision.
@@ -2849,6 +2989,7 @@ frozen), the fitter fell behind (mesh missing). The old slow CPU fit had been th
 by accident; CUDA graphs + analytic IK removed that brake.
 
 What we got (fixed, tested):
+
 1. Pacing: the studio accepts a chunk only while it is <= `display.stream_lead_frames` (120) ahead
    of the playhead (`trimmed_frames` + frame); TCP back-pressure slows the service. Measured: 20
    frames/s generated for 20 fps playback, pose moving, mesh on screen 6/6 samples.
@@ -2856,8 +2997,8 @@ What we got (fixed, tested):
    (`_abandon_stream`); an unexpected message closes the connection instead of desyncing.
 3. Service never swallows a command mid-stream: any command during a stream cancels it and is
    handled right after (`deferred_request`) -- the lost "load" was exactly this.
-New scenario `long_forever_stream` (30 s forever, pacing, movement, mesh, Stop, Load model x2,
-generate). Suites: 158 unit, 36/36 scenario, 57/57 control checks.
+   New scenario `long_forever_stream` (30 s forever, pacing, movement, mesh, Stop, Load model x2,
+   generate). Suites: 158 unit, 36/36 scenario, 57/57 control checks.
 
 Where we stopped and why: fixed and verified end to end. The user's hung studio/service processes
 from 00:13 run the old code and must be closed before relaunching.
@@ -2869,14 +3010,15 @@ panels draw, then clicks/drags/types through the viewer's own input handlers and
 57 checks over 40+ controls (environment, sampling, avatar, model, playback, prompt bar).
 
 What we got -- two more real bugs, fixed:
+
 1. Stale body chunks leaked into the next take (body 128/288 frames on a 96-frame skeleton, playhead
    past the timeline): the stale check ran outside the lock, then appended. `append_fitted_chunk` now
    checks and appends atomically under the buffer lock, and the take counter moves under the same lock.
 2. After Stop the status said "done -- body fitted on N frames"; the fitter's completion message
    overwrote "stopped". It now only reports done for a take that was not cancelled.
-Test-side lessons: click only once a widget's rect is stable across frames (transient status lines
-under a scrolled panel shift the layout by a line); a fast take can finish before Stop is clicked
-(use forever mode). Result: 57/57 controls, 28/28 scenarios, 154 unit tests.
+   Test-side lessons: click only once a widget's rect is stable across frames (transient status lines
+   under a scrolled panel shift the layout by a line); a fast take can finish before Stop is clicked
+   (use forever mode). Result: 57/57 controls, 28/28 scenarios, 154 unit tests.
 
 Where we stopped and why: all controls verified. Open, cosmetic: panel content shifts when the
 "updating avatar..." note appears/disappears while scrolled.
@@ -2887,6 +3029,7 @@ What we tried: built `scripts/qa/studio_human_test.py` (real studio viewer, offs
 sessions, per-frame invariants, pixel/mask checks) and `scripts/qa/motion_glitch_probe.py`.
 
 What we got -- real bugs found and fixed:
+
 1. S toggled skin AND shadows (aitviewer binds S to shadows). Skin moved to H.
 2. A new take was appended onto the previous take's skeleton: after a long take the timeline showed
    the old motion first (600-frame timeline for an 80-frame take) and the window trim cut the new
@@ -2895,11 +3038,11 @@ What we got -- real bugs found and fixed:
 4. Head pitched -44..+58 deg vs the torso: the 9 cm neck->head bone amplifies joint noise. Neck now
    pulled toward the chest rotation (`SHORT_BONE_PARENT_PULL = {12: 1.0}`): within +-15 deg, same
    joint error. Still visibly tilted on some clips; 2.0 halves it at the cost of head motion.
-Model "glitch": over-limit accelerations are 3-11x more frequent in plain Mamba past its horizon than
-with re-anchoring; not concentrated on decoder seams or anchor rebuilds; streamed recovery == whole.
-Harness lessons (not app bugs): headless keys are all "undefined" (use the PyQt6 key table); an
-unpaced headless loop starves worker threads (pace at 60 Hz like vsync).
-Result: 28/28 human checks, 154 unit tests pass.
+   Model "glitch": over-limit accelerations are 3-11x more frequent in plain Mamba past its horizon than
+   with re-anchoring; not concentrated on decoder seams or anchor rebuilds; streamed recovery == whole.
+   Harness lessons (not app bugs): headless keys are all "undefined" (use the PyQt6 key table); an
+   unpaced headless loop starves worker threads (pace at 60 Hz like vsync).
+   Result: 28/28 human checks, 154 unit tests pass.
 
 Where we stopped and why: head tilt partly remains (tuning call); SMPL-X model is built lazily on the
 first chunk (~1 s first-mesh delay) -- pre-warming at startup is the next small fix.
@@ -2942,6 +3085,7 @@ updater against a live service, fake scene) and counted what each render tick wo
 
 What we got: before -- body mesh on 0% of ticks, skeleton 95%; only 112/256 frames ever fitted.
 Four causes, all fixed:
+
 1. On a normal finish the stream worker discarded every chunk still queued for fitting. Now only
    cancel discards; the fitter drains the rest.
 2. The playhead ran ahead of the CPU fit (~0.8x real time), so `_sync_display_nodes` always showed
@@ -2950,12 +3094,12 @@ Four causes, all fixed:
 3. aitviewer advanced the frame inside `super().on_render()`, after our sync -> one-frame-stale
    mesh/skeleton choice. The viewer now advances first (same bookkeeping), then holds, then syncs.
 4. Dead `drop_skeleton` flag (set in 4 places, only ever cleared) removed.
-Because the fit now outlives the stream, a new take (`stream_buffers.take`) marks the old fit stale
-(`fit_is_stale`) so it aborts instead of writing into the new clip.
-Also: first-chunk fit budget 30+75 -> 20+50 iters (7.7s -> 4.2s, 1.5 -> 2.0 cm; continuation
-chunks sit at ~6 cm anyway). Status reads "fitting body..." after generation ends.
-After: mesh on all 256/256 frames, 76% of ticks (rest = frame-0 hold before the first mesh), first
-mesh at ~5s instead of ~10s. Tests: `tests/studio/test_body_playback.py`. Suite 147 passed.
+   Because the fit now outlives the stream, a new take (`stream_buffers.take`) marks the old fit stale
+   (`fit_is_stale`) so it aborts instead of writing into the new clip.
+   Also: first-chunk fit budget 30+75 -> 20+50 iters (7.7s -> 4.2s, 1.5 -> 2.0 cm; continuation
+   chunks sit at ~6 cm anyway). Status reads "fitting body..." after generation ends.
+   After: mesh on all 256/256 frames, 76% of ticks (rest = frame-0 hold before the first mesh), first
+   mesh at ~5s instead of ~10s. Tests: `tests/studio/test_body_playback.py`. Suite 147 passed.
 
 Where we stopped and why: SMPL-X fitting is launch-bound like the generator was -- GPU gives only
 1.0x vs CPU 0.8x real time -- so the mesh plays slightly slower than real time while fitting.
@@ -2967,6 +3111,7 @@ What we tried: read every function from token sampling to the studio client, rep
 suspect with a test before fixing.
 
 What we got (all fixed, each with a regression test or an end-to-end check):
+
 1. Studio could not start: `run_studio` resolved the default checkpoint before applying `--model`.
 2. Service child crashed on Windows (`WinError 10106`, then `No module named 'pwd'`): the spawn
    env was an allow-list missing SYSTEMROOT / USERNAME. Now inherits the full environment. The
@@ -3040,7 +3185,7 @@ where the transformer had led on FID. Both twins were then extended a further 40
 converged. It was: the Mamba's best-by-val checkpoint never moved past epoch 30 in the additional 40
 epochs (val FID oscillated 0.24-0.34, never beating 0.183), so its test result is unchanged (FID
 0.121, re-confirmed by an independent re-run of the full test-split eval,
-`artifacts/logs/train/20260927T114353Z_evaluate_test`). The transformer's running best-by-val *did*
+`artifacts/logs/train/20260927T114353Z_evaluate_test`). The transformer's running best-by-val _did_
 improve twice more (epoch 72: 0.242, epoch 100: 0.230), but that epoch-100 checkpoint scores **worse**
 on the full test split (FID 0.163) than the epoch-48 checkpoint's 0.132 -- a genuine val/test
 disagreement, not cherry-picked, since best-by-val tracking ran continuously across the whole 100-epoch
@@ -3122,7 +3267,7 @@ weights." Added `--resume_run_dir <path>` to `train-generator` (`app/run_log.py`
 `metrics.jsonl` (via a new `resumes.jsonl` provenance trail for the second invocation's git
 commit/versions) instead of fragmenting into a new one. **This particular resume, though, was already
 running (started independently, likely by the user directly) before the flag existed**, so its
-metrics live in a *second* run dir: epochs 1-30 are in
+metrics live in a _second_ run dir: epochs 1-30 are in
 `artifacts/logs/train/20260921T161630Z_generator_mamba/metrics.jsonl`, epochs 30-60 (once complete)
 will be in `artifacts/logs/train/20260923T135028Z_generator_mamba/metrics.jsonl`. When citing the
 final mamba curve, stitch both files together (same checkpoint lineage, matched recipe throughout,
@@ -3151,9 +3296,11 @@ checkpoint exists yet (`generator_transformer_rvq_bs8_e60_last.pt` was never wri
 lost -- but **resuming this means restarting the RVQ 60-epoch run from scratch, not continuing it.**
 
 **To pick this back up:** rerun the same script --
+
 ```
 .\scripts\training\run_matched_twin_60ep_local.ps1
 ```
+
 It is idempotent per stage: it will see `generator_transformer_bs8_e60.pt` already exists and SKIP
 straight to the RVQ stage, restarting that one fresh (init from the existing
 `generator_transformer_rvq_pretrained.pt`, gate from the existing
@@ -3169,6 +3316,7 @@ instead (`torch.load(path, weights_only=False)`).
 ## Update (2026-09-14b, AZURE PLATFORM -- and the GPU quota is NOT grantable by script)
 
 **The blocker is worse than "pending": the automated quota path is refused everywhere.**
+
 - `Standard NCADS_A100_v4 Family vCPUs` = **0** in every region checked.
 - `az quota update ... value=24` returns **`QuotaNotAvailableForResource`** in BOTH
   `germanywestcentral` and `swedencentral`. That error means the self-service grant is refused and a
@@ -3188,6 +3336,7 @@ capacity-constrained reviewer can grant elsewhere instead of rejecting. Contact 
 parameters -- deliberately not hardcoded.
 
 **Platform provisioned and verified** (`infra/azure/provision_platform.ps1`, idempotent, `-WhatIf`):
+
 - `rg-thesis-t2m` (swedencentral), tagged `project=thesis purpose=text2motion managed-by=cli`.
 - `stthesist2m01` -- Standard_LRS, Hot, **public blob access off, TLS 1.2 minimum**.
 - Containers `data` / `checkpoints` / `runs`.
@@ -3199,6 +3348,7 @@ parameters -- deliberately not hardcoded.
 - `kv-thesis-t2m` with RBAC authorization; the inference identity holds `Key Vault Secrets User`.
 
 **On-demand trainer** (`infra/azure/train_on_demand.ps1`):
+
 - **Refuses to start** when A100 quota < 24 -- verified: aborts at the check, exit 1, creates nothing.
 - `try/finally` teardown: rescues artifacts (`azcopy sync` of checkpoints + outputs) then deallocates
   on **every** exit path, success or failure.
@@ -3219,9 +3369,10 @@ real models and needs no GPU.
 
 **Both twins PASS the mandatory real-batch overfit gate**, run locally against the exact config the
 cloud uses (`configs/generator/gen_pilot_fsq8x1024.yaml`, tokenizer `fsq_g8_v1024.pt`):
+
 - transformer: token_accuracy 0.6094 -> **1.0000**, CE 4.770 -> 0.0044 in 26 steps.
-- mamba: token_accuracy 0.4620 -> **0.9918**, CE 5.350 -> 0.0409 in 26 steps.
-Gate artefacts with config SHA in `outputs/gates/validate_{transformer,mamba}.json`. The full path
+- mamba: token*accuracy 0.4620 -> **0.9918**, CE 5.350 -> 0.0409 in 26 steps.
+  Gate artefacts with config SHA in `outputs/gates/validate*{transformer,mamba}.json`. The full path
 (data -> tokenizer -> CLIP text -> generator -> loss -> optimizer) is wired correctly. All ten
 `preflight()` artefacts are present locally, so the bundle can be staged as-is.
 
@@ -3272,6 +3423,7 @@ type stubs, so Pylance could not resolve any attribute on it. Fixed with a 3-lin
 110 would have buried the other 18, which were genuine.
 
 **The 18 real type bugs, all fixed:**
+
 - `studio/contracts.py` -- the `ViewerHost` Protocol declared 5 members while `viewer.py` used 9. Added
   `viewports`, `viewport_mode`, `shadows_enabled`, `_past_frametimes` and `reload_settings()`. The port
   was lying about its own surface; `_past_frametimes` being private makes our dependence on aitviewer
@@ -3286,6 +3438,7 @@ type stubs, so Pylance could not resolve any attribute on it. Fixed with a 3-lin
 - `studio/viewer.py` -- `on_render` now matches aitviewer's base signature exactly instead of `**kwargs`.
 
 **Refactors applied (see the new `pylance` and existing `anti-waste` skills):**
+
 - `app/commands/serving.py` -- deleted the hardcoded `use_kernel=False`. Serve/studio now honour
   `config.generator.use_kernel` instead of always running Mamba eager regardless of hardware.
 - `generation/` -- extracted `warmup_cosine_factor(step, warmup, total_steps, floor)` into
@@ -3294,7 +3447,7 @@ type stubs, so Pylance could not resolve any attribute on it. Fixed with a 3-lin
   so past `total_steps` the pretrain LR would have climbed back up off the cosine instead of resting
   at the floor. Invisible in either file alone; obvious once side by side.
 - `tokenization/ema.py` (new) -- `ExponentialMovingAverage` moved out of `tokenization/trainer.py`.
-  `generation/trainer.py` was importing the *tokenizer's trainer* just to get a generic utility.
+  `generation/trainer.py` was importing the _tokenizer's trainer_ just to get a generic utility.
   Placement is forced by the DAG (shared code must sit at or below the lower consumer, and
   `tokenization` is below `generation`), but a dedicated module stops the import reading as a
   borrow and decouples the two trainers.
@@ -3302,12 +3455,14 @@ type stubs, so Pylance could not resolve any attribute on it. Fixed with a 3-lin
   Verified **bit-identical** against the pre-change value `[0.02803309 0.06617647 0.10110294]`.
 
 **Two config bugs fixed (both would have wrecked the Azure run):**
+
 - `configs/aws.yaml` -- restored the missing `t2m/` segment in the frozen Guo eval-matcher path.
 - `configs/generator/final100m_fsq8x1024.yaml` -- `use_kernel: false` -> `true`, matching its sibling
   `final100m.yaml`. **Note this also disables gradient checkpointing** (`checkpoint_blocks = not
-  cfg.use_kernel`), so VRAM rises -- fine on an A100 80 GB, would OOM on the 4 GB local card.
+cfg.use_kernel`), so VRAM rises -- fine on an A100 80 GB, would OOM on the 4 GB local card.
 
 **Measured and deliberately NOT changed** (documented so it is not re-litigated):
+
 - EMA -> `torch.optim.swa_utils.AveragedModel`: rejected. It holds a second full model copy (2x
   parameter memory on a 4 GB GPU) and ours already uses the same fused `torch._foreach_*` kernels.
 - Quaternions -> `scipy.spatial.transform.Rotation`: rejected. Ours are scalar-first `(w,x,y,z)`,
@@ -3322,7 +3477,7 @@ type stubs, so Pylance could not resolve any attribute on it. Fixed with a 3-lin
   shared, and that is now extracted.
 
 **rope caveat worth remembering:** `MoveGlobal` crashed mid-apply (`AttributeError: 'PyObject' object
-has no attribute 'get_returned_object'`) *after* rewriting one importer, leaving the test importing an
+has no attribute 'get_returned_object'`) _after_ rewriting one importer, leaving the test importing an
 empty module. It reports the planned changes before applying them, so a crash can leave a partial
 write -- always re-check the files it listed.
 
@@ -3338,6 +3493,7 @@ edges), `Split` (53), `ApplicationContext` (42), `Backbone` (41) -- the generato
 are the two real hubs. Cost 52k in / 36k out.
 
 **Two config bugs found, both verified, both would have silently ruined a paid GPU run.**
+
 1. `configs/aws.yaml:12` -- the frozen Guo eval-matcher path is
    `data/official_evaluator/extracted/text_mot_match/model/finest.tar`, **missing the `t2m/`
    segment** that `configs/default.yaml:14` has. A cloud eval would fail to load the matcher, which
@@ -3346,7 +3502,7 @@ are the two real hubs. Cost 52k in / 36k out.
    `configs/generator/final100m.yaml:31` has `true`. In `generation/model.py:115` `use_kernel`
    selects `mamba_ssm.ops.selective_scan_interface.selective_scan_fn` (the fused CUDA scan), and
    `model.py:163` sets `checkpoint_blocks = not cfg.use_kernel`. So the **headline 100M FSQ twin**
-   would run Mamba eager *plus* gradient checkpointing on an A100 where the fused kernel works.
+   would run Mamba eager _plus_ gradient checkpointing on an A100 where the fused kernel works.
    **This is a live hypothesis for why the latency claim failed** (mamba 28.6-29.7 ms/step vs
    transformer 14.6-16.5): the local measurement was eager by necessity on Windows, but this config
    would carry the handicap into the cloud too. Untested -- flip it and re-measure before concluding
@@ -3356,7 +3512,7 @@ are the two real hubs. Cost 52k in / 36k out.
    route through serving, so the benchmark numbers do not inherit that particular hardcode.
 
 **Also fixed:** `infra/kaggle/README.md:3` said "Primary venue is now Azure A10" while
-`infra/azure/README.md` explicitly *rejects* the A10 ("the worst buy on every efficiency axis --
+`infra/azure/README.md` explicitly _rejects_ the A10 ("the worst buy on every efficiency axis --
 2.2x the A100's cost per TFLOP") and picks `Standard_NC24ads_A100_v4`. Corrected to A100.
 
 **Literature check via `pwc-cli`** (`uv tool install pwc-cli`, binary `pwc` -- works, read-only
@@ -3390,13 +3546,14 @@ rope could not catch it either, since these are string literals in a set (same b
 **Root cause is the polarity of the assertion, so the fix inverts it.** Instead of enumerating what
 is forbidden (a list that rots on every rename), the guard now enumerates the small, stable set of
 roles a `contracts.py` may import and derives everything else from disk via `stage_module_names()`:
+
 - `CONTRACT_SAFE_ROLES = {contracts, representation, model}` for cross-stage imports.
 - `OWN_STAGE_CONTRACT_SAFE_ROLES = {representation}` within a stage's own package.
-Any module that is added or renamed is therefore forbidden **by default** -- the guard cannot lose
-coverage by falling out of date. Zero operation-module names remain hardcoded.
+  Any module that is added or renamed is therefore forbidden **by default** -- the guard cannot lose
+  coverage by falling out of date. Zero operation-module names remain hardcoded.
 
 **It also closed a gap that had always been there.** The old check only compared against
-`text2motion.{own_stage}.{name}`, so a `contracts.py` importing an operation from a *lower* stage
+`text2motion.{own_stage}.{name}`, so a `contracts.py` importing an operation from a _lower_ stage
 was never inspected. `studio/contracts.py` could have imported `motion.datamodule` freely.
 
 **Same rot pattern existed one level up**, so `test_stage_map_matches_the_packages_on_disk` was
@@ -3429,6 +3586,7 @@ code itself.
 semantic engine behind IDE rename) so every import and reference was rewritten by the tool, not by
 hand. rope caught a reference in `scripts/evaluation/eval_generalization.py` that a grep over `src/`
 would have missed.
+
 - `motion/dataset.py` -> `motion/datamodule.py`, class `MotionRepository` -> `MotionDataModule`.
   It was one letter from its sibling `motion/datasets.py`, which it imports. The class owns splits,
   scaler, datasets and dataloaders, so `DataModule` is both accurate and standard MLOps vocabulary.
@@ -3475,21 +3633,21 @@ restructure's lineage survives in git history.
 
 **What was broken and is now fixed.**
 
-1. *The avatar never moved through space.* `recover_skeleton` was called per chunk, and
+1. _The avatar never moved through space._ `recover_skeleton` was called per chunk, and
    `recover_root_rot_pos` restarts its `cumsum` at zero every call, so every 16-frame chunk
    re-integrated from the origin. Straight-line test: whole-sequence travels 3.15 m, streamed
    travelled 0.75 m and snapped back at every boundary. Fix = `StreamingSkeletonRecovery` in
    `motion/representation.py`, carrying accumulated yaw + xz offset. Streamed now equals
    whole-sequence to 1e-7 including turning. The follow-cam chasing that sawtooth was the same
    bug, not a camera problem.
-2. *Yaw half-angle.* The carry quaternion `(cos y, 0, sin y, 0)` rotates by **2y**, but the direct
+2. _Yaw half-angle._ The carry quaternion `(cos y, 0, sin y, 0)` rotates by **2y**, but the direct
    pose used a plain `yaw_matrix(y)`, so the mesh got half the world rotation the skeleton got and
    drifted apart on every turn.
-3. *Stop did nothing.* Generation actually stopped on the first press -- `worker DONE` printed
+3. _Stop did nothing._ Generation actually stopped on the first press -- `worker DONE` printed
    before the user's Stop -- but `_finish` was only called from the fit worker's `finally`, so
    `generating` stayed True and the button kept reading "Stop". A slow fitter froze the whole UI.
    `_worker` now calls `_finish` itself; the fitter reports separately.
-4. *SMPL-X fit was ~160x too slow on GPU.* 4 GB card, two CUDA processes; VRAM exhaustion spills
+4. _SMPL-X fit was ~160x too slow on GPU._ 4 GB card, two CUDA processes; VRAM exhaustion spills
    to shared system memory. Measured CPU **54 ms/iter** vs >=8700 ms contended on GPU.
    `fit.device: cpu`, `fit.threads: 4` (measured best, and 4 beats 6 and 12 -- the batch is tiny).
 
@@ -3500,16 +3658,17 @@ a later run **8688 frames / 2172 tokens** = **22.6x past the transformer's 96-to
 7.7-8.7x realtime, flat memory, clean stop. The transformer cannot produce frame 385 at all.
 
 **Two dead ends, both switched off (kept behind flags).**
-- *Out-of-process fitter* (`studio/fit_service.py`, `fit_client.py`, `fit.service`). Built on the
+
+- _Out-of-process fitter_ (`studio/fit_service.py`, `fit_client.py`, `fit.service`). Built on the
   hypothesis that GIL contention was the problem. Measured **slower**: 13.4 s/chunk vs 7.8 s
   in-process under load. The contention is CPU, not the GIL. Moving work across a process boundary
   does not create cores.
-- *Direct rot6d -> SMPL-X pose* (`studio/direct_pose.py`, `scripts/render/calibrate_rest_pose*.py`,
+- _Direct rot6d -> SMPL-X pose_ (`studio/direct_pose.py`, `scripts/render/calibrate_rest_pose*.py`,
   `fit.direct`). 42x faster and it **looked** fine on joint error (5.47 cm) -- but joint-position
   error cannot see limb twist or compensating rotation pairs. Rendered it: head off the skull,
   hands at the hips, body 0.61 m deep vs 0.33 m. Rotation error vs the optimiser was **63 deg**,
   and teacher-supervised recalibration only reached 17.2 deg, plateauing at step 200/1500 -- the
-  22-constant-rotation model has saturated. It is also a *worse* optimiser init than a zero pose
+  22-constant-rotation model has saturated. It is also a _worse_ optimiser init than a zero pose
   (33.6 cm vs 16.7 cm). Real finding worth keeping: T2M applies a joint's OWN global rotation to
   its incoming bone, SMPL applies the PARENT's, so the mapping is shifted one level down the tree.
   A closed-form correction is not enough; this needs a learned retargeting net.
@@ -3531,12 +3690,11 @@ fine-tuned CLIP and cannot be served or re-evaluated. Everything demoed today wa
 
 Tests 114 passed / 1 skipped. Ruff at baseline.
 
-
 ## Update (2026-08-19c, LIVE DEMO RUNS + UNBOUNDED STREAMING)
 
 **The studio demo runs again, on the 34M mamba twin.** Two things blocked it.
 
-1. *Every 100M checkpoint is unservable.* Configs fine-tune CLIP (`unfreeze_last_n=1`,
+1. _Every 100M checkpoint is unservable._ Configs fine-tune CLIP (`unfreeze_last_n=1`,
    `unfreeze_projection=true`), so a checkpoint must carry its text encoder. Only `*_last.pt`
    files are atomic bundles (`generator` + `text_encoder`); the headline "best val FID" exports
    (`generator_transformer_100m_val163.pt`, `generator_mamba_100m.pt`, `generator_transformer.pt`,
@@ -3544,7 +3702,7 @@ Tests 114 passed / 1 skipped. Ruff at baseline.
    The fail-loud guard in `app/container.py` correctly refuses them. This blocks re-evaluation,
    not just the demo. `configs/demo_models.yaml` now lists only the three loadable bundles and
    documents the disabled four. **Open: recover or re-export the 100M text encoders.**
-2. *SMPL-X fitting was ~160x too slow on GPU.* The fit thread was alive but had not finished 30
+2. _SMPL-X fitting was ~160x too slow on GPU._ The fit thread was alive but had not finished 30
    Adam iterations on 16 frames after 4m22s, with the GPU at 3589/4096 MiB and only 24%
    utilisation -- VRAM exhaustion spilling to shared system memory (two CUDA processes on a 4 GB
    card: the service holds the generator, the studio wanted the same GPU). Measured CPU: **54
@@ -3559,10 +3717,10 @@ from `nn.Embedding` when `steps > max_seq_len`).
 
 Measured live, mamba 34M, prompt "walk":
 
-| run | frames | tokens | motion | rate |
-|---|---|---|---|---|
-| 1 | 3056 | **764** | 2m33s | 7.7x realtime |
-| 2 | 480 | 120 | 24s | 8.4x realtime |
+| run | frames | tokens  | motion | rate          |
+| --- | ------ | ------- | ------ | ------------- |
+| 1   | 3056   | **764** | 2m33s  | 7.7x realtime |
+| 2   | 480    | 120     | 24s    | 8.4x realtime |
 
 The transformer twin stops at **96 tokens (384 frames, 19.2 s)**. The mamba twin reached **764
 tokens, 8.0x past that ceiling**, in one stream, stopped cleanly on Stop, studio working set
@@ -3573,6 +3731,7 @@ Duration control: `--seconds` (default 0.0 = forever) plus `--steps` (0 = foreve
 a "run forever" checkbox when the model supports it.
 
 Two deliberate limits, both measured not assumed:
+
 - **indefinite mode is skeleton-only** -- generation runs 7.5x realtime, CPU body fit 0.45x, so an
   unbounded stream feeds a fitter ~16x slower than its input. Mesh-forever needs generation paced
   to playback, which is a separate change.
@@ -3583,7 +3742,6 @@ Two deliberate limits, both measured not assumed:
 Nothing crashed, but semantic coherence that far out is unmeasured.
 
 Tests 112 passed / 1 skipped (2 new, both backbones' unbounded contract). Ruff: no new findings.
-
 
 ## Update (2026-08-19b, RUN SCRIPT + GRAD-ACCUM FIX + SCRIPTS REORGANIZED)
 
@@ -3598,6 +3756,7 @@ fail-louds if the optimizer-step budget drifts. Left alone.
 
 **`infra/azure/run_twins.sh` written.** One launch for all six runs (pretrain + gate + finetune
 for transformer/FSQ, mamba/FSQ, transformer/RVQ), transformer first so breakage costs $5 not $40.
+
 - **preflight** checks every config / tokenizer / token pack / data dir and the CUDA device,
   fails loud before anything expensive starts
 - **guard built in**: max-hours budget plus a stale-write kill, reason appended to
@@ -3610,6 +3769,7 @@ for transformer/FSQ, mamba/FSQ, transformer/RVQ), transformer first so breakage 
   is NOT written), and the find-based stall detector.
 
 **Scripts reorganized by series** -- the folder now tells you what a thing is for:
+
 - `scripts/training/` -- `local_guard.ps1`, `run_3day_local.ps1`. Paths deliberately UNCHANGED so
   `CLAUDE.md` and the Azure runbook still resolve.
 - `scripts/training/tokenizer_sweep/` -- the 10 Contribution A sweep scripts, marked DO NOT RE-RUN
@@ -3653,15 +3813,18 @@ improvement -> stop. Counter persists in `<stem>_last.pt` so a spot eviction doe
 Verified with a fake trainer; 110 tests pass, ruff clean.
 
 **Checked the training loop end to end. It is sound.** EMA 0.999, CFG dropout, pkeep 0.8, warmup
-+ cosine, full loss recipe (CE + soft-decode recon + rot6d + foot), text encoder trainable at
-1e-5. Two things verified specifically because early stopping depends on them:
-- **Eval is deterministic** -- fixed clip slice, fixed caption, per-clip seeded sampling
+
+- cosine, full loss recipe (CE + soft-decode recon + rot6d + foot), text encoder trainable at
+  1e-5. Two things verified specifically because early stopping depends on them:
+
+* **Eval is deterministic** -- fixed clip slice, fixed caption, per-clip seeded sampling
   (`evaluator.py:155`), seeded R-prec permutation. Same weights => same FID. So patience acts on
   signal, not noise.
-- **Twin fairness is structural** -- `item_rng(seed, epoch, idx)` makes augmentation a pure
+* **Twin fairness is structural** -- `item_rng(seed, epoch, idx)` makes augmentation a pure
   function, so both twins see byte-identical batches in identical order.
 
 **Three misalignments found:**
+
 1. **Epochs inconsistent** (18 / 20 / 50 / 150 across scripts, code default 60) while CLAUDE.md's
    own plateau lesson says 100-200+. The `--epochs 18` in the pilot plan was a 4GB-laptop
    compromise. Going with **100**.
@@ -3682,6 +3845,7 @@ break the controlled comparison.
 same everything, only the tokenizer differs. `fsq_g8_v1024.yaml` and `rvq_l8_1024.yaml` were
 already deliberately mirrored (same seed/width/downsample/resblocks/8 quantizers/1024 vocab).
 This upgrades Contribution A from "better reconstruction" to "better generation" for ~$5.
+
 - Wrote `configs/generator/gen_pilot_rvq8x1024.yaml` (needs `tokenizer.kind: rvq`; the sweep
   config never set it because `train-tokenizer` has a `--tokenizer` override and `tokenize` does
   not). Verified it builds RvqBaselineTokenizer and loads the trained checkpoint.
@@ -3719,6 +3883,7 @@ is a silent fallback to a worse tokenizer.
 where the fair twin comparison will actually run.
 
 **Speed work -- what worked (all measured, not estimated):**
+
 - **Demo generation 40.8 s -> 2.9 s (14.2x).** This was the real complaint. Two causes: the SMPL-X
   fit ran on the socket-reading thread and blocked everything, and the transformer had no prefill.
   Moved the fit to a worker thread, added `TransformerBackbone.prefill()` (194.4 ms -> 9.4 ms,
@@ -3738,6 +3903,7 @@ KV preallocation (flat 64->1024 tokens, no gain), fewer continuation fit iters (
 under-converged at 7.29 cm).
 
 **Two lessons that cost us time:**
+
 1. Estimates were wrong every time (5-15% -> 3.5%, 10-25% -> 1.2%, KV -> zero). Only direct
    measurement held up.
 2. Laptop GPU thermal drift produced **two false readings** ("batching is slower", "RMSNorm is
@@ -3754,10 +3920,11 @@ offset) vs 5.14 cm for IK. The error is flat with depth, so it is a rest-pose mi
 offline. Left the IK call in place until that is done.
 
 **Cloud venue -- decided: Azure A10, Kaggle as fallback.**
+
 - Problem: on Windows the transformer gets its fused kernel and Mamba does not (`mamba_ssm` and
   `triton` will not build). That measures the OS, not the architecture.
 - The user has a **$200 / 30-day Azure credit** from cert prep. Earlier we said Azure free tier
-  cannot do GPU -- that was true for a *trial* subscription only. Upgrading to pay-as-you-go
+  cannot do GPU -- that was true for a _trial_ subscription only. Upgrading to pay-as-you-go
   unblocks GPU SKUs **and keeps the unused credit** for the rest of the 30 days.
 - Box: `Standard_NV36ads_A10_v5`, full A10, 24 GB, sm_86. Picked for **Ampere, not speed** -- it has
   bf16 and TF32, which the free Kaggle T4 (sm_75) does not. That means our precision results
@@ -3766,6 +3933,7 @@ offline. Left the IK call in place until that is done.
   the constraint.**
 
 **Code changes for the cloud move:**
+
 - Fixed every stale `text2motion.train.*` / `text2motion.eval.*` call in `infra/aws/*.sh` and
   `run_3day_local.ps1` -> `text2motion.app.cli <subcommand>` with the now-required
   `sanity-overfit` gate. Zero stale references left.
@@ -3801,6 +3969,7 @@ so (a walk of every `ImportFrom` reports **0 upward imports**):
 
 Path mapping for anything written before this date (older entries below are left as they were
 written and still name the old paths):
+
 - `data/hml3d/{dataset,motion_window,clip_index,stats}.py` -> `motion/dataset.py`
 - `data/hml3d/{feature,joints,param_util}.py` -> `motion/representation.py`;
   `{quaternion,skeleton}.py` -> `motion/kinematics.py`
@@ -3826,6 +3995,7 @@ is one registry per subsystem, not scattered `if backbone == ...` branches. The 
 -- each constant now lives with the concept it describes.
 
 **Four real bugs fell out of the move** (all previously latent, none introduced by it):
+
 1. **Checkpoint saving was broken for `Backbone`.** `SE("Backbone", {...})` inside a
    `SimpleNamespace` has no module-level attribute to resolve against, so `torch.save` of a
    `GeneratorBundle` raised `PicklingError`. Real module-level enums fix it.
@@ -3836,7 +4006,7 @@ is one registry per subsystem, not scattered `if backbone == ...` branches. The 
    `>= window`.
 4. **`load_generator_checkpoint` returned a raw dict where a `GeneratorBundle` was expected**, so
    legacy (non-bundle) checkpoints crashed in `bundle.verify_tokenizer`. Return contract is now honest.
-Also: `--bootstrap 0` documented "0 disables" but crashed on an empty percentile array; it now disables.
+   Also: `--bootstrap 0` documented "0 disables" but crashed on an empty percentile array; it now disables.
 
 **Verification.** Test suite **110 passed / 1 skipped / 0 failed** (was 106 passed, 2 failed, 1
 collection error). `ruff check` + `ruff format --check` clean. All 24 configs load unchanged; the
@@ -3854,6 +4024,7 @@ at 1.17 MB, param-matched 31.63M vs 31.84M.
 actual motion sampling (`temperature` / `top_p` multinomial inside `generator.stream`) is driven by the
 **torch** RNG. Every other entrypoint seeds (train_generator, train_tokenizer, train_pretrain,
 eval_generalization all call `seed_everything`); the ONE that produces the citable numbers did not.
+
 - Proof: the same command twice gave FID 5.864 then 4.269. **Every number ever produced by
   `evaluate.py` is non-reproducible run-to-run** — the 34M twin table, the val rows, the cfg/temp
   sweep. The 20-rep protocol averages over CAPTION choice but not over SAMPLING noise.
@@ -3863,6 +4034,7 @@ eval_generalization all call `seed_everything`); the ONE that produces the citab
 
 **Code-quality refactor (user goal: less coupling, no duplicates, group vars into objects, fewer
 params, deterministic output).** Measured before -> after:
+
 - `evaluate_generation` **19 params -> 5**; functions with >=8 params **10 -> 6**.
 - New `eval/context.py`: `EvalContext` (device, dirs, our/eval stats, matchers, build_text,
   downsample + `clip_ids`/`normalize`/`denormalize`), `GenerationPipeline` (generator+text_encoder+
@@ -3882,13 +4054,13 @@ landed on a 131-line class with no ownership. Extracted state into owned objects
 `studio_viewer/scene_nodes.py` (state owners, not the mixins — composition of the mixins themselves is
 still TODO):
 
-| class | attrs before | after |
-|---|---|---|
-| StreamingStudioViewer | 68 | **39** |
-| GuiPanels | 55 | 48 |
-| GenerationControl | 48 | **29** |
-| Avatar | 39 | **21** |
-| Display | 23 | **12** |
+| class                 | attrs before | after  |
+| --------------------- | ------------ | ------ |
+| StreamingStudioViewer | 68           | **39** |
+| GuiPanels             | 55           | 48     |
+| GenerationControl     | 48           | **29** |
+| Avatar                | 39           | **21** |
+| Display               | 23           | **12** |
 
 - `SceneNodes` — rest/motion/body nodes + follow centre; typed `clear_*`/`show_*`/`focus` replace the
   stringly-typed `_remove(self, attr: str)` `getattr`/`setattr` reflection.
@@ -3912,6 +4084,7 @@ still TODO):
   composition and `avatar.py`/`display.py` node handling stops being duplicated.
 
 **Still OPEN:**
+
 - `GuiPanels` 48 attrs — mostly imgui widget bindings; untangling touches the widget wiring, the
   riskiest part to do blind. Needs a manual viewer smoke test alongside.
 - **Mixins -> composition** (the actual fix for the god object) — state extraction was the prerequisite.
@@ -3938,6 +4111,7 @@ still TODO):
 (resblocks k=3 at latent rate, ConvTranspose k=4 s=2, final k=3), so isolated chunks zero-pad where
 neighbours belong => the demo emitted different motion from the paper's numbers (6.16% rel MAE,
 denormalized 263 space; 17.9% at 1 token/chunk — smaller chunks are WORSE, more boundary per frame).
+
 - **Receptive field measured, not assumed: EXACTLY +/-4 latent tokens = +/-16 frames = +/-0.8 s.**
   `stream.decode.measure_decoder_context` probes it at construction by perturbing one token and
   recording which frames change — architecture-agnostic, so a causal tokenizer auto-reports right=0.
@@ -3964,6 +4138,7 @@ called from `load_config` => covers all 9 MotionGenerator construction sites at 
 validate. `configs/generator/gen_34m_prefix16.yaml` created to decouple the confound: **33.91M params,
 byte-identical to the prefix-1 cell except the prefix** (verified). Sanity-overfit PASS (CE 7.10 ->
 0.0019, text emb (2,16,512)).
+
 - **THE VAL PAIR IS THREE-WAY CONFOUNDED, not two.** Manifest audit: the 34M cell ran **cfg 5.0 /
   temp 1.1**, the 100M cell **cfg 6.0 / temp 1.0**. Sampling alone moves FID -44% at fixed weights
   (our own June sweep), so it can carry a large share of the 7.48 -> 1.63 gap. sec. 5.6 rewritten
@@ -3988,17 +4163,17 @@ emits only FULL 196-frame windows, so of 13,249 AMASS clips **only 3,164 ever en
 clips vs 200 trained clips truncated to the SAME lengths (`scripts/eval/pretrain_generalization.py`,
 runs `20260728T09{2426,2624,2857}Z`, CPU so the GPU stays on the prefix-16 run):
 
-| prior | params | trained-clip CE | held-out CE | gap |
-|---|---|---|---|---|
-| Transformer-34M | 33.91M | 4.75 | **5.87** | +1.12 |
-| Mamba-34M | 34.10M | 2.10 | **6.93** | +4.83 |
-| Transformer-100M | 98.07M | **1.38** | **7.19** | **+5.81** |
+| prior            | params | trained-clip CE | held-out CE | gap       |
+| ---------------- | ------ | --------------- | ----------- | --------- |
+| Transformer-34M  | 33.91M | 4.75            | **5.87**    | +1.12     |
+| Mamba-34M        | 34.10M | 2.10            | **6.93**    | +4.83     |
+| Transformer-100M | 98.07M | **1.38**        | **7.19**    | **+5.81** |
 
 - **Held-out ordering is the EXACT REVERSE of training ordering.** Training CE 4.75 -> 1.38 (3.4x
   better) made held-out CE WORSE (5.87 -> 7.19). The 1.54 the paper called `eps_capacity` is
   **memorization of a 3.25M-token corpus**, as sec. 6.1's entropy budget predicted (~3x capacity).
 - Caveat: unseen clips are all <196 frames (median 95), so absolute gaps carry distribution shift —
-  but the shift is IDENTICAL across the three priors, so the *differential* (+1.12 vs +5.81) and the
+  but the shift is IDENTICAL across the three priors, so the _differential_ (+1.12 vs +5.81) and the
   reversed ordering are unconfounded.
 - **sec. 5.8 rewritten**: "train longer buys little" SURVIVES (past the knee, epochs buy memorization);
   "lower pretrain CE demonstrates useful capacity" DOES NOT and is withdrawn. The AMASS prior's value
@@ -4019,6 +4194,7 @@ runs `20260620T051405Z_evaluate_val` (no-prior 6.58/0.217/7.71) and `20260620T20
 (`20260620T095439Z_pretrain_transformer`). **What is NOT sound: the ranking INVERTS on the models' own
 in-training gauge.** `generator_transformer.pt` is best-by-val-FID (`train_generator.py:153`), and the
 two fine-tune runs logged:
+
 - no-prior `20260620T003227Z_generator_transformer` (120 ep requested, ran to 113): best in-train val
   **FID 1.72 @ ep 90** (R@1 0.417); trajectory 3.02/2.25/3.02/3.68/2.23/**1.72**/3.18/2.69/1.96/2.77
 - +prior `20260620T101557Z_generator_transformer` (40 ep, `--init_ckpt` the AMASS prior): best in-train
@@ -4033,9 +4209,9 @@ Also note the budgets differ 113 vs 40 ep, and the exact +prior-40ep checkpoint 
 **RESOLVED — sec. 5.4's DIRECTION IS CORRECT; the "inversion" was an artifact.** Controlled CPU re-eval
 (150 val clips, identical settings, `outputs/prior_ablation_recheck.log`):
 
-| model | cfg 1.0 | cfg 3.0 |
-|---|---|---|
-| no-prior | FID 8.81 / R@1 0.136 | FID 6.67 / R@1 0.216 |
+| model        | cfg 1.0              | cfg 3.0              |
+| ------------ | -------------------- | -------------------- |
+| no-prior     | FID 8.81 / R@1 0.136 | FID 6.67 / R@1 0.216 |
 | +prior (bs8) | FID 6.31 / R@1 0.110 | FID 2.66 / R@1 0.253 |
 
 The prior wins on FID at BOTH guidance settings, and cfg 3.0 reproduces the published pair (6.67 vs
@@ -4050,6 +4226,7 @@ contradiction had a completely different cause — see F7.**
 diffing `generator_mamba_bs8_last.pt`'s stored encoder against fresh CLIP: **19 of 197 tensors differ**
 (exactly layer 11 + final_layer_norm + text_projection; max delta 0.016). So the generator is fed
 embeddings from an encoder it was never trained against.
+
 - This explains the long-standing "in-train gauge is optimistic" puzzle that sec. 5.6 note (ii)
   attributed to SAMPLE SIZE: no-prior in-train 1.72 vs standalone 8.81; mamba-bs8 in-train best_fid
   **0.82** vs citable test **4.06**. Same ~5x pattern every time.
@@ -4062,13 +4239,14 @@ embeddings from an encoder it was never trained against.
   -> `outputs/text_encoder_ab.log`.
 - **A/B MEASURED (same generator, same 150 val clips, cfg 6.0/temp 1.0, only the encoder differs):**
 
-| encoder | FID | R@1 | R@2 | R@3 | MM-Dist | Div |
-|---|---|---|---|---|---|---|
-| pristine (published behaviour) | 4.461 | 0.293 | 0.421 | 0.521 | 4.740 | 8.038 |
-| **co-adapted (correct)** | **0.959** | **0.394** | **0.570** | **0.665** | **3.921** | **9.812** |
+| encoder                        | FID       | R@1       | R@2       | R@3       | MM-Dist   | Div       |
+| ------------------------------ | --------- | --------- | --------- | --------- | --------- | --------- |
+| pristine (published behaviour) | 4.461     | 0.293     | 0.421     | 0.521     | 4.740     | 8.038     |
+| **co-adapted (correct)**       | **0.959** | **0.394** | **0.570** | **0.665** | **3.921** | **9.812** |
 
-  **FID improves 4.65x**; Diversity 9.81 vs GT 9.5. `outputs/text_encoder_ab.log`. The paper's absolute
-  numbers are understated by roughly this factor.
+**FID improves 4.65x**; Diversity 9.81 vs GT 9.5. `outputs/text_encoder_ab.log`. The paper's absolute
+numbers are understated by roughly this factor.
+
 - **ROOT-CAUSE FIX APPLIED**: `train_generator` now writes `<ckpt>_text_encoder.pt` beside every
   best-by-val checkpoint; `evaluate.py` AUTO-DISCOVERS that sidecar (and still warns loudly if the
   config unfreezes CLIP but no encoder is found). Generator and encoder can no longer drift apart.
@@ -4091,6 +4269,7 @@ embeddings from an encoder it was never trained against.
 
 **F7 PAPER-UPDATE CHECKLIST (every claim the corrected numbers touch — update in ONE pass, do not fix
 the table and leave dependents stale):**
+
 - L443-444 twin table rows (all 8 metrics x 2 backbones) — REPLACE.
 - L453-454 val pair (7.48 / 1.63) — **BOTH rows came from `evaluate.py` = pristine encoder, so both are
   invalid**, not just confounded. The three-way-confound rewrite still stands but the numbers go too.
@@ -4119,9 +4298,11 @@ short; `scripts/eval/scaling_budget.py`, run `20260727T145249Z_scaling_budget`),
 capacity result. Tests 33 -> 44 green, ruff clean, ASCII clean.
 
 ## Update (2026-06-10b, FINISH-LINE PLAN EXECUTING — Track A done, runs in flight, harvest armed)
+
 Plan accepted (`~/.claude/plans/what-is-the-best-peaceful-map.md`): ~$80 AWS budget → one g5.xlarge
 canary (~$2) + THE final 100M twin run (~$20) + contingency/reserve; everything else local.
 User-confirmed: 100M twins on g5, prefix+END upgrades included (gated), AMASS pretraining ablation on.
+
 - **SAMPLING LOCKED (val, 300 clips, ep-20 transformer): cfg_scale 5.0, temperature 1.1, top_p 0.9**
   → FID 3.46 / R@1 0.21 vs 6.14 / 0.105 unguided (−44% FID, ×2 R@1, zero retraining). Full grids in
   `outputs/{cfg_sweep,temp_sweep}.log`. Over-guidance onset at scale 8 (FID up, R@1 still rising).
@@ -4129,12 +4310,12 @@ User-confirmed: 100M twins on g5, prefix+END upgrades included (gated), AMASS pr
   (1) `use_kernel` fused mamba-ssm scan — EXPLICIT opt-in, lazy import that fails LOUD (user rule:
   no try/except fallbacks, ever); parity test auto-runs where mamba-ssm installs (= the g5 canary).
   (2) **16-token CLIP prefix** (`TextEncoderCfg.prefix_len == GeneratorCfg.text_prefix_len`; pooled
-  + 15 masked token states; P=1 byte-identical to legacy — parity-tested, old ckpts unaffected).
-  (3) **END token** (vocab+1; placed at each clip's last token; excluded from soft-decode;
-  `stream(stop_at_end=True)` self-terminates, fixed-length mode masks END → protocol-comparable).
-  (4) **100M twins param-matched: transformer 12L/d768 = 94.70M vs mamba 23L = 96.37M (+1.77%)**,
-  bf16 autocast (`TrainCfg.amp`), `configs/final100m.yaml`. Sanity-overfit on the 4GB GPU:
-  CE 7.0 → 0.003 (transformer) / 0.004 (mamba) — PASS both, prefix+END+bf16 active.
+  - 15 masked token states; P=1 byte-identical to legacy — parity-tested, old ckpts unaffected).
+    (3) **END token** (vocab+1; placed at each clip's last token; excluded from soft-decode;
+    `stream(stop_at_end=True)` self-terminates, fixed-length mode masks END → protocol-comparable).
+    (4) **100M twins param-matched: transformer 12L/d768 = 94.70M vs mamba 23L = 96.37M (+1.77%)**,
+    bf16 autocast (`TrainCfg.amp`), `configs/final100m.yaml`. Sanity-overfit on the 4GB GPU:
+    CE 7.0 → 0.003 (transformer) / 0.004 (mamba) — PASS both, prefix+END+bf16 active.
 - **Cloud mamba (31.8M, old recipe) at ep ~27, ~43 min/ep; dies Jun 11 01:30 UTC at ~ep 42.**
   **Head-to-head @ep20 (200-clip trend, no CFG): mamba R@1 0.193 == transformer 0.193, R@3 0.375 >
   0.354, FID 4.80 vs 3.24 (within that metric's epoch-to-epoch noise)** → early gate signal GOOD.
@@ -4151,6 +4332,7 @@ User-confirmed: 100M twins on g5, prefix+END upgrades included (gated), AMASS pr
   full test) → `outputs/twin_table_v0.log`. **Machine must stay awake overnight.**
 
 ## Update (2026-06-10c, BOX HARVESTED + TERMINATED EARLY — mamba peaked at ep 30)
+
 - **Mamba overfitting turn confirmed at ep 40** (FID 5.26, R@1 0.094) after the **ep-30 peak:
   FID 4.17, R@1 0.208 — better than ANY transformer epoch** (twin best R@1 0.193 @ep20). Trajectory:
   ep20 4.80/0.193 → ep30 4.17/0.208 → ep40 5.26/0.094. Same overfit pattern as the twin, one decade
@@ -4163,6 +4345,7 @@ User-confirmed: 100M twins on g5, prefix+END upgrades included (gated), AMASS pr
   freed GPU: `_twin_eval` per backbone, `--split test --cfg_scale 5.0 --temperature 1.1`, 20-rep.
 
 ## OPEN DECISIONS (the queue, in order)
+
 1. **ADR-0002 gate (after twin table v0):** mamba FID within ~1.5x of transformer at locked sampling
    → proceed to the 100M run; else debug locally first. Record the v0 table in ADR 0002 either way.
    Caveat to record: mamba ~42ep vs transformer 150ep wall-budget mismatch (both select best-by-eval;
@@ -4177,8 +4360,10 @@ User-confirmed: 100M twins on g5, prefix+END upgrades included (gated), AMASS pr
    optional 31.6M-recipe ablation rerun ~$7. Spend nothing on cloud before the v0 gate verdict.
 
 ## Update (2026-06-10, CLOUD RUN LIVE-READ + FULL CODE REVIEW — act before Jun 11 01:30 UTC)
+
 (Corrects the first version of this entry: the instance is ALIVE — it runs in **eu-west-1**, the
 earlier "dead" read came from querying eu-north-1, the bucket region.)
+
 - **Instance `i-0d79ed71ae495022e`** (g4dn.xlarge, eu-west-1) launched Jun 9 13:30 UTC, GPU 100%.
   **Transformer: 150 ep COMPLETE in 5h57m** (~2.4 min/ep). **Mamba: running, ~34 min/ep** (pure-
   PyTorch scan ≈ 14x slower). **Hard max-lifetime (36h) kills the box Jun 11 01:30 UTC ≈ epoch ~50.**
@@ -4223,7 +4408,9 @@ earlier "dead" read came from querying eu-north-1, the bucket region.)
   pretraining as an ablation (the 290 GB donor data is unused by design on the citable track).
 
 ## Update (2026-06-08b, TWIN PARAM-MATCH + MAMBA TRAINING MADE TRACTABLE; runs launched)
+
 Matched the twin param counts and fixed the Mamba training-time blocker, then launched both runs.
+
 - **Param match (config-driven):** shared parts (token_emb+heads+text_proj) = 6.41M, identical both.
   Each Mamba block ~= half an attn+MLP block, so **Mamba n=15 (31.84M) == Transformer n=8 (31.64M),
   +0.6%**. Added `GeneratorCfg.mamba_n_layers=15`; `train_generator` resolves n_layers per backbone.
@@ -4241,7 +4428,7 @@ Matched the twin param counts and fixed the Mamba training-time blocker, then la
   COMPARISON (the thesis claim) is valid at matched budget. For SOTA absolute numbers, rerun 150ep/bs
   on a bigger GPU (commands in train_generator docstring; `--resume` continues).
 - **Launched** (background, sequential — single 4GB GPU): `python -u -m text2motion.train.train_generator
-  --backbone {transformer,mamba} --epochs 40 --batch_size 16`; logs `outputs/twin_{transformer,mamba}.log`,
+--backbone {transformer,mamba} --epochs 40 --batch_size 16`; logs `outputs/twin_{transformer,mamba}.log`,
   checkpoints `checkpoints/generator_{backbone}{,_last}.pt`. FID/R-prec eval every 10 epochs.
 - **20-rep full-test twin eval ready:** `_twin_eval.py` (mirrors `_l2.py` GT protocol — our_vab, Comp_v6
   stats, 32-pool, 20 reps — but motion = generated via stream+frozen-FSQ-decode from each backbone's
@@ -4253,12 +4440,14 @@ Matched the twin param counts and fixed the Mamba training-time blocker, then la
   iso-vocab FSQ ablation; the still-open doc items (citations, latency-vs-horizon plot).
 
 ## Update (2026-06-08, FOUR-AGENT VALIDATION — R-PRECISION RESIDUAL RESOLVED; fixes applied)
+
 Ran four validation subagents (data / algorithm / architecture+hypotheses / eval+baselines). Verdict:
 **thesis stands, no fatal flaws.** The long-standing R-precision residual is now CLOSED.
+
 - **ROOT CAUSE of the 0.41-vs-0.51 R-prec gap: `_l2.py` loaded the wrong vocabulary** (`hhi_vab`, the
   Inter-X human-human set) instead of the official `our_vab`. `hhi_vab`'s distinct sos/eos/unk vectors
-  + missing-word->unk fallback displaced every text embedding (MM-Dist ~9). NOT the encoders, matcher
-  weights, data, or our_vab-vs-GloVe (all proven equivalent earlier) — it was the driver's vocab arg.
+  - missing-word->unk fallback displaced every text embedding (MM-Dist ~9). NOT the encoders, matcher
+    weights, data, or our_vab-vs-GloVe (all proven equivalent earlier) — it was the driver's vocab arg.
 - **After the one-line fix, GT repro now matches published to noise (20 reps, official 263 test, 2179
   clips):** R@1 **0.514** (pub 0.511), R@2 0.706 (0.703), R@3 0.799 (0.797), MM-Dist **2.977** (2.974),
   Diversity 9.667 (9.503). Earlier STATUS entries calling this "unresolved/footnoted" are SUPERSEDED.
@@ -4288,17 +4477,19 @@ Ran four validation subagents (data / algorithm / architecture+hypotheses / eval
   O(L)-sequential training forward as a known limitation.
 
 ## Update (2026-06-04, CONTRIBUTION A — tokenizer pipeline built + first results)
+
 Built the tokenizer training stack: `data/hml3d/motion_window.py` (64-frame windows, in-memory cache),
 `train/tokenizer_trainer.py` (EMA + codebook perplexity), `eval/tokenizer_eval.py` (MPJPE + feat-L2 +
 downstream FID on the validated matcher), `train/train_tokenizer.py` (CLI, best-by-FID checkpoint).
 Trained on the official 263 data, 500 epochs (~80k iters, the T2M-GPT budget), width 512 / 3 resblocks.
+
 - **Strong-RVQ baseline (the bar): recon-FID 0.044** (MPJPE 115mm, perplexity 328/512). Near MoMask
   0.019, better than T2M-GPT 0.07. Saved `checkpoints/tokenizer_rvq.pt`.
 - **Residual-FSQ: recon-FID 0.22** (MPJPE 178mm, perplexity 142/1000) — 5x WORSE than RVQ. Root cause:
   residual FSQ keeps the latent at fsq_dim=4 (codes sum in 4-D) and later levels collapse on the fixed
   grid; a 4-D continuous latent can't represent 263-D motion. RVQ's 512-D codes win.
-- **Fix WORKED.** `GroupedFSQ` (G groups -> G*4=24-D latent, every group used) + `TokenizerCfg.quantizer
-  = "grouped"|"residual"` (default grouped). 500 epochs.
+- **Fix WORKED.** `GroupedFSQ` (G groups -> G\*4=24-D latent, every group used) + `TokenizerCfg.quantizer
+= "grouped"|"residual"` (default grouped). 500 epochs.
 - **CONTRIBUTION A RESULT (full test, 2189 clips): Grouped-FSQ recon-FID 0.0266 BEATS Strong-RVQ
   0.0382** (MPJPE 119 vs 125mm; FSQ perplexity 572/1000 vs RVQ 328/512 — the no-dead-code advantage).
   Both beat T2M-GPT 0.071; approaching MoMask 0.019. **The FSQ-beats-RVQ hypothesis is SUPPORTED** ->
@@ -4308,12 +4499,14 @@ Trained on the official 263 data, 500 epochs (~80k iters, the T2M-GPT budget), w
   tokens, full loss recipe + CLIP text encoder; ADR 0002 small-config FID gate.
 
 ## Update (2026-06-04, EVAL HARNESS — FULLY VERIFIED faithful; FID/Diversity reproduce paper)
+
 Exhaustively verified EVERY eval component byte-for-byte vs Guo's official code:
+
 - Motion + text encoders: identical to `inter-x/.../networks/modules.py` (maxdiff 0.0). The bug found
   earlier (ReLU vs **LeakyReLU(0.2)** + conv padding=1) is fixed in `eval/matcher.py`.
 - Word vectors: our `glove.6B.300d` == Guo's HumanML3D `our_vab` (downloaded the t2m glove bundle via
-  gdown, id 1cmXKUT31pqd7_XpJAiWEo1K81TMYHA5n -> `data/t2m_glove/glove/our_vab_*`; maxdiff 1e-7). So
-  raw GloVe was correct; the inter-x `hhi_vab` was the non-standard outlier.
+  gdown, id 1cmXKUT31pqd7*XpJAiWEo1K81TMYHA5n -> `data/t2m_glove/glove/our_vab*\*`; maxdiff 1e-7). So
+raw GloVe was correct; the inter-x `hhi_vab` was the non-standard outlier.
 - Data: TeoGchx/HumanML3D Mean corr **0.99997** with Comp_v6 (= true standard 263). Checkpoint:
   official (camenduru) == donor. Normalization: Comp_v6 (bundled with evaluator).
 - **Result: FID + Diversity reproduce published exactly** (Diversity 9.67 vs 9.50). GT R-precision
@@ -4324,9 +4517,11 @@ Exhaustively verified EVERY eval component byte-for-byte vs Guo's official code:
 - Eval GT-repro driver lives at `_l2.py` (20-rep protocol). Promote to `eval/evaluate.py` later.
 
 ## Update (2026-06-04, EVAL HARNESS VALIDATED — official evaluator confirmed identical)
+
 Downloaded the **official HumanML3D evaluator** (camenduru/MoMask `humanml3d_evaluator.zip` ->
 `data/official_evaluator/extracted/text_mot_match/model/finest.tar`). Loaded it with our matcher ->
 **byte-identical results to the donor's finest.tar** (R-top1 0.410, norms 11.5/16.0, MM 9.06). So:
+
 - We ARE using the correct official evaluator weights (donor's == official).
 - The 0.41-vs-0.51 R-prec residual is NOT the checkpoint, NOT the data (official 263), NOT the
   protocol (20-rep random caption), NOT POS/normalization/activation (all ruled out by experiment).
@@ -4339,10 +4534,12 @@ Downloaded the **official HumanML3D evaluator** (camenduru/MoMask `humanml3d_eva
   exact published GT R-prec (0.51) would need the full official eval dataloader; deferred, not blocking.
 
 ## Update (2026-06-04, MATCHER BUG FOUND via official data — R-prec 0.24->0.41, Diversity EXACT)
+
 Downloaded the **official HumanML3D-263** (TeoGchx/HumanML3D HF mirror, 4.4GB) -> converted to our
 layout at `data/HumanML3D_official` (`data/hml3d/convert_official.py`; 29228 clips, splits 23384/
 1460/4384, Mean/Std). **Citable track now = official data** (config `hml3d_out_dir` switched); our
 SMPL-X regen stays at `data/HumanML3D_263` for the deferred 168 demo.
+
 - **The R-precision gap was the MATCHER, NOT the data.** Official SMPL-H data gave the SAME ~0.24 as
   our SMPL-X -> disproved the SMPL-X-provenance theory; isolated the bug to the matcher.
 - **Root cause (diffed vs Guo's `networks/modules.py`):** we used plain `ReLU` + conv `padding=0`;
@@ -4359,7 +4556,9 @@ SMPL-X regen stays at `data/HumanML3D_263` for the deferred 168 demo.
 - Tests green (test_eval matcher-load + metric math). `_l2.py` is the L2 driver (points at official).
 
 ## Update (2026-06-03, STAGE 2 L2 — DATA FAITHFUL + 3 MATCHER BUGS FIXED)
+
 L2 verdict: **the regenerated 263 data is field-faithful.**
+
 - **Mean correlation 0.9950** between our regenerated 263 Mean and the official eval stats
   (Comp_v6 meta) — features sit on the official distribution. Byte-faithful pipeline + exact
   round-trip already shown.
@@ -4372,7 +4571,7 @@ L2 verdict: **the regenerated 263 data is field-faithful.**
      pack_padded_sequence). Fixed (`_bigru_final_state`).
   3. Spurious `F.normalize` on the embeddings; Guo returns raw `output_net` (un-normalized — its
      Diversity 9.5 / MM-dist 2.97 are impossible for unit vectors). Removed.
-  `_load_exact` now also FAILS on unexpected keys so dropped-key bugs can't recur.
+     `_load_exact` now also FAILS on unexpected keys so dropped-key bugs can't recur.
 - Remaining R-precision top-1 gap (0.24 vs 0.51): I then ALSO reproduced Guo's full WordVectorizer
   (POS one-hots + VIP word-lists from his repo at `data/inter-x/.../word_vectorizer.py` + sos/eos +
   hhi_vab special vecs) and fed real POS one-hots — top-1 moved only 0.239→0.244. So the TEXT branch
@@ -4398,7 +4597,9 @@ L2 verdict: **the regenerated 263 data is field-faithful.**
   Not needed for FID or relative generator comparison.
 
 ## Update (2026-06-03, DATASET LOADER WIRED)
+
 `src/text2motion/data/hml3d/dataset.py` now loads the real regenerated 263 data end-to-end:
+
 - Reads `new_joint_vecs` + `Mean/Std` from `hml3d_out_dir`; texts from `paths.texts_dir` (donor
   `HumanML3D/texts`, NOT copied) — new config field `texts_dir`.
 - **Per-variant captions**: mirrored `M<id>` clips use their own `M<id>.txt` (official left<->right
@@ -4408,14 +4609,16 @@ L2 verdict: **the regenerated 263 data is field-faithful.**
 - **Truncate-not-drop**: clips longer than `max_motion_len` are windowed (random for train, leading
   for eval) instead of dropped — recovered ~4.8k train clips (official behavior; "use full data").
 - Added `collate_pad` (pad to batch max + lengths) and `build_dataloader(paths, repr, data, split,
-  batch_size)`.
+batch_size)`.
 - Counts: **train 17,396** (8,698 base ×2 mirror), **val 563**, **test 1,638** (base-only).
 - Tests: `tests/test_dataset.py` (3, slow) green; full non-slow suite still 21 passed.
 - **NEXT:** Stage-2 L2 validation (T2M-GPT VQVAE recon FID on this data) + train Residual-FSQ
   tokenizer vs strong-RVQ baseline (Contribution A) on the GPU.
 
 ## Update (2026-06-03, REGENERATION COMPLETE — Stage 1 DONE)
+
 **Real standard-263 HumanML3D data now exists** at `data/HumanML3D_263/` (repo-local C:).
+
 - `new_joint_vecs/` = **22,552 valid 263-feature files** (~11,276 clips ×2 mirror), `new_joints/` =
   22,552 recovered, `joints/` = 22,770, `Mean.npy`/`Std.npy` both (263,). ~40 h of motion
   (2,897,960 frames). Splits (train/val/test.txt) copied alongside.
@@ -4430,6 +4633,7 @@ L2 verdict: **the regenerated 263 data is field-faithful.**
   Residual-FSQ tokenizer + strong-RVQ baseline (Contribution A) on this real data.
 
 ## Update (2026-06-03, latest — pipeline validated + coverage measured)
+
 - **Full Stage-1→3 pipeline validated on REAL data**: 8 AMASS clips → SMPL-X GPU forward → 263
   features → `recover_from_ric`, all finite, **round-trip L1 = 0.0000** (compare recovery to
   `global_positions`, the 2nd return — not the root-local 3rd). The feature math is correct on real
@@ -4451,12 +4655,14 @@ L2 verdict: **the regenerated 263 data is field-faithful.**
   (stage 1 walks ~all AMASS on GPU; 2 = index→joints; 3 = 263 features; 4 = Mean/Std). Long job.
 
 ## Update (2026-06-03, later — DATA BLOCKER REMOVED)
+
 **The "download SMPL+H + DMPL" blocker is GONE.** Inspecting the donor data revealed the AMASS on
 disk is the **SMPL-X G release**, not SMPL-H: `surface_model_type='smplx'`, `poses` 165-dim
 (3+63+90+3+6), 16 betas, separate `pose_jaw`/`pose_eye`, framerate key `mocap_frame_rate`. So the
 correct (matching) body model is **SMPL-X, which is already on disk** (`arctic/unpack/models/smplx/
 SMPLX_{NEUTRAL,MALE,FEMALE}.npz`). No download needed; DMPL not needed (SMPL-X has none; irrelevant
 to the 22 body joints).
+
 - **`raw_pose.py` re-implemented for the SMPL-X release** (was a faithful but now-mismatched SMPL-H
   port that would have silently skipped every file via the `mocap_framerate` KeyError). Forwards via
   the `smplx` package, passes all pose components at batch T (jaw/eye/expr = zeros), keeps `joints[:22]`,
@@ -4469,13 +4675,15 @@ to the 22 body joints).
   `uniform_skeleton` retargeting standardizes bone lengths -> near-identical features. The Stage-2 L2
   gate (reproduce T2M-GPT recon FID) validates it.
 - **NEXT ACTION is no longer a download** — it's to RUN `python -m text2motion.data.hml3d.regenerate
-  --config configs/default.yaml --stage all` (long CPU job over ~all AMASS; consider CUDA + a subset
+--config configs/default.yaml --stage all` (long CPU job over ~all AMASS; consider CUDA + a subset
   first). Tests now 24 green (21 non-slow + 3 slow).
 
 ## Update (2026-06-03, post-restart session)
+
 Resolved the open streaming question and built the two data-independent next steps from the
 research dossier (`.claude/docs/references.md` Q1–Q4 now record the provenance):
-- **Streaming deadlock FIXED.** `run_producer` pushed STREAM_END with a *blocking* `put` -> deadlock
+
+- **Streaming deadlock FIXED.** `run_producer` pushed STREAM_END with a _blocking_ `put` -> deadlock
   when the bounded queue was full and no consumer drained. Now both chunks and the sentinel use
   `_put_drop_oldest` (never stalls). Regression test added. This was the unconfirmed-streaming risk.
 - **Text encoder built + validated** (`src/text2motion/model/text_encoder.py`): CLIP ViT-B/32
@@ -4501,19 +4709,21 @@ Resume anchor for the streaming text→motion (SMPL-X) rebuild. Read with `CLAUD
 `C:\Users\ic.butacu\.claude\plans\first-plan-the-flow-bright-pike.md`.
 
 ## Where we are
+
 Both thesis contributions have **working, unit-validated cores** (on synthetic data). Everything that
 can be built without the gated body models + GPU is done. Last confirmed: **13/13 tests green**
 (Stage 0/data-contract/tokenizer/generator/training); the **4 streaming tests** were written and were
 the only ones unconfirmed when the runner began auto-backgrounding — re-run to confirm (expect 17).
 
-Re-verify: `PYTHONPATH=src .venv/Scripts/python.exe -m pytest tests/`  ·  lint: `... -m ruff check src/ tests/`
+Re-verify: `PYTHONPATH=src .venv/Scripts/python.exe -m pytest tests/` · lint: `... -m ruff check src/ tests/`
 
 ## Stage status
+
 - **0 — Foundations** ✅ done. snake_case typed config (`src/text2motion/shared/{config,seed}.py`,
   `configs/default.yaml`), package skeleton, hook, ruff. Verified.
 - **1 — Regenerate standard-263 from AMASS** ✅ code, ⏳ run blocked.
   Ported faithfully (constants byte-exact) to `src/text2motion/data/hml3d/{quaternion,skeleton,
-  param_util,feature,raw_pose,regenerate,dataset}.py`. `index.csv` + train/val/test splits FETCHED
+param_util,feature,raw_pose,regenerate,dataset}.py`. `index.csv` + train/val/test splits FETCHED
   (`D:\Facultate\dissertation\data\HumanML3D\index.csv`, `...\HumanML3D_263\{train,val,test}.txt`).
   **BLOCKED ON: user downloads SMPL+H + DMPL → `body_model/{smplh,dmpls}/{male,female}/model.npz`**
   (gated, MANO + SMPL sites). Then run `python -m text2motion.data.hml3d.regenerate --stage all`.
@@ -4548,8 +4758,9 @@ standalone comments + ALL docstrings repo-wide (65 files, ~800 net lines) via `.
 `;`-chained clustering). 38 tests still pass, ruff clean, ASCII clean.
 
 **34M twin TEST eval COMPLETE (citable: both pilots, full test 2189 clips, 20-rep, cfg 6 / temp 1.0 / GT-length):**
+
 - Transformer-34M-bs8: FID **3.30**, R@1 0.246, R@2 0.386, R@3 0.485, MM-Dist 5.26, Div 8.55, MModality 3.36
-- Mamba-34M-bs8:       FID 4.06, R@1 **0.255**, R@2 **0.398**, R@3 **0.498**, MM-Dist **5.00**, Div 8.03, MModality 2.88
+- Mamba-34M-bs8: FID 4.06, R@1 **0.255**, R@2 **0.398**, R@3 **0.498**, MM-Dist **5.00**, Div 8.03, MModality 2.88
 - **Read: PARITY.** Mamba leads every R-precision rank (~1.5 sigma) + MM-Dist; transformer leads FID (~23%) +
   diversity. Neither dominates -> supports the thesis claim (matched-budget parity + O(1) streaming), NOT a
   SOTA claim. Paper sec 5.6 rewritten with the real table + sec 5.9 (twin fairness) + `paper/FEEDBACK.md`.
@@ -4565,6 +4776,7 @@ CPU then freed (was OOMing by parking the 390MB state on-GPU).
 pretrain 30 ep bs32, Stage B finetune 60 ep bs64 `--init_ckpt`, cfg 5.0 / temp 1.1. `infra/aws/run_mamba100m.sh` + README.
 
 **Cloud infra hardening (3 g5.xlarge boxes burned, ~$4 total):**
+
 - CUDA-version bug FIXED: the kernel gate now auto-detects the toolkit matching torch (was hardcoded
   cuda-13.0; the DLAMI moved to torch cu128 -> use `/usr/local/cuda-12.8`).
 - Never-busy watchdog raised **90 -> 150 min** (`user_data.sh.tftpl`): a from-source kernel build idles the
@@ -4582,9 +4794,10 @@ minutes of boot. Cost est ~$25-30, may brush the 36h hard cap; best-by-val syncs
 cap-stop still yields a usable checkpoint. NEXT: `terraform apply` -> bootstrap (bundle + overlay eager
 config/script) -> monitor `s3://.../results/` for `generator_mamba_100m*`; `MAMBA100M_DONE` marks done;
 then `evaluate.py --split test` completes the 100M twin row.
-  state vs growing KV; overfit), `src/text2motion/train/{losses,ema,trainer}.py` (token-CE +
-  soft-decode-recon through frozen decoder + velocity/foot/root + EMA 0.999 + CFG dropout; A+B wired).
-  ⏳ Train on real tokens; add text-encoder (CLIP/SBERT) + top-layer unfreeze.
+state vs growing KV; overfit), `src/text2motion/train/{losses,ema,trainer}.py` (token-CE +
+soft-decode-recon through frozen decoder + velocity/foot/root + EMA 0.999 + CFG dropout; A+B wired).
+⏳ Train on real tokens; add text-encoder (CLIP/SBERT) + top-layer unfreeze.
+
 - **6 — Streaming + aitviewer studio** ✅ code.
   `src/text2motion/stream/decode.py` (bounded-state → windowed token→frame decode → bounded queue,
   drop-to-latest, STREAM_END), `src/text2motion/render/studio.py` (263→22-joint `recover_skeleton`,
@@ -4592,18 +4805,21 @@ then `evaluate.py --split test` completes the 100M twin row.
   ⏳ Drive with a trained model + real aitviewer render (`uv sync --extra viewer`). 168 SMPL-X path deferred.
 
 ## Critical path remaining (strict order, data/GPU-gated)
-1. **USER:** download SMPL+H + DMPL into `body_model/`.  2. regenerate 263 → L2 validation (VQVAE recon
-FID).  3. train Residual-FSQ tokenizer + baseline benchmark (Contribution A evidence).  4. train
-generator + twin w/ full loss → ADR 0002 FID gate (Contribution B evidence).  5. streaming studio demo.
-(Wire a CUDA torch before 2–4: the SMPL-H forward + training are slow on CPU.)
+
+1. **USER:** download SMPL+H + DMPL into `body_model/`. 2. regenerate 263 → L2 validation (VQVAE recon
+   FID). 3. train Residual-FSQ tokenizer + baseline benchmark (Contribution A evidence). 4. train
+   generator + twin w/ full loss → ADR 0002 FID gate (Contribution B evidence). 5. streaming studio demo.
+   (Wire a CUDA torch before 2–4: the SMPL-H forward + training are slow on CPU.)
 
 ## Conventions (don't relearn)
+
 Python 3.12, snake_case (PEP8), config-driven via typed dataclasses (no global constants / magic
 numbers), fail-loud (no strict=False / silent fallbacks), paths via config. Donor at
 `D:\Facultate\dissertation` is READ-ONLY (data + SMPL-X bodies + Guo matcher + VQVAEV3); reuse data,
 re-implement code. Run/test with `PYTHONPATH=src .venv/Scripts/python.exe`.
 
 ## Test inventory
+
 `tests/`: test_hml3d_263_contract (2), test_tokenizer (3), test_generator (4), test_training (4),
 test_streaming (4). Known benign warning: `torch.cross` dim deprecation in the byte-faithful ported
 `quaternion.py` (intentional).
