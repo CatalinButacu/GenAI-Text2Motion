@@ -130,8 +130,8 @@ class StudioGenerationController:
             self.state.live.prev_prompt = ""
             self.state.live.last_dispatched = prompt
             if self.state.generating:
-                self.state.stream_buffers.cancel = True
-                self.state.live.regen_pending = True
+                self.state.client.steer(prompt)
+                self.state.status = f'live: steering to "{prompt}"'
             else:
                 self.start_generation(prompt, live=True)
         if self.state.live.regen_pending and not self.state.generating:

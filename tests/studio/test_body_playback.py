@@ -425,3 +425,48 @@ def test_pose_upsampling_takes_the_short_way_across_180_degrees():
     axis_z = abs(up_orient[0, 2]) / angle
     assert angle == pytest.approx(np.pi, abs=1e-4)
     assert axis_z == pytest.approx(1.0, abs=1e-4)
+
+
+def live_controller(generating: bool):
+    from text2motion.studio.session import LiveGenerationDebouncer
+
+    steered = []
+    started = []
+    live = LiveGenerationDebouncer()
+    live.enabled = True
+    state = SimpleNamespace(
+        live=live,
+        temperature=1.0,
+        top_p=0.9,
+        steps=24,
+        prompt_text="a person jumps",
+        generating=generating,
+        stream_buffers=StudioStreamBuffers(),
+        client=SimpleNamespace(steer=steered.append),
+        config=SimpleNamespace(live=SimpleNamespace(debounce_seconds=0.0)),
+        status="",
+    )
+    live.signature = (1.0, 0.9, 24)
+    live.mark_dirty("a person jumps", 0.0)
+    host = SimpleNamespace(scene=FakeScene())
+    controller = StudioGenerationController(
+        cast(ViewerHost, host), state, cast(SmplxAvatarController, SimpleNamespace())
+    )
+    controller.start_generation = lambda prompt, live: started.append(prompt)
+    return controller, state, steered, started
+
+
+def test_a_prompt_change_during_a_stream_sends_one_steer_and_no_cancel():
+    controller, state, steered, started = live_controller(generating=True)
+    controller.tick_live()
+    controller.tick_live()
+    assert steered == ["a person jumps"]
+    assert not state.stream_buffers.cancel
+    assert started == []
+
+
+def test_a_prompt_change_without_a_stream_starts_a_generation_and_sends_no_steer():
+    controller, state, steered, started = live_controller(generating=False)
+    controller.tick_live()
+    assert steered == []
+    assert started == ["a person jumps"]
