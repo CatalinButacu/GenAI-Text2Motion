@@ -46,3 +46,51 @@ def test_data_then_tokenizer_on_the_fixture_writes_one_entry_per_step(tmp_path, 
     assert all(entry["recipe_hash"] == stamp for entry in manifest["steps"].values())
     assert (request.root / f"tokenizer.{stamp}").is_file()
     assert (request.root / "data").read_text(encoding="utf-8") == str(dataset)
+
+
+def test_evaluate_workflow_runs_both_twins_from_one_step_list_and_reruns_skip(
+    tmp_path, monkeypatch
+):
+    dataset = tmp_path / "fixture"
+    build_fixture_dataset(dataset)
+    calls = []
+
+    def record(name):
+        def handler(app, args):
+            backbone = getattr(args, "backbone", None)
+            calls.append(f"{name}:{getattr(backbone, 'value', backbone)}")
+            if name == "sanity-overfit":
+                args.overfit_gate.write_text("{}", encoding="utf-8")
+
+        return handler
+
+    for name, target in (
+        ("prepare", "run_prepare"),
+        ("train-tokenizer", "run_train_tokenizer"),
+        ("tokenize", "run_tokenize"),
+        ("sanity-overfit", "run_sanity_overfit"),
+        ("train-generator", "run_train_generator"),
+    ):
+        monkeypatch.setattr(f"text2motion.app.training.{target}", record(name))
+    monkeypatch.setattr("text2motion.app.serving.run_evaluate", record("evaluate"))
+    paths = SimpleNamespace(hml3d_out_dir=dataset, tokenizer_checkpoint=tmp_path / "tok.pt")
+    app = SimpleNamespace(config=SimpleNamespace(paths=paths))
+    request = RunRequest(
+        workflow=Workflow.EVALUATE, root=tmp_path / "run", tokenizer=TokenizerKind.FINITE_SCALAR
+    )
+
+    run_workflow(app, request)
+    first = list(calls)
+    run_workflow(app, request)
+
+    assert calls == first
+    twins = [call for call in first if call.startswith(("sanity-overfit", "train-generator"))]
+    assert sorted(twins) == [
+        "sanity-overfit:mamba",
+        "sanity-overfit:transformer",
+        "train-generator:mamba",
+        "train-generator:transformer",
+    ]
+    assert first[-1] == "evaluate:both"
+    manifest = json.loads((request.root / MANIFEST_NAME).read_text(encoding="utf-8"))
+    assert len(manifest["steps"]) == 8

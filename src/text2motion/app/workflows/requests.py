@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic import Field
 
 from text2motion.app.cli_requests import DefaultConfigRequest
+from text2motion.generation.contracts import GeneratorTrainingRequest
 from text2motion.tokenization.contracts import TokenizerKind
 
 
@@ -40,4 +41,16 @@ class RunRequest(DefaultConfigRequest):
     epochs: int = Field(default=50, gt=0, description="tokenizer passes over the training set")
     max_steps: int | None = Field(
         default=None, gt=0, description="stop the tokenizer after this many optimizer steps"
+    )
+    tokenizer_ckpt: Path | None = Field(
+        default=None,
+        description="frozen tokenizer checkpoint for the generator steps; default from the config",
+    )
+    overfit_steps: int = Field(
+        default=1000, gt=0, description="maximum optimizer steps of each overfit gate"
+    )
+    generator_epochs: int = Field(
+        default=GeneratorTrainingRequest().epochs,
+        gt=0,
+        description="target epoch of each generator; the same for both backbones",
     )
