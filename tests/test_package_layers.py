@@ -8,14 +8,23 @@ ROOT_PACKAGE = "text2motion"
 MAX_FILES = 10
 ALLOWED = MappingProxyType(
     {
+        "common": frozenset(),
         "motion": frozenset(),
-        "dataset": frozenset({"motion"}),
-        "studio": frozenset({"motion"}),
-        "tokenization": frozenset({"motion", "dataset"}),
-        "generation": frozenset({"motion", "dataset", "tokenization"}),
-        "evaluation": frozenset({"motion", "generation"}),
+        "dataset": frozenset({"common", "motion"}),
+        "studio": frozenset({"common", "motion"}),
+        "tokenization": frozenset({"common", "motion", "dataset"}),
+        "generation": frozenset({"common", "motion", "dataset", "tokenization"}),
+        "evaluation": frozenset({"common", "motion", "generation"}),
         "app": frozenset(
-            {"motion", "dataset", "studio", "tokenization", "generation", "evaluation"}
+            {
+                "common",
+                "motion",
+                "dataset",
+                "studio",
+                "tokenization",
+                "generation",
+                "evaluation",
+            }
         ),
     }
 )
