@@ -6,6 +6,11 @@ import pytest
 import torch
 
 GOLDEN_OUTPUTS_SCRIPT = Path("scripts/qa/golden_outputs.py")
+pytestmark = pytest.mark.skip(
+    reason="A28-T1 (owner 2026-11-25): golden inputs (generator and tokenizer checkpoints, evaluator weights, "
+    "eval stats) were deleted on 2026-11-23; record again with scripts/qa/golden_outputs.py save-generator "
+    "after the causal retrain of both twins"
+)
 
 
 def golden_outputs_module():

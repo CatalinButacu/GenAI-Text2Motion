@@ -2,9 +2,14 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 import torch
 
 GOLDEN_OUTPUTS_SCRIPT = Path("scripts/qa/golden_outputs.py")
+pytestmark = pytest.mark.skip(
+    reason="A28-T1 (owner 2026-11-25): golden inputs runs/checkpoints/tokenizer/*.pt were deleted on "
+    "2026-11-23; record again with scripts/qa/golden_outputs.py save-tokenizer after the causal tokenizer retrain"
+)
 
 
 def golden_outputs_module():

@@ -2,6 +2,13 @@
 
 Master record for the final paper: docs/paper/FINAL_PAPER.md. Use it for every result, contribution and open decision. This file is a diary only.
 
+## Update (2026-11-25, A28-T1 golden tests decision)
+
+- Owner decision: record new golden values (chat 2026-11-25).
+- Module freeze: the only change in tokenization is one import path in reconstruction_metrics.py (text2motion.dataset.datasets -> text2motion.dataset.training.captioned). Re-frozen at 745a968a with an unfreeze and a freeze row in docs/notes/module_ledger.csv. test_module_freeze passes.
+- Tokenizer and generator golden: their inputs (tokenizer and generator checkpoints, evaluator weights, eval stats) were deleted on 2026-11-23, so no new values can be recorded. Both tests are skipped with a named reason. Record them again with scripts/qa/golden_outputs.py after the causal retrain.
+- make check: 842 passed, 3 skipped, exit 0. The gate is green for the first time since 2026-11-23.
+
 ## Update (2026-11-25, A28-T11 steering joint jump; wiring only)
 
 - No generator checkpoint exists in this environment (runs/checkpoints is missing). The measure used the tiny CPU Mamba (random weights), so it shows wiring only, not quality.
