@@ -12,7 +12,7 @@ import threading
 import time
 import traceback
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -61,6 +61,88 @@ class MotionStreamProtocol:
 
 
 ############################################################
+#       StreamSteering
+############################################################
+STEER_JUMP_FRAMES = 16
+CM_PER_M = 100.0
+
+
+@dataclass
+class PendingSteer:
+    prompt: str
+    switch_token: int
+    start: int
+    end: int
+    peak: float = 0.0
+    measured: int = 0
+
+
+@dataclass
+class StreamSteering:
+    every: int
+    downsample: int
+    text: torch.Tensor
+    pending: list[PendingSteer] = field(default_factory=list)
+    previous: np.ndarray | None = None
+    offset: int = 0
+
+    def text_at(self, index: int) -> torch.Tensor:
+        return self.text
+
+    def request(self, prompt: str, text: torch.Tensor, tokens_consumed: int) -> dict:
+        if not self.every:
+            return {
+                "type": "steer_rejected",
+                "reason": "the service runs without anchors; set anchor_every_tokens above 0",
+            }
+        self.text = text
+        switch_token = -(-tokens_consumed // self.every) * self.every
+        start = switch_token * self.downsample
+        self.pending.append(
+            PendingSteer(prompt, switch_token, start, start + STEER_JUMP_FRAMES - 1)
+        )
+        return {"type": "steer_accepted", "prompt": prompt, "switch_token": switch_token}
+
+    def frame_steps(self, joints: np.ndarray) -> np.ndarray:
+        steps = np.zeros(len(joints))
+        steps[1:] = np.linalg.norm(joints[1:] - joints[:-1], axis=-1).max(axis=-1)
+        if self.previous is not None:
+            steps[0] = np.linalg.norm(joints[0] - self.previous, axis=-1).max()
+        return steps
+
+    def observe(self, joints: np.ndarray) -> list[dict]:
+        steps = self.frame_steps(joints)
+        frames = np.arange(self.offset, self.offset + len(joints))
+        reports = []
+        for item in list(self.pending):
+            inside = (frames >= item.start) & (frames <= item.end)
+            if inside.any():
+                item.peak = max(item.peak, float(steps[inside].max()) * CM_PER_M)
+                item.measured += int(inside.sum())
+            if self.offset + len(joints) > item.end:
+                reports.append(self.report(item))
+                self.pending.remove(item)
+        self.previous = joints[-1]
+        self.offset += len(joints)
+        return reports
+
+    def flush(self) -> list[dict]:
+        reports = [self.report(item) for item in self.pending]
+        self.pending.clear()
+        return reports
+
+    def report(self, item: PendingSteer) -> dict:
+        return {
+            "type": "steered",
+            "prompt": item.prompt,
+            "switch_token": item.switch_token,
+            "switch_frame": item.start,
+            "frames_measured": item.measured,
+            "joint_jump_cm": item.peak if item.measured else None,
+        }
+
+
+############################################################
 #       Release
 ############################################################
 @dataclass(frozen=True)
@@ -102,6 +184,12 @@ class MotionInferenceClient:
         self.lock = threading.Lock()
         self.hello = MotionStreamProtocol.recv_json(self.io)
         self.last_stats: dict | None = None
+        self.steer_events: list[dict] = []
+        self.send_lock = threading.Lock()
+
+    def steer(self, prompt: str) -> None:
+        with self.send_lock:
+            MotionStreamProtocol.send_json(self.io, {"cmd": "steer", "prompt": prompt})
 
     def load(self, config: str, ckpt: str, tokenizer_ckpt: str, backbone: str) -> dict:
         with self.lock:
@@ -155,11 +243,14 @@ class MotionInferenceClient:
                             self.io, MotionStreamProtocol.recv_json(self.io)
                         )
                         if should_cancel is not None and should_cancel() and not cancel_sent:
-                            MotionStreamProtocol.send_json(self.io, {"cmd": "cancel"})
+                            with self.send_lock:
+                                MotionStreamProtocol.send_json(self.io, {"cmd": "cancel"})
                             cancel_sent = True
                         yield StreamedChunk(
                             joints=joints, features=features, yaw=float(placement["yaw"])
                         )
+                    elif kind in ("steer_accepted", "steer_rejected", "steered"):
+                        self.steer_events.append(msg)
                     elif kind in ("done", "cancelled"):
                         finished = True
                         self.last_stats = msg.get("stats")
@@ -183,6 +274,8 @@ class MotionInferenceClient:
             kind = msg["type"]
             if kind in ("chunk", "features"):
                 MotionStreamProtocol.recv_array(self.io, msg)
+            elif kind in ("steer_accepted", "steer_rejected", "steered"):
+                continue
             elif kind in ("done", "cancelled", "error"):
                 self.last_stats = msg.get("stats")
                 return
@@ -417,6 +510,9 @@ class MotionInferenceServer:
             )
             synchronize()
             encode_seconds = time.perf_counter() - encode_started
+            steering = StreamSteering(
+                self.pipeline.anchor_every, self.pipeline.downsample, text_emb
+            )
             token_source = self.pipeline.generator.token_generator.stream_token_indices(
                 text_emb,
                 int(request["steps"]),
@@ -429,6 +525,7 @@ class MotionInferenceServer:
                 anchors=StreamAnchors(
                     every=self.pipeline.anchor_every,
                     context=self.pipeline.anchor_context,
+                    text_at=steering.text_at if self.pipeline.anchor_every else None,
                 ),
             )
             for chunk in self.pipeline.decoder.stream_tokens(timed_tokens(token_source)):
@@ -441,7 +538,18 @@ class MotionInferenceServer:
                 MotionStreamProtocol.send_json(io, {"type": "placement", "yaw": carried_yaw})
                 MotionStreamProtocol.send_array(io, "features", features)
                 timing.setdefault("first_chunk", time.perf_counter() - started)
+                for report in steering.observe(joints):
+                    MotionStreamProtocol.send_json(io, report)
                 interrupting = pending_request(sock, io)
+                if interrupting is not None and interrupting.get("cmd") == "steer":
+                    new_text = self.pipeline.generator.text_encoder([interrupting["prompt"]]).to(
+                        self.pipeline.device
+                    )
+                    MotionStreamProtocol.send_json(
+                        io,
+                        steering.request(interrupting["prompt"], new_text, timing["tokens"]),
+                    )
+                    interrupting = None
                 timing["send"] += time.perf_counter() - send_started
                 cancelled = interrupting is not None
                 if interrupting is not None and interrupting.get("cmd") != "cancel":
@@ -452,6 +560,8 @@ class MotionInferenceServer:
                 if cancelled:
                     break
 
+        for report in steering.flush():
+            MotionStreamProtocol.send_json(io, report)
         elapsed = time.perf_counter() - started
         logger.info(
             f"[service] {'cancelled' if cancelled else 'done'} {frames} frames in {elapsed:.2f}s "
@@ -568,6 +678,10 @@ class MotionInferenceServer:
                 return False
             elif command == "cancel":
                 continue
+            elif command == "steer":
+                MotionStreamProtocol.send_json(
+                    io, {"type": "steer_rejected", "reason": "no stream is running"}
+                )
             else:
                 MotionStreamProtocol.send_json(
                     io, {"type": "error", "message": f"unknown cmd {command!r}"}

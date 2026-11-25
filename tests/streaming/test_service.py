@@ -236,3 +236,94 @@ def test_inference_stats_report_the_time_to_the_first_chunk():
 
     assert stats["first_chunk_ms"] == 250.0
     assert stats["ms_per_step"] == 40.0
+
+
+class _SteerablePipeline(_EndlessPipeline):
+    anchor_every = 4
+
+    def __init__(self) -> None:
+        import time
+        from types import SimpleNamespace
+
+        import torch
+
+        def text_encoder(prompts):
+            return torch.full((1, 512), 5.0 if prompts[0] == "run" else 0.0)
+
+        def tokens(text, steps, sampling, anchors):
+            index = 0
+            while index < steps:
+                if index and index % anchors.every == 0:
+                    text = anchors.text_at(index)
+                time.sleep(0.01)
+                yield torch.full((1, 2), int(text[0, 0].item()), dtype=torch.long)
+                index += 1
+
+        def chunks(token_iter):
+            for token in token_iter:
+                yield torch.full((1, 4, 263), float(token[0, 0].item()))
+
+        self.generator = SimpleNamespace(
+            text_encoder=text_encoder, token_generator=SimpleNamespace(stream_token_indices=tokens)
+        )
+        self.decoder = SimpleNamespace(stream_tokens=chunks)
+
+
+def test_steer_during_a_stream_keeps_the_stream_and_reports_the_joint_jump_in_cm():
+    client_side, io, thread = serve_in_thread(_SteerablePipeline())
+    assert MotionStreamProtocol.recv_json(io)["type"] == "hello"
+    MotionStreamProtocol.send_json(
+        io,
+        {
+            "cmd": "generate",
+            "prompt": "walk",
+            "steps": 60,
+            "temperature": 1.0,
+            "top_p": 0.9,
+            "cfg_scale": 1.0,
+        },
+    )
+    header = MotionStreamProtocol.recv_json(io)
+    assert header["type"] == "chunk"
+    MotionStreamProtocol.recv_array(io, header)
+    MotionStreamProtocol.send_json(io, {"cmd": "steer", "prompt": "run"})
+    kinds = []
+    steered = None
+    frames = 0
+    while True:
+        msg = MotionStreamProtocol.recv_json(io)
+        kinds.append(msg["type"])
+        if msg["type"] == "chunk":
+            frames += len(MotionStreamProtocol.recv_array(io, msg))
+        elif msg["type"] == "features":
+            MotionStreamProtocol.recv_array(io, msg)
+        elif msg["type"] == "steered":
+            steered = msg
+        elif msg["type"] in ("done", "cancelled", "error"):
+            last = msg
+            break
+    assert last["type"] == "done"
+    assert "cancelled" not in kinds
+    assert kinds.count("steer_accepted") == 1
+    assert steered is not None
+    assert steered["prompt"] == "run"
+    assert steered["switch_token"] % 4 == 0
+    assert steered["frames_measured"] > 0
+    assert steered["joint_jump_cm"] > 0
+    assert last["frames"] == 60 * 4
+    assert frames + 4 == 60 * 4
+    MotionStreamProtocol.send_json(io, {"cmd": "shutdown"})
+    assert MotionStreamProtocol.recv_json(io)["type"] == "bye"
+    thread.join(timeout=5)
+    client_side.close()
+
+
+def test_steer_without_a_running_stream_is_rejected():
+    client_side, io, thread = serve_in_thread(_HelloOnlyPipeline())
+    assert MotionStreamProtocol.recv_json(io)["type"] == "hello"
+    MotionStreamProtocol.send_json(io, {"cmd": "steer", "prompt": "run"})
+    assert MotionStreamProtocol.recv_json(io)["type"] == "steer_rejected"
+    MotionStreamProtocol.send_json(io, {"cmd": "shutdown"})
+    assert MotionStreamProtocol.recv_json(io)["type"] == "bye"
+    thread.join(timeout=5)
+    client_side.close()
