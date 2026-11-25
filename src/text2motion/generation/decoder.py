@@ -4,10 +4,11 @@ import contextlib
 import queue as queue_mod
 from collections import deque
 from collections.abc import Iterable, Iterator
+from enum import Enum
 
 import torch
 
-from text2motion.generation.contracts import DEFAULT_SAMPLING, SamplingConfig
+from text2motion.generation.contracts import DEFAULT_SAMPLING, SamplingConfig, StreamAnchors
 from text2motion.generation.nn_generator import MotionTokenGenerator
 from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
 
@@ -139,3 +140,60 @@ class StreamingMotionDecoder:
         yield from self.stream_tokens(
             generator.stream_token_indices(text_emb, num_steps, sampling=sampling)
         )
+
+
+############################################################
+#       Caption steering
+############################################################
+class SteeringMode(Enum):
+    REANCHOR = "reanchor"
+    CROSSFADE = "crossfade"
+
+
+@torch.no_grad()
+def steer_stream(
+    generator: MotionTokenGenerator,
+    decoder: StreamingMotionDecoder,
+    old_text: torch.Tensor,
+    new_text: torch.Tensor,
+    num_steps: int,
+    switch_token: int,
+    mode: SteeringMode,
+    sampling: SamplingConfig = DEFAULT_SAMPLING,
+    anchor_every: int = 4,
+    anchor_context: int = 8,
+    blend_frames: int = 16,
+) -> Iterator[tuple[int, torch.Tensor]]:
+    if not 0 < switch_token < num_steps:
+        raise ValueError("switch_token must lie inside the stream")
+    frame_index = 0
+    if mode is SteeringMode.REANCHOR:
+        if switch_token % anchor_every:
+            raise ValueError("switch_token must be a multiple of anchor_every")
+        anchors = StreamAnchors(
+            every=anchor_every,
+            context=anchor_context,
+            text_at=lambda index: old_text if index < switch_token else new_text,
+        )
+        for chunk in decoder.stream_tokens(
+            generator.stream_token_indices(old_text, num_steps, sampling, anchors=anchors)
+        ):
+            yield frame_index, chunk
+            frame_index += chunk.shape[1]
+        return
+    if blend_frames < 1:
+        raise ValueError("blend_frames must be positive")
+    start = switch_token * decoder.downsample
+    old_chunks = decoder.stream_tokens(
+        generator.stream_token_indices(old_text, num_steps, sampling)
+    )
+    new_chunks = decoder.stream_tokens(
+        generator.stream_token_indices(new_text, num_steps, sampling)
+    )
+    for old_chunk, new_chunk in zip(old_chunks, new_chunks, strict=True):
+        frames = torch.arange(
+            frame_index, frame_index + old_chunk.shape[1], device=old_chunk.device
+        )
+        weight = ((frames - start + 1) / blend_frames).clamp(0.0, 1.0)[None, :, None]
+        yield frame_index, old_chunk * (1.0 - weight) + new_chunk * weight
+        frame_index += old_chunk.shape[1]
