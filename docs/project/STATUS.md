@@ -2,6 +2,18 @@
 
 Master record for the final paper: docs/paper/FINAL_PAPER.md. Use it for every result, contribution and open decision. This file is a diary only.
 
+## Update (2026-11-26, A28-T14 final gate of epic A28; blocked on pyright)
+
+- make check: exit 0. ruff passes. pytest: 851 passed, 3 skipped, 15 deselected, 0 failed, 221 s.
+- pyright on the full repo: 99 errors, 0 warnings, 282 files. The criterion is 0, so it is not met.
+- The 99 errors are in 6 files that A28 commits did not change: studio/panels.py 87, studio/viewer.py 1, scripts/qa/studio_controls_test.py 7, scripts/qa/studio_human_test.py 1, scripts/checks/reproduce_reference_clip.py 2, scripts/dataset/validate_reference_joints.py 1.
+- 96 of them are imgui errors. Likely cause (not tested): the self-built Python 3.14 imgui wheel in third_party/wheels gives pyright no type information. The other 3 are in 2 untracked scripts.
+- check_problems.py --check on the 32 Python files of the A28 commits: 2 problems before, 0 after. Fixed: C901 in app/service.py (steer handling moved to apply_steer, which raises if no model is loaded); G02 in common/runner.py (Run is now a type alias statement).
+- check_problems.py --check on the uncommitted files (run before the fix): 4 problems, not fixed: dataset/pipeline.py SIM108 1, reproduce_reference_clip.py 2, validate_reference_joints.py 1. All 3 files are untracked owner work.
+- tests/test_package_layers.py with tests/app/test_import_boundaries.py: 7 passed. test_package_layers alone: 2 passed.
+- docs/project/ARCHITECTURE.md updated: 8 packages with common and dataset, import table, run workflows, training engine, steering.
+- OWNER decision: (a) add imgui type stubs under typings/ and fix the 2 scripts in a new task, or (b) accept pyright 0 on the A28 files only.
+
 ## Update (2026-11-25, A28-T1 golden tests decision)
 
 - Owner decision: record new golden values (chat 2026-11-25).

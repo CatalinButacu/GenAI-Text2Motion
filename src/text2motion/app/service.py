@@ -467,6 +467,19 @@ class MotionInferenceServer:
         self.inference_log = Path(inference_log) if inference_log else None
         self.deferred_request: dict | None = None
 
+    def apply_steer(
+        self, io, request: dict | None, steering: StreamSteering, token: int
+    ) -> dict | None:
+        if request is None or request.get("cmd") != "steer":
+            return request
+        if self.pipeline is None:
+            raise RuntimeError("steer needs a loaded model")
+        new_text = self.pipeline.generator.text_encoder([request["prompt"]]).to(
+            self.pipeline.device
+        )
+        MotionStreamProtocol.send_json(io, steering.request(request["prompt"], new_text, token))
+        return None
+
     def handle_generate(self, sock: socket.socket, io, request: dict) -> None:
         if self.pipeline is None:
             MotionStreamProtocol.send_json(
@@ -540,16 +553,9 @@ class MotionInferenceServer:
                 timing.setdefault("first_chunk", time.perf_counter() - started)
                 for report in steering.observe(joints):
                     MotionStreamProtocol.send_json(io, report)
-                interrupting = pending_request(sock, io)
-                if interrupting is not None and interrupting.get("cmd") == "steer":
-                    new_text = self.pipeline.generator.text_encoder([interrupting["prompt"]]).to(
-                        self.pipeline.device
-                    )
-                    MotionStreamProtocol.send_json(
-                        io,
-                        steering.request(interrupting["prompt"], new_text, timing["tokens"]),
-                    )
-                    interrupting = None
+                interrupting = self.apply_steer(
+                    io, pending_request(sock, io), steering, timing["tokens"]
+                )
                 timing["send"] += time.perf_counter() - send_started
                 cancelled = interrupting is not None
                 if interrupting is not None and interrupting.get("cmd") != "cancel":

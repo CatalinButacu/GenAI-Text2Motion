@@ -1,37 +1,43 @@
 # Architecture -- top-down, measured
 
-Grounded in the code and enforced by `tests/app/test_import_boundaries.py`, not aspirational.
-The source is split into six stages under `src/text2motion/`.
+Enforced by `tests/test_package_layers.py` (source of truth) and
+`tests/app/test_import_boundaries.py` (a wider envelope for `evaluation`).
+The source is split into eight packages under `src/text2motion/`.
 
 ## The layering
 
 Static dependency inspection gives an acyclic package graph; runtime imports are not checked here.
 
 ```
-  L5  app          configuration, composition, checkpoints, CLI commands, service IPC
-  L4  evaluation   Guo metrics and streaming benchmarks
-      studio       SMPL-X fitting and the aitviewer studio
-  L3  generation   Mamba/transformer twins, text encoder, training, bounded decode
-  L2  tokenization FSQ/RVQ tokenizer, corpus encoding, training
-  L1  motion       HumanML3D-263 contract, data, preparation, kinematics
+  L6  app          configuration, composition, checkpoints, CLI commands, workflows, service IPC
+  L5  evaluation   Guo metrics and streaming benchmarks
+  L4  generation   Mamba/transformer twins, text encoder, training, bounded decode, steering
+  L3  tokenization FSQ/RVQ tokenizer, corpus encoding, training
+  L2  dataset      source preparation, splits, loaders, test fixture
+      studio       SMPL-X fitting and the aitviewer studio (imports motion and common only)
+  L1  motion       HumanML3D-263 contract, kinematics
+  L0  common       step runner, recipe hash, manifest, training engine
 ```
 
-Allowed dependencies:
+Allowed dependencies (each package may also import itself):
 
-| package | depends on |
+| package | may import |
 |---|---|
-| `motion` | `motion` |
-| `tokenization` | `motion`, `tokenization` |
-| `generation` | `motion`, `tokenization`, `generation` |
-| `evaluation` | `motion`, `tokenization`, `generation`, `evaluation` |
-| `studio` | `motion`, `studio` |
-| `app` | all stages; composition root |
+| `common` | nothing |
+| `motion` | nothing |
+| `dataset` | `common`, `motion` |
+| `studio` | `common`, `motion` |
+| `tokenization` | `common`, `motion`, `dataset` |
+| `generation` | `common`, `motion`, `dataset`, `tokenization` |
+| `evaluation` | `common`, `motion`, `generation` |
+| `app` | all packages; composition root |
 
-The table lists the allowed dependency envelope; the boundary test rejects imports outside it.
+Each package holds at most 10 Python files. A subpackage takes the overflow.
 
-`app/` is flat, with exactly ten Python modules:
+`app/` has exactly ten Python modules:
 `__init__.py`, `bootstrap.py`, `checkpoint.py`, `cli.py`, `cli_requests.py`,
 `config.py`, `run_log.py`, `service.py`, `training.py`, and `serving.py`.
+The `app/workflows/` subpackage holds the `run` command.
 `service.py` owns the wire protocol, client, server startup, and inference server.
 `training.py` owns preparation and training commands; `serving.py` owns serving and evaluation.
 
@@ -39,12 +45,27 @@ The table lists the allowed dependency envelope; the boundary test rejects impor
 
 | package | owns | must NOT |
 |---|---|---|
-| `motion` | 263 representation, preparation, datasets, joint recovery | know about tokenizers, generators, metrics, or rendering |
+| `common` | `Step` and `run_steps`, recipe hash, manifest, the shared training engine | import another package |
+| `motion` | 263 representation and joint recovery | know about tokenizers, generators, metrics, or rendering |
+| `dataset` | preparation, splits, loaders, the CPU test fixture | know about tokenizers or generators |
 | `tokenization` | tokenizer architectures, corpus encoding, reconstruction training/eval | know about generators or application wiring |
 | `generation` | twins, encoder, losses, training, decode | import evaluation, studio, or app |
 | `evaluation` | frozen Guo matcher, FID/R-precision/Diversity, benchmarks | mutate models or write checkpoints |
 | `studio` | aitviewer meshes/skeletons and SMPL-X fitting | duplicate motion representation math |
 | `app` | config, checkpoints, composition, CLI, service IPC | leak wiring into lower stages |
+
+## Workflows, training engine and steering (epic A28)
+
+- `text2motion run` runs one workflow: `data`, `tokenizer`, `generator` or `evaluate`.
+  `app/workflows/steps.py` builds each as a list of `Step` objects over the CLI handlers.
+  One step list serves both twins. `run_steps` skips a finished step by recipe hash (ADR 0006).
+- `common/engine.py` `run_epochs` is the one epoch loop of `tokenizer_trainer`,
+  `generator_trainer` and `pretrain`. It holds the clean validation cross-entropy history.
+  Parity values: `tests/generation/trainer_parity.json`.
+- `generation/decoder.py` `steer_stream` changes the prompt inside a stream: `REANCHOR` or
+  `CROSSFADE`. The service command `steer` uses re-anchor and reports the joint jump in cm.
+  Studio live mode sends `steer` on a prompt change. The choice is provisional: it was measured
+  on a tiny random model only (`docs/notes/steering_joint_jump.csv`).
 
 ## The ">5 collaborators" rule
 
@@ -109,22 +130,8 @@ window (`tests/studio/test_studio_composition.py`). That was impossible under th
 
 ## Re-check commands
 
-```
-python - <<'PY'   # cycles + layer violations
-import ast,pathlib,collections
-pkg=collections.defaultdict(set)
-for p in pathlib.Path('src/text2motion').rglob('*.py'):
-    if '__pycache__' in str(p): continue
-    parts=p.relative_to('src/text2motion').parts
-    src=parts[0] if len(parts)>1 else 'root'
-    for n in ast.walk(ast.parse(p.read_text(encoding='utf-8'))):
-        if isinstance(n,ast.ImportFrom) and (n.module or '').startswith('text2motion'):
-            seg=(n.module or '').split('.'); dst=seg[1] if len(seg)>1 else 'root'
-            if dst!=src: pkg[src].add(dst)
-edges={(a,b) for a,v in pkg.items() for b in v}
-print('cycles:',[(a,b) for a,b in edges if (b,a) in edges and a<b] or 'NONE')
-order=['motion','tokenization','generation','evaluation','studio','app']
-rank={n:i for i,n in enumerate(order)}
-print('violations:',[(a,b) for a,b in edges if rank.get(b,-1)>rank.get(a,99)] or 'NONE')
-PY
+```powershell
+make check
+make types
+.\.venv\Scripts\python.exe -m pytest tests/test_package_layers.py tests/app/test_import_boundaries.py -q
 ```

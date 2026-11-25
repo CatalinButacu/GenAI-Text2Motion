@@ -6,7 +6,7 @@ from pathlib import Path
 
 from text2motion.common.fingerprint import recipe_hash
 
-Run = Callable[[dict[str, Path], Path], None]
+type Run = Callable[[dict[str, Path], Path], None]
 
 
 @dataclass(frozen=True)
