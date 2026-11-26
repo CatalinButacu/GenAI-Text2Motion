@@ -391,3 +391,11 @@ def test_a_row_with_an_extra_field_fails_loud(monkeypatch, tmp_path):
 
     with pytest.raises(runner.RunnerError, match="one value per header column"):
         runner.run_epic("A1", 5, tables, work, no_replan)
+
+
+def test_a_missing_graphify_fails_loud(monkeypatch):
+    runner = runner_module(monkeypatch)
+    monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+
+    with pytest.raises(runner.RunnerError, match="graphify"):
+        runner.refresh_graph()

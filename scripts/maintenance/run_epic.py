@@ -40,6 +40,8 @@ Finish criterion: {finish_criterion}
 
 Rules:
 - Follow AGENTS.md and CLAUDE.md. Work on this task only.
+- Write short sentences. Report your work as numbered steps: step, reason, result.
+- Before you search code, run `graphify query "<topic>" --budget 1500`. The runner refreshed the graph just before this session.
 - Do not start GPU jobs, training, downloads or any public action.
 - Tests that already fail before your change are not yours: do not edit, skip or revert anything to make them pass, and do not touch tests/golden or the module ledger. Name them in evidence.
 - In epic_tasks.csv, edit only the status, evidence and updated fields of row {id}. Do not edit epics.csv.
@@ -52,6 +54,8 @@ Task: {task}
 Finish criterion: {finish_criterion}
 Reason in its evidence: {evidence}
 
+- Write short sentences. Report your work as numbered steps: step, reason, result.
+- Before you search code, run `graphify query "<topic>" --budget 1500`. The runner refreshed the graph just before this session.
 Decide which case applies, do only that, then stop. Do not do the task itself.
 A) The blocker needs the owner: a decision, a login, the supervisor, a GPU job, money, a public action,
    or a change to a thesis claim (AGENTS.md step 7 stop points). Leave status blocked.
@@ -64,6 +68,7 @@ PLAN_PROMPT = """Read the owner's direction in {direction}.
 Read AGENTS.md, the newest 3 entries of docs/project/STATUS.md, docs/project/epics.csv and docs/project/epic_tasks.csv.
 Run `graphify query "<topic>" --budget 1500` for the code areas the direction touches.
 
+- Write short sentences. Report your work as numbered steps: step, reason, result.
 Plan one epic that follows the direction:
 - Add one row to epics.csv: id {epic_id}, state {state}, the question, depends_on, time_box, budget,
   a measurable finish_criterion, the task ids, updated {today}.
@@ -414,6 +419,7 @@ def build_command(
 def run_session(
     command: list[str], label: str, timeout_s: float, session_env: Mapping[str, str]
 ) -> None:
+    refresh_graph()
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = LOG_DIR / f"{label}_{stamp}.json"
@@ -499,6 +505,15 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
 
     return parser.parse_args(argv)
+
+
+def refresh_graph() -> None:
+    graphify = shutil.which("graphify")
+
+    if graphify is None:
+        raise RunnerError("'graphify' is not on PATH; the sessions need a fresh code graph")
+
+    subprocess.run([graphify, "update", "."], cwd=REPO, capture_output=True, check=True)
 
 
 def find_claude(name: str) -> str:
