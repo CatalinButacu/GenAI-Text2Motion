@@ -23,8 +23,8 @@ from text2motion.evaluation.metrics import (
     motion_statistics,
     own_caption_ranks,
     r_precision,
-    transition_statistics,
 )
+from text2motion.evaluation.transition.statistics import transition_statistics
 from text2motion.generation.contracts import (
     Backbone,
     SamplingConfig,

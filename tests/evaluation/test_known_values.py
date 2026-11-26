@@ -9,6 +9,7 @@ from text2motion.evaluation.metrics import (
     motion_statistics,
     r_precision,
 )
+from text2motion.evaluation.transition.statistics import transition_statistics
 from text2motion.motion.representation import FPS, RAW_OFFSETS, kinematic_bones
 
 JOINTS = 22
@@ -32,16 +33,16 @@ def test_flowmdm_jerk_profile_uses_l1_coordinates_then_maximum_joint():
 def test_transition_contacts_use_the_common_floor_and_do_not_hide_airborne_feet():
     joints = standing_motion()
     joints[:, :, 0] += np.arange(len(joints))[:, None] * 0.01
-    floor = metrics.transition_statistics(joints, 50)
+    floor = transition_statistics(joints, 50)
     assert floor["foot_skate_m_per_s"] == pytest.approx(0.2)
     assert floor["bone_relative_deviation"] == pytest.approx(0.0, abs=1e-12)
     joints[:, :, 1] += 0.2
-    raised = metrics.transition_statistics(joints, 50)
+    raised = transition_statistics(joints, 50)
     assert raised["foot_skate_m_per_s"] is None
     assert raised["foot_contact_fraction"] == 0
     assert raised["all_feet_above_floor_10cm_fraction"] == 1
     joints[:, :, 1] -= 0.23
-    lowered = metrics.transition_statistics(joints, 50)
+    lowered = transition_statistics(joints, 50)
     assert lowered["feet_below_floor_2cm_fraction"] == 1
 
 

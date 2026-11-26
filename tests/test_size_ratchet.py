@@ -13,7 +13,6 @@ SOURCE_PREFIX = "src/text2motion/"
 ALLOWED = MappingProxyType(
     {
         "file": (
-            "evaluation/metrics.py",
             "evaluation/nn_matcher.py",
             "generation/training/trainer.py",
             "generation/model/generator.py",
@@ -27,7 +26,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "evaluation/metrics.py::transition_statistics",
             "evaluation/nn_matcher.py::GuoEvaluationResources.from_frozen_guo_assets",
             "generation/decoder.py::measure_decoder_context",
             "generation/decoder.py::steer_stream",
