@@ -27,8 +27,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "dataset/training/windows.py::MotionWindowDataset.__init__",
-            "dataset/training/windows.py::MotionWindowDataset.load_windowable_clips",
             "evaluation/metrics.py::transition_statistics",
             "evaluation/nn_matcher.py::GuoEvaluationResources.from_frozen_guo_assets",
             "generation/decoder.py::measure_decoder_context",
