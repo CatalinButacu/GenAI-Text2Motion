@@ -42,10 +42,22 @@ class StudioSession:
         self.model_dir = model_dir
         self.apply_model_limits(client.hello)
 
+        self.apply_sampling_settings(args)
+        self.apply_display_settings(config)
+        self.apply_fit_defaults(model_dir, config)
+        self.load_launch_models(args, config)
+        self.start_prompt_state()
+        self.build_runtime_parts(scene)
+        self.follow_cam = True
+        self.styled = False
+
+    def apply_sampling_settings(self, args: StudioLaunchArguments) -> None:
         self.temperature = float(args.temperature)
         self.top_p = float(args.top_p)
         self.cfg_scale = float(args.cfg_scale)
         self.steps = resolve_step_budget(args, self.downsample, self.max_steps)
+
+    def apply_display_settings(self, config: StudioConfig) -> None:
         self.window_frames = int(config.display.window_frames)
         self.fit_lookahead_chunks = int(config.display.fit_lookahead_chunks)
         self.stream_lead_frames = int(config.display.stream_lead_frames)
@@ -54,12 +66,14 @@ class StudioSession:
             raise ValueError(f"display.upsample must be >= 1, got {self.upsample}")
         self.window_steps = max(8, self.window_frames // self.downsample)
 
+    def apply_fit_defaults(self, model_dir: str, config: StudioConfig) -> None:
         self.gender_idx = 0
         self.fit_body = bool(model_dir)
         self.show_skin = True
         self.skin_color = config.appearance.skin_color
         self.user_betas = np.zeros(config.fit.num_betas, dtype=np.float32)
 
+    def load_launch_models(self, args: StudioLaunchArguments, config: StudioConfig) -> None:
         self.backbone = args.backbone
         launch_entry = StudioModelEntry(
             name=Path(str(args.ckpt)).stem,
@@ -74,19 +88,18 @@ class StudioSession:
         self.loading_model = False
         self.load_status = f"active: {self.models[self.model_idx].label}"
 
+    def start_prompt_state(self) -> None:
         self.prompt_text = ""
         self.status = "ready -- describe a motion below and press Enter"
         self.generating = False
         self.history: list[str] = []
 
+    def build_runtime_parts(self, scene) -> None:
         self.live = LiveGenerationDebouncer()
         self.live.signature = (self.temperature, self.top_p, self.steps)
         self.stream_buffers = StudioStreamBuffers()
         self.smplx_fit = SmplxFitState()
         self.nodes = StudioSceneNodes(scene)
-        self.follow_cam = True
-
-        self.styled = False
 
     def apply_model_limits(self, hello: dict) -> None:
         def default_step_budget(trained_steps: int, max_steps: int) -> int:
