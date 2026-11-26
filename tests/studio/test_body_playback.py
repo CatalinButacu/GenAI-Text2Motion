@@ -71,12 +71,12 @@ def test_playhead_runs_free_once_fitting_has_stopped():
 def test_a_new_take_makes_the_running_fit_stale():
     buffers = StudioStreamBuffers()
     buffers.fit_take = buffers.take
-    assert not buffers.fit_is_stale()
+    assert not buffers.fit_track.fit_is_stale()
     buffers.take += 1
-    assert buffers.fit_is_stale()
+    assert buffers.fit_track.fit_is_stale()
     buffers.fit_take = buffers.take
     buffers.cancel = True
-    assert buffers.fit_is_stale()
+    assert buffers.fit_track.fit_is_stale()
 
 
 @pytest.mark.parametrize("upsample", [1, 3])

@@ -43,7 +43,7 @@ class SmplxAvatarController:
         if self.state.device == "cuda":
             torch.cuda.empty_cache()
         model = self.body.body_model(frames, gender)
-        if self.state.stream_buffers.fit_is_stale():
+        if self.state.stream_buffers.fit_track.fit_is_stale():
             return
         res = solve_smplx_pose_from_joints(model, joints, self.state.device)
         self.state.stream_buffers.fit_progress = 1.0
@@ -52,7 +52,7 @@ class SmplxAvatarController:
         display_verts = self.body.shaped_vertices(
             self.body.body_model(display_frames, gender), display, display_frames
         )
-        appended = self.state.stream_buffers.append_fitted_chunk(
+        appended = self.state.stream_buffers.fit_track.append_fitted_chunk(
             self.state.smplx_fit, display_verts, display.faces, display
         )
         if not appended:
@@ -118,7 +118,7 @@ class SmplxAvatarController:
             self.state.stream_buffers.fit_take = self.state.stream_buffers.take
         self.state.stream_buffers.fitting = True
         self.state.status = "fitting SMPL-X to the generated motion..."
-        self.state.stream_buffers.reset_fit_track(self.state.smplx_fit)
+        self.state.stream_buffers.fit_track.reset_fit_track(self.state.smplx_fit)
         threading.Thread(
             target=self.fit_existing_motion,
             args=(source[-frames - 1 :].copy(), frames),

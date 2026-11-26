@@ -5,6 +5,8 @@ import threading
 
 import numpy as np
 
+from text2motion.studio.session.fit_track import StudioFitTrack
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,6 +36,7 @@ class StudioStreamBuffers:
         self.frames_emitted = 0
         self.last_body_lag = -1
         self.fit_progress: float | None = None
+        self.fit_track = StudioFitTrack(self)
 
     def drain(self) -> tuple[list, list, tuple | None]:
         with self.lock:
@@ -53,24 +56,6 @@ class StudioStreamBuffers:
     def push_remesh(self, verts: np.ndarray, faces: np.ndarray, is_rest: bool) -> None:
         with self.lock:
             self.pending_remesh = (verts, faces, is_rest)
-
-    def append_fitted_chunk(self, fit, verts, faces, res) -> bool:
-        with self.lock:
-            if self.fit_is_stale():
-                return False
-            self.pending_body_chunks.append((verts, faces))
-            fit.orient.append(res.global_orient)
-            fit.pose.append(res.body_pose)
-            fit.transl.append(res.transl)
-            if fit.betas is None:
-                fit.betas = res.betas
-            return True
-
-    def reset_fit_track(self, fit) -> None:
-        with self.lock:
-            self.pending_body_chunks = []
-            self.fit_anchor = None
-            fit.reset_track()
 
     def add_source_joints(self, joints: np.ndarray) -> None:
         with self.lock:
@@ -94,6 +79,3 @@ class StudioStreamBuffers:
     @property
     def body_frames(self) -> int:
         return 0 if self.body_verts is None else len(self.body_verts)
-
-    def fit_is_stale(self) -> bool:
-        return self.cancel or self.fit_take != self.take

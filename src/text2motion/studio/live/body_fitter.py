@@ -35,7 +35,7 @@ class BodyFitter:
                 chunk = fit_queue.get()
                 if chunk is None:
                     break
-                if buffers.fit_is_stale():
+                if buffers.fit_track.fit_is_stale():
                     continue
                 n_frames += len(chunk.joints) * self.state.upsample
                 self.avatar.fit_single_chunk(chunk.joints, n_frames, self.state.upsample)

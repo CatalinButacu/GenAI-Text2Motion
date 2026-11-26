@@ -117,9 +117,9 @@ def test_append_fitted_chunk_keeps_body_and_fit_track_aligned():
     buf, fit = StudioStreamBuffers(), SmplxFitState()
     buf.fit_take = buf.take
     for _ in range(3):
-        assert buf.append_fitted_chunk(fit, "verts", "faces", FitResult())
+        assert buf.fit_track.append_fitted_chunk(fit, "verts", "faces", FitResult())
     buf.take += 1
-    assert not buf.append_fitted_chunk(fit, "verts", "faces", FitResult())
+    assert not buf.fit_track.append_fitted_chunk(fit, "verts", "faces", FitResult())
 
     assert len(buf.pending_body_chunks) == len(fit.orient) == 3
     assert len(fit.pose) == len(fit.transl) == 3
@@ -137,9 +137,9 @@ def test_reset_fit_track_clears_both_sides_together():
         betas = "b"
 
     buf, fit = StudioStreamBuffers(), SmplxFitState()
-    buf.append_fitted_chunk(fit, "v", "f", FitResult())
+    buf.fit_track.append_fitted_chunk(fit, "v", "f", FitResult())
 
-    buf.reset_fit_track(fit)
+    buf.fit_track.reset_fit_track(fit)
 
     assert buf.pending_body_chunks == []
     assert (fit.orient, fit.pose, fit.transl, fit.betas) == ([], [], [], None)
