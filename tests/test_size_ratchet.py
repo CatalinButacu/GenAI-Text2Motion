@@ -14,7 +14,6 @@ ALLOWED = MappingProxyType(
     {
         "file": (
             "app/service/handlers.py",
-            "app/runtime/context.py",
             "dataset/sources/amass/corpus.py",
             "evaluation/metrics.py",
             "evaluation/nn_matcher.py",
@@ -30,7 +29,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "app/runtime/context.py::ApplicationContext.load_text_to_motion_generator",
             "app/runtime/run_log.py::start_run",
             "app/service/client.py::MotionInferenceClient.generate",
             "app/service/handlers.py::MotionInferenceServer.handle_generate",

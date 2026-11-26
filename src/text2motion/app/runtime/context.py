@@ -15,6 +15,11 @@ from text2motion.app.config.schema import (
 )
 from text2motion.app.runtime.checkpoint import load_generator_checkpoint
 from text2motion.app.runtime.environment import apply_precision, resolve_device, seed_everything
+from text2motion.app.runtime.generator_loading import (
+    require_text_encoder_state,
+    resolve_text_encoder_state,
+    verify_generator_bundle,
+)
 from text2motion.app.runtime.run_log import ensure_logging_configured
 from text2motion.dataset.training.module import MotionDataModule
 from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
@@ -121,31 +126,13 @@ class ApplicationContext:
         token_generator_state, text_encoder_state, generator_bundle = load_generator_checkpoint(
             checkpoint, map_location=self.device
         )
-        if generator_bundle is not None:
-            generator_bundle.verify_tokenizer(tokenizer_checkpoint)
-            generator_bundle.verify_generator_config(generator_spec.as_dict())
+        verify_generator_bundle(generator_bundle, tokenizer_checkpoint, generator_spec)
         token_generator.load_state_dict(token_generator_state)
 
-        if text_encoder_state is None and text_encoder_checkpoint:
-            text_encoder_checkpoint_payload = torch.load(
-                text_encoder_checkpoint, map_location=self.device, weights_only=True
-            )
-            if "text_encoder" not in text_encoder_checkpoint_payload:
-                raise KeyError(
-                    f"{text_encoder_checkpoint} has no 'text_encoder' entry (keys: {list(text_encoder_checkpoint_payload)})"
-                )
-            text_encoder_state = text_encoder_checkpoint_payload["text_encoder"]
-
-        trains_clip = (
-            self.config.text_encoder.unfreeze_last_n > 0
-            or self.config.text_encoder.unfreeze_projection
+        text_encoder_state = resolve_text_encoder_state(
+            text_encoder_state, text_encoder_checkpoint, self.device
         )
-        if text_encoder_state is None and trains_clip:
-            raise RuntimeError(
-                "this config trains CLIP, but the generator checkpoint contains no matching "
-                "text-encoder state. Use an atomic generator bundle, or pass an explicit "
-                "text-encoder checkpoint for a documented legacy evaluation."
-            )
+        require_text_encoder_state(self.config, text_encoder_state)
 
         return TextToMotionGenerator(
             token_generator, self.load_text_encoder(text_encoder_state).eval(), tokenizer
