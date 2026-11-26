@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import logging
-import os
 import socket
-import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
 
+import numpy as np
+
 from text2motion.app.service.protocol import MotionStreamProtocol, Release, ServiceAddress
+from text2motion.app.service.spawn import (
+    motion_server_command,
+    motion_server_env,
+    spawn_detached_process,
+)
 from text2motion.motion.contracts import StreamedChunk
 
 logger = logging.getLogger(__name__)
@@ -61,52 +65,71 @@ class MotionInferenceClient:
         should_cancel=None,
     ):
         with self.lock:
-            MotionStreamProtocol.send_json(
-                self.io,
-                {
-                    "cmd": "generate",
-                    "prompt": prompt,
-                    "steps": steps,
-                    "temperature": temperature,
-                    "top_p": top_p,
-                    "cfg_scale": cfg_scale,
-                },
-            )
-            cancel_sent = False
-            finished = False
-            try:
-                while True:
-                    msg = MotionStreamProtocol.recv_json(self.io)
-                    kind = msg["type"]
-                    if kind == "chunk":
-                        joints = MotionStreamProtocol.recv_array(self.io, msg)
-                        placement = MotionStreamProtocol.recv_json(self.io)
-                        features = MotionStreamProtocol.recv_array(
-                            self.io, MotionStreamProtocol.recv_json(self.io)
-                        )
-                        if should_cancel is not None and should_cancel() and not cancel_sent:
-                            with self.send_lock:
-                                MotionStreamProtocol.send_json(self.io, {"cmd": "cancel"})
-                            cancel_sent = True
-                        yield StreamedChunk(
-                            joints=joints, features=features, yaw=float(placement["yaw"])
-                        )
-                    elif kind in ("steer_accepted", "steer_rejected", "steered"):
-                        self.steer_events.append(msg)
-                    elif kind in ("done", "cancelled"):
-                        finished = True
-                        self.last_stats = msg.get("stats")
-                        return
-                    elif kind == "error":
-                        finished = True
-                        raise RuntimeError(msg["message"])
-                    else:
-                        finished = True
-                        self.close()
-                        raise RuntimeError(f"unexpected message {kind!r}; connection closed")
-            finally:
-                if not finished:
-                    self.abandon_stream(cancel_sent)
+            self.send_generate_request(prompt, steps, temperature, top_p, cfg_scale)
+            yield from self.stream_generation_frames(should_cancel)
+
+    def send_generate_request(
+        self,
+        prompt: str,
+        steps: int,
+        temperature: float,
+        top_p: float,
+        cfg_scale: float,
+    ) -> None:
+        MotionStreamProtocol.send_json(
+            self.io,
+            {
+                "cmd": "generate",
+                "prompt": prompt,
+                "steps": steps,
+                "temperature": temperature,
+                "top_p": top_p,
+                "cfg_scale": cfg_scale,
+            },
+        )
+
+    def stream_generation_frames(self, should_cancel):
+        cancel_sent = False
+        finished = False
+        try:
+            while True:
+                msg = MotionStreamProtocol.recv_json(self.io)
+                kind = msg["type"]
+                if kind == "chunk":
+                    joints, placement, features = self.receive_chunk_frames(msg)
+                    cancel_sent = self.send_cancel_once(should_cancel, cancel_sent)
+                    yield StreamedChunk(
+                        joints=joints, features=features, yaw=float(placement["yaw"])
+                    )
+                elif kind in ("steer_accepted", "steer_rejected", "steered"):
+                    self.steer_events.append(msg)
+                elif kind in ("done", "cancelled"):
+                    finished = True
+                    self.last_stats = msg.get("stats")
+                    return
+                elif kind == "error":
+                    finished = True
+                    raise RuntimeError(msg["message"])
+                else:
+                    finished = True
+                    self.close()
+                    raise RuntimeError(f"unexpected message {kind!r}; connection closed")
+        finally:
+            if not finished:
+                self.abandon_stream(cancel_sent)
+
+    def receive_chunk_frames(self, msg: dict) -> tuple[np.ndarray, dict, np.ndarray]:
+        joints = MotionStreamProtocol.recv_array(self.io, msg)
+        placement = MotionStreamProtocol.recv_json(self.io)
+        features = MotionStreamProtocol.recv_array(self.io, MotionStreamProtocol.recv_json(self.io))
+        return joints, placement, features
+
+    def send_cancel_once(self, should_cancel, cancel_sent: bool) -> bool:
+        if should_cancel is None or not should_cancel() or cancel_sent:
+            return cancel_sent
+        with self.send_lock:
+            MotionStreamProtocol.send_json(self.io, {"cmd": "cancel"})
+        return True
 
     def abandon_stream(self, cancel_sent: bool) -> None:
         if not cancel_sent:
@@ -135,34 +158,8 @@ def start_motion_server(
     log_path: str | Path,
     service_config: str | Path,
 ) -> None:
-    cmd = [
-        sys.executable,
-        "-u",
-        "-m",
-        "text2motion.app.cli",
-        "serve",
-        "--config",
-        release.config,
-        "--ckpt",
-        release.ckpt,
-        "--tokenizer_ckpt",
-        release.tokenizer_ckpt,
-        "--backbone",
-        release.backbone,
-        "--host",
-        address.host,
-        "--port",
-        str(address.port),
-        "--service_config",
-        str(service_config),
-    ]
-    Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-    flags = getattr(subprocess, "DETACHED_PROCESS", 0)
-    env = dict(os.environ)
-    env["PYTHONPATH"] = env.get("PYTHONPATH") or "src"
-    env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-    with open(log_path, "ab") as log:
-        subprocess.Popen(cmd, stdout=log, stderr=log, creationflags=flags, env=env)
+    cmd = motion_server_command(release, address, service_config)
+    spawn_detached_process(cmd, motion_server_env(), log_path)
     logger.info(f"[service] spawned; loading the model (log: {log_path})...")
 
 
@@ -187,14 +184,12 @@ def changed_identity_fields(served: object, expected: dict[str, str]) -> list[st
     return sorted(key for key in expected if served.get(key) != expected[key])
 
 
-def motion_service_client(
+def connect_or_spawn_motion_server(
     release: Release,
     address: ServiceAddress,
     log_path: str | Path,
-    *,
     service_config: str | Path,
-    policy: dict[str, object],
-    spawn_wait_seconds: int = 240,
+    spawn_wait_seconds: int,
 ) -> MotionInferenceClient:
     try:
         client = MotionInferenceClient(address)
@@ -202,6 +197,15 @@ def motion_service_client(
     except OSError:
         start_motion_server(release, address, log_path, service_config)
         client = await_motion_server(address, spawn_wait_seconds, log_path)
+    return client
+
+
+def check_served_policy(
+    client: MotionInferenceClient,
+    address: ServiceAddress,
+    service_config: str | Path,
+    policy: dict[str, object],
+) -> None:
     served_policy = client.hello.get("policy")
     if served_policy != policy:
         client.close()
@@ -210,6 +214,11 @@ def motion_service_client(
             f"but {service_config} asks for {policy}; a load cannot change it. "
             "Stop the warm service, then start again."
         )
+
+
+def switch_release_if_changed(
+    client: MotionInferenceClient, release: Release
+) -> MotionInferenceClient:
     expected = release.identity()
     changed = changed_identity_fields(client.hello.get("identity"), expected)
     if not changed:
@@ -220,3 +229,19 @@ def motion_service_client(
     if still_changed:
         raise RuntimeError(f"the service loaded another release (different: {still_changed})")
     return client
+
+
+def motion_service_client(
+    release: Release,
+    address: ServiceAddress,
+    log_path: str | Path,
+    *,
+    service_config: str | Path,
+    policy: dict[str, object],
+    spawn_wait_seconds: int = 240,
+) -> MotionInferenceClient:
+    client = connect_or_spawn_motion_server(
+        release, address, log_path, service_config, spawn_wait_seconds
+    )
+    check_served_policy(client, address, service_config, policy)
+    return switch_release_if_changed(client, release)

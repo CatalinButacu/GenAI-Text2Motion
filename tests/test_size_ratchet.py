@@ -29,11 +29,8 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "app/service/client.py::MotionInferenceClient.generate",
             "app/service/handlers.py::MotionInferenceServer.handle_generate",
             "app/service/handlers.py::MotionInferenceServer.serve_client",
-            "app/service/client.py::motion_service_client",
-            "app/service/client.py::start_motion_server",
             "app/stages/serve.py::load_inference_pipeline",
             "app/stages/evaluate.py::run_evaluate",
             "app/stages/serve.py::run_studio",
