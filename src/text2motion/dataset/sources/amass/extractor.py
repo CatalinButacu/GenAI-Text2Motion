@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,24 @@ def resolve_model_root(smplx_dir: Path) -> Path:
     if smplx_dir.name.lower() == "smplx":
         return smplx_dir.parent
     return smplx_dir
+
+
+def source_frame_rate(data: Mapping[str, Any], src_path: str | Path) -> float:
+    fps_key = next(
+        (key for key in ("mocap_frame_rate", "mocap_framerate") if key in data),
+        None,
+    )
+    if fps_key is None:
+        raise ValueError(f"{src_path} has motion but no frame-rate field")
+    return float(data[fps_key])
+
+
+def read_betas(data: Mapping[str, Any], beta_count: int, src_path: str | Path) -> np.ndarray:
+    if np.asarray(data["betas"]).shape[0] < beta_count:
+        raise ValueError(
+            f"{src_path}: {np.asarray(data['betas']).shape[0]} betas, the model needs {beta_count}"
+        )
+    return np.asarray(data["betas"][:beta_count], dtype=np.float32)
 
 
 ############################################################
@@ -134,52 +153,52 @@ class AmassPoseExtractor:
             )
         return stride
 
-    @torch.inference_mode()
-    def extract(self, src_path: str | Path) -> np.ndarray | None:
+    def read_motion(self, src_path: str | Path) -> tuple[list[np.ndarray], Any] | None:
         with np.load(src_path, allow_pickle=True) as data:
             if "trans" not in data:
                 return None
-            fps_key = next(
-                (key for key in ("mocap_frame_rate", "mocap_framerate") if key in data),
-                None,
-            )
-            if fps_key is None:
-                raise ValueError(f"{src_path} has motion but no frame-rate field")
-            sample = slice(None, None, self.stride(float(data[fps_key]), src_path))
+            sample = slice(None, None, self.stride(source_frame_rate(data, src_path), src_path))
             root = np.asarray(data["root_orient"][sample], dtype=np.float32)
             if root.shape[0] == 0:
                 return None
             body = np.asarray(data["pose_body"][sample], dtype=np.float32)
             hand = np.asarray(data["pose_hand"][sample], dtype=np.float32)
             trans = np.asarray(data["trans"][sample], dtype=np.float32)
-            if np.asarray(data["betas"]).shape[0] < self._beta_count:
-                raise ValueError(
-                    f"{src_path}: {np.asarray(data['betas']).shape[0]} betas, the model needs "
-                    f"{self._beta_count}"
-                )
-            betas = np.asarray(data["betas"][: self._beta_count], dtype=np.float32)
+            betas = read_betas(data, self._beta_count, src_path)
             model = self.model(data["gender"])
+        return [root, body, hand, trans, betas], model
 
-        root_device = self.to_float_tensor(root)
-        body_device = self.to_float_tensor(body)
-        hand_device = self.to_float_tensor(hand)
-        trans_device = self.to_float_tensor(trans)
-        betas_device = self.to_float_tensor(betas)
-
+    def forward_chunks(
+        self,
+        model: Any,
+        root: torch.Tensor,
+        body: torch.Tensor,
+        hand: torch.Tensor,
+        trans: torch.Tensor,
+        betas: torch.Tensor,
+    ) -> torch.Tensor:
         chunks: list[torch.Tensor] = []
         for start in range(0, root.shape[0], self._chunk_size):
             end = min(start + self._chunk_size, root.shape[0])
             chunks.append(
                 self.forward(
                     model,
-                    root_device[start:end],
-                    body_device[start:end],
-                    hand_device[start:end],
-                    trans_device[start:end],
-                    betas_device,
+                    root[start:end],
+                    body[start:end],
+                    hand[start:end],
+                    trans[start:end],
+                    betas,
                 )
             )
-        joints = torch.cat(chunks, dim=0)
+        return torch.cat(chunks, dim=0)
+
+    @torch.inference_mode()
+    def extract(self, src_path: str | Path) -> np.ndarray | None:
+        motion = self.read_motion(src_path)
+        if motion is None:
+            return None
+        arrays, model = motion
+        joints = self.forward_chunks(model, *[self.to_float_tensor(array) for array in arrays])
         y_up_joints = torch.stack((joints[..., 0], joints[..., 2], joints[..., 1]), dim=-1)
         if not torch.isfinite(y_up_joints).all():
             raise ValueError(f"{src_path}: the extracted joints hold NaN or Inf values")

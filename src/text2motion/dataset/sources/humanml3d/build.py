@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import logging
 import shutil
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -13,17 +12,15 @@ from tqdm import tqdm
 from text2motion.common.manifest import write_manifest
 from text2motion.dataset.contracts import AMASS_LABEL_FPS
 from text2motion.dataset.core.operations import DATA_CLIP_ERRORS, NPY_FILES
-from text2motion.dataset.core.windows import CropError, cut_window
 from text2motion.dataset.sources.amass.clock import USABLE_STATUS, stored_fps_table
 from text2motion.dataset.sources.amass.poses import (
     CLOCKED_POSES,
     extract_poses,
     write_clocked_poses,
 )
-from text2motion.dataset.sources.amass.reader import resolve_pose_path
-from text2motion.dataset.sources.amass.trim import head_trim_frames
-from text2motion.dataset.sources.base import INDEX_MANIFEST
-from text2motion.dataset.sources.humanml3d.official import OFFICIAL_SPLIT_FILES, index_frame_scale
+from text2motion.dataset.sources.humanml3d.index_stage import build_indexed_joint_clips
+from text2motion.dataset.sources.humanml3d.layout import Hml3dPreparationLayout
+from text2motion.dataset.sources.humanml3d.official import OFFICIAL_SPLIT_FILES
 from text2motion.dataset.sources.humanml3d.source import (
     HumanML3DSource,
     check_hml3d_fps,
@@ -37,11 +34,9 @@ from text2motion.motion.representation import (
     encode_joints,
     feature_params,
     recover_from_ric,
-    swap_left_right,
     target_offsets,
 )
 from text2motion.motion.storage import (
-    FEATURES_DIR,
     SPLIT_FILES,
     atomic_numpy_save,
     sha256_file,
@@ -51,105 +46,7 @@ logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
-DROPPED_INDEX_LOG = "dropped_index_rows.csv"
-
-
 FEATURES_MANIFEST = "features_manifest.json"
-
-
-############################################################
-#       Hml3dPreparationLayout
-############################################################
-@dataclass(frozen=True)
-class Hml3dPreparationLayout:
-    out_dir: Path
-
-    @property
-    def pose_data(self) -> Path:
-        return self.out_dir / "pose_data"
-
-    @property
-    def joints(self) -> Path:
-        return self.out_dir / "joints"
-
-    @property
-    def new_joints(self) -> Path:
-        return self.out_dir / "new_joints"
-
-    @property
-    def new_joint_vecs(self) -> Path:
-        return self.out_dir / FEATURES_DIR
-
-    def mkdirs(self) -> None:
-        for d in (self.pose_data, self.joints, self.new_joints, self.new_joint_vecs):
-            d.mkdir(parents=True, exist_ok=True)
-
-
-def build_indexed_joint_clips(
-    request: PreparationRequest, layout: Hml3dPreparationLayout, pose_root: Path | None = None
-) -> None:
-    if request.index_csv is None:
-        raise ValueError("index_csv must be set for stage 'index'")
-    fps = request.fps
-    scale = index_frame_scale(fps)
-    import pandas as pd
-
-    index_file = pd.read_csv(request.index_csv)
-    pose_root = pose_root if pose_root is not None else layout.pose_data
-
-    written = 0
-    missing: list[str] = []
-    invalid: list[tuple[str, str, str]] = []
-    for row in tqdm(index_file.to_dict("records"), desc="index->joints"):
-        source_path = row["source_path"]
-        new_name = row["new_name"]
-        start_frame = int(row["start_frame"]) * scale
-        end_frame = int(row["end_frame"]) * scale
-
-        load_path = resolve_pose_path(source_path, pose_root)
-        if load_path is None or ("humanact12" in source_path and scale != 1):
-            missing.append(str(new_name))
-            continue
-        data = np.load(load_path)
-
-        whole = "humanact12" in source_path
-        trim = 0 if whole else head_trim_frames(source_path, fps)
-        try:
-            data = cut_window(data, start_frame, end_frame, trim, whole=whole)
-        except CropError as error:
-            invalid.append((str(new_name), source_path, str(error)))
-            continue
-
-        data_m = swap_left_right(data)
-        atomic_numpy_save(data, layout.joints / f"{new_name}")
-        atomic_numpy_save(data_m, layout.joints / f"M{new_name}")
-        written += 1
-
-    recipe = {"index_sha256": sha256_file(Path(request.index_csv)), "fps": fps}
-    status = {
-        "written": written,
-        "missing": len(missing),
-        "missing_names": missing,
-        "invalid": len(invalid),
-        "invalid_names": [name for name, _, _ in invalid],
-        "complete": not missing and not invalid,
-    }
-    write_manifest(layout.out_dir / INDEX_MANIFEST, recipe, status)
-    with open(layout.out_dir / DROPPED_INDEX_LOG, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(["new_name", "source_path", "reason"])
-        writer.writerows(invalid)
-    if invalid:
-        logger.warning(
-            f"index->joints: dropped {len(invalid)} rows with invalid crop bounds or too few "
-            f"frames (log: {DROPPED_INDEX_LOG}); first: {[name for name, _, _ in invalid[:3]]}"
-        )
-    if missing:
-        logger.warning(
-            f"index->joints: {len(missing)} of {len(index_file)} clips have no pose file "
-            f"(names in {INDEX_MANIFEST}); first: {missing[:3]}"
-        )
-    logger.info(f"index->joints: wrote {written} clips")
 
 
 def joints_to_263(source: np.ndarray, params, joint_count: int):
@@ -160,16 +57,15 @@ def joints_to_263(source: np.ndarray, params, joint_count: int):
     return data, rec.squeeze().numpy()
 
 
-def encode_joint_clips_to_hml3d263(
-    request: PreparationRequest, layout: Hml3dPreparationLayout
-) -> None:
-    joint_count = request.joint_count
-    ref_path = reference_joints_path(layout.joints, request.reference_clip)
+def reference_params(ref_path: Path, joint_count: int, fps: int):
     reference = np.load(ref_path)[:, :joint_count]
     reference = reference.reshape(len(reference), -1, 3)
-    params = feature_params(target_offsets(reference), request.fps)
+    return feature_params(target_offsets(reference), fps)
 
-    source_list = sorted(p.name for p in layout.joints.glob(NPY_FILES))
+
+def write_encoded_clips(
+    source_list: list[str], layout: Hml3dPreparationLayout, params, joint_count: int
+) -> tuple[int, list[str]]:
     frame_num = 0
     failed: list[str] = []
     for source_file in tqdm(source_list, desc="joints->263"):
@@ -183,6 +79,18 @@ def encode_joint_clips_to_hml3d263(
         atomic_numpy_save(recovered, layout.new_joints / source_file)
         atomic_numpy_save(data, layout.new_joint_vecs / source_file)
         frame_num += data.shape[0]
+    return frame_num, failed
+
+
+def encode_joint_clips_to_hml3d263(
+    request: PreparationRequest, layout: Hml3dPreparationLayout
+) -> None:
+    joint_count = request.joint_count
+    ref_path = reference_joints_path(layout.joints, request.reference_clip)
+    params = reference_params(ref_path, joint_count, request.fps)
+
+    source_list = sorted(p.name for p in layout.joints.glob(NPY_FILES))
+    frame_num, failed = write_encoded_clips(source_list, layout, params, joint_count)
 
     recipe = {
         "reference_joints_sha256": sha256_file(ref_path),

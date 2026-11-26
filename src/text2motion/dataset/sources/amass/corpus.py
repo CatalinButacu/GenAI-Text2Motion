@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import logging
 from collections import Counter
+from collections.abc import Callable, Mapping
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -173,13 +175,7 @@ def corpus_features(
     return features.astype(np.float32)
 
 
-def build_amass_pretraining_corpus(
-    request: PreparationRequest,
-    regen_dir: Path,
-    out_dir: Path,
-    min_frames: int,
-    limit: int = 0,
-) -> dict[str, float]:
+def require_corpus_inputs(request: PreparationRequest, regen_dir: Path) -> tuple[Path, Path]:
     pose_root = regen_dir / "pose_data"
     if not pose_root.is_dir():
         raise FileNotFoundError(
@@ -188,38 +184,75 @@ def build_amass_pretraining_corpus(
     if request.index_csv is None:
         raise ValueError("index_csv must be set (the leakage guard needs the official index)")
     check_hml3d_fps(request.fps)
-    index_csv = Path(request.index_csv)
-    reference_path = reference_joints_path(regen_dir / "joints", request.reference_clip)
+    return pose_root, Path(request.index_csv)
+
+
+def corpus_params(reference_path: Path, request: PreparationRequest):
     joint_count = request.joint_count
     reference = np.load(reference_path)[:, :joint_count].reshape(-1, joint_count, 3)
-    params = feature_params(target_offsets(reference), request.fps)
+    return feature_params(target_offsets(reference), request.fps)
 
-    pose_recipe = complete_pose_recipe(pose_root)
-    recipe = corpus_recipe(request, index_csv, reference_path, pose_recipe, min_frames)
-    vec_dir = out_dir / FEATURES_DIR
-    existing = {path.name for path in vec_dir.glob(NPY_FILES)}
-    manifest_path = out_dir / CORPUS_MANIFEST
-    check_recipe_reuse(manifest_path, recipe, bool(existing))
-    excluded = heldout_feature_names(index_csv, Path(request.out_dir), pose_root)
+
+def excluded_feature_names(
+    index_csv: Path, dataset_dir: Path, pose_root: Path, vec_dir: Path, existing: set[str]
+) -> set[str]:
+    excluded = heldout_feature_names(index_csv, dataset_dir, pose_root)
     present = sorted(excluded & existing)
     if present:
         raise ValueError(
             f"{len(present)} heldout files are already in {vec_dir} (first: {present[:3]}); "
             "build into a new folder"
         )
-    previous_fingerprints = stored_fingerprints(manifest_path)
+    return excluded
+
+
+def select_pose_sources(pose_root: Path, limit: int) -> list[Path]:
     sources = sorted(pose_root.rglob(NPY_FILES))
     if not sources:
         raise FileNotFoundError(f"no pose files under {pose_root}")
     if limit:
         sources = sources[:limit]
+    return sources
+
+
+def named_fingerprints(sources: list[Path], pose_root: Path) -> dict[str, list[int]]:
     names = [corpus_feature_name(src, pose_root) for src in sources]
     check_unique_names(names)
-    fingerprints = {name: source_fingerprint(src) for name, src in zip(names, sources, strict=True)}
-    vec_dir.mkdir(parents=True, exist_ok=True)
-    write_manifest(
-        manifest_path, recipe, {"complete": False, "source_fingerprints": previous_fingerprints}
-    )
+    return {name: source_fingerprint(src) for name, src in zip(names, sources, strict=True)}
+
+
+def reused_frames(save_path: Path, src: Path, previous: object, current: object) -> int:
+    if previous != current:
+        raise ValueError(
+            f"{save_path} exists, but its source {src} changed or is not recorded; "
+            "build into a new folder"
+        )
+    return int(np.load(save_path, mmap_mode="r").shape[0])
+
+
+def convert_source(
+    src: Path, save_path: Path, features_of: Callable[[Path], np.ndarray | None]
+) -> tuple[str, int]:
+    try:
+        features = features_of(src)
+    except DATA_CLIP_ERRORS as exc:
+        logger.warning(f"FAILED {save_path.name}: {exc}")
+        return "failed", 0
+    if features is None:
+        return "skipped_short", 0
+    atomic_numpy_save(features, save_path)
+    return "written", features.shape[0]
+
+
+def convert_sources(
+    sources: list[Path],
+    pose_root: Path,
+    vec_dir: Path,
+    excluded: set[str],
+    previous: Mapping[str, object],
+    fingerprints: Mapping[str, object],
+    features_of: Callable[[Path], np.ndarray | None],
+) -> tuple[dict[str, int], list[str]]:
     counts = {"written": 0, "reused": 0, "skipped_heldout": 0, "skipped_short": 0, "frames": 0}
     failed: list[str] = []
     for src in tqdm(sources, desc="pose->263 (all AMASS)"):
@@ -229,46 +262,96 @@ def build_amass_pretraining_corpus(
             continue
         save_path = vec_dir / name
         if save_path.is_file():
-            if previous_fingerprints.get(name) != fingerprints[name]:
-                raise ValueError(
-                    f"{save_path} exists, but its source {src} changed or is not recorded; "
-                    "build into a new folder"
-                )
-            counts["reused"] += 1
-            counts["frames"] += int(np.load(save_path, mmap_mode="r").shape[0])
-            continue
-        try:
-            features = corpus_features(src, pose_root, request, params, min_frames)
-        except DATA_CLIP_ERRORS as exc:
+            outcome = "reused"
+            frames = reused_frames(save_path, src, previous.get(name), fingerprints[name])
+        else:
+            outcome, frames = convert_source(src, save_path, features_of)
+        if outcome == "failed":
             failed.append(name)
-            logger.warning(f"FAILED {name}: {exc}")
             continue
-        if features is None:
-            counts["skipped_short"] += 1
-            continue
-        atomic_numpy_save(features, save_path)
-        counts["written"] += 1
-        counts["frames"] += features.shape[0]
+        counts[outcome] += 1
+        counts["frames"] += frames
+    return counts, failed
 
-    summary = {
-        **counts,
-        "failed": len(failed),
-        "hours": round(counts["frames"] / request.fps / 3600, 2),
-    }
-    write_manifest(
-        manifest_path,
-        recipe,
-        {
-            **summary,
-            "limit": limit,
-            "complete": not failed and not limit,
-            "failed_names": failed,
-            "source_fingerprints": fingerprints,
-        },
-    )
+
+def require_no_failures(failed: list[str]) -> None:
     if failed:
         raise RuntimeError(
             f"{len(failed)} source files failed to convert (names in {CORPUS_MANIFEST}); "
             f"first: {failed[:3]}"
         )
+
+
+def read_corpus_inputs(
+    request: PreparationRequest, regen_dir: Path, min_frames: int
+) -> tuple[Path, Path, dict[str, object], Callable[[Path], np.ndarray | None]]:
+    pose_root, index_csv = require_corpus_inputs(request, regen_dir)
+    reference_path = reference_joints_path(regen_dir / "joints", request.reference_clip)
+    params = corpus_params(reference_path, request)
+    pose_recipe = complete_pose_recipe(pose_root)
+    recipe = corpus_recipe(request, index_csv, reference_path, pose_recipe, min_frames)
+    features_of = partial(
+        corpus_features, pose_root=pose_root, request=request, params=params, min_frames=min_frames
+    )
+    return pose_root, index_csv, recipe, features_of
+
+
+def check_corpus_folder(
+    out_dir: Path, recipe: dict[str, object], index_csv: Path, dataset_dir: Path, pose_root: Path
+) -> set[str]:
+    vec_dir = out_dir / FEATURES_DIR
+    existing = {path.name for path in vec_dir.glob(NPY_FILES)}
+    check_recipe_reuse(out_dir / CORPUS_MANIFEST, recipe, bool(existing))
+    return excluded_feature_names(index_csv, dataset_dir, pose_root, vec_dir, existing)
+
+
+def write_corpus_summary(
+    manifest_path: Path,
+    recipe: dict[str, object],
+    counts: Mapping[str, int],
+    failed: list[str],
+    fps: int,
+    limit: int,
+    fingerprints: Mapping[str, object],
+) -> dict[str, float]:
+    summary = {
+        **counts,
+        "failed": len(failed),
+        "hours": round(counts["frames"] / fps / 3600, 2),
+    }
+    status = {
+        **summary,
+        "limit": limit,
+        "complete": not failed and not limit,
+        "failed_names": failed,
+        "source_fingerprints": fingerprints,
+    }
+    write_manifest(manifest_path, recipe, status)
+    return summary
+
+
+def build_amass_pretraining_corpus(
+    request: PreparationRequest,
+    regen_dir: Path,
+    out_dir: Path,
+    min_frames: int,
+    limit: int = 0,
+) -> dict[str, float]:
+    pose_root, index_csv, recipe, features_of = read_corpus_inputs(request, regen_dir, min_frames)
+    dataset_dir = Path(request.out_dir)
+    excluded = check_corpus_folder(out_dir, recipe, index_csv, dataset_dir, pose_root)
+    vec_dir = out_dir / FEATURES_DIR
+    manifest_path = out_dir / CORPUS_MANIFEST
+    previous = stored_fingerprints(manifest_path)
+    sources = select_pose_sources(pose_root, limit)
+    fingerprints = named_fingerprints(sources, pose_root)
+    vec_dir.mkdir(parents=True, exist_ok=True)
+    write_manifest(manifest_path, recipe, {"complete": False, "source_fingerprints": previous})
+    counts, failed = convert_sources(
+        sources, pose_root, vec_dir, excluded, previous, fingerprints, features_of
+    )
+    summary = write_corpus_summary(
+        manifest_path, recipe, counts, failed, request.fps, limit, fingerprints
+    )
+    require_no_failures(failed)
     return summary
