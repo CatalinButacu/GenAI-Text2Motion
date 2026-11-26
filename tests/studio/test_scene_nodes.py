@@ -47,7 +47,7 @@ def test_clear_deselects_when_the_node_is_selected():
     nodes.show_body(body)
     scene.select(body)
 
-    nodes.clear_body()
+    nodes.clearer.clear_body()
 
     assert nodes.body is None
     assert scene.selected_object is None  # stale selection must not survive removal
@@ -60,7 +60,7 @@ def test_clear_all_empties_every_slot():
     nodes.show_motion(FakeNode("motion"))
     nodes.show_body(FakeNode("body"))
 
-    nodes.clear_all()
+    nodes.clearer.clear_all()
 
     assert (nodes.rest, nodes.motion, nodes.body) == (None, None, None)
     assert scene.nodes == []
@@ -93,14 +93,14 @@ def test_has_generated_motion_tracks_clears():
     nodes.show_motion(FakeNode("motion"))
     assert nodes.has_generated_motion
 
-    nodes.clear_motion()
+    nodes.clearer.clear_motion()
     assert not nodes.has_generated_motion
 
 
 def test_clearing_an_empty_slot_is_a_noop():
     nodes, scene = make()
-    nodes.clear_all()
-    nodes.clear_body()
+    nodes.clearer.clear_all()
+    nodes.clearer.clear_body()
     assert scene.nodes == []
 
 

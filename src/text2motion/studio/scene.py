@@ -4,10 +4,11 @@ import logging
 
 import numpy as np
 from aitviewer.renderables.meshes import Meshes
-from aitviewer.scene.camera import ViewerCamera
 
 from text2motion.motion.representation import kinematic_bones
 from text2motion.studio.contracts import ViewerHost
+from text2motion.studio.scene_support.camera import StreamCamera
+from text2motion.studio.scene_support.clearer import SceneNodeClearer
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,45 @@ def create_skeleton_sequence_node(joints: np.ndarray, radius: float = 0.01):
     from aitviewer.renderables.skeletons import Skeletons
 
     return Skeletons(joint_positions=joints, joint_connections=kinematic_bones(), radius=radius)
+
+
+def append_skeleton_sequence_frames(node, joints: np.ndarray) -> None:
+    node.joint_positions = np.append(node.joint_positions, joints, axis=0)
+    node.spheres.add_frames(joints)
+    node.lines.add_frames(joints[:, node.skeleton].reshape(len(joints), -1, 3))
+
+
+def reset_motion_for_new_stream(state) -> None:
+    state.nodes.clearer.clear_motion()
+    state.stream_buffers.accum_joints = None
+    state.stream_buffers.trimmed_frames = 0
+
+
+def accumulate_joints(stream_buffers, new: np.ndarray) -> None:
+    stream_buffers.accum_joints = (
+        new
+        if stream_buffers.accum_joints is None
+        else np.concatenate([stream_buffers.accum_joints, new], axis=0)
+    )
+
+
+def add_or_extend_motion(nodes, new: np.ndarray) -> None:
+    if nodes.motion is None:
+        motion = create_skeleton_sequence_node(new)
+        motion.name = "Motion (streaming)"
+        nodes.show_motion(motion)
+    else:
+        append_skeleton_sequence_frames(nodes.motion, new)
+
+
+def start_stream_view(state, host: ViewerHost) -> None:
+    state.stream_buffers.started = True
+    state.nodes.clearer.clear_body()
+    state.nodes.clearer.clear_rest()
+    state.nodes.follow_center = None
+    host.scene.current_frame_id = 0
+    host.toggle_animation(True)
+    state.stream_buffers.need_reset_view = True
 
 
 ############################################################
@@ -28,35 +68,15 @@ class StudioSceneNodes:
         self.motion = None
         self.body = None
         self.follow_center: np.ndarray | None = None
-
-    def drop(self, node):
-        if node is None:
-            return
-        if self.scene.selected_object is node:
-            self.scene.select(None)
-        self.scene.remove(node)
-
-    def clear_rest(self) -> None:
-        self.rest = self.drop(self.rest)
-
-    def clear_motion(self) -> None:
-        self.motion = self.drop(self.motion)
-
-    def clear_body(self) -> None:
-        self.body = self.drop(self.body)
-
-    def clear_all(self) -> None:
-        self.clear_motion()
-        self.clear_rest()
-        self.clear_body()
+        self.clearer = SceneNodeClearer(scene, self)
 
     def show_rest(self, node) -> None:
-        self.clear_rest()
+        self.clearer.clear_rest()
         self.rest = node
         self.scene.add(node)
 
     def show_motion(self, node) -> None:
-        self.clear_motion()
+        self.clearer.clear_motion()
         self.motion = node
         self.scene.add(node)
 
@@ -80,6 +100,7 @@ class StreamSceneUpdater:
     def __init__(self, host: ViewerHost, state) -> None:
         self.host = host
         self.state = state
+        self.camera = StreamCamera(host, state)
 
     def consume(self) -> None:
         chunks, body_chunks, remesh = self.state.stream_buffers.drain()
@@ -94,7 +115,7 @@ class StreamSceneUpdater:
             self.state.stream_buffers.need_reset_view = False
             node = self.state.nodes.focus
             if node is not None:
-                self.center_view(node)
+                self.camera.center_view(node)
 
     def hold_playhead_at_fitted_body(self) -> None:
         buffers = self.state.stream_buffers
@@ -131,48 +152,19 @@ class StreamSceneUpdater:
         if motion is not None:
             motion.enabled = not on_body
 
-    def center_view(self, node) -> None:
-        bounds = node.current_bounds
-        if not np.isfinite(bounds).all():
-            logger.info(f"[warn] skipped centring on {node.name}: non-finite bounds")
-            return
-        self.host.center_view_on_node(node)
-
     def append_chunks(self, chunks: list[np.ndarray]) -> None:
-        def append_skeleton_sequence_frames(node, joints: np.ndarray) -> None:
-            node.joint_positions = np.append(node.joint_positions, joints, axis=0)
-            node.spheres.add_frames(joints)
-            node.lines.add_frames(joints[:, node.skeleton].reshape(len(joints), -1, 3))
-
         new = np.concatenate(chunks, axis=0)
         if not self.state.stream_buffers.started:
-            self.state.nodes.clear_motion()
-            self.state.stream_buffers.accum_joints = None
-            self.state.stream_buffers.trimmed_frames = 0
-        self.state.stream_buffers.accum_joints = (
-            new
-            if self.state.stream_buffers.accum_joints is None
-            else np.concatenate([self.state.stream_buffers.accum_joints, new], axis=0)
-        )
-        if self.state.nodes.motion is None:
-            motion = create_skeleton_sequence_node(new)
-            motion.name = "Motion (streaming)"
-            self.state.nodes.show_motion(motion)
-        else:
-            append_skeleton_sequence_frames(self.state.nodes.motion, new)
+            reset_motion_for_new_stream(self.state)
+        accumulate_joints(self.state.stream_buffers, new)
+        add_or_extend_motion(self.state.nodes, new)
         logger.info(
             f"[DISP] skeleton node added: accum={self.state.stream_buffers.accum_joints.shape} "
             f"scene_frames={self.host.scene.n_frames} started={self.state.stream_buffers.started}"
         )
         self.trim_to_window()
         if not self.state.stream_buffers.started:
-            self.state.stream_buffers.started = True
-            self.state.nodes.clear_body()
-            self.state.nodes.clear_rest()
-            self.state.nodes.follow_center = None
-            self.host.scene.current_frame_id = 0
-            self.host.toggle_animation(True)
-            self.state.stream_buffers.need_reset_view = True
+            start_stream_view(self.state, self.host)
 
     def trim_to_window(self) -> None:
         window = self.state.window_frames
@@ -232,45 +224,9 @@ class StreamSceneUpdater:
             )
             return
         frame = self.host.scene.current_frame_id
-        self.state.nodes.clear_all()
+        self.state.nodes.clearer.clear_all()
         self.state.nodes.show_body(
             Meshes(verts, faces, color=self.state.skin_color, name="Avatar (SMPL-X)")
         )
         self.state.stream_buffers.body_verts = verts
         self.host.scene.current_frame_id = min(frame, len(verts) - 1)
-
-    def current_center(self) -> np.ndarray | None:
-        frame = self.host.scene.current_frame_id
-        nodes = self.state.nodes
-        body_verts = self.state.stream_buffers.body_verts
-        joints = self.state.stream_buffers.accum_joints
-        body_frames = 0 if body_verts is None else len(body_verts)
-        body_is_shown = nodes.body is not None and (nodes.motion is None or frame < body_frames)
-        if body_is_shown and body_verts is not None:
-            return body_verts[min(frame, len(body_verts) - 1)].mean(axis=0)
-        if body_is_shown or nodes.motion is None or joints is None:
-            return None
-        return joints[min(frame, len(joints) - 1)].mean(axis=0)
-
-    def update_follow_cam(self) -> None:
-        if not self.state.follow_cam:
-            return
-
-        camera = self.host.scene.camera
-        if not isinstance(camera, ViewerCamera):
-            return
-
-        center = self.current_center()
-        if center is None:
-            return
-
-        if self.state.nodes.follow_center is None:
-            offset = camera.position - camera.target
-            camera.target = center
-            camera.position = center + offset
-        else:
-            delta = center - self.state.nodes.follow_center
-            camera.position = camera.position + delta
-            camera.target = camera.target + delta
-
-        self.state.nodes.follow_center = center

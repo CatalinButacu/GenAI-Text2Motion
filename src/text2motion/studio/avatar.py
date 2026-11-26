@@ -88,8 +88,8 @@ class SmplxAvatarController:
         self.start_retrofit()
 
     def show_skeleton_only(self) -> None:
-        self.state.nodes.clear_body()
-        self.state.nodes.clear_rest()
+        self.state.nodes.clearer.clear_body()
+        self.state.nodes.clearer.clear_rest()
         joints = self.state.stream_buffers.accum_joints
         if joints is None or self.state.nodes.motion is not None:
             return

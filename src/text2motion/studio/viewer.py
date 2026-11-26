@@ -120,7 +120,7 @@ class StreamingStudioViewer(Viewer):
         self.advance_playhead(time)
         self.scene_updater.hold_playhead_at_fitted_body()
         self.scene_updater.sync_display_nodes()
-        self.scene_updater.update_follow_cam()
+        self.scene_updater.camera.update_follow_cam()
         super().on_render(
             time, frame_time, export=export, transparent_background=transparent_background
         )
