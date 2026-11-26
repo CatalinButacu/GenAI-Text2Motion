@@ -61,7 +61,7 @@ def run(a: argparse.Namespace) -> None:
     lengths = torch.full((a.batch,), cfg.data.max_motion_len, dtype=torch.long, device=dev)
     caps = ["a person walks forward and sits down"] * a.batch
     try:
-        text_emb = trainer.encode(caps)
+        text_emb = trainer.batch.encode(caps)
         parts = trainer.train_step(motion, text_emb, lengths)
         peak = torch.cuda.max_memory_allocated()
         free_now, _ = torch.cuda.mem_get_info()

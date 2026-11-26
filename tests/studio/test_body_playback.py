@@ -120,13 +120,13 @@ def test_every_streamed_chunk_reaches_the_body_fitter_after_a_normal_finish(upsa
     controller = StudioGenerationController(
         cast(ViewerHost, host), state, cast(SmplxAvatarController, avatar)
     )
-    original = controller.fit_motion_chunks
+    original = controller.fitter.fit_motion_chunks
 
     def fit_then_signal(fit_queue, take):
         original(fit_queue, take)
         fitter_done.set()
 
-    controller.fit_motion_chunks = fit_then_signal
+    controller.fitter.fit_motion_chunks = fit_then_signal
     buffers.take = 1
     params = {
         "steps": 24,
@@ -340,11 +340,11 @@ def test_the_stream_waits_until_the_playhead_is_within_the_lead():
     controller = StudioGenerationController(
         cast(ViewerHost, host), state, cast(SmplxAvatarController, SimpleNamespace())
     )
-    assert controller.frames_ahead_of_playhead(48) == 48
+    assert controller.pacer.frames_ahead_of_playhead(48) == 48
     released = threading.Event()
 
     def accept():
-        controller.wait_for_playback(48)
+        controller.pacer.wait_for_playback(48)
         released.set()
 
     threading.Thread(target=accept, daemon=True).start()
@@ -353,7 +353,7 @@ def test_the_stream_waits_until_the_playhead_is_within_the_lead():
     assert released.wait(2.0)
     buffers.trimmed_frames = 100
     scene.current_frame_id = 0
-    assert controller.frames_ahead_of_playhead(148) == 48
+    assert controller.pacer.frames_ahead_of_playhead(148) == 48
 
 
 def test_stop_releases_a_stream_that_is_waiting_for_playback():
@@ -366,7 +366,7 @@ def test_stop_releases_a_stream_that_is_waiting_for_playback():
     released = threading.Event()
 
     def accept():
-        controller.wait_for_playback(500)
+        controller.pacer.wait_for_playback(500)
         released.set()
 
     threading.Thread(target=accept, daemon=True).start()

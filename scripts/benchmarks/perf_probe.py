@@ -175,7 +175,7 @@ def precision_case(args, config, device: str, backbone: Backbone, mode: str, tok
         with torch.no_grad():
             tokens = trainer.tokenizer_network.encode(motion)
             if trainer.token_generator.end_id is not None:
-                tokens, _ = trainer.append_end_targets(tokens, lengths)
+                tokens, _ = trainer.batch.append_end_targets(tokens, lengths)
     apply_precision(Float32Precision.HIGHEST if mode == "fp32" else Float32Precision.TF32)
     logits, gradients, loss, names = precision_numeric(trainer, text, tokens, amp)
     folder = args.out_path.with_suffix("")

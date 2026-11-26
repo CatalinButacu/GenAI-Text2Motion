@@ -14,7 +14,6 @@ ALLOWED = MappingProxyType(
     {
         "file": (
             "motion/representation.py",
-            "studio/live/controller.py",
             "studio/scene.py",
             "tokenization/nn_quantizers.py",
             "tokenization/nn_tokenizer.py",
@@ -25,9 +24,6 @@ ALLOWED = MappingProxyType(
             "motion/normalization.py::fit_train_stats",
             "motion/normalization.py::normalization_stats",
             "motion/representation.py::encode_joints",
-            "studio/live/controller.py::StudioGenerationController.accept_chunk",
-            "studio/live/controller.py::StudioGenerationController.start_generation",
-            "studio/live/controller.py::StudioGenerationController.stream_generation",
             "studio/scene.py::StreamSceneUpdater.append_chunks",
             "studio/session/state.py::StudioSession.__init__",
             "tokenization/corpus.py::build_token_pack",
@@ -40,7 +36,6 @@ ALLOWED = MappingProxyType(
         ),
         "class": (
             "motion/kinematics.py::Skeleton",
-            "studio/live/controller.py::StudioGenerationController",
             "studio/scene.py::StreamSceneUpdater",
             "studio/scene.py::StudioSceneNodes",
             "studio/session/buffers.py::StudioStreamBuffers",

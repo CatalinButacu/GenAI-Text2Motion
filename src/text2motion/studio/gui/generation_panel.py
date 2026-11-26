@@ -57,7 +57,7 @@ class GenerationPanel:
         busy = self.state.generating or self.state.loading_model
         if imgui.button("Load model", width=-1) and not busy:
             log_action("press Load model", self.state.models[self.state.model_idx].key)
-            self.generation.start_model_load()
+            self.generation.loader.start_model_load()
         if imgui.button("Reload settings + models (R)", width=-1) and not busy:
             log_action("press Reload settings")
             self.host.reload_settings()

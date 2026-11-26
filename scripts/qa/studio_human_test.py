@@ -383,7 +383,7 @@ def scenario_switch_models(driver: HumanDriver) -> None:
         return
     state.steps = 0
     state.model_idx = transformer
-    driver.viewer.generation.start_model_load()
+    driver.viewer.generation.loader.start_model_load()
     loaded = driver.wait_until(lambda: not state.loading_model, 120.0)
     driver.check(
         "the transformer loads", loaded and "active" in state.load_status, state.load_status
@@ -403,7 +403,7 @@ def scenario_switch_models(driver: HumanDriver) -> None:
         state.status,
     )
     state.model_idx = mamba
-    driver.viewer.generation.start_model_load()
+    driver.viewer.generation.loader.start_model_load()
     loaded = driver.wait_until(lambda: not state.loading_model, 120.0)
     driver.check(
         "switching back to Mamba loads", loaded and "active" in state.load_status, state.load_status
@@ -477,7 +477,7 @@ def scenario_long_forever_stream(driver: HumanDriver) -> None:
     mamba = next(i for i, key in enumerate(labels) if key.startswith("mamba:") and "thesis" in key)
     for index in (transformer, mamba):
         state.model_idx = index
-        driver.viewer.generation.start_model_load()
+        driver.viewer.generation.loader.start_model_load()
         driver.check(
             f"Load model after a long stream works ({labels[index]})",
             driver.wait_until(lambda: not state.loading_model, 60.0)
