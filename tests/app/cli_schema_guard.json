@@ -1,0 +1,1434 @@
+{
+  "prepare": {
+    "$defs": {
+      "PreparationStage": {
+        "enum": [
+          "clock",
+          "joints",
+          "features",
+          "stats",
+          "all"
+        ],
+        "title": "PreparationStage",
+        "type": "string"
+      }
+    },
+    "properties": {
+      "config": {
+        "default": "configs/default.yaml",
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "stage": {
+        "$ref": "#/$defs/PreparationStage",
+        "default": "all",
+        "description": "run one preparation stage only (clock, joints, features, stats); all runs them in sequence"
+      },
+      "corpus": {
+        "default": false,
+        "description": "build the unlabeled AMASS pretraining corpus and not the captioned data set",
+        "title": "Corpus",
+        "type": "boolean"
+      },
+      "adopt_pose_folder": {
+        "default": false,
+        "description": "stage amass: accept an existing pose folder without a manifest after a new extraction of a fixed sample matches the files on disk",
+        "title": "Adopt Pose Folder",
+        "type": "boolean"
+      },
+      "regen_dir": {
+        "default": "data/processed/humanml3d_263",
+        "description": "folder with the regenerated poses and joints that the corpus is built from",
+        "format": "path",
+        "title": "Regen Dir",
+        "type": "string"
+      },
+      "corpus_dir": {
+        "default": "data/AMASS_263",
+        "description": "output folder of the AMASS 263-feature corpus",
+        "format": "path",
+        "title": "Corpus Dir",
+        "type": "string"
+      },
+      "min_frames": {
+        "default": 40,
+        "description": "clips shorter than this are dropped; a higher value gives fewer, longer clips",
+        "title": "Min Frames",
+        "type": "integer"
+      },
+      "limit": {
+        "default": 0,
+        "description": "convert only the first N sequences, for a quick test; 0 converts all",
+        "title": "Limit",
+        "type": "integer"
+      },
+      "source_release": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "folder of an official HumanML3D release to convert; skips all other stages",
+        "title": "Source Release"
+      },
+      "converted_dir": {
+        "default": "data/processed/humanml3d",
+        "description": "output folder for the converted official release",
+        "format": "path",
+        "title": "Converted Dir",
+        "type": "string"
+      }
+    },
+    "title": "PrepareRequest",
+    "type": "object"
+  },
+  "tokenize": {
+    "properties": {
+      "config": {
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "features_dir": {
+        "default": "data/AMASS_263/new_joint_vecs",
+        "description": "folder of 263-feature clips to encode",
+        "format": "path",
+        "title": "Features Dir",
+        "type": "string"
+      },
+      "tokenizer_ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "frozen tokenizer checkpoint; default from the config",
+        "title": "Tokenizer Ckpt"
+      },
+      "token_pack": {
+        "default": "data/amass_tokens.npz",
+        "description": "output .npz file of tokens; pretraining reads this file",
+        "format": "path",
+        "title": "Token Pack",
+        "type": "string"
+      },
+      "segment_frames": {
+        "default": 196,
+        "description": "window length in frames; clips shorter than one window are not encoded",
+        "exclusiveMinimum": 0,
+        "title": "Segment Frames",
+        "type": "integer"
+      },
+      "stride": {
+        "default": 196,
+        "description": "step between windows; a smaller stride gives more, overlapping windows",
+        "exclusiveMinimum": 0,
+        "title": "Stride",
+        "type": "integer"
+      },
+      "regen_dir": {
+        "default": "data/processed/humanml3d_263",
+        "description": "folder with pose_data; the heldout clips are found and excluded through it",
+        "format": "path",
+        "title": "Regen Dir",
+        "type": "string"
+      }
+    },
+    "required": [
+      "config"
+    ],
+    "title": "TokenizeRequest",
+    "type": "object"
+  },
+  "train-tokenizer": {
+    "$defs": {
+      "TokenizerKind": {
+        "enum": [
+          "fsq",
+          "rvq"
+        ],
+        "title": "TokenizerKind",
+        "type": "string"
+      }
+    },
+    "properties": {
+      "config": {
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "exploratory": {
+        "default": false,
+        "description": "record a non-protocol run that is not citable; protocol runs use seed 2026",
+        "title": "Exploratory",
+        "type": "boolean"
+      },
+      "tokenizer": {
+        "$ref": "#/$defs/TokenizerKind",
+        "description": "quantizer family: fsq has no learned codebook, rvq is the baseline"
+      },
+      "epochs": {
+        "default": 50,
+        "description": "passes over the training set",
+        "exclusiveMinimum": 0,
+        "title": "Epochs",
+        "type": "integer"
+      },
+      "window": {
+        "default": 64,
+        "description": "training crop in frames; a longer crop gives more context and uses more memory",
+        "exclusiveMinimum": 0,
+        "title": "Window",
+        "type": "integer"
+      },
+      "batch_size": {
+        "default": 128,
+        "description": "clips per step; limited by GPU memory",
+        "exclusiveMinimum": 0,
+        "title": "Batch Size",
+        "type": "integer"
+      },
+      "ema_decay": {
+        "default": 0.99,
+        "description": "decay of the averaged weights that are evaluated; higher is smoother and slower",
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "title": "Ema Decay",
+        "type": "number"
+      },
+      "eval_every": {
+        "default": 5,
+        "description": "epochs between reconstruction evaluations",
+        "exclusiveMinimum": 0,
+        "title": "Eval Every",
+        "type": "integer"
+      },
+      "max_eval_clips": {
+        "anyOf": [
+          {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "cap on evaluation clips; a low cap is faster and gives a noisier FID",
+        "title": "Max Eval Clips"
+      },
+      "max_steps": {
+        "anyOf": [
+          {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "stop after this many optimizer steps, for equal-step comparisons; not with --resume",
+        "title": "Max Steps"
+      },
+      "num_workers": {
+        "default": 0,
+        "description": "data loader processes; 0 loads in the training process and needs the least RAM",
+        "minimum": 0,
+        "title": "Num Workers",
+        "type": "integer"
+      },
+      "amass_share": {
+        "default": 0.0,
+        "description": "share of AMASS clips in each epoch; 0 trains on HumanML3D only",
+        "exclusiveMaximum": 1.0,
+        "minimum": 0.0,
+        "title": "Amass Share",
+        "type": "number"
+      },
+      "amass_features": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "folder with the AMASS 263 features; required when amass_share is above 0",
+        "title": "Amass Features"
+      },
+      "ckpt_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "checkpoint file name inside the checkpoint folder; also names the run",
+        "title": "Ckpt Name"
+      },
+      "resume": {
+        "default": false,
+        "description": "continue from the saved state of this checkpoint",
+        "title": "Resume",
+        "type": "boolean"
+      },
+      "accept_legacy_resume": {
+        "default": false,
+        "description": "with --resume: load an old resume file; its RNG state starts fresh",
+        "title": "Accept Legacy Resume",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "config",
+      "tokenizer"
+    ],
+    "title": "TrainTokenizerRequest",
+    "type": "object"
+  },
+  "sanity-overfit": {
+    "$defs": {
+      "Backbone": {
+        "enum": [
+          "transformer",
+          "mamba"
+        ],
+        "title": "Backbone",
+        "type": "string"
+      }
+    },
+    "properties": {
+      "config": {
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "exploratory": {
+        "default": false,
+        "description": "record a non-protocol run that is not citable; protocol runs use seed 2026",
+        "title": "Exploratory",
+        "type": "boolean"
+      },
+      "backbone": {
+        "$ref": "#/$defs/Backbone",
+        "description": "sequence mixer: mamba has a fixed-size state, transformer has a cache that grows"
+      },
+      "tokenizer_ckpt": {
+        "description": "frozen tokenizer checkpoint; it must be the one the generator was trained on",
+        "format": "path",
+        "title": "Tokenizer Ckpt",
+        "type": "string"
+      },
+      "overfit_gate": {
+        "description": "output gate file; train-generator refuses to start without it",
+        "format": "path",
+        "title": "Overfit Gate",
+        "type": "string"
+      },
+      "batch_size": {
+        "default": 4,
+        "description": "clips in the one batch that the model must memorise",
+        "title": "Batch Size",
+        "type": "integer"
+      },
+      "steps": {
+        "default": 1000,
+        "description": "maximum optimizer steps before the gate fails",
+        "title": "Steps",
+        "type": "integer"
+      },
+      "lr": {
+        "default": 0.003,
+        "description": "learning rate for the gate only; high on purpose, to memorise fast",
+        "title": "Lr",
+        "type": "number"
+      },
+      "init_ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "pretrained weights to start the gate from, as the run that uses the gate does",
+        "title": "Init Ckpt"
+      }
+    },
+    "required": [
+      "config",
+      "backbone",
+      "tokenizer_ckpt",
+      "overfit_gate"
+    ],
+    "title": "SanityOverfitRequest",
+    "type": "object"
+  },
+  "train-generator": {
+    "$defs": {
+      "Backbone": {
+        "enum": [
+          "transformer",
+          "mamba"
+        ],
+        "title": "Backbone",
+        "type": "string"
+      }
+    },
+    "properties": {
+      "config": {
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "exploratory": {
+        "default": false,
+        "description": "record a non-protocol run that is not citable; protocol runs use seed 2026",
+        "title": "Exploratory",
+        "type": "boolean"
+      },
+      "backbone": {
+        "$ref": "#/$defs/Backbone",
+        "description": "sequence mixer: mamba has a fixed-size state, transformer has a cache that grows"
+      },
+      "tokenizer_ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "frozen tokenizer checkpoint; it must be the one the generator was trained on",
+        "title": "Tokenizer Ckpt"
+      },
+      "overfit_gate": {
+        "description": "passed gate file from sanity-overfit for this config, tokenizer and backbone",
+        "format": "path",
+        "title": "Overfit Gate",
+        "type": "string"
+      },
+      "init_ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "pretrained weights to start from; without it training starts from random weights",
+        "title": "Init Ckpt"
+      },
+      "text_cache": {
+        "default": true,
+        "description": "reuse the frozen CLIP layer states of the train captions from a disk cache; the results are the same, the step is faster",
+        "title": "Text Cache",
+        "type": "boolean"
+      },
+      "compile": {
+        "default": true,
+        "description": "compile the generator with torch.compile; about 7% faster for mamba, the results are not bit-identical to an eager run; without CUDA or Triton the run stays eager",
+        "title": "Compile",
+        "type": "boolean"
+      },
+      "epochs": {
+        "default": 60,
+        "description": "target epoch; the cosine schedule spans exactly this many epochs",
+        "title": "Epochs",
+        "type": "integer"
+      },
+      "batch_size": {
+        "default": 64,
+        "description": "clips per step; keep it equal for both backbones",
+        "title": "Batch Size",
+        "type": "integer"
+      },
+      "num_workers": {
+        "default": 0,
+        "description": "data loader processes; more is faster, and each one needs RAM; 0 needs the least",
+        "title": "Num Workers",
+        "type": "integer"
+      },
+      "grad_accum": {
+        "default": 1,
+        "description": "batches per optimizer step; effective batch is batch_size times this",
+        "title": "Grad Accum",
+        "type": "integer"
+      },
+      "cfg_scale": {
+        "default": 1.0,
+        "description": "guidance scale for the validation samples; higher follows the text more closely",
+        "title": "Cfg Scale",
+        "type": "number"
+      },
+      "eval_every": {
+        "default": 5,
+        "description": "epochs between validation runs; each run can select a new best checkpoint",
+        "title": "Eval Every",
+        "type": "integer"
+      },
+      "max_eval_clips": {
+        "default": 600,
+        "description": "validation clips; fewer is faster and gives a noisier FID",
+        "title": "Max Eval Clips",
+        "type": "integer"
+      },
+      "eval_batch_size": {
+        "default": 32,
+        "description": "clips generated together in validation; changes speed, not the result",
+        "title": "Eval Batch Size",
+        "type": "integer"
+      },
+      "temperature": {
+        "default": 1.0,
+        "description": "sampling temperature for validation; higher gives more varied motion",
+        "title": "Temperature",
+        "type": "number"
+      },
+      "vocab_dir": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "word-vector folder of the evaluator; default from the config",
+        "title": "Vocab Dir"
+      },
+      "ckpt_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "file name of the best checkpoint inside the checkpoint folder",
+        "title": "Ckpt Name"
+      },
+      "resume": {
+        "default": false,
+        "description": "continue from the saved last state of ckpt_name",
+        "title": "Resume",
+        "type": "boolean"
+      },
+      "fresh_selection": {
+        "default": false,
+        "description": "with --resume: reset earlier best FID and validation-CE patience for this run",
+        "title": "Fresh Selection",
+        "type": "boolean"
+      },
+      "resume_run_dir": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "existing run folder to continue the log in; keeps one folder for one training",
+        "title": "Resume Run Dir"
+      },
+      "patience": {
+        "default": 0,
+        "description": "stop after this many validations without a better FID; 0 never stops early",
+        "title": "Patience",
+        "type": "integer"
+      },
+      "clean_ce": {
+        "default": true,
+        "description": "after each epoch, log the teacher-forced CE on a fixed train subset and on validation",
+        "title": "Clean Ce",
+        "type": "boolean"
+      },
+      "ce_batches": {
+        "default": 50,
+        "description": "batches of --eval_batch_size clips for each clean CE; 0 uses the full split",
+        "title": "Ce Batches",
+        "type": "integer"
+      },
+      "val_ce_patience": {
+        "default": 6,
+        "description": "stop on this consecutive epoch without a lower clean validation CE; default 6 allows five retries; 0 disables",
+        "minimum": 0,
+        "title": "Val Ce Patience",
+        "type": "integer"
+      },
+      "stop_epoch": {
+        "default": 0,
+        "description": "stop after this epoch while --epochs still sets the cosine length; 0 runs to --epochs",
+        "minimum": 0,
+        "title": "Stop Epoch",
+        "type": "integer"
+      },
+      "select_on_val_ce": {
+        "default": false,
+        "description": "save the best bundle at the lowest clean validation CE, not at the lowest val FID",
+        "title": "Select On Val Ce",
+        "type": "boolean"
+      },
+      "save_r1_floor": {
+        "default": 0.0,
+        "description": "save the best-FID bundle only at an evaluation whose val R@1 is at least this value; an evaluation below it counts as no improvement; default 0 keeps every run unchanged",
+        "maximum": 1,
+        "minimum": 0,
+        "title": "Save R1 Floor",
+        "type": "number"
+      },
+      "accept_legacy_resume": {
+        "default": false,
+        "description": "with --resume: load an old resume file; its RNG and schedule state start fresh",
+        "title": "Accept Legacy Resume",
+        "type": "boolean"
+      },
+      "extend_schedule": {
+        "default": false,
+        "description": "with --resume: accept a new --epochs; the learning rate follows the new cosine",
+        "title": "Extend Schedule",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "config",
+      "backbone",
+      "overfit_gate"
+    ],
+    "title": "TrainGeneratorRequest",
+    "type": "object"
+  },
+  "pretrain": {
+    "$defs": {
+      "Backbone": {
+        "enum": [
+          "transformer",
+          "mamba"
+        ],
+        "title": "Backbone",
+        "type": "string"
+      }
+    },
+    "properties": {
+      "config": {
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "exploratory": {
+        "default": false,
+        "description": "record a non-protocol run that is not citable; protocol runs use seed 2026",
+        "title": "Exploratory",
+        "type": "boolean"
+      },
+      "backbone": {
+        "$ref": "#/$defs/Backbone",
+        "description": "sequence mixer: mamba has a fixed-size state, transformer has a cache that grows"
+      },
+      "token_pack": {
+        "default": "data/amass_tokens_fsq8x1024.npz",
+        "description": "token file from the tokenize command; the unlabeled motion to learn from",
+        "format": "path",
+        "title": "Token Pack",
+        "type": "string"
+      },
+      "epochs": {
+        "default": 30,
+        "description": "passes over the token corpus; too many memorise it",
+        "title": "Epochs",
+        "type": "integer"
+      },
+      "batch_size": {
+        "default": 64,
+        "description": "windows per step; keep it equal for both backbones",
+        "title": "Batch Size",
+        "type": "integer"
+      },
+      "grad_accum": {
+        "default": 1,
+        "description": "batches per optimizer step; effective batch is batch_size times this",
+        "title": "Grad Accum",
+        "type": "integer"
+      },
+      "num_workers": {
+        "default": 0,
+        "description": "data loader processes; 0 needs the least RAM",
+        "title": "Num Workers",
+        "type": "integer"
+      },
+      "val_fraction": {
+        "default": 0.05,
+        "description": "share of clips held out, by clip; shows if the model memorises the corpus",
+        "title": "Val Fraction",
+        "type": "number"
+      },
+      "ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "output checkpoint path; default is generator_<backbone>_pretrained.pt",
+        "title": "Ckpt"
+      },
+      "resume": {
+        "default": false,
+        "description": "continue from the saved state of this checkpoint",
+        "title": "Resume",
+        "type": "boolean"
+      },
+      "accept_legacy_resume": {
+        "default": false,
+        "description": "with --resume: load an old resume file; its RNG and schedule state start fresh",
+        "title": "Accept Legacy Resume",
+        "type": "boolean"
+      },
+      "extend_schedule": {
+        "default": false,
+        "description": "with --resume: accept a new --epochs; the learning rate follows the new cosine",
+        "title": "Extend Schedule",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "config",
+      "backbone"
+    ],
+    "title": "PretrainRequest",
+    "type": "object"
+  },
+  "evaluate": {
+    "$defs": {
+      "BackboneChoice": {
+        "enum": [
+          "transformer",
+          "mamba",
+          "both"
+        ],
+        "title": "BackboneChoice",
+        "type": "string"
+      },
+      "GenerationLengthPolicy": {
+        "enum": [
+          "fixed",
+          "end"
+        ],
+        "title": "GenerationLengthPolicy",
+        "type": "string"
+      },
+      "Split": {
+        "enum": [
+          "train",
+          "val",
+          "test"
+        ],
+        "title": "Split",
+        "type": "string"
+      }
+    },
+    "properties": {
+      "config": {
+        "default": "configs/default.yaml",
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "backbone": {
+        "$ref": "#/$defs/BackboneChoice",
+        "default": "both",
+        "description": "which generator to score (transformer, mamba, both); both uses one protocol"
+      },
+      "split": {
+        "$ref": "#/$defs/Split",
+        "default": "test",
+        "description": "data split (val or test); score test one time only, for a selected checkpoint"
+      },
+      "max_clips": {
+        "default": 100000,
+        "description": "cap on clips; FID is biased upward when the count is small",
+        "title": "Max Clips",
+        "type": "integer"
+      },
+      "temperature": {
+        "default": 1.0,
+        "description": "sampling temperature; higher gives more varied and less accurate motion",
+        "title": "Temperature",
+        "type": "number"
+      },
+      "top_p": {
+        "default": 0.9,
+        "description": "nucleus threshold; lower removes unlikely tokens and reduces variety",
+        "title": "Top P",
+        "type": "number"
+      },
+      "cfg_scale": {
+        "default": 1.0,
+        "description": "guidance scale; 1 is no guidance, the thesis protocol uses 6",
+        "title": "Cfg Scale",
+        "type": "number"
+      },
+      "length_mode": {
+        "$ref": "#/$defs/GenerationLengthPolicy",
+        "default": "fixed",
+        "description": "fixed uses the ground-truth length; end lets the model stop at its END token"
+      },
+      "mm_clips": {
+        "default": 100,
+        "description": "captions used for the multimodality metric",
+        "title": "Mm Clips",
+        "type": "integer"
+      },
+      "mm_repeats": {
+        "default": 30,
+        "description": "motions generated for each of those captions",
+        "title": "Mm Repeats",
+        "type": "integer"
+      },
+      "bootstrap": {
+        "default": 200,
+        "description": "clip resamples for a bootstrap FID interval of generation run 0",
+        "title": "Bootstrap",
+        "type": "integer"
+      },
+      "reps": {
+        "default": 20,
+        "description": "generation runs; each run samples all clips again; the report gives mean and 95% interval",
+        "title": "Reps",
+        "type": "integer"
+      },
+      "eval_batch_size": {
+        "default": 32,
+        "description": "clips generated together; changes speed, not the result",
+        "title": "Eval Batch Size",
+        "type": "integer"
+      },
+      "ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "generator checkpoint path; used only when one backbone is selected",
+        "title": "Ckpt"
+      },
+      "clip_list": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "file with one clip id per line; only these clips of the split are scored",
+        "title": "Clip List"
+      },
+      "tokenizer_ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "frozen tokenizer checkpoint; default from the config",
+        "title": "Tokenizer Ckpt"
+      },
+      "text_encoder_ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "checkpoint to read the text encoder from, when the generator file has none",
+        "title": "Text Encoder Ckpt"
+      },
+      "device": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "cuda or cpu; default from the config",
+        "title": "Device"
+      },
+      "seed": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "random seed; default from the config",
+        "title": "Seed"
+      }
+    },
+    "title": "EvaluateRequest",
+    "type": "object"
+  },
+  "benchmark": {
+    "properties": {
+      "config": {
+        "default": "configs/default.yaml",
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "device": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "cuda or cpu; default from the config",
+        "title": "Device"
+      },
+      "horizons": {
+        "default": [
+          64,
+          128,
+          256,
+          512,
+          1024
+        ],
+        "description": "stream lengths in tokens at which state size and latency are recorded",
+        "items": {
+          "type": "integer"
+        },
+        "title": "Horizons",
+        "type": "array"
+      },
+      "report": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "output JSON file; default is streaming_bench.json in the outputs folder",
+        "title": "Report"
+      },
+      "warmup": {
+        "default": 32,
+        "description": "steps run before timing starts, so the first slow steps are not measured",
+        "title": "Warmup",
+        "type": "integer"
+      },
+      "streams": {
+        "default": [],
+        "description": "numbers of parallel streams to time; empty skips this test",
+        "items": {
+          "type": "integer"
+        },
+        "title": "Streams",
+        "type": "array"
+      },
+      "streams_horizon": {
+        "default": 256,
+        "description": "stream length used in the parallel-stream test",
+        "title": "Streams Horizon",
+        "type": "integer"
+      }
+    },
+    "title": "BenchmarkRequest",
+    "type": "object"
+  },
+  "serve": {
+    "$defs": {
+      "Backbone": {
+        "enum": [
+          "transformer",
+          "mamba"
+        ],
+        "title": "Backbone",
+        "type": "string"
+      }
+    },
+    "properties": {
+      "config": {
+        "default": "configs/default.yaml",
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "host": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "service address; default from the config",
+        "title": "Host"
+      },
+      "port": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "service TCP port; default from the config",
+        "title": "Port"
+      },
+      "service_config": {
+        "default": "configs/service.yml",
+        "description": "YAML file with the address and runtime settings of the service",
+        "format": "path",
+        "title": "Service Config",
+        "type": "string"
+      },
+      "ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "generator checkpoint; default from the config",
+        "title": "Ckpt"
+      },
+      "tokenizer_ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "frozen tokenizer checkpoint; it must be the one the generator was trained on",
+        "title": "Tokenizer Ckpt"
+      },
+      "backbone": {
+        "$ref": "#/$defs/Backbone",
+        "default": "transformer",
+        "description": "sequence mixer: mamba has a fixed-size state, transformer has a cache that grows"
+      },
+      "idle_seconds": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "the service stops after this many seconds without a request",
+        "title": "Idle Seconds"
+      }
+    },
+    "title": "ServeRequest",
+    "type": "object"
+  },
+  "studio": {
+    "$defs": {
+      "Backbone": {
+        "enum": [
+          "transformer",
+          "mamba"
+        ],
+        "title": "Backbone",
+        "type": "string"
+      }
+    },
+    "properties": {
+      "config": {
+        "default": "configs/default.yaml",
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "host": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "service address; default from the config",
+        "title": "Host"
+      },
+      "port": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "service TCP port; default from the config",
+        "title": "Port"
+      },
+      "service_config": {
+        "default": "configs/service.yml",
+        "description": "YAML file with the address and runtime settings of the service",
+        "format": "path",
+        "title": "Service Config",
+        "type": "string"
+      },
+      "ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "generator checkpoint; default from the config",
+        "title": "Ckpt"
+      },
+      "tokenizer_ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "frozen tokenizer checkpoint; it must be the one the generator was trained on",
+        "title": "Tokenizer Ckpt"
+      },
+      "backbone": {
+        "$ref": "#/$defs/Backbone",
+        "default": "transformer",
+        "description": "sequence mixer: mamba has a fixed-size state, transformer has a cache that grows"
+      },
+      "model_dir": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "SMPL-X model folder; without it the studio shows the skeleton only",
+        "title": "Model Dir"
+      },
+      "studio_config": {
+        "default": "configs/studio.yml",
+        "description": "YAML file with display, fit and panel settings",
+        "format": "path",
+        "title": "Studio Config",
+        "type": "string"
+      },
+      "model": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "key of a model in the model registry; it sets config, checkpoint and backbone",
+        "title": "Model"
+      },
+      "steps": {
+        "default": 0,
+        "description": "token steps for each generation; one step is 4 frames; 0 uses the model maximum",
+        "title": "Steps",
+        "type": "integer"
+      },
+      "seconds": {
+        "default": 0.0,
+        "description": "motion length in seconds for each generation; above 0 it replaces --steps",
+        "title": "Seconds",
+        "type": "number"
+      },
+      "cfg_scale": {
+        "default": 6.0,
+        "description": "guidance scale; higher follows the text more closely and varies less",
+        "title": "Cfg Scale",
+        "type": "number"
+      },
+      "temperature": {
+        "default": 1.0,
+        "description": "sampling temperature; higher gives more varied motion",
+        "title": "Temperature",
+        "type": "number"
+      },
+      "top_p": {
+        "default": 0.9,
+        "description": "nucleus threshold; lower removes unlikely tokens",
+        "title": "Top P",
+        "type": "number"
+      },
+      "fps": {
+        "default": 20,
+        "description": "frame rate of the motion data, before display upsampling",
+        "title": "Fps",
+        "type": "integer"
+      }
+    },
+    "title": "StudioRequest",
+    "type": "object"
+  },
+  "run": {
+    "$defs": {
+      "TokenizerKind": {
+        "enum": [
+          "fsq",
+          "rvq"
+        ],
+        "title": "TokenizerKind",
+        "type": "string"
+      },
+      "Workflow": {
+        "enum": [
+          "data",
+          "tokenizer",
+          "generator",
+          "evaluate"
+        ],
+        "title": "Workflow",
+        "type": "string"
+      }
+    },
+    "properties": {
+      "config": {
+        "default": "configs/default.yaml",
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "workflow": {
+        "$ref": "#/$defs/Workflow",
+        "description": "chain of steps to run: data, tokenizer, generator or evaluate; a step with the same recipe hash is skipped"
+      },
+      "root": {
+        "description": "folder for the step markers and manifest.json of this workflow run",
+        "format": "path",
+        "title": "Root",
+        "type": "string"
+      },
+      "tokenizer": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/TokenizerKind"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "quantizer family; required by the tokenizer workflow"
+      },
+      "exploratory": {
+        "default": false,
+        "description": "record a non-protocol tokenizer run that is not citable",
+        "title": "Exploratory",
+        "type": "boolean"
+      },
+      "epochs": {
+        "default": 50,
+        "description": "tokenizer passes over the training set",
+        "exclusiveMinimum": 0,
+        "title": "Epochs",
+        "type": "integer"
+      },
+      "max_steps": {
+        "anyOf": [
+          {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "stop the tokenizer after this many optimizer steps",
+        "title": "Max Steps"
+      },
+      "tokenizer_ckpt": {
+        "anyOf": [
+          {
+            "format": "path",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "frozen tokenizer checkpoint for the generator steps; default from the config",
+        "title": "Tokenizer Ckpt"
+      },
+      "overfit_steps": {
+        "default": 1000,
+        "description": "maximum optimizer steps of each overfit gate",
+        "exclusiveMinimum": 0,
+        "title": "Overfit Steps",
+        "type": "integer"
+      },
+      "generator_epochs": {
+        "default": 60,
+        "description": "target epoch of each generator; the same for both backbones",
+        "exclusiveMinimum": 0,
+        "title": "Generator Epochs",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "workflow",
+      "root"
+    ],
+    "title": "RunRequest",
+    "type": "object"
+  },
+  "health": {
+    "properties": {
+      "config": {
+        "default": "configs/default.yaml",
+        "description": "YAML file with model, data and path settings; it selects the experiment",
+        "format": "path",
+        "title": "Config",
+        "type": "string"
+      },
+      "host": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "service address; default from the config",
+        "title": "Host"
+      },
+      "port": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "service TCP port; default from the config",
+        "title": "Port"
+      },
+      "service_config": {
+        "default": "configs/service.yml",
+        "description": "YAML file with the address and runtime settings of the service",
+        "format": "path",
+        "title": "Service Config",
+        "type": "string"
+      }
+    },
+    "title": "HealthRequest",
+    "type": "object"
+  }
+}

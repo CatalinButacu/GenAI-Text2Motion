@@ -1,0 +1,1226 @@
+{
+  "transformer": {
+    "parameter_order": [
+      "token_emb.0.weight",
+      "token_emb.1.weight",
+      "text_proj.weight",
+      "text_proj.bias",
+      "heads.0.weight",
+      "heads.0.bias",
+      "heads.1.weight",
+      "heads.1.bias",
+      "backbone.pos.weight",
+      "backbone.blocks.0.norm1.weight",
+      "backbone.blocks.0.norm2.weight",
+      "backbone.blocks.0.qkv.weight",
+      "backbone.blocks.0.proj.weight",
+      "backbone.blocks.0.mlp.0.weight",
+      "backbone.blocks.0.mlp.0.bias",
+      "backbone.blocks.0.mlp.2.weight",
+      "backbone.blocks.0.mlp.2.bias",
+      "backbone.blocks.1.norm1.weight",
+      "backbone.blocks.1.norm2.weight",
+      "backbone.blocks.1.qkv.weight",
+      "backbone.blocks.1.proj.weight",
+      "backbone.blocks.1.mlp.0.weight",
+      "backbone.blocks.1.mlp.0.bias",
+      "backbone.blocks.1.mlp.2.weight",
+      "backbone.blocks.1.mlp.2.bias",
+      "backbone.norm_f.weight"
+    ],
+    "resume_checkpoint": {
+      "keys": [
+        "best_fid",
+        "ema",
+        "epoch",
+        "format",
+        "generator",
+        "optimizer",
+        "rng",
+        "run_dir",
+        "scheduler",
+        "stale_evaluations",
+        "text_encoder",
+        "total_steps",
+        "version",
+        "weighter"
+      ],
+      "generator": {
+        "token_emb.0.weight": [
+          17,
+          64
+        ],
+        "token_emb.1.weight": [
+          17,
+          64
+        ],
+        "text_proj.weight": [
+          64,
+          32
+        ],
+        "text_proj.bias": [
+          64
+        ],
+        "heads.0.weight": [
+          17,
+          64
+        ],
+        "heads.0.bias": [
+          17
+        ],
+        "heads.1.weight": [
+          17,
+          64
+        ],
+        "heads.1.bias": [
+          17
+        ],
+        "backbone.pos.weight": [
+          33,
+          64
+        ],
+        "backbone.blocks.0.norm1.weight": [
+          64
+        ],
+        "backbone.blocks.0.norm2.weight": [
+          64
+        ],
+        "backbone.blocks.0.qkv.weight": [
+          192,
+          64
+        ],
+        "backbone.blocks.0.proj.weight": [
+          64,
+          64
+        ],
+        "backbone.blocks.0.mlp.0.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.0.mlp.0.bias": [
+          256
+        ],
+        "backbone.blocks.0.mlp.2.weight": [
+          64,
+          256
+        ],
+        "backbone.blocks.0.mlp.2.bias": [
+          64
+        ],
+        "backbone.blocks.1.norm1.weight": [
+          64
+        ],
+        "backbone.blocks.1.norm2.weight": [
+          64
+        ],
+        "backbone.blocks.1.qkv.weight": [
+          192,
+          64
+        ],
+        "backbone.blocks.1.proj.weight": [
+          64,
+          64
+        ],
+        "backbone.blocks.1.mlp.0.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.1.mlp.0.bias": [
+          256
+        ],
+        "backbone.blocks.1.mlp.2.weight": [
+          64,
+          256
+        ],
+        "backbone.blocks.1.mlp.2.bias": [
+          64
+        ],
+        "backbone.norm_f.weight": [
+          64
+        ]
+      },
+      "ema": {
+        "token_emb.0.weight": [
+          17,
+          64
+        ],
+        "token_emb.1.weight": [
+          17,
+          64
+        ],
+        "text_proj.weight": [
+          64,
+          32
+        ],
+        "text_proj.bias": [
+          64
+        ],
+        "heads.0.weight": [
+          17,
+          64
+        ],
+        "heads.0.bias": [
+          17
+        ],
+        "heads.1.weight": [
+          17,
+          64
+        ],
+        "heads.1.bias": [
+          17
+        ],
+        "backbone.pos.weight": [
+          33,
+          64
+        ],
+        "backbone.blocks.0.norm1.weight": [
+          64
+        ],
+        "backbone.blocks.0.norm2.weight": [
+          64
+        ],
+        "backbone.blocks.0.qkv.weight": [
+          192,
+          64
+        ],
+        "backbone.blocks.0.proj.weight": [
+          64,
+          64
+        ],
+        "backbone.blocks.0.mlp.0.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.0.mlp.0.bias": [
+          256
+        ],
+        "backbone.blocks.0.mlp.2.weight": [
+          64,
+          256
+        ],
+        "backbone.blocks.0.mlp.2.bias": [
+          64
+        ],
+        "backbone.blocks.1.norm1.weight": [
+          64
+        ],
+        "backbone.blocks.1.norm2.weight": [
+          64
+        ],
+        "backbone.blocks.1.qkv.weight": [
+          192,
+          64
+        ],
+        "backbone.blocks.1.proj.weight": [
+          64,
+          64
+        ],
+        "backbone.blocks.1.mlp.0.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.1.mlp.0.bias": [
+          256
+        ],
+        "backbone.blocks.1.mlp.2.weight": [
+          64,
+          256
+        ],
+        "backbone.blocks.1.mlp.2.bias": [
+          64
+        ],
+        "backbone.norm_f.weight": [
+          64
+        ]
+      }
+    },
+    "bundle_checkpoint": {
+      "keys": [
+        "backbone",
+        "epoch",
+        "format",
+        "generator",
+        "resolved_generator_config",
+        "text_encoder",
+        "tokenizer",
+        "validation_fid",
+        "version"
+      ],
+      "tokenizer_keys": [
+        "path",
+        "sha256"
+      ],
+      "config_keys": [
+        "backbone",
+        "codebook_size",
+        "d_conv",
+        "d_model",
+        "d_state",
+        "d_text",
+        "dropout",
+        "dt_rank",
+        "expand",
+        "mamba_n_layers",
+        "max_seq_len",
+        "n_heads",
+        "n_layers",
+        "num_codebooks",
+        "per_step_text",
+        "text_prefix_len",
+        "use_end_token",
+        "use_kernel"
+      ],
+      "generator": {
+        "token_emb.0.weight": [
+          17,
+          64
+        ],
+        "token_emb.1.weight": [
+          17,
+          64
+        ],
+        "text_proj.weight": [
+          64,
+          32
+        ],
+        "text_proj.bias": [
+          64
+        ],
+        "heads.0.weight": [
+          17,
+          64
+        ],
+        "heads.0.bias": [
+          17
+        ],
+        "heads.1.weight": [
+          17,
+          64
+        ],
+        "heads.1.bias": [
+          17
+        ],
+        "backbone.pos.weight": [
+          33,
+          64
+        ],
+        "backbone.blocks.0.norm1.weight": [
+          64
+        ],
+        "backbone.blocks.0.norm2.weight": [
+          64
+        ],
+        "backbone.blocks.0.qkv.weight": [
+          192,
+          64
+        ],
+        "backbone.blocks.0.proj.weight": [
+          64,
+          64
+        ],
+        "backbone.blocks.0.mlp.0.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.0.mlp.0.bias": [
+          256
+        ],
+        "backbone.blocks.0.mlp.2.weight": [
+          64,
+          256
+        ],
+        "backbone.blocks.0.mlp.2.bias": [
+          64
+        ],
+        "backbone.blocks.1.norm1.weight": [
+          64
+        ],
+        "backbone.blocks.1.norm2.weight": [
+          64
+        ],
+        "backbone.blocks.1.qkv.weight": [
+          192,
+          64
+        ],
+        "backbone.blocks.1.proj.weight": [
+          64,
+          64
+        ],
+        "backbone.blocks.1.mlp.0.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.1.mlp.0.bias": [
+          256
+        ],
+        "backbone.blocks.1.mlp.2.weight": [
+          64,
+          256
+        ],
+        "backbone.blocks.1.mlp.2.bias": [
+          64
+        ],
+        "backbone.norm_f.weight": [
+          64
+        ]
+      }
+    },
+    "stream_tokens": [
+      [
+        0,
+        2
+      ],
+      [
+        10,
+        7
+      ],
+      [
+        0,
+        7
+      ],
+      [
+        15,
+        7
+      ],
+      [
+        11,
+        2
+      ],
+      [
+        11,
+        9
+      ],
+      [
+        15,
+        7
+      ],
+      [
+        0,
+        2
+      ],
+      [
+        1,
+        11
+      ],
+      [
+        0,
+        7
+      ],
+      [
+        0,
+        4
+      ],
+      [
+        11,
+        0
+      ],
+      [
+        15,
+        0
+      ],
+      [
+        12,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        15,
+        0
+      ],
+      [
+        6,
+        0
+      ],
+      [
+        9,
+        8
+      ],
+      [
+        12,
+        2
+      ],
+      [
+        9,
+        10
+      ],
+      [
+        10,
+        0
+      ],
+      [
+        0,
+        7
+      ],
+      [
+        11,
+        7
+      ],
+      [
+        8,
+        15
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        8,
+        7
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        15,
+        0
+      ],
+      [
+        0,
+        11
+      ],
+      [
+        6,
+        2
+      ],
+      [
+        11,
+        10
+      ],
+      [
+        11,
+        2
+      ],
+      [
+        6,
+        0
+      ],
+      [
+        11,
+        0
+      ],
+      [
+        11,
+        2
+      ],
+      [
+        9,
+        4
+      ],
+      [
+        11,
+        7
+      ],
+      [
+        8,
+        4
+      ]
+    ]
+  },
+  "mamba": {
+    "parameter_order": [
+      "token_emb.0.weight",
+      "token_emb.1.weight",
+      "text_proj.weight",
+      "text_proj.bias",
+      "heads.0.weight",
+      "heads.0.bias",
+      "heads.1.weight",
+      "heads.1.bias",
+      "backbone.blocks.0.norm.weight",
+      "backbone.blocks.0.mixer.a_log",
+      "backbone.blocks.0.mixer.d_skip",
+      "backbone.blocks.0.mixer.in_proj.weight",
+      "backbone.blocks.0.mixer.conv1d.weight",
+      "backbone.blocks.0.mixer.conv1d.bias",
+      "backbone.blocks.0.mixer.x_proj.weight",
+      "backbone.blocks.0.mixer.dt_proj.weight",
+      "backbone.blocks.0.mixer.dt_proj.bias",
+      "backbone.blocks.0.mixer.out_proj.weight",
+      "backbone.blocks.1.norm.weight",
+      "backbone.blocks.1.mixer.a_log",
+      "backbone.blocks.1.mixer.d_skip",
+      "backbone.blocks.1.mixer.in_proj.weight",
+      "backbone.blocks.1.mixer.conv1d.weight",
+      "backbone.blocks.1.mixer.conv1d.bias",
+      "backbone.blocks.1.mixer.x_proj.weight",
+      "backbone.blocks.1.mixer.dt_proj.weight",
+      "backbone.blocks.1.mixer.dt_proj.bias",
+      "backbone.blocks.1.mixer.out_proj.weight",
+      "backbone.blocks.2.norm.weight",
+      "backbone.blocks.2.mixer.a_log",
+      "backbone.blocks.2.mixer.d_skip",
+      "backbone.blocks.2.mixer.in_proj.weight",
+      "backbone.blocks.2.mixer.conv1d.weight",
+      "backbone.blocks.2.mixer.conv1d.bias",
+      "backbone.blocks.2.mixer.x_proj.weight",
+      "backbone.blocks.2.mixer.dt_proj.weight",
+      "backbone.blocks.2.mixer.dt_proj.bias",
+      "backbone.blocks.2.mixer.out_proj.weight",
+      "backbone.norm_f.weight"
+    ],
+    "resume_checkpoint": {
+      "keys": [
+        "best_fid",
+        "ema",
+        "epoch",
+        "format",
+        "generator",
+        "optimizer",
+        "rng",
+        "run_dir",
+        "scheduler",
+        "stale_evaluations",
+        "text_encoder",
+        "total_steps",
+        "version",
+        "weighter"
+      ],
+      "generator": {
+        "token_emb.0.weight": [
+          17,
+          64
+        ],
+        "token_emb.1.weight": [
+          17,
+          64
+        ],
+        "text_proj.weight": [
+          64,
+          32
+        ],
+        "text_proj.bias": [
+          64
+        ],
+        "heads.0.weight": [
+          17,
+          64
+        ],
+        "heads.0.bias": [
+          17
+        ],
+        "heads.1.weight": [
+          17,
+          64
+        ],
+        "heads.1.bias": [
+          17
+        ],
+        "backbone.blocks.0.norm.weight": [
+          64
+        ],
+        "backbone.blocks.0.mixer.a_log": [
+          128,
+          8
+        ],
+        "backbone.blocks.0.mixer.d_skip": [
+          128
+        ],
+        "backbone.blocks.0.mixer.in_proj.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.0.mixer.conv1d.weight": [
+          128,
+          1,
+          4
+        ],
+        "backbone.blocks.0.mixer.conv1d.bias": [
+          128
+        ],
+        "backbone.blocks.0.mixer.x_proj.weight": [
+          24,
+          128
+        ],
+        "backbone.blocks.0.mixer.dt_proj.weight": [
+          128,
+          8
+        ],
+        "backbone.blocks.0.mixer.dt_proj.bias": [
+          128
+        ],
+        "backbone.blocks.0.mixer.out_proj.weight": [
+          64,
+          128
+        ],
+        "backbone.blocks.1.norm.weight": [
+          64
+        ],
+        "backbone.blocks.1.mixer.a_log": [
+          128,
+          8
+        ],
+        "backbone.blocks.1.mixer.d_skip": [
+          128
+        ],
+        "backbone.blocks.1.mixer.in_proj.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.1.mixer.conv1d.weight": [
+          128,
+          1,
+          4
+        ],
+        "backbone.blocks.1.mixer.conv1d.bias": [
+          128
+        ],
+        "backbone.blocks.1.mixer.x_proj.weight": [
+          24,
+          128
+        ],
+        "backbone.blocks.1.mixer.dt_proj.weight": [
+          128,
+          8
+        ],
+        "backbone.blocks.1.mixer.dt_proj.bias": [
+          128
+        ],
+        "backbone.blocks.1.mixer.out_proj.weight": [
+          64,
+          128
+        ],
+        "backbone.blocks.2.norm.weight": [
+          64
+        ],
+        "backbone.blocks.2.mixer.a_log": [
+          128,
+          8
+        ],
+        "backbone.blocks.2.mixer.d_skip": [
+          128
+        ],
+        "backbone.blocks.2.mixer.in_proj.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.2.mixer.conv1d.weight": [
+          128,
+          1,
+          4
+        ],
+        "backbone.blocks.2.mixer.conv1d.bias": [
+          128
+        ],
+        "backbone.blocks.2.mixer.x_proj.weight": [
+          24,
+          128
+        ],
+        "backbone.blocks.2.mixer.dt_proj.weight": [
+          128,
+          8
+        ],
+        "backbone.blocks.2.mixer.dt_proj.bias": [
+          128
+        ],
+        "backbone.blocks.2.mixer.out_proj.weight": [
+          64,
+          128
+        ],
+        "backbone.norm_f.weight": [
+          64
+        ]
+      },
+      "ema": {
+        "token_emb.0.weight": [
+          17,
+          64
+        ],
+        "token_emb.1.weight": [
+          17,
+          64
+        ],
+        "text_proj.weight": [
+          64,
+          32
+        ],
+        "text_proj.bias": [
+          64
+        ],
+        "heads.0.weight": [
+          17,
+          64
+        ],
+        "heads.0.bias": [
+          17
+        ],
+        "heads.1.weight": [
+          17,
+          64
+        ],
+        "heads.1.bias": [
+          17
+        ],
+        "backbone.blocks.0.norm.weight": [
+          64
+        ],
+        "backbone.blocks.0.mixer.a_log": [
+          128,
+          8
+        ],
+        "backbone.blocks.0.mixer.d_skip": [
+          128
+        ],
+        "backbone.blocks.0.mixer.in_proj.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.0.mixer.conv1d.weight": [
+          128,
+          1,
+          4
+        ],
+        "backbone.blocks.0.mixer.conv1d.bias": [
+          128
+        ],
+        "backbone.blocks.0.mixer.x_proj.weight": [
+          24,
+          128
+        ],
+        "backbone.blocks.0.mixer.dt_proj.weight": [
+          128,
+          8
+        ],
+        "backbone.blocks.0.mixer.dt_proj.bias": [
+          128
+        ],
+        "backbone.blocks.0.mixer.out_proj.weight": [
+          64,
+          128
+        ],
+        "backbone.blocks.1.norm.weight": [
+          64
+        ],
+        "backbone.blocks.1.mixer.a_log": [
+          128,
+          8
+        ],
+        "backbone.blocks.1.mixer.d_skip": [
+          128
+        ],
+        "backbone.blocks.1.mixer.in_proj.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.1.mixer.conv1d.weight": [
+          128,
+          1,
+          4
+        ],
+        "backbone.blocks.1.mixer.conv1d.bias": [
+          128
+        ],
+        "backbone.blocks.1.mixer.x_proj.weight": [
+          24,
+          128
+        ],
+        "backbone.blocks.1.mixer.dt_proj.weight": [
+          128,
+          8
+        ],
+        "backbone.blocks.1.mixer.dt_proj.bias": [
+          128
+        ],
+        "backbone.blocks.1.mixer.out_proj.weight": [
+          64,
+          128
+        ],
+        "backbone.blocks.2.norm.weight": [
+          64
+        ],
+        "backbone.blocks.2.mixer.a_log": [
+          128,
+          8
+        ],
+        "backbone.blocks.2.mixer.d_skip": [
+          128
+        ],
+        "backbone.blocks.2.mixer.in_proj.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.2.mixer.conv1d.weight": [
+          128,
+          1,
+          4
+        ],
+        "backbone.blocks.2.mixer.conv1d.bias": [
+          128
+        ],
+        "backbone.blocks.2.mixer.x_proj.weight": [
+          24,
+          128
+        ],
+        "backbone.blocks.2.mixer.dt_proj.weight": [
+          128,
+          8
+        ],
+        "backbone.blocks.2.mixer.dt_proj.bias": [
+          128
+        ],
+        "backbone.blocks.2.mixer.out_proj.weight": [
+          64,
+          128
+        ],
+        "backbone.norm_f.weight": [
+          64
+        ]
+      }
+    },
+    "bundle_checkpoint": {
+      "keys": [
+        "backbone",
+        "epoch",
+        "format",
+        "generator",
+        "resolved_generator_config",
+        "text_encoder",
+        "tokenizer",
+        "validation_fid",
+        "version"
+      ],
+      "tokenizer_keys": [
+        "path",
+        "sha256"
+      ],
+      "config_keys": [
+        "backbone",
+        "codebook_size",
+        "d_conv",
+        "d_model",
+        "d_state",
+        "d_text",
+        "dropout",
+        "dt_rank",
+        "expand",
+        "mamba_n_layers",
+        "max_seq_len",
+        "n_heads",
+        "n_layers",
+        "num_codebooks",
+        "per_step_text",
+        "text_prefix_len",
+        "use_end_token",
+        "use_kernel"
+      ],
+      "generator": {
+        "token_emb.0.weight": [
+          17,
+          64
+        ],
+        "token_emb.1.weight": [
+          17,
+          64
+        ],
+        "text_proj.weight": [
+          64,
+          32
+        ],
+        "text_proj.bias": [
+          64
+        ],
+        "heads.0.weight": [
+          17,
+          64
+        ],
+        "heads.0.bias": [
+          17
+        ],
+        "heads.1.weight": [
+          17,
+          64
+        ],
+        "heads.1.bias": [
+          17
+        ],
+        "backbone.blocks.0.norm.weight": [
+          64
+        ],
+        "backbone.blocks.0.mixer.a_log": [
+          128,
+          8
+        ],
+        "backbone.blocks.0.mixer.d_skip": [
+          128
+        ],
+        "backbone.blocks.0.mixer.in_proj.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.0.mixer.conv1d.weight": [
+          128,
+          1,
+          4
+        ],
+        "backbone.blocks.0.mixer.conv1d.bias": [
+          128
+        ],
+        "backbone.blocks.0.mixer.x_proj.weight": [
+          24,
+          128
+        ],
+        "backbone.blocks.0.mixer.dt_proj.weight": [
+          128,
+          8
+        ],
+        "backbone.blocks.0.mixer.dt_proj.bias": [
+          128
+        ],
+        "backbone.blocks.0.mixer.out_proj.weight": [
+          64,
+          128
+        ],
+        "backbone.blocks.1.norm.weight": [
+          64
+        ],
+        "backbone.blocks.1.mixer.a_log": [
+          128,
+          8
+        ],
+        "backbone.blocks.1.mixer.d_skip": [
+          128
+        ],
+        "backbone.blocks.1.mixer.in_proj.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.1.mixer.conv1d.weight": [
+          128,
+          1,
+          4
+        ],
+        "backbone.blocks.1.mixer.conv1d.bias": [
+          128
+        ],
+        "backbone.blocks.1.mixer.x_proj.weight": [
+          24,
+          128
+        ],
+        "backbone.blocks.1.mixer.dt_proj.weight": [
+          128,
+          8
+        ],
+        "backbone.blocks.1.mixer.dt_proj.bias": [
+          128
+        ],
+        "backbone.blocks.1.mixer.out_proj.weight": [
+          64,
+          128
+        ],
+        "backbone.blocks.2.norm.weight": [
+          64
+        ],
+        "backbone.blocks.2.mixer.a_log": [
+          128,
+          8
+        ],
+        "backbone.blocks.2.mixer.d_skip": [
+          128
+        ],
+        "backbone.blocks.2.mixer.in_proj.weight": [
+          256,
+          64
+        ],
+        "backbone.blocks.2.mixer.conv1d.weight": [
+          128,
+          1,
+          4
+        ],
+        "backbone.blocks.2.mixer.conv1d.bias": [
+          128
+        ],
+        "backbone.blocks.2.mixer.x_proj.weight": [
+          24,
+          128
+        ],
+        "backbone.blocks.2.mixer.dt_proj.weight": [
+          128,
+          8
+        ],
+        "backbone.blocks.2.mixer.dt_proj.bias": [
+          128
+        ],
+        "backbone.blocks.2.mixer.out_proj.weight": [
+          64,
+          128
+        ],
+        "backbone.norm_f.weight": [
+          64
+        ]
+      }
+    },
+    "stream_tokens": [
+      [
+        0,
+        2
+      ],
+      [
+        4,
+        1
+      ],
+      [
+        5,
+        7
+      ],
+      [
+        8,
+        14
+      ],
+      [
+        5,
+        5
+      ],
+      [
+        12,
+        2
+      ],
+      [
+        6,
+        12
+      ],
+      [
+        15,
+        10
+      ],
+      [
+        3,
+        13
+      ],
+      [
+        13,
+        12
+      ],
+      [
+        8,
+        14
+      ],
+      [
+        7,
+        1
+      ],
+      [
+        11,
+        13
+      ],
+      [
+        8,
+        0
+      ],
+      [
+        8,
+        12
+      ],
+      [
+        0,
+        8
+      ],
+      [
+        10,
+        12
+      ],
+      [
+        2,
+        12
+      ],
+      [
+        12,
+        3
+      ],
+      [
+        5,
+        7
+      ],
+      [
+        11,
+        4
+      ],
+      [
+        13,
+        4
+      ],
+      [
+        12,
+        2
+      ],
+      [
+        11,
+        7
+      ],
+      [
+        2,
+        0
+      ],
+      [
+        6,
+        8
+      ],
+      [
+        3,
+        10
+      ],
+      [
+        13,
+        6
+      ],
+      [
+        5,
+        3
+      ],
+      [
+        12,
+        4
+      ],
+      [
+        12,
+        3
+      ],
+      [
+        3,
+        11
+      ],
+      [
+        5,
+        5
+      ],
+      [
+        12,
+        1
+      ],
+      [
+        0,
+        4
+      ],
+      [
+        0,
+        12
+      ],
+      [
+        3,
+        5
+      ],
+      [
+        3,
+        10
+      ],
+      [
+        13,
+        12
+      ],
+      [
+        12,
+        10
+      ]
+    ]
+  }
+}
