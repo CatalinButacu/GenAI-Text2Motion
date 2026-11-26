@@ -28,11 +28,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "app/stages/serve.py::load_inference_pipeline",
-            "app/stages/serve.py::run_studio",
-            "app/stages/pretrain.py::run_pretrain",
-            "app/stages/overfit.py::run_sanity_overfit",
-            "app/stages/generator.py::run_train_generator",
             "app/stages/tokenizer.py::run_train_tokenizer",
             "common/engine.py::restore_clean_ce",
             "dataset/sources/amass/corpus.py::heldout_sources",
