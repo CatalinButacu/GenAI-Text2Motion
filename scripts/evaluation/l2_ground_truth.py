@@ -11,17 +11,19 @@ from text2motion.evaluation.embeddings import (
     compute_guo_motion_embeddings,
     compute_guo_text_embeddings,
 )
+from text2motion.evaluation.guo.checkpoint import (
+    load_frozen_guo_embedding_encoders,
+    load_guo_motion_normalization_stats,
+)
+from text2motion.evaluation.guo.vocabulary import (
+    GuoWordPosVectorizer,
+    create_guo_text_input_builder,
+)
 from text2motion.evaluation.metrics import (
     diversity,
     fid,
     mm_dist,
     r_precision,
-)
-from text2motion.evaluation.nn_matcher import (
-    GuoWordPosVectorizer,
-    create_guo_text_input_builder,
-    load_frozen_guo_embedding_encoders,
-    load_guo_motion_normalization_stats,
 )
 from text2motion.motion.contracts import Split
 from text2motion.motion.storage import base_clip_ids, parse_text_file
