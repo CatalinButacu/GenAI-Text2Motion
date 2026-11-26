@@ -198,7 +198,7 @@ def test_graph_decode_follows_a_prompt_change_like_eager_decode():
     torch.manual_seed(2026)
     cfg = small_cfg(Backbone.MAMBA)
     model = trained_like(cfg).cuda()
-    model.enable_cuda_graph_decode()
+    model.cuda_graph.enable()
     tokens = torch.randint(cfg.codebook_size, (2, 6, cfg.num_codebooks), device="cuda")
 
     for _ in range(2):
@@ -209,7 +209,7 @@ def test_graph_decode_follows_a_prompt_change_like_eager_decode():
         state = model.backbone.init_state(2, torch.device("cuda"))
         _, state = model.backbone.step(prefix[:, 0], state)
         eager = EagerDecodeStep(model, [tuple(t.clone() for t in s) for s in state], text_vector)
-        captured = model.decode_step_for(state, 2, text_vector)
+        captured = model.cuda_graph.decode_step_for(state, 2, text_vector)
         for feed in tokens.unbind(1):
             expected = eager(feed)
             torch.testing.assert_close(captured(feed).clone(), expected, atol=1e-4, rtol=1e-4)

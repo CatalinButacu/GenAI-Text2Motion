@@ -34,7 +34,7 @@ def build_generator(
         tokenizer_checkpoint=tokenizer_ckpt,
     )
     if app.config.service.cuda_graph_decode and Backbone(args.backbone) is Backbone.MAMBA:
-        generator.token_generator.enable_cuda_graph_decode()
+        generator.token_generator.cuda_graph.enable()
     return generator
 
 

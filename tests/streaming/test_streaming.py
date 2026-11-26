@@ -287,7 +287,7 @@ def test_cuda_graph_decode_streams_the_same_tokens_as_eager_decode():
         return torch.stack(list(tokens), 1)
 
     eager = stream()
-    gen.enable_cuda_graph_decode()
+    gen.cuda_graph.enable()
     first = stream()
     replayed = stream()
     assert torch.equal(eager, first)
@@ -306,7 +306,7 @@ def test_cuda_graph_decode_refuses_a_positional_backbone():
         n_heads=4,
     )
     with pytest.raises(ValueError, match="recurrent state"):
-        MotionTokenGenerator(cfg).enable_cuda_graph_decode()
+        MotionTokenGenerator(cfg).cuda_graph.enable()
 
 
 def test_anchored_stream_runs_a_positional_backbone_past_its_learned_positions():
@@ -396,7 +396,7 @@ def test_anchored_cuda_graph_decode_matches_anchored_eager_decode():
         return torch.stack(list(tokens), 1)
 
     eager = stream()
-    gen.enable_cuda_graph_decode()
+    gen.cuda_graph.enable()
     assert torch.equal(eager, stream())
 
 

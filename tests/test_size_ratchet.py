@@ -14,7 +14,6 @@ ALLOWED = MappingProxyType(
     {
         "file": (
             "generation/training/trainer.py",
-            "generation/model/generator.py",
             "motion/representation.py",
             "studio/avatar.py",
             "studio/fitting.py",
@@ -31,8 +30,6 @@ ALLOWED = MappingProxyType(
             "generation/training/overfit.py::overfit_single_batch",
             "generation/training/epochs.py::train_generator",
             "generation/model/mamba.py::MambaMixer.forward",
-            "generation/model/generator.py::MotionTokenGenerator.check_stream_budget",
-            "generation/model/generator.py::MotionTokenGenerator.stream_token_indices",
             "generation/training/pretrain.py::pretrain_generator",
             "motion/kinematics.py::Skeleton.inverse_kinematics_np",
             "motion/normalization.py::fit_train_stats",
@@ -55,7 +52,6 @@ ALLOWED = MappingProxyType(
         ),
         "class": (
             "generation/training/trainer.py::GeneratorTrainer",
-            "generation/model/generator.py::MotionTokenGenerator",
             "motion/kinematics.py::Skeleton",
             "studio/avatar.py::SmplxAvatarController",
             "studio/live/controller.py::StudioGenerationController",

@@ -43,14 +43,14 @@ def test_stream_state_size_is_constant_over_ten_thousand_anchored_steps(backbone
     torch.manual_seed(2026)
     gen = tiny_twin(backbone)
     active = []
-    build_step = gen.decode_step_for
+    build_step = gen.cuda_graph.decode_step_for
 
     def recording_step(state, batch, text_vector):
         step = build_step(state, batch, text_vector)
         active.append(step)
         return step
 
-    gen.decode_step_for = recording_step
+    gen.cuda_graph.decode_step_for = recording_step
     sizes = [
         state_bytes(active[-1].state)
         for _ in gen.stream_token_indices(torch.randn(1, D_TEXT), STEPS, anchors=ANCHORS)
