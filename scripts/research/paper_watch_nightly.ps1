@@ -20,6 +20,6 @@ if (Select-String -Path $report -Pattern "^New papers: 0$" -Quiet) {
     exit 0
 }
 $prompt = "Read the file $brief completely and do the task it describes. The report file is $report."
-& cmd /c "`"$copilot`" -C `"$repo`" --agent research-scout -p `"$prompt`" -s --model gpt-6-luna --allow-all-tools --deny-tool shell --deny-tool write > `"$marks`" 2>> `"$log`""
+& cmd /c "`"$copilot`" -C `"$repo`" --agent research-scout -p `"$prompt`" -s --model gpt-6.2-sol--allow-all-tools --deny-tool shell --deny-tool write > `"$marks`" 2>> `"$log`""
 if ($LASTEXITCODE -ne 0) { throw "copilot failed with exit code $LASTEXITCODE, see $log" }
 "$(Get-Date -Format s) done: $report, $marks" | Out-File -Append -Encoding utf8 $log
