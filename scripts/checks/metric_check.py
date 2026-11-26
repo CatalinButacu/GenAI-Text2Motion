@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from text2motion.motion.representation import recover_from_ric
+from text2motion.motion.recovery import recover_from_ric
 
 FEATURE_DIR = Path("data/processed/humanml3d/new_joint_vecs")
 SPLIT_FILE = Path("data/processed/humanml3d/val.txt")

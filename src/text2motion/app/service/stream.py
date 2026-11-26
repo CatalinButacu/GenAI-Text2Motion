@@ -10,7 +10,7 @@ import torch
 from text2motion.app.service.protocol import MotionStreamProtocol
 from text2motion.app.service.state import LoadedInferencePipeline, StreamSteering
 from text2motion.generation.contracts import SamplingConfig, StreamAnchors
-from text2motion.motion.representation import StreamingSkeletonRecovery
+from text2motion.motion.recovery import StreamingSkeletonRecovery
 
 
 ############################################################

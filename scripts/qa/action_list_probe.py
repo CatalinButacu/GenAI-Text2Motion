@@ -26,7 +26,7 @@ from text2motion.generation.contracts import (
     StudioSamplingConfig,
 )
 from text2motion.generation.model.sampling import seeded_sampling_uniforms
-from text2motion.motion.representation import recover_skeleton
+from text2motion.motion.recovery import recover_skeleton
 
 logger = logging.getLogger(__name__)
 SPLIT_SEED = 2026

@@ -12,6 +12,11 @@ from text2motion.dataset.training.windows import MotionWindowDataset
 from text2motion.motion import representation
 from text2motion.motion.contracts import MotionClip, Split
 from text2motion.motion.normalization import MotionScaler, fit_train_stats
+from text2motion.motion.recovery import (
+    StreamingSkeletonRecovery,
+    recover_from_ric,
+    recover_skeleton,
+)
 from text2motion.motion.representation import DIM, JOINTS
 from text2motion.motion.storage import (
     FEATURES_DIR,
@@ -133,13 +138,13 @@ def test_the_scaler_rejects_integer_or_other_width_features(features, error):
 
 def test_recovery_rejects_another_width_and_non_finite_values():
     with pytest.raises(ValueError, match="263"):
-        representation.recover_from_ric(torch.zeros(4, 272), 22)
+        recover_from_ric(torch.zeros(4, 272), 22)
     features = np.zeros((4, DIM), np.float32)
     features[1, 7] = np.nan
     with pytest.raises(ValueError, match="NaN or Inf"):
-        representation.recover_skeleton(features)
+        recover_skeleton(features)
     with pytest.raises(ValueError, match="NaN or Inf"):
-        representation.StreamingSkeletonRecovery()(features)
+        StreamingSkeletonRecovery()(features)
 
 
 def test_encoding_one_frame_raises(synthetic_joints):
@@ -151,8 +156,8 @@ def test_encoding_one_frame_raises(synthetic_joints):
 def test_float64_recovery_keeps_its_dtype_and_matches_float32():
     features = torch.from_numpy(np.random.default_rng(2).standard_normal((6, DIM)))
 
-    double = representation.recover_from_ric(features, 22)
-    single = representation.recover_from_ric(features.float(), 22)
+    double = recover_from_ric(features, 22)
+    single = recover_from_ric(features.float(), 22)
 
     assert double.dtype == torch.float64
     torch.testing.assert_close(double.float(), single, atol=1e-5, rtol=1e-5)
@@ -162,8 +167,8 @@ def test_streamed_recovery_accepts_cuda_features():
     assert torch.cuda.is_available(), "this test checks the CUDA path; this run has no CUDA"
     features = torch.from_numpy(np.random.default_rng(3).standard_normal((8, DIM))).float()
 
-    on_cpu = representation.StreamingSkeletonRecovery()(features)
-    on_cuda = representation.StreamingSkeletonRecovery()(features.cuda())
+    on_cpu = StreamingSkeletonRecovery()(features)
+    on_cuda = StreamingSkeletonRecovery()(features.cuda())
 
     np.testing.assert_allclose(on_cuda, on_cpu, atol=1e-5)
 

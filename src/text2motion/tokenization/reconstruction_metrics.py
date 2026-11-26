@@ -10,7 +10,8 @@ import torch
 from text2motion.dataset.training.captioned import check_no_missing_files
 from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler
-from text2motion.motion.representation import JOINTS, recover_from_ric
+from text2motion.motion.recovery import recover_from_ric
+from text2motion.motion.representation import JOINTS
 from text2motion.motion.storage import FEATURES_DIR, base_clip_ids
 from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
 

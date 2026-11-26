@@ -12,7 +12,8 @@ import torch
 from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.evaluation.metrics import paired_mean_ratio
 from text2motion.generation.contracts import Backbone, SamplingConfig
-from text2motion.motion.representation import FPS, recover_skeleton
+from text2motion.motion.recovery import recover_skeleton
+from text2motion.motion.representation import FPS
 
 SEED = 2026
 CONFIG = "configs/generator/size_sweep/width_320.yaml"

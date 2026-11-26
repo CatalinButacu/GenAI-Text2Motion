@@ -12,7 +12,8 @@ from text2motion.generation.contracts import (
 )
 from text2motion.generation.decoder import StreamingMotionDecoder
 from text2motion.generation.model.generator import MotionTokenGenerator
-from text2motion.motion.representation import kinematic_bones, recover_skeleton
+from text2motion.motion.recovery import recover_skeleton
+from text2motion.motion.representation import kinematic_bones
 from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
 
@@ -217,7 +218,7 @@ def test_positional_backbone_refuses_unbounded_and_overlong_streams():
 
 
 def test_streamed_root_recovery_matches_whole_sequence_trajectory():
-    from text2motion.motion.representation import (
+    from text2motion.motion.recovery import (
         StreamingSkeletonRecovery,
         recover_skeleton,
     )
@@ -254,7 +255,7 @@ def test_streamed_root_recovery_matches_whole_sequence_trajectory():
 
 
 def test_streaming_recovery_resets_to_the_origin():
-    from text2motion.motion.representation import StreamingSkeletonRecovery
+    from text2motion.motion.recovery import StreamingSkeletonRecovery
 
     feat = np.zeros((16, 263), dtype=np.float32)
     feat[:, 1] = 0.05

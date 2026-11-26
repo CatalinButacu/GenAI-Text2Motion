@@ -1,4 +1,3 @@
-import math
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
@@ -6,16 +5,19 @@ from types import MappingProxyType
 import numpy as np
 import torch
 
-from text2motion.motion.geometry import (
-    qbetween_np,
-    qinv,
-    qinv_np,
-    qmul_np,
-    qrot,
-    qrot_np,
-    quaternion_to_cont6d,
-    quaternion_to_cont6d_np,
+from text2motion.motion.encoding import (
+    center_on_first_root,
+    check_joint_shape,
+    detect_foot_contacts,
+    initial_heading_quat,
+    lift_to_floor,
+    local_velocity,
+    pack_features,
+    root_channels,
+    root_relative_positions,
+    rotation_features,
 )
+from text2motion.motion.geometry import qrot_np
 from text2motion.motion.kinematics import Skeleton
 
 DIM = 263
@@ -173,223 +175,30 @@ def uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarray
 
 
 def encode_joints(positions: np.ndarray, params: FeatureParams) -> tuple[np.ndarray, ...]:
-    if positions.ndim != 3 or positions.shape[0] < 2:
-        raise ValueError(
-            f"encode_joints needs joints of shape [frames >= 2, joints, 3], got {positions.shape}"
-        )
-    foot_threshold = params.foot_velocity_threshold
-    face_joints = params.face_joints
-    left_feet, right_feet = params.left_feet, params.right_feet
-    raw_offsets = torch.tensor(params.raw_offsets)
-
+    check_joint_shape(positions)
     positions = uniform_skeleton(positions, params)
-
-    floor_height = positions.min(axis=0).min(axis=0)[1]
-    positions[:, :, 1] -= floor_height
+    positions = lift_to_floor(positions)
 
     root_pos_init = positions[0]
-    root_pose_init_xz = root_pos_init[0] * np.array([1, 0, 1])
-    positions = positions - root_pose_init_xz
-
-    r_hip, l_hip, sdr_r, sdr_l = face_joints
-    across1 = root_pos_init[r_hip] - root_pos_init[l_hip]
-    across2 = root_pos_init[sdr_r] - root_pos_init[sdr_l]
-    across = across1 + across2
-    across = across / np.sqrt((across**2).sum(axis=-1))[..., np.newaxis]
-
-    forward_init = np.cross(np.array([[0, 1, 0]]), across, axis=-1)
-    forward_init = forward_init / np.sqrt((forward_init**2).sum(axis=-1))[..., np.newaxis]
-
-    target = np.array([[0, 0, 1]])
-    root_quat_init = qbetween_np(forward_init, target)
-    root_quat_init = np.ones(positions.shape[:-1] + (4,)) * root_quat_init
-
+    positions = center_on_first_root(positions)
+    root_quat_init = initial_heading_quat(root_pos_init, params.face_joints, positions.shape[:-1])
     positions = qrot_np(root_quat_init, positions)
 
     global_positions = positions.copy()
+    feet_l, feet_r = detect_foot_contacts(
+        positions, params.left_feet, params.right_feet, params.foot_velocity_threshold
+    )
+    cont_6d_params, r_velocity, velocity, r_rot = rotation_features(
+        positions, torch.tensor(params.raw_offsets), params.chains, params.face_joints
+    )
+    positions = root_relative_positions(positions, r_rot)
 
-    def detect_feet(positions: np.ndarray, threshold: float) -> tuple[np.ndarray, np.ndarray]:
-        velocity_limit = np.array([threshold, threshold])
-
-        left_x = (positions[1:, left_feet, 0] - positions[:-1, left_feet, 0]) ** 2
-        left_y = (positions[1:, left_feet, 1] - positions[:-1, left_feet, 1]) ** 2
-        left_z = (positions[1:, left_feet, 2] - positions[:-1, left_feet, 2]) ** 2
-        left_contact = ((left_x + left_y + left_z) < velocity_limit).astype(np.float32)
-
-        right_x = (positions[1:, right_feet, 0] - positions[:-1, right_feet, 0]) ** 2
-        right_y = (positions[1:, right_feet, 1] - positions[:-1, right_feet, 1]) ** 2
-        right_z = (positions[1:, right_feet, 2] - positions[:-1, right_feet, 2]) ** 2
-        right_contact = ((right_x + right_y + right_z) < velocity_limit).astype(np.float32)
-        return left_contact, right_contact
-
-    feet_l, feet_r = detect_feet(positions, foot_threshold)
-
-    def rotation_features(positions: np.ndarray) -> tuple[np.ndarray, ...]:
-        skeleton = Skeleton(raw_offsets, params.chains, "cpu")
-        quat_params = skeleton.inverse_kinematics_np(positions, face_joints, smooth_forward=True)
-
-        cont_6d_params = quaternion_to_cont6d_np(quat_params)
-        r_rot = quat_params[:, 0].copy()
-        velocity = (positions[1:, 0] - positions[:-1, 0]).copy()
-        velocity = qrot_np(r_rot[1:], velocity)
-        r_velocity = qmul_np(r_rot[1:], qinv_np(r_rot[:-1]))
-        return cont_6d_params, r_velocity, velocity, r_rot
-
-    cont_6d_params, r_velocity, velocity, r_rot = rotation_features(positions)
-
-    def root_relative_positions(positions: np.ndarray) -> np.ndarray:
-        positions[..., 0] -= positions[:, 0:1, 0]
-        positions[..., 2] -= positions[:, 0:1, 2]
-        return qrot_np(np.repeat(r_rot[:, None], positions.shape[1], axis=1), positions)
-
-    positions = root_relative_positions(positions)
-
-    root_y = positions[:, 0, 1:2]
-
-    r_velocity = np.arcsin(r_velocity[:, 2:3])
-    l_velocity = velocity[:, [0, 2]]
-    root_data = np.concatenate([r_velocity, l_velocity, root_y[:-1]], axis=-1)
-
+    root_data, l_velocity = root_channels(positions, r_velocity, velocity)
     rot_data = cont_6d_params[:, 1:].reshape(len(cont_6d_params), -1)
-
     ric_data = positions[:, 1:].reshape(len(positions), -1)
-
-    local_vel = qrot_np(
-        np.repeat(r_rot[:-1, None], global_positions.shape[1], axis=1),
-        global_positions[1:] - global_positions[:-1],
-    )
-    local_vel = local_vel.reshape(len(local_vel), -1)
-
-    data = root_data
-    data = np.concatenate([data, ric_data[:-1]], axis=-1)
-    data = np.concatenate([data, rot_data[:-1]], axis=-1)
-    data = np.concatenate([data, local_vel], axis=-1)
-    data = np.concatenate([data, feet_l, feet_r], axis=-1)
-
+    local_vel = local_velocity(global_positions, r_rot)
+    data = pack_features(root_data, ric_data, rot_data, local_vel, feet_l, feet_r)
     return data, global_positions, positions, l_velocity
-
-
-def check_feature_width(data: torch.Tensor, joint_count: int) -> None:
-    def feature_width(joint_count: int) -> int:
-        return 8 + (joint_count - 1) * 9 + joint_count * 3
-
-    expected = feature_width(joint_count)
-    if data.dim() < 2 or data.shape[-1] != expected:
-        raise ValueError(
-            f"recovery needs features of shape [..., frames, {expected}] for {joint_count} "
-            f"joints, got {tuple(data.shape)}"
-        )
-
-
-def check_finite_features(data: torch.Tensor) -> None:
-    if not torch.isfinite(data).all():
-        raise ValueError("the motion features hold NaN or Inf values")
-
-
-def recover_root(data: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    rot_vel = data[..., 0]
-    r_rot_ang = torch.zeros_like(rot_vel).to(data.device)
-    r_rot_ang[..., 1:] = rot_vel[..., :-1]
-    r_rot_ang = torch.cumsum(r_rot_ang, dim=-1)
-
-    r_rot_quat = torch.zeros(data.shape[:-1] + (4,), dtype=data.dtype, device=data.device)
-    r_rot_quat[..., 0] = torch.cos(r_rot_ang)
-    r_rot_quat[..., 2] = torch.sin(r_rot_ang)
-
-    r_pos = torch.zeros(data.shape[:-1] + (3,), dtype=data.dtype, device=data.device)
-    r_pos[..., 1:, [0, 2]] = data[..., :-1, 1:3]
-    r_pos = qrot(qinv(r_rot_quat), r_pos)
-
-    r_pos = torch.cumsum(r_pos, dim=-2)
-
-    r_pos[..., 1] = data[..., 3]
-    return r_rot_quat, r_pos
-
-
-def recover_from_ric(data: torch.Tensor, joint_count: int) -> torch.Tensor:
-    check_feature_width(data, joint_count)
-    r_rot_quat, r_pos = recover_root(data)
-    positions = data[..., 4 : (joint_count - 1) * 3 + 4]
-    positions = positions.view(positions.shape[:-1] + (-1, 3))
-
-    positions = qrot(qinv(r_rot_quat[..., None, :]).expand(positions.shape[:-1] + (4,)), positions)
-
-    positions[..., 0] += r_pos[..., 0:1]
-    positions[..., 2] += r_pos[..., 2:3]
-
-    return torch.cat([r_pos.unsqueeze(-2), positions], dim=-2)
-
-
-def recover_from_rot(data: torch.Tensor, joint_count: int, skeleton: Skeleton) -> torch.Tensor:
-    check_feature_width(data, joint_count)
-    r_rot_quat, r_pos = recover_root(data)
-
-    r_rot_cont6d = quaternion_to_cont6d(r_rot_quat)
-
-    start_indx = 1 + 2 + 1 + (joint_count - 1) * 3
-    end_indx = start_indx + (joint_count - 1) * 6
-    cont6d_params = data[..., start_indx:end_indx]
-    cont6d_params = torch.cat([r_rot_cont6d, cont6d_params], dim=-1)
-    cont6d_params = cont6d_params.view(-1, joint_count, 6)
-
-    joints = skeleton.forward_kinematics_cont6d(cont6d_params, r_pos.reshape(-1, 3))
-    return joints.reshape(data.shape[:-1] + (joint_count, 3))
-
-
-def recover_skeleton(feat263: np.ndarray | torch.Tensor) -> np.ndarray:
-    data = (
-        feat263
-        if isinstance(feat263, torch.Tensor)
-        else torch.as_tensor(feat263, dtype=torch.float32)
-    )
-    check_finite_features(data)
-    return recover_from_ric(data.float(), JOINTS).cpu().numpy()
-
-
-############################################################
-#       StreamingSkeletonRecovery
-############################################################
-class StreamingSkeletonRecovery:
-    def __init__(self) -> None:
-        self.reset()
-
-    def reset(self) -> None:
-        self.yaw = 0.0
-        self.offset = np.zeros(2, dtype=np.float32)
-
-    @staticmethod
-    def yaw_quat(yaw: float, device: torch.device) -> torch.Tensor:
-        quat = torch.zeros(4, dtype=torch.float32, device=device)
-        quat[0] = math.cos(yaw)
-        quat[2] = math.sin(yaw)
-        return quat
-
-    def __call__(self, feat263: np.ndarray | torch.Tensor) -> np.ndarray:
-        data = (
-            feat263.float()
-            if isinstance(feat263, torch.Tensor)
-            else torch.as_tensor(np.asarray(feat263), dtype=torch.float32)
-        )
-        check_finite_features(data)
-        local = recover_from_ric(data, JOINTS)
-
-        carry = self.yaw_quat(self.yaw, data.device).expand(local.shape[:-1] + (4,))
-        placed = qrot(qinv(carry), local)
-        placed[..., 0] += float(self.offset[0])
-        placed[..., 2] += float(self.offset[1])
-
-        yaw_next = self.yaw + float(data[..., 0].sum())
-        step = torch.zeros(3, dtype=torch.float32, device=data.device)
-        step[0] = data[-1, 1]
-        step[2] = data[-1, 2]
-        step = qrot(qinv(self.yaw_quat(yaw_next, data.device)), step)
-
-        root_last = placed[-1, 0]
-        self.offset = np.array(
-            [float(root_last[0] + step[0]), float(root_last[2] + step[2])], dtype=np.float32
-        )
-        self.yaw = yaw_next
-        return placed.cpu().numpy()
 
 
 def kinematic_bones() -> np.ndarray:

@@ -10,7 +10,8 @@ import torch
 from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.generation.contracts import Backbone, SamplingConfig, StreamAnchors
 from text2motion.generation.decoder import StreamingMotionDecoder
-from text2motion.motion.representation import FPS, StreamingSkeletonRecovery, recover_skeleton
+from text2motion.motion.recovery import StreamingSkeletonRecovery, recover_skeleton
+from text2motion.motion.representation import FPS
 
 PROMPTS = (
     "a person runs forward",

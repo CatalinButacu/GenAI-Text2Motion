@@ -23,7 +23,7 @@ from text2motion.evaluation.metrics import (
 )
 from text2motion.generation.contracts import Backbone, StudioSamplingConfig
 from text2motion.motion.contracts import Split
-from text2motion.motion.representation import recover_skeleton
+from text2motion.motion.recovery import recover_skeleton
 
 logger = logging.getLogger(__name__)
 SEED = 2026

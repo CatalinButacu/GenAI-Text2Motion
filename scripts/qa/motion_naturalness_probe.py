@@ -13,7 +13,7 @@ from text2motion.app.config.loading import load_dataclass
 from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.evaluation.metrics import motion_statistics
 from text2motion.generation.contracts import Backbone, SamplingConfig
-from text2motion.motion.representation import recover_skeleton
+from text2motion.motion.recovery import recover_skeleton
 from text2motion.studio.fitting import build_smplx_body_model
 from text2motion.studio.pose_parameters import solve_smplx_pose_from_joints
 from text2motion.studio.studio_config import StudioConfig

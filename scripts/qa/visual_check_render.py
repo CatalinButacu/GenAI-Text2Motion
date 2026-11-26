@@ -11,7 +11,8 @@ import torch
 from matplotlib.animation import PillowWriter
 
 from text2motion.evaluation.metrics import motion_statistics
-from text2motion.motion.representation import FPS, KINEMATIC_CHAINS, recover_from_ric
+from text2motion.motion.recovery import recover_from_ric
+from text2motion.motion.representation import FPS, KINEMATIC_CHAINS
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 HML3D = REPO / "data" / "HumanML3D_official" / "new_joint_vecs"

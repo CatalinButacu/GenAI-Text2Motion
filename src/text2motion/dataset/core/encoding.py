@@ -5,12 +5,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from text2motion.motion.recovery import (
+    recover_from_ric,
+)
 from text2motion.motion.representation import (
     JOINTS,
     FeatureParams,
     encode_joints,
     feature_params,
-    recover_from_ric,
     target_offsets,
 )
 

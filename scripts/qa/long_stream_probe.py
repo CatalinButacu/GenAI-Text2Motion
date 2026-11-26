@@ -33,7 +33,8 @@ from text2motion.generation.contracts import (
 )
 from text2motion.generation.model.sampling import seeded_sampling_uniforms
 from text2motion.motion.contracts import Split
-from text2motion.motion.representation import DIM, FPS, recover_skeleton
+from text2motion.motion.recovery import recover_skeleton
+from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import FEATURES_DIR, atomic_numpy_save, parse_text_file, sha256_file
 
 logger = logging.getLogger(__name__)

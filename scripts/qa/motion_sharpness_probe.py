@@ -16,7 +16,7 @@ from text2motion.evaluation.metrics import paired_mean_ratio, sharpness_statisti
 from text2motion.evaluation.samples import deterministic_generation_seed
 from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.contracts import Split
-from text2motion.motion.representation import recover_skeleton
+from text2motion.motion.recovery import recover_skeleton
 
 SEED = 2026
 CONFIG = "configs/generator/size_sweep/width_320.yaml"

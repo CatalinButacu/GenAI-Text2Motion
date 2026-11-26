@@ -30,10 +30,12 @@ from text2motion.dataset.splits.plan import SplitPlan
 from text2motion.dataset.splits.view import ALLOWED_TRAIN_FILE
 from text2motion.motion.contracts import PreparationRequest, Split
 from text2motion.motion.normalization import fit_train_stats
+from text2motion.motion.recovery import (
+    recover_from_ric,
+)
 from text2motion.motion.representation import (
     encode_joints,
     feature_params,
-    recover_from_ric,
     target_offsets,
 )
 from text2motion.motion.storage import (

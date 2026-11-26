@@ -19,7 +19,8 @@ from text2motion.app.requests.serve import ModelServiceRequest
 from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.app.stages.serve import load_inference_pipeline
 from text2motion.generation.contracts import Backbone, SamplingConfig
-from text2motion.motion.representation import DIM, FPS, kinematic_bones, recover_skeleton
+from text2motion.motion.recovery import recover_skeleton
+from text2motion.motion.representation import DIM, FPS, kinematic_bones
 from text2motion.motion.storage import sha256_file
 
 REVIEW_FRAMES = tuple(range(176, 289))

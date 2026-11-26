@@ -8,12 +8,14 @@ from torch import nn
 from torch.nn import functional as F
 
 from text2motion.generation.contracts import LossWeights as LossWeights
+from text2motion.motion.recovery import (
+    recover_from_ric,
+    recover_from_rot,
+)
 from text2motion.motion.representation import (
     FOOT_CONTACT_JOINTS,
     JOINTS,
     SLICES,
-    recover_from_ric,
-    recover_from_rot,
 )
 from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
 

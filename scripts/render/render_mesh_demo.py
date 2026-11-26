@@ -16,7 +16,8 @@ from text2motion.app.requests.serve import ModelServiceRequest
 from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.app.stages.serve import load_inference_pipeline
 from text2motion.generation.contracts import Backbone, SamplingConfig
-from text2motion.motion.representation import FPS, StreamingSkeletonRecovery
+from text2motion.motion.recovery import StreamingSkeletonRecovery
+from text2motion.motion.representation import FPS
 from text2motion.studio.fitting import fit_smplx_to_joints
 from text2motion.studio.studio_config import SmplxFitConfig
 
