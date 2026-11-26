@@ -29,7 +29,6 @@ ALLOWED = MappingProxyType(
         ),
         "function": (
             "app/stages/serve.py::load_inference_pipeline",
-            "app/stages/evaluate.py::run_evaluate",
             "app/stages/serve.py::run_studio",
             "app/stages/pretrain.py::run_pretrain",
             "app/stages/overfit.py::run_sanity_overfit",
