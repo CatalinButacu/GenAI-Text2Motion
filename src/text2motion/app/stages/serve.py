@@ -9,11 +9,19 @@ from text2motion.app.config.loading import load_dataclass, service_policy
 from text2motion.app.requests.base import HealthRequest
 from text2motion.app.requests.serve import ModelServiceRequest, ServeRequest, StudioRequest
 from text2motion.app.runtime.context import ApplicationContext
+from text2motion.app.service.client import MotionInferenceClient
 from text2motion.app.service.handlers import MotionInferenceServer
 from text2motion.app.service.protocol import Release, ServiceAddress
 from text2motion.app.service.state import LoadedInferencePipeline
+from text2motion.app.stages.inference_pipeline import (
+    build_decoder,
+    build_generator,
+    build_loaded_pipeline,
+    resolve_max_steps,
+    resolve_model_paths,
+)
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.decoder import StreamingMotionDecoder
+from text2motion.studio.studio_config import StudioConfig
 
 logger = logging.getLogger(__name__)
 
@@ -21,53 +29,12 @@ logger = logging.getLogger(__name__)
 def load_inference_pipeline(
     app: ApplicationContext, args: ModelServiceRequest
 ) -> LoadedInferencePipeline:
-    args.ckpt = args.ckpt or app.config.paths.generator_checkpoint(args.backbone)
-    args.tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
-    tokenizer = app.models.load_tokenizer(args.tokenizer_ckpt)
-    generator = app.models.load_text_to_motion_generator(
-        args.backbone,
-        args.ckpt,
-        tokenizer,
-        tokenizer_checkpoint=args.tokenizer_ckpt,
-    )
-    if app.config.service.cuda_graph_decode and Backbone(args.backbone) is Backbone.MAMBA:
-        generator.token_generator.enable_cuda_graph_decode()
-    scaler = app.create_motion_repository().load_scaler()
-    decoder = StreamingMotionDecoder(
-        tokenizer.network,
-        downsample=app.config.tokenizer.downsample,
-        mean=torch.from_numpy(scaler.mean).to(app.device),
-        std=torch.from_numpy(scaler.std).to(app.device),
-    )
-    service = app.config.service
-    position_limit = getattr(generator.token_generator.backbone, "max_positions", None)
-    max_steps = (
-        0 if position_limit is None else position_limit - app.config.generator.text_prefix_len
-    )
-    if service.anchor_every_tokens:
-        generator.token_generator.check_stream_budget(
-            0,
-            app.config.generator.text_prefix_len,
-            None,
-            service.anchor_every_tokens,
-            service.anchor_context_tokens,
-        )
-        max_steps = 0
-    return LoadedInferencePipeline(
-        generator=generator,
-        decoder=decoder,
-        backbone=str(args.backbone),
-        checkpoint=str(args.ckpt),
-        downsample=app.config.tokenizer.downsample,
-        trained_steps=app.config.data.max_motion_len // app.config.tokenizer.downsample,
-        max_steps=max_steps,
-        device=app.device,
-        identity=Release(
-            str(args.config), str(args.ckpt), str(args.tokenizer_ckpt), str(args.backbone)
-        ).identity(),
-        anchor_every=service.anchor_every_tokens,
-        anchor_context=service.anchor_context_tokens,
-    )
+    ckpt, tokenizer_ckpt = resolve_model_paths(app, args)
+    tokenizer = app.models.load_tokenizer(tokenizer_ckpt)
+    generator = build_generator(app, args, tokenizer, ckpt, tokenizer_ckpt)
+    decoder = build_decoder(app, tokenizer)
+    max_steps = resolve_max_steps(app, generator)
+    return build_loaded_pipeline(app, args, generator, decoder, max_steps)
 
 
 def run_serve(app: ApplicationContext, args: ServeRequest) -> None:
@@ -112,46 +79,14 @@ def select_model(args: StudioRequest, model: str, registry: Path) -> None:
 
 
 def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
-    from text2motion.app.service.client import motion_service_client
-    from text2motion.studio.studio_config import StudioConfig
     from text2motion.studio.viewer import StreamingStudioViewer
 
-    studio_config = (
-        load_dataclass(StudioConfig, args.studio_config)
-        if Path(args.studio_config).is_file()
-        else StudioConfig()
-    )
-    if args.model:
-        select_model(args, args.model, studio_config.model_registry)
-        app = app.with_config(args.config)
-    app = app.with_service_file(args.service_config)
-    args.ckpt = args.ckpt or app.config.paths.generator_checkpoint(args.backbone)
-    args.tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
-    args.host = args.host or app.config.service.connect_host
-    args.port = args.port or app.config.service.port
-
-    device = studio_config.fit.device
-    if device == "cpu":
-        torch.set_num_threads(studio_config.fit.threads)
-    logger.info(f"[load] SMPL-X body fit runs on {device} ({torch.get_num_threads()} threads)")
-    logger.info(f"[load] connecting to the motion service (backbone={args.backbone})...")
-    client = motion_service_client(
-        Release(
-            str(args.config),
-            str(args.ckpt),
-            str(args.tokenizer_ckpt),
-            str(args.backbone),
-        ),
-        ServiceAddress(args.host, args.port),
-        app.config.paths.service_log,
-        service_config=args.service_config,
-        policy=service_policy(app.config.service),
-        spawn_wait_seconds=app.config.service.startup_timeout_seconds,
-    )
-    model_dir = str(args.model_dir or studio_config.fit.model_dir)
-    model_dir = model_dir if model_dir and Path(model_dir).exists() else ""
-    if not model_dir:
-        logger.info("[load] SMPL-X model dir not found -> skeleton-only studio")
+    studio_config = load_studio_config(args)
+    app = prepare_studio_request(app, args, studio_config)
+    address = resolve_service_address(app, args)
+    device = configure_body_fit(studio_config)
+    client = connect_studio_client(app, args, address)
+    model_dir = resolve_model_dir(args, studio_config)
 
     StreamingStudioViewer(
         client=client,
@@ -161,6 +96,69 @@ def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
         config=studio_config,
         reload_config=lambda: load_dataclass(StudioConfig, args.studio_config),
     ).run()
+
+
+def load_studio_config(args: StudioRequest) -> StudioConfig:
+    return (
+        load_dataclass(StudioConfig, args.studio_config)
+        if Path(args.studio_config).is_file()
+        else StudioConfig()
+    )
+
+
+def prepare_studio_request(
+    app: ApplicationContext, args: StudioRequest, studio_config: StudioConfig
+) -> ApplicationContext:
+    if args.model:
+        select_model(args, args.model, studio_config.model_registry)
+        app = app.with_config(args.config)
+    app = app.with_service_file(args.service_config)
+    args.ckpt = args.ckpt or app.config.paths.generator_checkpoint(args.backbone)
+    args.tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
+    return app
+
+
+def resolve_service_address(app: ApplicationContext, args: StudioRequest) -> ServiceAddress:
+    args.host = args.host or app.config.service.connect_host
+    args.port = args.port or app.config.service.port
+    return ServiceAddress(args.host, args.port)
+
+
+def configure_body_fit(studio_config: StudioConfig) -> str:
+    device = studio_config.fit.device
+    if device == "cpu":
+        torch.set_num_threads(studio_config.fit.threads)
+    logger.info(f"[load] SMPL-X body fit runs on {device} ({torch.get_num_threads()} threads)")
+    return device
+
+
+def connect_studio_client(
+    app: ApplicationContext, args: StudioRequest, address: ServiceAddress
+) -> MotionInferenceClient:
+    from text2motion.app.service.client import motion_service_client
+
+    logger.info(f"[load] connecting to the motion service (backbone={args.backbone})...")
+    return motion_service_client(
+        Release(
+            str(args.config),
+            str(args.ckpt),
+            str(args.tokenizer_ckpt),
+            str(args.backbone),
+        ),
+        address,
+        app.config.paths.service_log,
+        service_config=args.service_config,
+        policy=service_policy(app.config.service),
+        spawn_wait_seconds=app.config.service.startup_timeout_seconds,
+    )
+
+
+def resolve_model_dir(args: StudioRequest, studio_config: StudioConfig) -> str:
+    model_dir = str(args.model_dir or studio_config.fit.model_dir)
+    model_dir = model_dir if model_dir and Path(model_dir).exists() else ""
+    if not model_dir:
+        logger.info("[load] SMPL-X model dir not found -> skeleton-only studio")
+    return model_dir
 
 
 def run_health(app: ApplicationContext, request: HealthRequest) -> None:
