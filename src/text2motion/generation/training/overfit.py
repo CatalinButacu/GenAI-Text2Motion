@@ -10,6 +10,7 @@ from text2motion.generation.contracts import (
     OverfitCriteria,
 )
 from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.model.text_encoder import CLIPTextEncoder
 from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
 
@@ -38,18 +39,46 @@ def teacher_forced_accuracy(
     return float(accuracy), float(ce)
 
 
-def overfit_single_batch(
-    trainer: GeneratorTrainer,
-    motion: torch.Tensor,
-    lengths: torch.Tensor,
-    captions: list[str],
-    steps: int,
-    criteria: OverfitCriteria = DEFAULT_OVERFIT_CRITERIA,
-) -> dict[str, float]:
-    generator = trainer.token_generator
-    text_encoder = trainer.text_encoder
-    if text_encoder is None:
+def gate_text_encoder(trainer: GeneratorTrainer) -> CLIPTextEncoder:
+    if trainer.text_encoder is None:
         raise ValueError("the overfit gate needs the text encoder of the trainer")
+    return trainer.text_encoder
+
+
+def measure_gate(
+    trainer: GeneratorTrainer,
+    text_encoder: CLIPTextEncoder,
+    motion: torch.Tensor,
+    captions: list[str],
+    lengths: torch.Tensor,
+) -> tuple[float, float]:
+    generator = trainer.token_generator
+    generator.eval()
+    text_encoder.eval()
+    return teacher_forced_accuracy(
+        generator,
+        trainer.tokenizer_network,
+        trainer.downsample,
+        motion,
+        text_encoder(captions),
+        lengths,
+    )
+
+
+def restore_gate_training(trainer: GeneratorTrainer, text_encoder: CLIPTextEncoder) -> None:
+    trainer.token_generator.train()
+    text_encoder.train()
+
+
+def run_gate_steps(
+    trainer: GeneratorTrainer,
+    text_encoder: CLIPTextEncoder,
+    motion: torch.Tensor,
+    captions: list[str],
+    lengths: torch.Tensor,
+    steps: int,
+    criteria: OverfitCriteria,
+) -> tuple[float | None, dict[str, float], int]:
     first_total: float | None = None
     parts: dict[str, float] = {}
     step = 0
@@ -63,37 +92,35 @@ def overfit_single_batch(
         first_total = parts["total"] if first_total is None else first_total
         if step % 25 and step + 1 != steps:
             continue
-        generator.eval()
-        text_encoder.eval()
-        accuracy, ce = teacher_forced_accuracy(
-            generator,
-            trainer.tokenizer_network,
-            trainer.downsample,
-            motion,
-            text_encoder(captions),
-            lengths,
-        )
-        generator.train()
-        text_encoder.train()
+        accuracy, ce = measure_gate(trainer, text_encoder, motion, captions, lengths)
+        restore_gate_training(trainer, text_encoder)
         logger.info(
             f"step {step + 1:4d} total {parts['total']:.5f} ce {ce:.5f} token_accuracy {accuracy:.4f}"
         )
         if criteria.accepts(accuracy, ce, parts["total"] / first_total):
             break
+    return first_total, parts, step
 
-    generator.eval()
-    text_encoder.eval()
-    accuracy, ce = teacher_forced_accuracy(
-        generator,
-        trainer.tokenizer_network,
-        trainer.downsample,
-        motion,
-        text_encoder(captions),
-        lengths,
-    )
+
+def check_tokenizer_frozen(trainer: GeneratorTrainer) -> None:
     if any(parameter.grad is not None for parameter in trainer.tokenizer_network.parameters()):
         raise RuntimeError("frozen tokenizer received gradients during overfit gate")
 
+
+def overfit_single_batch(
+    trainer: GeneratorTrainer,
+    motion: torch.Tensor,
+    lengths: torch.Tensor,
+    captions: list[str],
+    steps: int,
+    criteria: OverfitCriteria = DEFAULT_OVERFIT_CRITERIA,
+) -> dict[str, float]:
+    text_encoder = gate_text_encoder(trainer)
+    first_total, parts, step = run_gate_steps(
+        trainer, text_encoder, motion, captions, lengths, steps, criteria
+    )
+    accuracy, ce = measure_gate(trainer, text_encoder, motion, captions, lengths)
+    check_tokenizer_frozen(trainer)
     if first_total is None:
         raise RuntimeError("the overfit gate ran no step")
     return {
