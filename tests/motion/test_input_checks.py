@@ -5,12 +5,9 @@ import pytest
 import torch
 
 from text2motion.dataset.contracts import MotionDataConfig
-from text2motion.dataset.datasets import (
-    CaptionedMotionDataset,
-    MotionWindowDataset,
-    clip_frame_counts,
-    collate_motion_clips,
-)
+from text2motion.dataset.training.batching import collate_motion_clips
+from text2motion.dataset.training.captioned import CaptionedMotionDataset, clip_frame_counts
+from text2motion.dataset.training.windows import MotionWindowDataset
 from text2motion.motion import representation
 from text2motion.motion.contracts import MotionClip, Split
 from text2motion.motion.normalization import MotionScaler, fit_train_stats
@@ -38,6 +35,7 @@ def small_dataset_root(root):
             "a person walks#a/DET#0.0#0.0\n", encoding="utf-8"
         )
     (root / SPLIT_FILES[Split.TRAIN]).write_text("A\nB\n", encoding="utf-8")
+    (root / "train_allowed.txt").write_text("A\nB\n", encoding="utf-8")
     return root
 
 

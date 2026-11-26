@@ -19,14 +19,26 @@ from text2motion.dataset.contracts import (
     NewtonLimits,
     QualityLimits,
 )
-from text2motion.dataset.features import feature_joints
+from text2motion.dataset.core.encoding import feature_joints
 
 UP_AXIS = 1
+
+
 GROUND_AXES = (0, 2)
+
+
 QUALITY_METRICS = ("skating_ratio", "float_mm", "jerk_m_per_s3", "yaw_p99_rad_per_s")
+
+
 METRES_TO_MM = 1000.0
+
+
 SECONDS_PER_HOUR = 3600
+
+
 ALL_SUBSETS = "all"
+
+
 AMASS_EXTRA = "amass_extra"
 
 

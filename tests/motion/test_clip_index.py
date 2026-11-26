@@ -2,7 +2,7 @@ import json
 
 import numpy as np
 
-from text2motion.dataset.datasets import CLIP_LENGTHS_FILE, clip_frame_counts
+from text2motion.dataset.training.captioned import CLIP_LENGTHS_FILE, clip_frame_counts
 
 
 def make_clip(vec_dir, name, frames, dim=263):

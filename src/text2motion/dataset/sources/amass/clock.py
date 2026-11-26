@@ -8,17 +8,31 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from text2motion.dataset.amass import dataset_name, head_trim_frames, resolve_pose_path
 from text2motion.dataset.contracts import AMASS_LABEL_FPS
-from text2motion.dataset.features import feature_joints
+from text2motion.dataset.core.encoding import feature_joints
+from text2motion.dataset.sources.amass.names import dataset_name
+from text2motion.dataset.sources.amass.reader import resolve_pose_path
+from text2motion.dataset.sources.amass.trim import head_trim_frames
 from text2motion.motion.representation import FPS
 
 STORED_FPS_HYPOTHESES = (60, 100, 120)
+
+
 PROBE_JOINTS = (0, 7, 8, 15, 20, 21)
+
+
 PAIRS = tuple(itertools.combinations(PROBE_JOINTS, 2))
+
+
 MIN_CORRELATION = 0.9
+
+
 MIN_SCORED_FRAMES = 2
+
+
 NO_SCORE = -1.0
+
+
 USABLE_STATUS = frozenset({"ok", "folder_rate"})
 
 

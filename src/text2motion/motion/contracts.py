@@ -45,9 +45,9 @@ NO_RUN_OUTPUTS = RunOutputs()
 #       PreparationStage
 ############################################################
 class PreparationStage(StrEnum):
-    AMASS = "amass"
-    INDEX = "index"
-    FEATURE = "feature"
+    CLOCK = "clock"
+    JOINTS = "joints"
+    FEATURES = "features"
     STATS = "stats"
     ALL = "all"
 
@@ -72,9 +72,13 @@ class PreparationRequest:
     amass_dir: Path | None = None
     smplx_models: Path | None = None
     index_csv: Path | None = None
+    clock_csv: Path | None = None
     device: str = "cpu"
     fps: int = FPS
     joint_count: int = JOINTS
+    reference_clip: str = "000021"
+    fill: bool = True
+    adopt_pose_folder: bool = False
 
 
 ############################################################

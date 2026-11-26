@@ -25,13 +25,14 @@ from text2motion.app.run_log import (
     run_dir_to_continue,
     start_run,
 )
-from text2motion.dataset.datasets import CaptionedMotionDataset, dataset_size
-from text2motion.dataset.preparation import (
+from text2motion.dataset.pipeline import run_pipeline
+from text2motion.dataset.sources.amass.corpus import (
     build_amass_pretraining_corpus,
-    convert_official_release,
     heldout_feature_names,
-    run_hml3d_preparation,
 )
+from text2motion.dataset.sources.humanml3d.official import convert_official_release
+from text2motion.dataset.training.batching import dataset_size
+from text2motion.dataset.training.captioned import CaptionedMotionDataset
 from text2motion.generation.contracts import (
     DEFAULT_OVERFIT_CRITERIA,
     PRETRAINED_OVERFIT_CRITERIA,
@@ -124,8 +125,9 @@ def run_prepare(app: ApplicationContext, args: PrepareRequest) -> None:
                 f"--regen_dir {regen_dir} is the training dataset (paths.hml3d_out_dir); "
                 "prepare writes only into a separate regeneration folder"
             )
-        run_hml3d_preparation(
-            replace(request, out_dir=regen_dir), args.stage, args.adopt_pose_folder
+        run_pipeline(
+            replace(request, out_dir=regen_dir, adopt_pose_folder=args.adopt_pose_folder),
+            args.stage,
         )
         return
 

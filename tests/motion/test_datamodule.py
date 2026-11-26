@@ -6,11 +6,9 @@ import torch
 
 from text2motion.app.config import load_config
 from text2motion.dataset.contracts import MotionDataConfig
-from text2motion.dataset.datasets import (
-    CaptionedMotionDataset,
-    MotionDataModule,
-    collate_motion_clips,
-)
+from text2motion.dataset.training.batching import collate_motion_clips
+from text2motion.dataset.training.captioned import CaptionedMotionDataset
+from text2motion.dataset.training.module import MotionDataModule
 from text2motion.motion.contracts import MotionClip, Split
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import FEATURES_DIR, MEAN_FILE, SPLIT_FILES, STD_FILE, TEXTS_DIR
@@ -63,6 +61,7 @@ def test_a_clip_without_a_caption_of_minimum_length_stops_the_dataset(tmp_path):
     np.save(tmp_path / FEATURES_DIR / "A.npy", np.zeros((60, DIM), np.float32))
     (tmp_path / TEXTS_DIR / "A.txt").write_text("a person walks#a/DET#0.0#1.0\n", encoding="utf-8")
     (tmp_path / SPLIT_FILES[Split.TRAIN]).write_text("A\n", encoding="utf-8")
+    (tmp_path / "train_allowed.txt").write_text("A\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="no caption that covers"):
         CaptionedMotionDataset(

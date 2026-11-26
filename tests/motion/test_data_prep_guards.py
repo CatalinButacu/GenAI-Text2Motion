@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from text2motion.dataset.datasets import item_rng
-from text2motion.dataset.preparation import run_hml3d_preparation
-from text2motion.motion.contracts import PreparationRequest, PreparationStage
+from text2motion.dataset.sources.humanml3d.build import fit_hml3d_statistics
+from text2motion.dataset.training.batching import item_rng
+from text2motion.motion.contracts import PreparationRequest
 from text2motion.motion.normalization import fit_train_stats, normalization_stats
 from text2motion.motion.storage import listed_clip_ids
 
@@ -30,7 +30,7 @@ def test_a_missing_split_file_stops_the_listed_reader(tmp_path):
 
 def test_stats_refuse_to_fit_without_a_train_split(tmp_path):
     with pytest.raises(FileNotFoundError, match="fitted on the train split alone"):
-        run_hml3d_preparation(PreparationRequest(out_dir=tmp_path), PreparationStage.STATS)
+        fit_hml3d_statistics(PreparationRequest(out_dir=tmp_path))
 
 
 def test_stats_ignore_val_and_test_clips(tmp_path):
@@ -94,7 +94,7 @@ def test_foot_contact_limit_keeps_the_same_speed_at_60_fps():
 
 
 def test_index_frames_scale_to_a_multiple_of_20_fps_only():
-    from text2motion.dataset.preparation import index_frame_scale
+    from text2motion.dataset.sources.humanml3d.official import index_frame_scale
 
     assert index_frame_scale(20) == 1
     assert index_frame_scale(60) == 3

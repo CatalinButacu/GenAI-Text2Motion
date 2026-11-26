@@ -5,7 +5,7 @@ import pytest
 
 from text2motion.app.config import from_mapping
 from text2motion.dataset.contracts import CaptionWeighting, MotionDataConfig
-from text2motion.dataset.datasets import CaptionedMotionDataset
+from text2motion.dataset.training.captioned import CaptionedMotionDataset
 from text2motion.motion.contracts import Split
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import (
@@ -33,6 +33,8 @@ def write_clips(root: Path, kick_clips: int, split: Split = Split.TRAIN) -> None
         lines = [WALK, KICK] if index < kick_clips else [WALK, WALK]
         (root / TEXTS_DIR / f"{name}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     (root / SPLIT_FILES[split]).write_text("\n".join(names) + "\n", encoding="utf-8")
+    if split is Split.TRAIN:
+        (root / "train_allowed.txt").write_text("\n".join(names) + "\n", encoding="utf-8")
 
 
 def kick_share(dataset: CaptionedMotionDataset, draws: int) -> float:

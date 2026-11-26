@@ -10,7 +10,7 @@ from text2motion.app.config import ProjectPathsConfig, load_config, load_service
 def test_default_deployment_paths_are_portable_atomic_bundles():
     config = load_config("configs/default.yaml")
 
-    assert config.paths.hml3d_out_dir == Path("data/processed/humanml3d")
+    assert config.paths.hml3d_out_dir == Path("data/HumanML3D_60fps")
     assert config.paths.tokenizer_checkpoint.name == "fsq_g8_v1024.pt"
     assert config.paths.generator_checkpoint("transformer").name.endswith("_last.pt")
     assert config.paths.generator_checkpoint("mamba").name.endswith("_last.pt")

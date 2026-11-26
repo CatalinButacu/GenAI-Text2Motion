@@ -5,9 +5,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from text2motion.motion.representation import MotionSource, RepresentationTrack
+from text2motion.motion.representation import RepresentationTrack
 
 GRAVITY_M_PER_S2 = 9.81
+SOURCE_NAMES = ("amass", "humanml3d")
 SEED = 2026
 AMASS_LABEL_FPS = 120
 MOTIONX_FPS = 30
@@ -103,6 +104,7 @@ class QualityLimits:
 class DatasetPaths:
     repo: Path
     amass_raw: Path
+    work: Path | None = None
 
     @property
     def hml3d_official(self) -> Path:
@@ -122,10 +124,16 @@ class DatasetPaths:
 
     @property
     def notes(self) -> Path:
-        return self.repo / "doc" / "notes"
+        return self.repo / "docs" / "notes"
+
+    @property
+    def clock_csv(self) -> Path:
+        folder = self.work if self.work is not None else self.notes
+        return folder / "amass_clock_check.csv"
 
     def hml3d_at(self, fps: int) -> Path:
-        return self.repo / "data" / f"HumanML3D_{fps}fps"
+        root = self.work if self.work is not None else self.repo / "data"
+        return root / f"HumanML3D_{fps}fps"
 
     def joints(self, fps: int, source: str) -> Path:
         return self.extra / f"joints{fps}" / source
@@ -158,7 +166,7 @@ class ClipWeighting(StrEnum):
 @dataclass(frozen=True)
 class MotionDataConfig:
     track: RepresentationTrack = RepresentationTrack.HML3D_263
-    sources: tuple[MotionSource, ...] = (MotionSource.HUMANML3D,)
+    sources: tuple[str, ...] = ("humanml3d",)
     mirror_augment: bool = True
     caption_weighting: CaptionWeighting = CaptionWeighting.UNIFORM
     clip_weighting: ClipWeighting = ClipWeighting.UNIFORM
@@ -174,6 +182,11 @@ class MotionDataConfig:
             )
         if not self.sources:
             raise ValueError("the data config needs at least one motion source")
+        for name in self.sources:
+            if name not in SOURCE_NAMES:
+                raise ValueError(
+                    f"unknown motion source {name!r}; registered: {sorted(SOURCE_NAMES)}"
+                )
         if self.clip_weighting is ClipWeighting.MOTION_CLASS and self.motion_classes is None:
             raise ValueError("motion_class clip weighting needs the motion_classes verb map")
         if (

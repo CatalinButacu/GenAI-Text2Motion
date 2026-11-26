@@ -21,24 +21,24 @@ def test_the_preparation_stages_write_into_the_regeneration_folder(tmp_path, mon
     written = []
     monkeypatch.setattr(
         training,
-        "run_hml3d_preparation",
-        lambda request, stage, adopt: written.append(Path(request.out_dir)),
+        "run_pipeline",
+        lambda request, stage: written.append((Path(request.out_dir), stage)),
     )
     official = tmp_path / "official"
     regen = tmp_path / "regen"
 
     training.run_prepare(
-        app(official), PrepareRequest(stage=PreparationStage.INDEX, regen_dir=regen)
+        app(official), PrepareRequest(stage=PreparationStage.JOINTS, regen_dir=regen)
     )
 
-    assert written == [regen]
+    assert written == [(regen, PreparationStage.JOINTS)]
 
 
 def test_the_training_dataset_is_refused_as_the_regeneration_folder(tmp_path, monkeypatch):
-    monkeypatch.setattr(training, "run_hml3d_preparation", lambda *args: None)
+    monkeypatch.setattr(training, "run_pipeline", lambda *args: None)
     official = tmp_path / "official"
 
     with pytest.raises(ValueError, match="training dataset"):
         training.run_prepare(
-            app(official), PrepareRequest(stage=PreparationStage.INDEX, regen_dir=official)
+            app(official), PrepareRequest(stage=PreparationStage.JOINTS, regen_dir=official)
         )

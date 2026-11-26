@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import torch
 
 from text2motion.motion import representation as param_util
@@ -54,3 +55,31 @@ def test_param_constants_exact(synthetic_joints) -> None:
         (9, 14, 17, 19, 21),
         (9, 13, 16, 18, 20),
     )
+
+
+def constant_speed_joints(frames: int, speed: float) -> np.ndarray:
+    base = param_util.RAW_OFFSETS.astype(np.float64) * 0.3
+    joints = np.tile(base[None], (frames, 1, 1))
+    for chain in param_util.KINEMATIC_CHAINS:
+        for index in range(1, len(chain)):
+            joints[:, chain[index]] += joints[:, chain[index - 1]]
+    noise = np.random.default_rng(0).standard_normal(joints.shape) * 0.02
+    noise[:, 0] = 0.0
+    joints = joints + noise
+    joints[:, :, 0] += speed * (np.arange(frames) / 20.0)[:, None]
+    return joints
+
+
+def test_root_velocity_per_frame_is_one_third_at_60_fps():
+    from text2motion.dataset.core.rate import cubic_resample
+
+    source = constant_speed_joints(41, speed=1.0)
+    upsampled = cubic_resample(source, 20, 60)
+    params_20 = feature_params(target_offsets(source), 20)
+    params_60 = feature_params(target_offsets(upsampled), 60)
+    feat_20 = encode_joints(source, params_20)[0]
+    feat_60 = encode_joints(upsampled, params_60)[0]
+    assert feat_60.shape[1] == EXPECTED_DIM
+    speed_20 = np.linalg.norm(feat_20[5:-5, 1:3], axis=1).mean()
+    speed_60 = np.linalg.norm(feat_60[15:-15, 1:3], axis=1).mean()
+    assert speed_60 == pytest.approx(speed_20 / 3, rel=0.02)

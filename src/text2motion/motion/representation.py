@@ -45,15 +45,6 @@ class RepresentationTrack(StrEnum):
     SMPLX_168 = "smplx168"
 
 
-############################################################
-#       MotionSource
-############################################################
-class MotionSource(StrEnum):
-    HUMANML3D = "humanml3d"
-    AMASS = "amass"
-    INTER_X = "inter-x"
-
-
 RAW_OFFSETS = np.array(
     [
         [0, 0, 0],

@@ -2,7 +2,8 @@ import numpy as np
 import pytest
 
 from text2motion.dataset.contracts import MotionDataConfig
-from text2motion.dataset.datasets import CaptionedMotionDataset, MotionWindowDataset
+from text2motion.dataset.training.captioned import CaptionedMotionDataset
+from text2motion.dataset.training.windows import MotionWindowDataset
 
 CAPTION = "a person walks#a/DET#0.0#0.0"
 
@@ -18,6 +19,7 @@ def dataset_root(tmp_path, frames=(80, 80, 20)):
     np.save(tmp_path / "Std.npy", np.ones(263, np.float32))
     names = "\n".join(f"{index:06d}" for index in range(len(frames)))
     (tmp_path / "train.txt").write_text(names, encoding="utf-8")
+    (tmp_path / "train_allowed.txt").write_text(names, encoding="utf-8")
     return tmp_path
 
 

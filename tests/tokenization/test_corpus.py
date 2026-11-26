@@ -9,7 +9,7 @@ import torch
 from pydantic import ValidationError
 
 from text2motion.app.cli_requests import TokenizeRequest
-from text2motion.dataset import preparation
+from text2motion.dataset.sources.amass import corpus as amass_corpus
 from text2motion.motion.normalization import MotionScaler
 from text2motion.tokenization.contracts import TokenPackPlan
 from text2motion.tokenization.corpus import (
@@ -128,9 +128,9 @@ def test_a_copy_of_a_heldout_capture_under_another_name_is_excluded(tmp_path, mo
     np.save(heldout, np.ones((8, 3), np.float32))
     np.save(pose_root / "ACCAD" / "run_a_stageii.npy", np.ones((8, 3), np.float32))
     np.save(pose_root / "ACCAD" / "walk_stageii.npy", np.zeros((8, 3), np.float32))
-    monkeypatch.setattr(preparation, "heldout_sources", lambda *args: {heldout.resolve()})
+    monkeypatch.setattr(amass_corpus, "heldout_sources", lambda *args: {heldout.resolve()})
 
-    names = preparation.heldout_feature_names(Path("index.csv"), tmp_path, pose_root)
+    names = amass_corpus.heldout_feature_names(Path("index.csv"), tmp_path, pose_root)
 
     assert names == {"ACCAD__run_stageii.npy", "ACCAD__run_a_stageii.npy"}
 

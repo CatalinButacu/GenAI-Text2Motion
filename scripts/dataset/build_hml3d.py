@@ -1,57 +1,29 @@
-# .\.venv\Scripts\python.exe scripts/dataset/build_hml3d.py all --fps 60
+# .\.venv\Scripts\python.exe scripts/dataset/build_hml3d.py all --fps 60 [--amass-raw DIR] [--work DIR]
 import argparse
-import csv
 import pathlib
 
-from text2motion.dataset.clock import stored_fps_table
-from text2motion.dataset.contracts import AMASS_LABEL_FPS, DatasetPaths
-from text2motion.dataset.preparation import (
-    Hml3dPreparationLayout,
-    build_features,
-    build_joint_clips,
-    preparation_request,
-    run_hml3d_preparation,
-)
+from text2motion.dataset.contracts import DatasetPaths
+from text2motion.dataset.pipeline import request_from_paths, run_pipeline
 from text2motion.motion.contracts import PreparationStage
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-PATHS = DatasetPaths(REPO, REPO / "data" / "amass")
-CLOCK_CSV = PATHS.notes / "amass_clock_check.csv"
-STAGES = ("clock", "joints", "features", "all")
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("stage", choices=STAGES)
+    parser.add_argument("stage", choices=[stage.value for stage in PreparationStage])
     parser.add_argument("--fps", type=int, required=True)
+    parser.add_argument("--amass-raw", type=pathlib.Path, default=REPO / "data" / "amass")
+    parser.add_argument("--work", type=pathlib.Path, default=None)
+    parser.add_argument("--no-fill", action="store_true")
     return parser.parse_args()
-
-
-def write_clock_table(fps: int) -> None:
-    request = preparation_request(PATHS, fps)
-    run_hml3d_preparation(request, PreparationStage.AMASS)
-    pose_root = Hml3dPreparationLayout(request.out_dir).pose_data
-    rows = [
-        row.as_record()
-        for row in stored_fps_table(PATHS.hml3d_official, pose_root, AMASS_LABEL_FPS // fps)
-    ]
-    with open(CLOCK_CSV, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
-    statuses = [str(row["status"]) for row in rows]
-    print("files", len(rows), {status: statuses.count(status) for status in sorted(set(statuses))})
 
 
 def main() -> None:
     arguments = parse_arguments()
-    stage, fps = arguments.stage, arguments.fps
-    if stage in ("clock", "all"):
-        write_clock_table(fps)
-    if stage in ("joints", "all"):
-        build_joint_clips(PATHS, CLOCK_CSV, fps)
-    if stage in ("features", "all"):
-        build_features(PATHS, fps)
+    paths = DatasetPaths(REPO, arguments.amass_raw.resolve(), work=arguments.work)
+    request = request_from_paths(paths, arguments.fps, fill=not arguments.no_fill)
+    run_pipeline(request, PreparationStage(arguments.stage))
 
 
 if __name__ == "__main__":

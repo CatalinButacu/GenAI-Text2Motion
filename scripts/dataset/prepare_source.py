@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 import numpy as np
 from tqdm import tqdm
 
-from text2motion.dataset.amass import AmassReader, amass_files_outside_hml3d
 from text2motion.dataset.contracts import (
     MIN_CLIP_SECONDS,
     MIN_UPRIGHT_SHARE,
@@ -17,10 +16,11 @@ from text2motion.dataset.contracts import (
     DatasetPaths,
     clip_name,
 )
-from text2motion.dataset.features import clip_features, encoder_params
-from text2motion.dataset.motionx import motionx_body_clips, motionx_captions
-from text2motion.dataset.quality import upright_share
-from text2motion.dataset.resample import cubic_resample, downsample, lowpass
+from text2motion.dataset.core.encoding import clip_features, encoder_params
+from text2motion.dataset.core.quality import upright_share
+from text2motion.dataset.core.rate import cubic_resample, downsample, lowpass
+from text2motion.dataset.sources.amass.reader import AmassReader, amass_files_outside_hml3d
+from text2motion.dataset.sources.motionx import motionx_body_clips, motionx_captions
 from text2motion.motion.representation import FeatureParams
 
 REPO = pathlib.Path(__file__).resolve().parents[2]

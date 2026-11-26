@@ -19,7 +19,7 @@ from text2motion.app.config import (
     load_config,
 )
 from text2motion.app.run_log import ensure_logging_configured
-from text2motion.dataset.datasets import MotionDataModule
+from text2motion.dataset.training.module import MotionDataModule
 from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
 from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.generation.contracts import Backbone

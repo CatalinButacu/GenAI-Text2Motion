@@ -16,8 +16,8 @@ from text2motion.dataset.contracts import (
     QualityLimits,
     subset_of,
 )
-from text2motion.dataset.features import feature_joints
-from text2motion.dataset.quality import (
+from text2motion.dataset.core.encoding import feature_joints
+from text2motion.dataset.core.quality import (
     QUALITY_METRICS,
     ClipVerdict,
     fit_quality_forest,

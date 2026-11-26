@@ -4,12 +4,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from text2motion.dataset.amass import (
-    dataset_name,
-    head_trim_frames,
-    heldout_sources,
-    resolve_pose_path,
-)
+from text2motion.dataset.sources.amass.corpus import heldout_sources
+from text2motion.dataset.sources.amass.names import dataset_name
+from text2motion.dataset.sources.amass.reader import resolve_pose_path
+from text2motion.dataset.sources.amass.trim import head_trim_frames
 
 FPS = 20
 

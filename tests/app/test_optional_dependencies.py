@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from text2motion.app.run_log import start_run
-from text2motion.dataset.preparation import write_motions
+from text2motion.dataset.sources.humanml3d.official import write_motions
 
 
 def test_the_converter_names_the_prep_extra_when_pyarrow_is_missing(tmp_path, monkeypatch):

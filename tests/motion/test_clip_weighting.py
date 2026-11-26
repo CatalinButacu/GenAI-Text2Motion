@@ -5,11 +5,9 @@ import pytest
 
 from text2motion.app.config import from_mapping
 from text2motion.dataset.contracts import CaptionWeighting, ClipWeighting, MotionDataConfig
-from text2motion.dataset.datasets import (
-    MOTION_CLASS_COLUMN,
-    CaptionedMotionDataset,
-    MotionDataModule,
-)
+from text2motion.dataset.training.captioned import CaptionedMotionDataset
+from text2motion.dataset.training.labels import MOTION_CLASS_COLUMN
+from text2motion.dataset.training.module import MotionDataModule
 from text2motion.motion.contracts import Split
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import (
@@ -38,6 +36,8 @@ def write_clips(root: Path, split: Split = Split.TRAIN) -> Path:
         lines = [WALK, KICK] if index < KICK_CLIPS else [WALK, WALK]
         (root / TEXTS_DIR / f"{name}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     (root / SPLIT_FILES[split]).write_text("\n".join(names) + "\n", encoding="utf-8")
+    if split is Split.TRAIN:
+        (root / "train_allowed.txt").write_text("\n".join(names) + "\n", encoding="utf-8")
     classes = root / "classes.csv"
     classes.write_text(f"verb,{MOTION_CLASS_COLUMN}\nwalk,0\nkick,1\n", encoding="utf-8")
     return classes
@@ -165,6 +165,7 @@ def write_verb_clips(root: Path) -> None:
         np.save(root / FEATURES_DIR / f"{name}.npy", np.zeros((60, DIM), np.float32))
         (root / TEXTS_DIR / f"{name}.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     (root / SPLIT_FILES[Split.TRAIN]).write_text("\n".join(names) + "\n", encoding="utf-8")
+    (root / "train_allowed.txt").write_text(chr(10).join(names) + chr(10), encoding="utf-8")
 
 
 def test_each_verb_group_gets_the_same_total_weight(tmp_path):

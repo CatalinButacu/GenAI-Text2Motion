@@ -147,7 +147,7 @@ class StudioRequest(ModelServiceRequest):
 class PrepareRequest(DefaultConfigRequest):
     stage: PreparationStage = Field(
         default=PreparationStage.ALL,
-        description="run one preparation stage only (amass, index, feature, stats); all runs them in sequence",
+        description="run one preparation stage only (clock, joints, features, stats); all runs them in sequence",
     )
     corpus: bool = Field(
         default=False,
