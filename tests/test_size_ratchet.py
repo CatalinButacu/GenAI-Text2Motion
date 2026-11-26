@@ -13,7 +13,6 @@ SOURCE_PREFIX = "src/text2motion/"
 ALLOWED = MappingProxyType(
     {
         "file": (
-            "dataset/sources/amass/corpus.py",
             "evaluation/metrics.py",
             "evaluation/nn_matcher.py",
             "generation/training/trainer.py",
@@ -28,7 +27,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "dataset/sources/amass/corpus.py::heldout_sources",
             "dataset/sources/amass/extractor.py::AmassPoseExtractor.__init__",
             "dataset/sources/amass/poses.py::extract_poses",
             "dataset/sources/humanml3d/build.py::build_joint_clips",
