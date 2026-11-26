@@ -1,0 +1,21 @@
+# Direction: one generic architecture for causal, infinite motion
+
+- Goal: one simple, generic structure across src: the workflows data, tokenizer, generator and evaluate run on one step runner, and one live session streams causal motion without end, where a new prompt steers the running stream (no restart) in the studio.
+- Measure:
+  - `text2motion run <workflow>` runs data -> tokenizer -> generator -> evaluate end to end on a tiny CPU fixture dataset in one test.
+  - Studio and service: a prompt change during a stream uses a `steer` command; test shows no stream restart, and the joint jump at the switch is reported in cm.
+  - Stream state size is constant over 10000 token steps (test on CPU with a tiny model).
+  - One training engine serves tokenizer, generator and pretrain; losses match the current trainers on fixed seeds.
+  - `make check`, pyright and check_problems green for every changed file; package layer test updated and green.
+- Limits:
+  - No GPU job, no training run, no download. The causal tokenizer retrain and the twins come later, as tasks with agent gpu.
+  - The two generator twins stay matched. Completed experiment recipes and checkpoint keys stay unchanged.
+  - Reuse first: `dataset/core/runner.py` (step runner, recipe hash, manifest), `nn_generator.stream_token_indices` with `StreamAnchors.text_at`, `StreamingMotionDecoder`, the CLI command table in `app/cli.py`, the studio components.
+  - No new framework (no Prefect, DVC or Lightning).
+  - Code rules of AGENTS.md: at most 10 files per package, no comments, fail loud.
+- Budget: 0 GPU hours; at most 5 USD per session; time box 2026-12-12.
+- Known context: dataset plan steps 2 to 10 (progress file, 2026-11-25); STATUS entry "PACKAGE RESTRUCTURE -- workflow packages, facades, one CLI" (2026-08-16); service protocol in `app/service.py` has only load, generate, cancel; studio live mode cancels and restarts (`studio/generation.py:132`).
+- Open choices:
+  - Where the shared runner lives: a new `core` package that imports nothing, or inside `motion`.
+  - Steering: re-anchor with the kept context (`text_at`), or cross-fade between two streams. Measure the joint jump at the switch for both.
+  - The golden tests are red (checkpoints deleted): restore the inputs, or record new golden values before the training engine change. This is an owner decision.

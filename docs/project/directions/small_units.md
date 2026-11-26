@@ -1,0 +1,22 @@
+# Direction: small units with one clear role
+
+- Goal: code that is easy to read: small files, small classes and small functions, each with one clearly named role, and the same behaviour as today.
+- Measure:
+  - A size ratchet test in `tests/`: no file in `src` above 300 lines, no function above 40 lines, no class above 12 methods, except names in an allow list that may only shrink. Start with today's offenders in the list; each task removes names from it.
+  - Measured on 2026-11-26 (scratchpad size audit, to move into `scripts/maintenance/size_audit.py`): 18 files above 300 lines, 43 functions above 40 lines (10 above 80), 6 classes above 12 methods. Target at the end of the epic: at most 6 files, 10 functions and 2 classes left in the allow list.
+  - Behaviour unchanged: `tests/generation/test_trainer_parity.py`, the end-to-end `run` test, the streaming and studio tests, and `make check` stay green after every task; checkpoint keys unchanged.
+- Limits:
+  - At most 10 files per package (tests/test_package_layers.py). When a split needs more files, use a sub-package, as `dataset` does (`core`, `sources`, `splits`, `training`).
+  - One map of package layers: today it exists twice (`tests/test_package_layers.py` ALLOWED and `tests/app/test_import_boundaries.py` ALLOWED_DEPENDENCIES). Keep one.
+  - Frozen modules (`motion`, `tokenization`, see docs/notes/module_ledger.csv) change only with an owner-approved unfreeze row: set agent to owner for that approval step.
+  - Rename only with `scripts/maintenance/rename_everywhere.py`. No new framework. AGENTS.md code rules: no comments, fail loud, no underscore prefixes.
+  - The two generator twins stay matched; completed experiment recipes unchanged.
+- Budget: 0 GPU hours; at most 3 USD per session; Sonnet; time box 2026-12-12.
+- Known context: A28 (shared runner in `common`, training engine `common/engine.py`, workflows, steer). T8 added the engine but the trainers kept their old bodies: `generator_trainer.py` 863 lines, `train_generator` 90, `pretrain_generator` 131, `train_tokenizer` 86.
+- Largest offenders, in order of value:
+  - Files: `generation/generator_trainer.py` 863, `app/service.py` 717, `generation/nn_generator.py` 619, `app/cli_requests.py` 593, `app/training.py` 579, `studio/panels.py` 450.
+  - Functions: `run_train_generator` 143, `pretrain_generator` 131, `handle_generate` 129, `build_amass_pretraining_corpus` 99, `encode_joints` 95 (frozen `motion`).
+  - Classes: `CaptionedMotionDataset` 29 methods, `GuiPanels` 26, `SmplxAvatarController` 18.
+- Open choices:
+  - Ratchet limits: 300/40/12 (proposed) or stricter 250/30/10. Measure how many names each limit puts in the allow list.
+  - `app/service.py`: split by wire protocol, session state and command handlers, or by client and server.
