@@ -1,0 +1,898 @@
+{
+ "motion": {
+  "encode_joints": [
+   "d47ae1ed17da615383236363b695630ee5d7d0c9d156f9b48495b17703b5078a",
+   "98b3239295e93af74351e3ed8e373533aa103079be1a67ec316bfd3f9fc7a2d9",
+   "72f7dc7305f5ce941ab812f9d89572e4ac248045c6777f494acef7f946d30fad",
+   "10731242096fc5c10ae5377da23ce4e7dc3f12087a3bd9db86e85af64aec71f9"
+  ],
+  "inverse_kinematics": "013949796029e86912cb3f86f99d71313743de5ceac7a3668653cff253e1334a"
+ },
+ "fsq_grouped": {
+  "parameter_order": [
+   "encoder.net.0.weight",
+   "encoder.net.0.bias",
+   "encoder.net.2.weight",
+   "encoder.net.2.bias",
+   "encoder.net.4.weight",
+   "encoder.net.4.bias",
+   "encoder.net.6.net.0.weight",
+   "encoder.net.6.net.0.bias",
+   "encoder.net.6.net.2.weight",
+   "encoder.net.6.net.2.bias",
+   "decoder.net.0.net.0.weight",
+   "decoder.net.0.net.0.bias",
+   "decoder.net.0.net.2.weight",
+   "decoder.net.0.net.2.bias",
+   "decoder.net.1.weight",
+   "decoder.net.1.bias",
+   "decoder.net.3.weight",
+   "decoder.net.3.bias",
+   "decoder.net.5.weight",
+   "decoder.net.5.bias",
+   "pre_q.weight",
+   "pre_q.bias",
+   "post_q.weight",
+   "post_q.bias"
+  ],
+  "state_dict": {
+   "encoder.net.0.weight": [
+    32,
+    263,
+    3
+   ],
+   "encoder.net.0.bias": [
+    32
+   ],
+   "encoder.net.2.weight": [
+    32,
+    32,
+    4
+   ],
+   "encoder.net.2.bias": [
+    32
+   ],
+   "encoder.net.4.weight": [
+    32,
+    32,
+    4
+   ],
+   "encoder.net.4.bias": [
+    32
+   ],
+   "encoder.net.6.net.0.weight": [
+    32,
+    32,
+    3
+   ],
+   "encoder.net.6.net.0.bias": [
+    32
+   ],
+   "encoder.net.6.net.2.weight": [
+    32,
+    32,
+    1
+   ],
+   "encoder.net.6.net.2.bias": [
+    32
+   ],
+   "decoder.net.0.net.0.weight": [
+    32,
+    32,
+    3
+   ],
+   "decoder.net.0.net.0.bias": [
+    32
+   ],
+   "decoder.net.0.net.2.weight": [
+    32,
+    32,
+    1
+   ],
+   "decoder.net.0.net.2.bias": [
+    32
+   ],
+   "decoder.net.1.weight": [
+    32,
+    32,
+    4
+   ],
+   "decoder.net.1.bias": [
+    32
+   ],
+   "decoder.net.3.weight": [
+    32,
+    32,
+    4
+   ],
+   "decoder.net.3.bias": [
+    32
+   ],
+   "decoder.net.5.weight": [
+    263,
+    32,
+    3
+   ],
+   "decoder.net.5.bias": [
+    263
+   ],
+   "quantizer.groups.0.levels": [
+    2
+   ],
+   "quantizer.groups.0.half_l_bound": [
+    2
+   ],
+   "quantizer.groups.0.half_width": [
+    2
+   ],
+   "quantizer.groups.0.basis": [
+    2
+   ],
+   "quantizer.groups.1.levels": [
+    2
+   ],
+   "quantizer.groups.1.half_l_bound": [
+    2
+   ],
+   "quantizer.groups.1.half_width": [
+    2
+   ],
+   "quantizer.groups.1.basis": [
+    2
+   ],
+   "pre_q.weight": [
+    4,
+    32
+   ],
+   "pre_q.bias": [
+    4
+   ],
+   "post_q.weight": [
+    32,
+    4
+   ],
+   "post_q.bias": [
+    32
+   ]
+  },
+  "token_indices": [
+   [
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ]
+   ],
+   [
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ]
+   ]
+  ],
+  "reconstruction": "748605bf1fbb2f73d2648c61434d4f340148a7817499b6583f6d0f83674e449b",
+  "commitment_loss": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc"
+ },
+ "fsq_residual": {
+  "parameter_order": [
+   "encoder.net.0.weight",
+   "encoder.net.0.bias",
+   "encoder.net.2.weight",
+   "encoder.net.2.bias",
+   "encoder.net.4.weight",
+   "encoder.net.4.bias",
+   "encoder.net.6.net.0.weight",
+   "encoder.net.6.net.0.bias",
+   "encoder.net.6.net.2.weight",
+   "encoder.net.6.net.2.bias",
+   "decoder.net.0.net.0.weight",
+   "decoder.net.0.net.0.bias",
+   "decoder.net.0.net.2.weight",
+   "decoder.net.0.net.2.bias",
+   "decoder.net.1.weight",
+   "decoder.net.1.bias",
+   "decoder.net.3.weight",
+   "decoder.net.3.bias",
+   "decoder.net.5.weight",
+   "decoder.net.5.bias",
+   "pre_q.weight",
+   "pre_q.bias",
+   "post_q.weight",
+   "post_q.bias"
+  ],
+  "state_dict": {
+   "encoder.net.0.weight": [
+    32,
+    263,
+    3
+   ],
+   "encoder.net.0.bias": [
+    32
+   ],
+   "encoder.net.2.weight": [
+    32,
+    32,
+    4
+   ],
+   "encoder.net.2.bias": [
+    32
+   ],
+   "encoder.net.4.weight": [
+    32,
+    32,
+    4
+   ],
+   "encoder.net.4.bias": [
+    32
+   ],
+   "encoder.net.6.net.0.weight": [
+    32,
+    32,
+    3
+   ],
+   "encoder.net.6.net.0.bias": [
+    32
+   ],
+   "encoder.net.6.net.2.weight": [
+    32,
+    32,
+    1
+   ],
+   "encoder.net.6.net.2.bias": [
+    32
+   ],
+   "decoder.net.0.net.0.weight": [
+    32,
+    32,
+    3
+   ],
+   "decoder.net.0.net.0.bias": [
+    32
+   ],
+   "decoder.net.0.net.2.weight": [
+    32,
+    32,
+    1
+   ],
+   "decoder.net.0.net.2.bias": [
+    32
+   ],
+   "decoder.net.1.weight": [
+    32,
+    32,
+    4
+   ],
+   "decoder.net.1.bias": [
+    32
+   ],
+   "decoder.net.3.weight": [
+    32,
+    32,
+    4
+   ],
+   "decoder.net.3.bias": [
+    32
+   ],
+   "decoder.net.5.weight": [
+    263,
+    32,
+    3
+   ],
+   "decoder.net.5.bias": [
+    263
+   ],
+   "quantizer.layers.0.levels": [
+    2
+   ],
+   "quantizer.layers.0.half_l_bound": [
+    2
+   ],
+   "quantizer.layers.0.half_width": [
+    2
+   ],
+   "quantizer.layers.0.basis": [
+    2
+   ],
+   "quantizer.layers.1.levels": [
+    2
+   ],
+   "quantizer.layers.1.half_l_bound": [
+    2
+   ],
+   "quantizer.layers.1.half_width": [
+    2
+   ],
+   "quantizer.layers.1.basis": [
+    2
+   ],
+   "pre_q.weight": [
+    2,
+    32
+   ],
+   "pre_q.bias": [
+    2
+   ],
+   "post_q.weight": [
+    32,
+    2
+   ],
+   "post_q.bias": [
+    32
+   ]
+  },
+  "token_indices": [
+   [
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ]
+   ],
+   [
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ]
+   ]
+  ],
+  "reconstruction": "76d3c71418b1d0e5d1e3c353b96fcc8a5456f6248c8c8a6d269c1baef8276606",
+  "commitment_loss": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc"
+ },
+ "fsq_causal_heading": {
+  "parameter_order": [
+   "encoder.net.0.conv.weight",
+   "encoder.net.0.conv.bias",
+   "encoder.net.2.conv.weight",
+   "encoder.net.2.conv.bias",
+   "encoder.net.4.conv.weight",
+   "encoder.net.4.conv.bias",
+   "encoder.net.6.net.0.conv.weight",
+   "encoder.net.6.net.0.conv.bias",
+   "encoder.net.6.net.2.weight",
+   "encoder.net.6.net.2.bias",
+   "decoder.net.0.net.0.conv.weight",
+   "decoder.net.0.net.0.conv.bias",
+   "decoder.net.0.net.2.weight",
+   "decoder.net.0.net.2.bias",
+   "decoder.net.2.conv.weight",
+   "decoder.net.2.conv.bias",
+   "decoder.net.5.conv.weight",
+   "decoder.net.5.conv.bias",
+   "decoder.net.7.conv.weight",
+   "decoder.net.7.conv.bias",
+   "pre_q.weight",
+   "pre_q.bias",
+   "post_q.weight",
+   "post_q.bias",
+   "heading_head.weight",
+   "heading_head.bias"
+  ],
+  "state_dict": {
+   "encoder.net.0.conv.weight": [
+    32,
+    263,
+    3
+   ],
+   "encoder.net.0.conv.bias": [
+    32
+   ],
+   "encoder.net.2.conv.weight": [
+    32,
+    32,
+    4
+   ],
+   "encoder.net.2.conv.bias": [
+    32
+   ],
+   "encoder.net.4.conv.weight": [
+    32,
+    32,
+    4
+   ],
+   "encoder.net.4.conv.bias": [
+    32
+   ],
+   "encoder.net.6.net.0.conv.weight": [
+    32,
+    32,
+    3
+   ],
+   "encoder.net.6.net.0.conv.bias": [
+    32
+   ],
+   "encoder.net.6.net.2.weight": [
+    32,
+    32,
+    1
+   ],
+   "encoder.net.6.net.2.bias": [
+    32
+   ],
+   "decoder.net.0.net.0.conv.weight": [
+    32,
+    32,
+    3
+   ],
+   "decoder.net.0.net.0.conv.bias": [
+    32
+   ],
+   "decoder.net.0.net.2.weight": [
+    32,
+    32,
+    1
+   ],
+   "decoder.net.0.net.2.bias": [
+    32
+   ],
+   "decoder.net.2.conv.weight": [
+    32,
+    32,
+    3
+   ],
+   "decoder.net.2.conv.bias": [
+    32
+   ],
+   "decoder.net.5.conv.weight": [
+    32,
+    32,
+    3
+   ],
+   "decoder.net.5.conv.bias": [
+    32
+   ],
+   "decoder.net.7.conv.weight": [
+    263,
+    32,
+    3
+   ],
+   "decoder.net.7.conv.bias": [
+    263
+   ],
+   "quantizer.groups.0.levels": [
+    2
+   ],
+   "quantizer.groups.0.half_l_bound": [
+    2
+   ],
+   "quantizer.groups.0.half_width": [
+    2
+   ],
+   "quantizer.groups.0.basis": [
+    2
+   ],
+   "quantizer.groups.1.levels": [
+    2
+   ],
+   "quantizer.groups.1.half_l_bound": [
+    2
+   ],
+   "quantizer.groups.1.half_width": [
+    2
+   ],
+   "quantizer.groups.1.basis": [
+    2
+   ],
+   "pre_q.weight": [
+    4,
+    32
+   ],
+   "pre_q.bias": [
+    4
+   ],
+   "post_q.weight": [
+    32,
+    4
+   ],
+   "post_q.bias": [
+    32
+   ],
+   "heading_head.weight": [
+    1,
+    32
+   ],
+   "heading_head.bias": [
+    1
+   ]
+  },
+  "token_indices": [
+   [
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ]
+   ],
+   [
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     10,
+     10
+    ]
+   ]
+  ],
+  "reconstruction": "b24709d19b5a2c71e236f1c2401c58a108531f33a84f59d6e89cecaa392d3a6b",
+  "commitment_loss": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc"
+ },
+ "rvq": {
+  "parameter_order": [
+   "encoder.net.0.weight",
+   "encoder.net.0.bias",
+   "encoder.net.2.weight",
+   "encoder.net.2.bias",
+   "encoder.net.4.weight",
+   "encoder.net.4.bias",
+   "encoder.net.6.net.0.weight",
+   "encoder.net.6.net.0.bias",
+   "encoder.net.6.net.2.weight",
+   "encoder.net.6.net.2.bias",
+   "decoder.net.0.net.0.weight",
+   "decoder.net.0.net.0.bias",
+   "decoder.net.0.net.2.weight",
+   "decoder.net.0.net.2.bias",
+   "decoder.net.1.weight",
+   "decoder.net.1.bias",
+   "decoder.net.3.weight",
+   "decoder.net.3.bias",
+   "decoder.net.5.weight",
+   "decoder.net.5.bias",
+   "pre_q.weight",
+   "pre_q.bias",
+   "post_q.weight",
+   "post_q.bias"
+  ],
+  "state_dict": {
+   "encoder.net.0.weight": [
+    32,
+    263,
+    3
+   ],
+   "encoder.net.0.bias": [
+    32
+   ],
+   "encoder.net.2.weight": [
+    32,
+    32,
+    4
+   ],
+   "encoder.net.2.bias": [
+    32
+   ],
+   "encoder.net.4.weight": [
+    32,
+    32,
+    4
+   ],
+   "encoder.net.4.bias": [
+    32
+   ],
+   "encoder.net.6.net.0.weight": [
+    32,
+    32,
+    3
+   ],
+   "encoder.net.6.net.0.bias": [
+    32
+   ],
+   "encoder.net.6.net.2.weight": [
+    32,
+    32,
+    1
+   ],
+   "encoder.net.6.net.2.bias": [
+    32
+   ],
+   "decoder.net.0.net.0.weight": [
+    32,
+    32,
+    3
+   ],
+   "decoder.net.0.net.0.bias": [
+    32
+   ],
+   "decoder.net.0.net.2.weight": [
+    32,
+    32,
+    1
+   ],
+   "decoder.net.0.net.2.bias": [
+    32
+   ],
+   "decoder.net.1.weight": [
+    32,
+    32,
+    4
+   ],
+   "decoder.net.1.bias": [
+    32
+   ],
+   "decoder.net.3.weight": [
+    32,
+    32,
+    4
+   ],
+   "decoder.net.3.bias": [
+    32
+   ],
+   "decoder.net.5.weight": [
+    263,
+    32,
+    3
+   ],
+   "decoder.net.5.bias": [
+    263
+   ],
+   "pre_q.weight": [
+    32,
+    32
+   ],
+   "pre_q.bias": [
+    32
+   ],
+   "post_q.weight": [
+    32,
+    32
+   ],
+   "post_q.bias": [
+    32
+   ],
+   "rvq.layers.0.embed": [
+    16,
+    32
+   ],
+   "rvq.layers.0.cluster_size": [
+    16
+   ],
+   "rvq.layers.0.embed_avg": [
+    16,
+    32
+   ],
+   "rvq.layers.1.embed": [
+    16,
+    32
+   ],
+   "rvq.layers.1.cluster_size": [
+    16
+   ],
+   "rvq.layers.1.embed_avg": [
+    16,
+    32
+   ]
+  },
+  "token_indices": [
+   [
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ]
+   ],
+   [
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ],
+    [
+     13,
+     10
+    ]
+   ]
+  ],
+  "reconstruction": "5d3b71dcfa36340ae9aa25ca7a5b4160f2e862cfd3b8144f704577fdc450251f",
+  "commitment_loss": "ad19f1e4c6435bfff60ce0fbee37378314b2a5f3fa3746d62d47cd5075c402c7"
+ }
+}
