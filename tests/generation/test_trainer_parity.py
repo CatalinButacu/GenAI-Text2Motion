@@ -15,7 +15,7 @@ from text2motion.generation.contracts import Backbone, GeneratorConfig, Generato
 from text2motion.generation.model.generator import MotionTokenGenerator
 from text2motion.generation.model.spec import GeneratorModelSpec
 from text2motion.generation.requests import GeneratorPretrainingRequest
-from text2motion.generation.training import pretrain as pretrain_module
+from text2motion.generation.training import pretrain_epoch as epoch_module
 from text2motion.generation.training.pretrain import pretrain_generator
 from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.contracts import Split
@@ -101,14 +101,14 @@ def pretrain_record(root: Path, monkeypatch) -> dict:
     arrays[PACK_IDENTITY_KEY] = np.array(identity)
     np.savez(pack, **arrays)
     losses: list[float] = []
-    original = pretrain_module.token_ce_loss
+    original = epoch_module.token_ce_loss
 
     def recording(*args, **kwargs):
         loss = original(*args, **kwargs)
         losses.append(loss.item())
         return loss
 
-    monkeypatch.setattr(pretrain_module, "token_ce_loss", recording)
+    monkeypatch.setattr(epoch_module, "token_ce_loss", recording)
     torch.manual_seed(SEED)
     out_path = root / "pretrained.pt"
     pretrain_generator(
