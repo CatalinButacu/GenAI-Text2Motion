@@ -8,13 +8,11 @@ import pytest
 
 from text2motion.studio.avatar import SmplxAvatarController
 from text2motion.studio.contracts import ViewerHost
-from text2motion.studio.generation import StudioGenerationController
+from text2motion.studio.live.controller import StudioGenerationController
 from text2motion.studio.scene import StreamSceneUpdater, StudioSceneNodes
-from text2motion.studio.session import (
-    SmplxFitState,
-    StudioStreamBuffers,
-    live_step_budget,
-)
+from text2motion.studio.session.buffers import StudioStreamBuffers
+from text2motion.studio.session.fit_state import SmplxFitState
+from text2motion.studio.session.registry import live_step_budget
 
 
 class FakeScene:
@@ -378,7 +376,7 @@ def test_stop_releases_a_stream_that_is_waiting_for_playback():
 
 
 def test_upsampling_interpolates_between_frames_and_ends_on_each_source_frame():
-    from text2motion.studio.generation import upsample_joints
+    from text2motion.studio.live.actions import upsample_joints
 
     joints = np.stack([np.full((22, 3), float(i), np.float32) for i in range(4)])
     upsampled = upsample_joints(None, joints, 3)
@@ -428,7 +426,7 @@ def test_pose_upsampling_takes_the_short_way_across_180_degrees():
 
 
 def live_controller(generating: bool):
-    from text2motion.studio.session import LiveGenerationDebouncer
+    from text2motion.studio.session.debounce import LiveGenerationDebouncer
 
     steered = []
     started = []

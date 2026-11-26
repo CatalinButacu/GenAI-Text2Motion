@@ -11,7 +11,7 @@ from text2motion.generation.contracts import (
     Backbone,
     OverfitCriteria,
 )
-from text2motion.generation.nn_generator import GeneratorModelSpec
+from text2motion.generation.model.spec import GeneratorModelSpec
 from text2motion.motion.storage import sha256_file
 
 

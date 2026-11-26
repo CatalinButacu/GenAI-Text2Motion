@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from text2motion.generation.generator_trainer import CleanCrossEntropyProgress
+from text2motion.common.engine import CleanCrossEntropyProgress
 
 LOGS = Path("runs/logs/train")
 BACKBONES = ("transformer", "mamba")

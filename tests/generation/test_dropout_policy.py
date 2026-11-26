@@ -6,7 +6,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from text2motion.generation.contracts import Backbone, GeneratorConfig
-from text2motion.generation.nn_generator import MotionTokenGenerator
+from text2motion.generation.model.generator import MotionTokenGenerator
 
 
 @pytest.mark.parametrize("backbone", list(Backbone))

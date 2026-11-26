@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from text2motion.generation.contracts import GeneratorPretrainingRequest
+from text2motion.generation.requests import GeneratorPretrainingRequest
 from text2motion.tokenization.corpus import pack_clip_keys, read_pack_identity
 
 

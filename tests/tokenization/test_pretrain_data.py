@@ -7,9 +7,9 @@ import numpy as np
 import pytest
 import torch
 
-from text2motion.generation.contracts import GeneratorPretrainingRequest, GeneratorTrainingConfig
-from text2motion.generation.nn_generator import GeneratorModelSpec
-from text2motion.generation.pretrain import pretrain_generator
+from text2motion.generation.contracts import GeneratorTrainingConfig
+from text2motion.generation.model.spec import GeneratorModelSpec
+from text2motion.generation.requests import GeneratorPretrainingRequest
 from text2motion.generation.token_datasets import (
     PretrainingBudget,
     TokenPack,
@@ -17,6 +17,7 @@ from text2motion.generation.token_datasets import (
     collate_tokens,
     split_keys_by_clip,
 )
+from text2motion.generation.training.pretrain import pretrain_generator
 from text2motion.motion.contracts import RunOutputs
 from text2motion.tokenization.corpus import PACK_FORMAT, PACK_IDENTITY_KEY, PACK_VERSION
 

@@ -21,8 +21,8 @@ from text2motion.app.config.loading import load_config
 from text2motion.app.config.schema import Float32Precision
 from text2motion.app.runtime.environment import apply_precision, resolve_device, seed_everything
 from text2motion.generation.contracts import Backbone, MixedPrecisionMode, SamplingConfig
-from text2motion.generation.generator_trainer import GeneratorTrainer
-from text2motion.generation.nn_generator import GeneratorModelSpec
+from text2motion.generation.model.spec import GeneratorModelSpec
+from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import atomic_numpy_save, sha256_file
 from text2motion.tokenization.nn_tokenizer import build_tokenizer_network

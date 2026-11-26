@@ -11,16 +11,13 @@ from text2motion.dataset.contracts import MotionDataConfig
 from text2motion.dataset.fixture import build_fixture_dataset
 from text2motion.dataset.training.batching import collate_motion_clips
 from text2motion.dataset.training.captioned import CaptionedMotionDataset
-from text2motion.generation import pretrain as pretrain_module
-from text2motion.generation.contracts import (
-    Backbone,
-    GeneratorConfig,
-    GeneratorPretrainingRequest,
-    GeneratorTrainingConfig,
-)
-from text2motion.generation.generator_trainer import GeneratorTrainer
-from text2motion.generation.nn_generator import GeneratorModelSpec, MotionTokenGenerator
-from text2motion.generation.pretrain import pretrain_generator
+from text2motion.generation.contracts import Backbone, GeneratorConfig, GeneratorTrainingConfig
+from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.model.spec import GeneratorModelSpec
+from text2motion.generation.requests import GeneratorPretrainingRequest
+from text2motion.generation.training import pretrain as pretrain_module
+from text2motion.generation.training.pretrain import pretrain_generator
+from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.contracts import Split
 from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.corpus import PACK_FORMAT, PACK_IDENTITY_KEY, PACK_VERSION

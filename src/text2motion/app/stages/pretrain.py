@@ -9,10 +9,8 @@ from text2motion.app.requests.generator import (
 from text2motion.app.runtime.context import ApplicationContext, required_path
 from text2motion.app.runtime.run_log import log_metrics, resumed_run_dir, start_run
 from text2motion.app.stages.data import require_protocol_run, verify_protocol_splits
-from text2motion.generation.contracts import (
-    GeneratorPretrainingRequest,
-)
-from text2motion.generation.pretrain import pretrain_generator, pretraining_resume_path
+from text2motion.generation.requests import GeneratorPretrainingRequest
+from text2motion.generation.training.pretrain import pretrain_generator, pretraining_resume_path
 from text2motion.motion.contracts import RunOutputs
 from text2motion.motion.storage import sha256_file
 from text2motion.tokenization.corpus import (

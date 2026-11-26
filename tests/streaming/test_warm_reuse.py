@@ -6,7 +6,7 @@ import pytest
 
 from text2motion.app.service.client import motion_service_client
 from text2motion.app.service.protocol import MotionStreamProtocol, Release, ServiceAddress
-from text2motion.studio.session import StudioSession
+from text2motion.studio.session.state import StudioSession
 
 POLICY = MappingProxyType(
     {"anchor_every_tokens": 0, "anchor_context_tokens": 16, "cuda_graph_decode": False}

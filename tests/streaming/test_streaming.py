@@ -11,7 +11,7 @@ from text2motion.generation.contracts import (
     StreamAnchors,
 )
 from text2motion.generation.decoder import StreamingMotionDecoder
-from text2motion.generation.nn_generator import MotionTokenGenerator
+from text2motion.generation.model.generator import MotionTokenGenerator
 from text2motion.motion.representation import kinematic_bones, recover_skeleton
 from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
@@ -272,7 +272,7 @@ def test_streaming_recovery_resets_to_the_origin():
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda graphs need a cuda device")
 def test_cuda_graph_decode_streams_the_same_tokens_as_eager_decode():
-    from text2motion.generation.nn_generator import seeded_sampling_uniforms
+    from text2motion.generation.model.sampling import seeded_sampling_uniforms
 
     torch.manual_seed(0)
     gen = MotionTokenGenerator(GEN).cuda().eval()
@@ -352,7 +352,7 @@ def test_anchoring_that_would_overrun_the_learned_positions_is_refused():
 
 
 def test_anchoring_disabled_leaves_the_stream_unchanged_and_enabled_changes_it():
-    from text2motion.generation.nn_generator import seeded_sampling_uniforms
+    from text2motion.generation.model.sampling import seeded_sampling_uniforms
 
     torch.manual_seed(0)
     gen = MotionTokenGenerator(GEN).eval()
@@ -378,7 +378,7 @@ def test_anchoring_disabled_leaves_the_stream_unchanged_and_enabled_changes_it()
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda graphs need a cuda device")
 def test_anchored_cuda_graph_decode_matches_anchored_eager_decode():
-    from text2motion.generation.nn_generator import seeded_sampling_uniforms
+    from text2motion.generation.model.sampling import seeded_sampling_uniforms
 
     torch.manual_seed(0)
     gen = MotionTokenGenerator(GEN).cuda().eval()
@@ -401,7 +401,7 @@ def test_anchored_cuda_graph_decode_matches_anchored_eager_decode():
 
 
 def test_a_new_text_at_a_reset_changes_only_the_tokens_after_that_reset():
-    from text2motion.generation.nn_generator import seeded_sampling_uniforms
+    from text2motion.generation.model.sampling import seeded_sampling_uniforms
 
     torch.manual_seed(0)
     gen = MotionTokenGenerator(GEN).eval()

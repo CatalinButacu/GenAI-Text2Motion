@@ -4,12 +4,9 @@ import time
 
 import imgui
 
-from text2motion.studio.generation import (
-    StudioGenerationController,
-    log_action,
-    log_toggle,
-)
 from text2motion.studio.gui.layout import WINDOW_FLAGS, PanelLayout
+from text2motion.studio.live.actions import log_action, log_toggle
+from text2motion.studio.live.controller import StudioGenerationController
 
 
 ############################################################

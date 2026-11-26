@@ -20,11 +20,8 @@ from text2motion.dataset.training.module import MotionDataModule
 from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
 from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.nn_generator import (
-    CLIPTextEncoder,
-    FrozenTextStates,
-    GeneratorModelSpec,
-)
+from text2motion.generation.model.spec import GeneratorModelSpec
+from text2motion.generation.model.text_encoder import CLIPTextEncoder, FrozenTextStates
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.contracts import PreparationRequest
 from text2motion.motion.storage import FAILURE_DUMP_FILE

@@ -19,17 +19,15 @@ from text2motion.dataset.training.captioned import CaptionedMotionDataset
 from text2motion.generation.contracts import (
     DEFAULT_OVERFIT_CRITERIA,
     PRETRAINED_OVERFIT_CRITERIA,
-    GeneratorTrainingRequest,
     OverfitCriteria,
     SamplingConfig,
 )
-from text2motion.generation.generator_trainer import (
-    CleanCrossEntropyLoaders,
-    GeneratorTrainer,
-    train_generator,
-)
-from text2motion.generation.nn_generator import GeneratorModelSpec, MotionTokenGenerator
+from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.model.spec import GeneratorModelSpec
 from text2motion.generation.pipeline import TextToMotionGenerator
+from text2motion.generation.requests import GeneratorTrainingRequest
+from text2motion.generation.training.epochs import train_generator
+from text2motion.generation.training.trainer import CleanCrossEntropyLoaders, GeneratorTrainer
 from text2motion.motion.contracts import RunOutputs, Split
 
 logger = logging.getLogger(__name__)

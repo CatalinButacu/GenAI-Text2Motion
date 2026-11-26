@@ -12,9 +12,10 @@ from text2motion.generation.contracts import (
     GeneratorTrainingConfig,
     SamplingConfig,
 )
-from text2motion.generation.generator_trainer import GeneratorTrainer
-from text2motion.generation.nn_generator import CLIPTextEncoder, MotionTokenGenerator
+from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.model.text_encoder import CLIPTextEncoder
 from text2motion.generation.pipeline import TextToMotionGenerator
+from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.nn_tokenizer import (
     FiniteScalarQuantizationTokenizer,

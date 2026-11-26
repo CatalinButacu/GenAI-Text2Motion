@@ -7,20 +7,16 @@ from typing import cast
 import pytest
 import torch
 
-from text2motion.generation.contracts import (
-    Backbone,
-    GeneratorConfig,
-    GeneratorTrainingConfig,
-    GeneratorTrainingRequest,
-)
-from text2motion.generation.generator_trainer import (
+from text2motion.generation.contracts import Backbone, GeneratorConfig, GeneratorTrainingConfig
+from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.requests import GeneratorTrainingRequest
+from text2motion.generation.training.epochs import train_generator
+from text2motion.generation.training.selection import check_ce_stop_setup
+from text2motion.generation.training.trainer import (
     GENERATOR_RESUME_FORMAT,
     CleanCrossEntropyLoaders,
     GeneratorTrainer,
-    check_ce_stop_setup,
-    train_generator,
 )
-from text2motion.generation.nn_generator import MotionTokenGenerator
 from text2motion.motion.contracts import RunOutputs
 from text2motion.motion.storage import RESUME_VERSION
 from text2motion.tokenization.contracts import TokenizerConfig

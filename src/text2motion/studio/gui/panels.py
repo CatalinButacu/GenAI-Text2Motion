@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from text2motion.studio.avatar import SmplxAvatarController
 from text2motion.studio.contracts import ViewerHost
-from text2motion.studio.generation import StudioGenerationController
 from text2motion.studio.gui.avatar_section import AvatarSection
 from text2motion.studio.gui.generation_panel import GenerationPanel
 from text2motion.studio.gui.layout import PanelLayout
@@ -10,6 +9,7 @@ from text2motion.studio.gui.playback import PlaybackPanel
 from text2motion.studio.gui.prompt import PromptPanel
 from text2motion.studio.gui.sampling import SamplingSection
 from text2motion.studio.gui.scene_panels import EnvironmentPanel, ScenePanel
+from text2motion.studio.live.controller import StudioGenerationController
 
 
 ############################################################

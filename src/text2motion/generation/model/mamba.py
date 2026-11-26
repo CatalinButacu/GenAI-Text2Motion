@@ -1,0 +1,244 @@
+from __future__ import annotations
+
+import importlib
+import importlib.util
+import math
+import sys
+import types
+from collections.abc import Callable
+from pathlib import Path
+from typing import cast
+
+import torch
+from torch import nn
+from torch.nn import functional as F
+from torch.utils.checkpoint import checkpoint
+
+from text2motion.generation.contracts import (
+    GeneratorConfig,
+)
+from text2motion.generation.model.layers import (
+    RMSNorm,
+    SequenceBackbone,
+    init_residual_output,
+)
+
+DT_MIN = 1e-3
+
+
+DT_MAX = 1e-1
+
+
+DT_FLOOR = 1e-4
+
+
+def init_reference_dt(dt_proj: nn.Linear, dt_rank: int) -> None:
+    bound = dt_rank**-0.5
+    span = math.log(DT_MAX) - math.log(DT_MIN)
+    with torch.no_grad():
+        nn.init.uniform_(dt_proj.weight, -bound, bound)
+        dt = torch.exp(torch.rand(dt_proj.out_features) * span + math.log(DT_MIN))
+        dt = dt.clamp(min=DT_FLOOR)
+        dt_proj.bias.copy_(dt + torch.log(-torch.expm1(-dt)))
+
+
+def parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    length = a.size(1)
+    shift = 1
+    while shift < length:
+        pad = (0, 0, 0, 0, shift, 0)
+        a_prev = F.pad(a[:, :-shift], pad, value=1.0)
+        x_prev = F.pad(x[:, :-shift], pad, value=0.0)
+        x = x + a * x_prev
+        a = a * a_prev
+        shift *= 2
+    return x
+
+
+############################################################
+#       MambaMixer
+############################################################
+class MambaMixer(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        d_state: int,
+        d_conv: int,
+        expand: int,
+        dt_rank: int,
+        use_kernel: bool = False,
+    ) -> None:
+        super().__init__()
+        self.d_inner = expand * d_model
+        self.d_state = d_state
+        self.d_conv = d_conv
+        self.dt_rank = dt_rank
+        self.use_kernel = use_kernel
+        self.in_proj = nn.Linear(d_model, 2 * self.d_inner, bias=False)
+        self.conv1d = nn.Conv1d(self.d_inner, self.d_inner, d_conv, groups=self.d_inner, bias=True)
+        self.x_proj = nn.Linear(self.d_inner, dt_rank + 2 * d_state, bias=False)
+        self.dt_proj = nn.Linear(dt_rank, self.d_inner, bias=True)
+        init_reference_dt(self.dt_proj, dt_rank)
+        a = torch.arange(1, d_state + 1, dtype=torch.float32).repeat(self.d_inner, 1)
+        self.a_log = nn.Parameter(torch.log(a))
+        self.d_skip = nn.Parameter(torch.ones(self.d_inner))
+        self.out_proj = nn.Linear(self.d_inner, d_model, bias=False)
+
+    def init_state(self, batch: int, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
+        ssm = torch.zeros(batch, self.d_inner, self.d_state, device=device)
+        conv = torch.zeros(batch, self.d_inner, self.d_conv - 1, device=device)
+        return ssm, conv
+
+    def negative_a(self) -> torch.Tensor:
+        if torch.is_grad_enabled():
+            return -torch.exp(self.a_log)
+        version = self.a_log._version
+        cached = getattr(self, "_negative_a", None)
+        if cached is None or cached[0] != version:
+            cached = (version, -torch.exp(self.a_log))
+            self._negative_a = cached
+        return cached[1]
+
+    def step(
+        self, u_t: torch.Tensor, ssm_state: torch.Tensor, conv_state: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        x, z = self.in_proj(u_t).chunk(2, dim=-1)
+        conv_in = torch.cat([conv_state, x.unsqueeze(-1)], dim=-1)
+        weight = self.conv1d.weight.squeeze(1)
+        bias = self.conv1d.bias
+        if bias is None:
+            raise ValueError("the Mamba convolution needs a bias")
+        x_conv = (conv_in * weight).sum(-1) + bias
+        new_conv = conv_in[..., 1:]
+        x_c = F.silu(x_conv)
+
+        a = self.negative_a()
+        dt, b, c = torch.split(self.x_proj(x_c), [self.dt_rank, self.d_state, self.d_state], dim=-1)
+        dt = F.softplus(self.dt_proj(dt))
+        da = torch.exp(dt.unsqueeze(-1) * a)
+        dbx = (dt * x_c).unsqueeze(-1) * b.unsqueeze(1)
+        new_ssm = da * ssm_state
+        new_ssm += dbx
+        y = (new_ssm * c.unsqueeze(1)).sum(-1) + self.d_skip * x_c
+        out = self.out_proj(y * F.silu(z))
+        return out, new_ssm, new_conv
+
+    def forward(self, seq: torch.Tensor) -> torch.Tensor:
+        def selective_scan_function() -> Callable:
+            if INTERFACE_MODULE not in sys.modules and importlib.util.find_spec("triton") is None:
+                register_package_without_triton()
+            return importlib.import_module(INTERFACE_MODULE).selective_scan_fn
+
+        x, z = self.in_proj(seq).chunk(2, dim=-1)
+
+        x_pad = F.pad(x.transpose(1, 2), (self.d_conv - 1, 0))
+        x_c = F.silu(self.conv1d(x_pad).transpose(1, 2))
+
+        a = -torch.exp(self.a_log)
+        dt_raw, b, c = torch.split(
+            self.x_proj(x_c), [self.dt_rank, self.d_state, self.d_state], dim=-1
+        )
+
+        if self.use_kernel:
+            y = selective_scan_function()(
+                x_c.transpose(1, 2).contiguous(),
+                self.dt_proj(dt_raw).transpose(1, 2).contiguous(),
+                a,
+                b.transpose(1, 2).contiguous(),
+                c.transpose(1, 2).contiguous(),
+                self.d_skip,
+                delta_softplus=True,
+            ).transpose(1, 2)
+            return self.out_proj(y * F.silu(z))
+
+        dt = F.softplus(self.dt_proj(dt_raw))
+        da = torch.exp(dt.unsqueeze(-1) * a)
+        dbx = (dt * x_c).unsqueeze(-1) * b.unsqueeze(2)
+
+        ssm = parallel_scan(da, dbx)
+        y = (ssm * c.unsqueeze(2)).sum(-1) + self.d_skip * x_c
+        return self.out_proj(y * F.silu(z))
+
+
+############################################################
+#       MambaBlock
+############################################################
+class MambaBlock(nn.Module):
+    def __init__(self, cfg: GeneratorConfig) -> None:
+        super().__init__()
+        self.norm = RMSNorm(cfg.d_model)
+        self.mixer = MambaMixer(
+            cfg.d_model, cfg.d_state, cfg.d_conv, cfg.expand, cfg.dt_rank, cfg.use_kernel
+        )
+        init_residual_output(self.mixer.out_proj, cfg.n_layers)
+
+    def init_state(self, batch: int, device: torch.device):
+        return self.mixer.init_state(batch, device)
+
+    def step(self, x_t: torch.Tensor, state):
+        out, ssm, conv = self.mixer.step(self.norm(x_t), state[0], state[1])
+        return x_t + out, (ssm, conv)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + self.mixer(self.norm(x))
+
+
+############################################################
+#       MambaBackbone
+############################################################
+class MambaBackbone(SequenceBackbone):
+    def __init__(self, cfg: GeneratorConfig) -> None:
+        super().__init__()
+        self.blocks = nn.ModuleList([MambaBlock(cfg) for _ in range(cfg.n_layers)])
+        self.norm_f = RMSNorm(cfg.d_model)
+        self.checkpoint_blocks = not cfg.use_kernel
+
+    def typed_blocks(self) -> list[MambaBlock]:
+        return cast("list[MambaBlock]", list(self.blocks))
+
+    @property
+    def max_positions(self) -> int | None:
+        return None
+
+    def init_state(self, batch: int, device: torch.device) -> list:
+        return [b.init_state(batch, device) for b in self.typed_blocks()]
+
+    def step(self, x_t: torch.Tensor, state: list) -> tuple[torch.Tensor, list]:
+        for i, block in enumerate(self.typed_blocks()):
+            x_t, state[i] = block.step(x_t, state[i])
+
+        return self.norm_f(x_t), state
+
+    def forward(self, seq: torch.Tensor) -> torch.Tensor:
+        for block in self.blocks:
+            if self.training and seq.requires_grad and self.checkpoint_blocks:
+                seq = cast(torch.Tensor, checkpoint(block, seq, use_reentrant=False))
+            else:
+                seq = block(seq)
+
+        return self.norm_f(seq)
+
+
+INTERFACE_MODULE = "mamba_ssm.ops.selective_scan_interface"
+
+
+TRITON_MODULES = ("mamba_ssm.ops.triton", "mamba_ssm.ops.triton.layer_norm")
+
+
+def register_package_without_triton() -> None:
+    package_spec = importlib.util.find_spec("mamba_ssm")
+    if package_spec is None or package_spec.origin is None:
+        raise ModuleNotFoundError(
+            "use_kernel needs the mamba_ssm package; build it from third_party/ "
+            "(see docs/notes/implementation-difficulties.md)"
+        )
+    package_dir = Path(package_spec.origin).parent
+    for name, folder in (("mamba_ssm", package_dir), ("mamba_ssm.ops", package_dir / "ops")):
+        package_stub = types.ModuleType(name)
+        package_stub.__path__ = [str(folder)]
+        sys.modules[name] = package_stub
+    for name in TRITON_MODULES:
+        triton_stub = types.ModuleType(name)
+        triton_stub.__path__ = []
+        sys.modules[name] = triton_stub
+    sys.modules[TRITON_MODULES[1]].__dict__["_layer_norm_fwd"] = None

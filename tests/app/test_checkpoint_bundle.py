@@ -5,7 +5,7 @@ import torch
 
 from text2motion.app.runtime.checkpoint import GeneratorBundle, load_generator_checkpoint
 from text2motion.generation.contracts import GeneratorConfig
-from text2motion.generation.nn_generator import MotionTokenGenerator
+from text2motion.generation.model.generator import MotionTokenGenerator
 
 
 def test_generator_bundle_keeps_generator_encoder_and_tokenizer_identity(tmp_path):

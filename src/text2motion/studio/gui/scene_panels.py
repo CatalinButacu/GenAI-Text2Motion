@@ -3,8 +3,8 @@ from __future__ import annotations
 import imgui
 
 from text2motion.studio.contracts import ViewerHost
-from text2motion.studio.generation import log_toggle
 from text2motion.studio.gui.layout import WINDOW_FLAGS, PanelLayout
+from text2motion.studio.live.actions import log_toggle
 
 
 ############################################################

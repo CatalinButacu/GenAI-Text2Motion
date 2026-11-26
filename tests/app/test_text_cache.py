@@ -1,7 +1,7 @@
 import hashlib
 
 from text2motion.app.runtime.context import ApplicationBootstrap
-from text2motion.generation.nn_generator import FrozenTextStates
+from text2motion.generation.model.text_encoder import FrozenTextStates
 
 
 def test_attach_text_cache_builds_once_then_loads_by_caption_set(tmp_path, monkeypatch):

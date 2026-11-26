@@ -9,7 +9,7 @@ from enum import Enum
 import torch
 
 from text2motion.generation.contracts import DEFAULT_SAMPLING, SamplingConfig, StreamAnchors
-from text2motion.generation.nn_generator import MotionTokenGenerator
+from text2motion.generation.model.generator import MotionTokenGenerator
 from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
 
 

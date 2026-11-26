@@ -13,10 +13,8 @@ from text2motion.app.stages.generator import initial_generator, overfit_criteria
 from text2motion.generation.contracts import (
     MixedPrecisionMode,
 )
-from text2motion.generation.generator_trainer import (
-    GeneratorTrainer,
-    overfit_single_batch,
-)
+from text2motion.generation.training.overfit import overfit_single_batch
+from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.contracts import Split
 from text2motion.motion.storage import sha256_file
 

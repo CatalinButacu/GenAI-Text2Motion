@@ -14,8 +14,9 @@ from torch.nn import functional as F
 from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.app.runtime.run_log import log_metrics, start_run
 from text2motion.generation.contracts import Backbone, SamplingConfig, StudioSamplingConfig
-from text2motion.generation.nn_backbones import MambaMixer
-from text2motion.generation.nn_generator import MotionTokenGenerator, seeded_sampling_uniforms
+from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.model.mamba import MambaMixer
+from text2motion.generation.model.sampling import seeded_sampling_uniforms
 
 logger = logging.getLogger(__name__)
 SPLIT_SEED = 2026

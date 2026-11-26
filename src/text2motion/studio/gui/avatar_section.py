@@ -3,8 +3,8 @@ from __future__ import annotations
 import imgui
 
 from text2motion.studio.avatar import SmplxAvatarController
-from text2motion.studio.generation import log_action, log_toggle
 from text2motion.studio.gui.layout import PanelLayout
+from text2motion.studio.live.actions import log_action, log_toggle
 
 
 ############################################################

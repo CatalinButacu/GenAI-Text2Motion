@@ -6,15 +6,13 @@ import pytest
 
 from text2motion.studio.avatar import SmplxAvatarController
 from text2motion.studio.contracts import ViewerHost
-from text2motion.studio.generation import StudioGenerationController
 from text2motion.studio.gui import sampling
 from text2motion.studio.gui.panels import GuiPanels
+from text2motion.studio.live.controller import StudioGenerationController
 from text2motion.studio.scene import StreamSceneUpdater, StudioSceneNodes
-from text2motion.studio.session import (
-    LiveGenerationDebouncer,
-    SmplxFitState,
-    StudioStreamBuffers,
-)
+from text2motion.studio.session.buffers import StudioStreamBuffers
+from text2motion.studio.session.debounce import LiveGenerationDebouncer
+from text2motion.studio.session.fit_state import SmplxFitState
 
 
 class FakeScene:

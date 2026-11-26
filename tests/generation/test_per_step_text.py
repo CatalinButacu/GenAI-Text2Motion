@@ -4,12 +4,10 @@ import pytest
 import torch
 
 from text2motion.generation.contracts import Backbone, GeneratorConfig, StreamAnchors
-from text2motion.generation.nn_backbones import TransformerBackbone
-from text2motion.generation.nn_generator import (
-    EagerDecodeStep,
-    MotionTokenGenerator,
-    seeded_sampling_uniforms,
-)
+from text2motion.generation.model.decode_step import EagerDecodeStep
+from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.model.sampling import seeded_sampling_uniforms
+from text2motion.generation.model.transformer import TransformerBackbone
 
 
 def small_cfg(backbone: Backbone) -> GeneratorConfig:

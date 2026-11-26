@@ -10,12 +10,9 @@ import torch
 
 from text2motion.evaluation.contracts import StreamingBenchmarkProtocol
 from text2motion.evaluation.reports import log_concurrency_table, log_horizon_table
-from text2motion.generation.nn_generator import (
-    Backbone,
-    GeneratorConfig,
-    GeneratorModelSpec,
-    MotionTokenGenerator,
-)
+from text2motion.generation.contracts import Backbone, GeneratorConfig
+from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.model.spec import GeneratorModelSpec
 
 logger = logging.getLogger(__name__)
 

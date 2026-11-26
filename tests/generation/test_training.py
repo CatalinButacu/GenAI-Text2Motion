@@ -9,13 +9,10 @@ from text2motion.generation.contracts import (
     GeneratorTrainingConfig,
     LossWeighting,
 )
-from text2motion.generation.generator_trainer import (
-    GENERATOR_RESUME_FORMAT,
-    GeneratorTrainer,
-    check_schedule_horizon,
-)
 from text2motion.generation.losses import LossWeights, soft_decode
-from text2motion.generation.nn_generator import MotionTokenGenerator
+from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.training.optimizer import check_schedule_horizon
+from text2motion.generation.training.trainer import GENERATOR_RESUME_FORMAT, GeneratorTrainer
 from text2motion.motion.storage import RESUME_VERSION, atomic_torch_save, is_legacy_resume
 from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.ema import ExponentialMovingAverage
@@ -301,7 +298,7 @@ def test_decay_groups_exempt_norms_biases_and_the_ssm_memory_params():
     from dataclasses import replace as _replace
 
     from text2motion.generation.contracts import GeneratorConfig
-    from text2motion.generation.generator_trainer import partition_parameters
+    from text2motion.generation.training.optimizer import partition_parameters
 
     gen_cfg = GeneratorConfig(num_codebooks=2, codebook_size=64, d_model=64, n_layers=2)
     mamba = MotionTokenGenerator(_replace(gen_cfg, backbone=Backbone.MAMBA))
@@ -325,7 +322,7 @@ def test_decay_groups_exempt_norms_biases_and_the_ssm_memory_params():
 def test_pretraining_optimizer_groups_do_not_decay_ssm_memory_params():
     from dataclasses import replace as _replace
 
-    from text2motion.generation.generator_trainer import adamw_groups
+    from text2motion.generation.training.optimizer import adamw_groups
 
     mamba = MotionTokenGenerator(_replace(GEN, backbone=Backbone.MAMBA))
     cfg = GeneratorTrainingConfig(weight_decay=0.01, decay_groups=True)

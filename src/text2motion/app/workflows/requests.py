@@ -6,7 +6,7 @@ from pathlib import Path
 from pydantic import Field
 
 from text2motion.app.requests.base import DefaultConfigRequest
-from text2motion.generation.contracts import GeneratorTrainingRequest
+from text2motion.generation.requests import GeneratorTrainingRequest
 from text2motion.tokenization.contracts import TokenizerKind
 
 

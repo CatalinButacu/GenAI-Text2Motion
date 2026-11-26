@@ -15,15 +15,11 @@ from text2motion.studio.contracts import (
     StudioLaunchArguments,
 )
 from text2motion.studio.fitting import create_smplx_rest_pose_mesh
-from text2motion.studio.generation import (
-    StudioGenerationController,
-    log_action,
-    log_result,
-    log_toggle,
-)
 from text2motion.studio.gui.panels import GuiPanels
+from text2motion.studio.live.actions import log_action, log_result, log_toggle
+from text2motion.studio.live.controller import StudioGenerationController
 from text2motion.studio.scene import StreamSceneUpdater
-from text2motion.studio.session import StudioSession
+from text2motion.studio.session.state import StudioSession
 from text2motion.studio.studio_config import StudioConfig
 
 logger = logging.getLogger(__name__)

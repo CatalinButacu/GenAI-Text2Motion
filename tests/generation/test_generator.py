@@ -2,7 +2,7 @@ import torch
 
 from text2motion.generation.contracts import Backbone, GeneratorConfig
 from text2motion.generation.losses import token_ce_loss
-from text2motion.generation.nn_generator import MotionTokenGenerator
+from text2motion.generation.model.generator import MotionTokenGenerator
 
 
 def small_cfg(backbone: str) -> GeneratorConfig:

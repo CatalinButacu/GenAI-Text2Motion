@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from text2motion.generation.contracts import Backbone, GeneratorConfig, StreamAnchors
-from text2motion.generation.nn_generator import MotionTokenGenerator
+from text2motion.generation.model.generator import MotionTokenGenerator
 
 D_TEXT = 16
 STEPS = 10000

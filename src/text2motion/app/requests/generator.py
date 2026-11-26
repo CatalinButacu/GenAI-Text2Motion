@@ -7,11 +7,8 @@ from pydantic import Field
 from text2motion.app.requests.base import (
     CommandRequest,
 )
-from text2motion.generation.contracts import (
-    Backbone,
-    GeneratorPretrainingRequest,
-    GeneratorTrainingRequest,
-)
+from text2motion.generation.contracts import Backbone
+from text2motion.generation.requests import GeneratorPretrainingRequest, GeneratorTrainingRequest
 from text2motion.motion.contracts import CorpusLayout
 
 

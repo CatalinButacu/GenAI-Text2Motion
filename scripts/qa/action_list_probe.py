@@ -25,7 +25,7 @@ from text2motion.generation.contracts import (
     StreamAnchors,
     StudioSamplingConfig,
 )
-from text2motion.generation.nn_generator import seeded_sampling_uniforms
+from text2motion.generation.model.sampling import seeded_sampling_uniforms
 from text2motion.motion.representation import recover_skeleton
 
 logger = logging.getLogger(__name__)

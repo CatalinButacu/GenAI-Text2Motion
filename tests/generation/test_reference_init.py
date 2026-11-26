@@ -5,14 +5,9 @@ import torch
 import torch.nn.functional as F
 
 from text2motion.generation.contracts import Backbone, GeneratorConfig
-from text2motion.generation.nn_backbones import (
-    DT_FLOOR,
-    DT_MAX,
-    MambaBlock,
-    MambaMixer,
-    TransformerBlock,
-)
-from text2motion.generation.nn_generator import MotionTokenGenerator
+from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.model.mamba import DT_FLOOR, DT_MAX, MambaBlock, MambaMixer
+from text2motion.generation.model.transformer import TransformerBlock
 
 
 def test_a_fresh_mamba_mixer_starts_with_the_reference_dt_and_a_long_memory():

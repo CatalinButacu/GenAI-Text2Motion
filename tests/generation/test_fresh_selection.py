@@ -5,12 +5,9 @@ from typing import cast
 import pytest
 import torch
 
-from text2motion.generation.contracts import GeneratorTrainingRequest
-from text2motion.generation.generator_trainer import (
-    GENERATOR_RESUME_FORMAT,
-    GeneratorTrainer,
-    train_generator,
-)
+from text2motion.generation.requests import GeneratorTrainingRequest
+from text2motion.generation.training.epochs import train_generator
+from text2motion.generation.training.trainer import GENERATOR_RESUME_FORMAT, GeneratorTrainer
 from text2motion.motion.contracts import RunOutputs
 from text2motion.motion.storage import RESUME_VERSION
 

@@ -5,10 +5,11 @@ from pathlib import Path
 import imgui
 
 from text2motion.studio.contracts import ViewerHost
-from text2motion.studio.generation import StudioGenerationController, log_action
 from text2motion.studio.gui.avatar_section import AvatarSection
 from text2motion.studio.gui.layout import WINDOW_FLAGS, PanelLayout
 from text2motion.studio.gui.sampling import SamplingSection
+from text2motion.studio.live.actions import log_action
+from text2motion.studio.live.controller import StudioGenerationController
 
 
 ############################################################
