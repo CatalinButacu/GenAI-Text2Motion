@@ -10,13 +10,10 @@ from text2motion.evaluation.contracts import (
     GenerationEvaluationProtocol,
     GenerationEvaluationSet,
 )
-from text2motion.evaluation.evaluator import (
-    HumanMl3dGenerationEvaluator,
-    chosen_caption_index,
-    deterministic_generation_seed,
-)
+from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
 from text2motion.evaluation.metrics import replication_summary
 from text2motion.evaluation.nn_matcher import GuoEvaluationResources
+from text2motion.evaluation.samples import chosen_caption_index, deterministic_generation_seed
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.storage import FEATURES_DIR
 

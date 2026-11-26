@@ -11,8 +11,8 @@ import torch
 
 from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.evaluation.contracts import EvaluationSample, GenerationEvaluationSet
-from text2motion.evaluation.evaluator import chosen_caption_index
 from text2motion.evaluation.metrics import own_caption_ranks
+from text2motion.evaluation.samples import chosen_caption_index
 from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.contracts import Split
 

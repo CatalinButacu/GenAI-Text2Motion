@@ -12,8 +12,8 @@ import numpy as np
 import torch
 
 from text2motion.app.bootstrap import ApplicationBootstrap
-from text2motion.evaluation.evaluator import deterministic_generation_seed
 from text2motion.evaluation.metrics import paired_mean_ratio, sharpness_statistics
+from text2motion.evaluation.samples import deterministic_generation_seed
 from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.contracts import Split
 from text2motion.motion.representation import recover_skeleton

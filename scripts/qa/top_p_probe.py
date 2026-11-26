@@ -15,6 +15,7 @@ from text2motion.evaluation.metrics import (
     paired_mean_ratio,
     sharpness_statistics,
 )
+from text2motion.evaluation.reports import calculate_run_metrics
 from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.contracts import Split
 from text2motion.motion.representation import recover_skeleton
@@ -64,7 +65,7 @@ def twin_rows(evaluator, pipeline, backbone: Backbone) -> list[dict[str, float |
         (f"top_p {CHALLENGER_TOP_P}", challenger),
     ):
         embeddings[name] = evaluator.compute_motion_embeddings(generated.generated)
-        metrics = evaluator.calculate_run_metrics(
+        metrics = calculate_run_metrics(
             real, embeddings[name], caption_emb, per_clip, np.random.default_rng(0)
         )
         sharp[name] = sharpness_columns(generated.generated)

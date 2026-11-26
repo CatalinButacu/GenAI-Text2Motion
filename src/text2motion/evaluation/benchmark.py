@@ -9,6 +9,7 @@ from pathlib import Path
 import torch
 
 from text2motion.evaluation.contracts import StreamingBenchmarkProtocol
+from text2motion.evaluation.reports import log_concurrency_table, log_horizon_table
 from text2motion.generation.nn_generator import (
     Backbone,
     GeneratorConfig,
@@ -48,11 +49,7 @@ def advance(
 
 
 @torch.no_grad()
-def warm_up_streaming_generator(
-    generator: MotionTokenGenerator, device: str, steps: int, batch: int = 1
-) -> None:
-    if steps <= 0:
-        return
+def prime_streaming_state(generator: MotionTokenGenerator, device: str, batch: int):
     cfg = generator.cfg
     state = generator.backbone.init_state(batch, torch.device(device))
     text = torch.randn(batch, cfg.text_prefix_len, cfg.d_text, device=device)
@@ -61,10 +58,49 @@ def warm_up_streaming_generator(
     for position in range(prefix.size(1)):
         _, state = generator.backbone.step(prefix[:, position], state)
     tokens = torch.zeros(batch, cfg.num_codebooks, dtype=torch.long, device=device)
+    return tokens, state, text_vector
+
+
+@torch.no_grad()
+def warm_up_streaming_generator(
+    generator: MotionTokenGenerator, device: str, steps: int, batch: int = 1
+) -> None:
+    if steps <= 0:
+        return
+    tokens, state, text_vector = prime_streaming_state(generator, device, batch)
     for _ in range(steps):
         tokens, state = advance(generator, tokens, state, text_vector)
     if device == "cuda":
         torch.cuda.synchronize()
+
+
+@torch.no_grad()
+def timed_advance(
+    generator: MotionTokenGenerator,
+    tokens: torch.Tensor,
+    state,
+    text_vector: torch.Tensor,
+    cuda: bool,
+):
+    if cuda:
+        torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    tokens, state = advance(generator, tokens, state, text_vector)
+    if cuda:
+        torch.cuda.synchronize()
+    return tokens, state, (time.perf_counter() - t0) * 1000
+
+
+def horizon_row(step: int, step_ms: list[float], state, cuda: bool) -> dict[str, float]:
+    segment = sorted(step_ms[-min(len(step_ms), 64) :])
+    return {
+        "horizon": step,
+        "ms_per_step": statistics.median(segment),
+        "ms_p10": segment[int(0.10 * (len(segment) - 1))],
+        "ms_p90": segment[int(0.90 * (len(segment) - 1))],
+        "state_bytes": streaming_state_size_bytes(state),
+        "cuda_peak_bytes": torch.cuda.max_memory_allocated() if cuda else 0,
+    }
 
 
 @torch.no_grad()
@@ -74,44 +110,43 @@ def benchmark_streaming_horizons(
     device: str,
     warmup_steps: int = StreamingBenchmarkProtocol().warmup,
 ) -> list[dict[str, float]]:
-    cfg = generator.cfg
     cuda = device == "cuda"
     warm_up_streaming_generator(generator, device, warmup_steps)
     if cuda:
         torch.cuda.reset_peak_memory_stats()
 
-    state = generator.backbone.init_state(1, torch.device(device))
-    text = torch.randn(1, cfg.text_prefix_len, cfg.d_text, device=device)
-    prefix = generator.project_text_prefix(text)
-    text_vector = generator.per_step_text_vector(text, prefix)
-    for position in range(prefix.size(1)):
-        h, state = generator.backbone.step(prefix[:, position], state)
-
+    tokens, state, text_vector = prime_streaming_state(generator, device, 1)
     rows: list[dict[str, float]] = []
     step_ms: list[float] = []
-    tokens = torch.zeros(1, cfg.num_codebooks, dtype=torch.long, device=device)
     for step in range(1, max(horizons) + 1):
-        if cuda:
-            torch.cuda.synchronize()
-        t0 = time.perf_counter()
-        tokens, state = advance(generator, tokens, state, text_vector)
-        if cuda:
-            torch.cuda.synchronize()
-        step_ms.append((time.perf_counter() - t0) * 1000)
-
+        tokens, state, elapsed = timed_advance(generator, tokens, state, text_vector, cuda)
+        step_ms.append(elapsed)
         if step in horizons:
-            segment = sorted(step_ms[-min(len(step_ms), 64) :])
-            rows.append(
-                {
-                    "horizon": step,
-                    "ms_per_step": statistics.median(segment),
-                    "ms_p10": segment[int(0.10 * (len(segment) - 1))],
-                    "ms_p90": segment[int(0.90 * (len(segment) - 1))],
-                    "state_bytes": streaming_state_size_bytes(state),
-                    "cuda_peak_bytes": torch.cuda.max_memory_allocated() if cuda else 0,
-                }
-            )
+            rows.append(horizon_row(step, step_ms, state, cuda))
     return rows
+
+
+@torch.no_grad()
+def measure_stream_batch(
+    generator: MotionTokenGenerator, batch: int, horizon: int, device: str
+) -> dict[str, float]:
+    cuda = device == "cuda"
+    tokens, state, text_vector = prime_streaming_state(generator, device, batch)
+    step_ms: list[float] = []
+    for _ in range(horizon):
+        tokens, state, elapsed = timed_advance(generator, tokens, state, text_vector, cuda)
+        step_ms.append(elapsed)
+
+    median_ms = statistics.median(step_ms[-min(len(step_ms), 64) :])
+    return {
+        "streams": batch,
+        "horizon": horizon,
+        "ms_per_step": median_ms,
+        "state_bytes": streaming_state_size_bytes(state),
+        "state_bytes_per_stream": streaming_state_size_bytes(state) / batch,
+        "cuda_peak_bytes": torch.cuda.max_memory_allocated() if cuda else 0,
+        "streams_per_second": batch / (median_ms / 1000.0),
+    }
 
 
 @torch.no_grad()
@@ -122,7 +157,6 @@ def benchmark_concurrent_streams(
     device: str,
     warmup_steps: int = 16,
 ) -> list[dict[str, float]]:
-    cfg = generator.cfg
     cuda = device == "cuda"
     rows: list[dict[str, float]] = []
 
@@ -132,40 +166,54 @@ def benchmark_concurrent_streams(
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
 
-        state = generator.backbone.init_state(batch, torch.device(device))
-        text = torch.randn(batch, cfg.text_prefix_len, cfg.d_text, device=device)
-        prefix = generator.project_text_prefix(text)
-        text_vector = generator.per_step_text_vector(text, prefix)
-        for position in range(prefix.size(1)):
-            _, state = generator.backbone.step(prefix[:, position], state)
-
-        tokens = torch.zeros(batch, cfg.num_codebooks, dtype=torch.long, device=device)
-        step_ms: list[float] = []
-        for _ in range(horizon):
-            if cuda:
-                torch.cuda.synchronize()
-            t0 = time.perf_counter()
-            tokens, state = advance(generator, tokens, state, text_vector)
-            if cuda:
-                torch.cuda.synchronize()
-            step_ms.append((time.perf_counter() - t0) * 1000)
-
-        median_ms = statistics.median(step_ms[-min(len(step_ms), 64) :])
-        rows.append(
-            {
-                "streams": batch,
-                "horizon": horizon,
-                "ms_per_step": median_ms,
-                "state_bytes": streaming_state_size_bytes(state),
-                "state_bytes_per_stream": streaming_state_size_bytes(state) / batch,
-                "cuda_peak_bytes": torch.cuda.max_memory_allocated() if cuda else 0,
-                "streams_per_second": batch / (median_ms / 1000.0),
-            }
-        )
-        del state
+        rows.append(measure_stream_batch(generator, batch, horizon, device))
         if cuda:
             torch.cuda.empty_cache()
     return rows
+
+
+def run_backbone_benchmark(
+    request: StreamingBenchmarkProtocol, architecture: GeneratorModelSpec, seed: int, device: str
+) -> tuple[list[dict[str, float]], list[dict[str, float]]]:
+    torch.manual_seed(seed)
+    module = architecture.create_model(device).eval()
+    results = benchmark_streaming_horizons(
+        module, sorted(request.horizons), device, warmup_steps=request.warmup
+    )
+    params = sum(p.numel() for p in module.parameters())
+    logger.info(
+        f"\n{architecture.backbone.value} ({params:,} params, "
+        f"{architecture.config.n_layers} layers, device {device})"
+    )
+    log_horizon_table(results)
+
+    rows: list[dict[str, float]] = []
+    if request.streams:
+        rows = benchmark_concurrent_streams(
+            module, sorted(request.streams), request.streams_horizon, device
+        )
+        log_concurrency_table(request.streams_horizon, rows)
+
+    del module
+    if device == "cuda":
+        torch.cuda.empty_cache()
+    return results, rows
+
+
+def write_benchmark_payload(
+    request: StreamingBenchmarkProtocol,
+    results: dict[str, list[dict[str, float]]],
+    concurrency: dict[str, list[dict[str, float]]],
+) -> dict:
+    payload = {"label": request.label, "scope": MODEL_ONLY_SCOPE, "results": results}
+    if concurrency:
+        payload["concurrency"] = concurrency
+
+    out_path = Path(request.out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(payload, indent=2))
+    logger.info(f"\nwrote {out_path}")
+    return payload
 
 
 def run_streaming_state_latency_benchmark(
@@ -178,62 +226,18 @@ def run_streaming_state_latency_benchmark(
 ) -> dict:
     results: dict[str, list[dict[str, float]]] = {}
     concurrency: dict[str, list[dict[str, float]]] = {}
-    horizons = sorted(request.horizons)
     logger.info(f"scope: {MODEL_ONLY_SCOPE}")
 
     for backbone in Backbone:
-        bench_seq_len = max(horizons) + generator.text_prefix_len + request.headroom
         architecture = GeneratorModelSpec.resolve(
             generator,
             backbone,
             codebook_size,
             num_codebooks,
-            max_seq_len=bench_seq_len,
+            max_seq_len=max(request.horizons) + generator.text_prefix_len + request.headroom,
         )
-        torch.manual_seed(seed)
-        module = architecture.create_model(device).eval()
-        results[backbone.value] = benchmark_streaming_horizons(
-            module, horizons, device, warmup_steps=request.warmup
-        )
-        params = sum(p.numel() for p in module.parameters())
-        logger.info(
-            f"\n{backbone.value} ({params:,} params, "
-            f"{architecture.config.n_layers} layers, device {device})"
-        )
-        logger.info(f"{'horizon':>8} {'ms/step':>9} {'state':>12} {'cuda peak':>12}")
-        for row in results[backbone.value]:
-            logger.info(
-                f"{row['horizon']:>8} {row['ms_per_step']:>9.2f} "
-                f"{row['state_bytes'] / 1e6:>10.2f}MB {row['cuda_peak_bytes'] / 1e6:>10.1f}MB"
-            )
-
-        if request.streams:
-            rows = benchmark_concurrent_streams(
-                module, sorted(request.streams), request.streams_horizon, device
-            )
+        results[backbone.value], rows = run_backbone_benchmark(request, architecture, seed, device)
+        if rows:
             concurrency[backbone.value] = rows
-            logger.info(f"  concurrency @ horizon {request.streams_horizon}")
-            logger.info(
-                f"  {'streams':>8} {'ms/step':>9} {'state':>12} {'per-stream':>12} {'peak':>10}"
-            )
-            for row in rows:
-                logger.info(
-                    f"  {row['streams']:>8} {row['ms_per_step']:>9.2f} "
-                    f"{row['state_bytes'] / 1e6:>10.2f}MB "
-                    f"{row['state_bytes_per_stream'] / 1e6:>10.3f}MB "
-                    f"{row['cuda_peak_bytes'] / 1e6:>8.1f}MB"
-                )
 
-        del module
-        if device == "cuda":
-            torch.cuda.empty_cache()
-
-    payload = {"label": request.label, "scope": MODEL_ONLY_SCOPE, "results": results}
-    if concurrency:
-        payload["concurrency"] = concurrency
-
-    out_path = Path(request.out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(payload, indent=2))
-    logger.info(f"\nwrote {out_path}")
-    return payload
+    return write_benchmark_payload(request, results, concurrency)
