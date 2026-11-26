@@ -30,7 +30,6 @@ ALLOWED = MappingProxyType(
             "generation/training/epochs.py::finish_epoch",
             "generation/training/overfit.py::overfit_single_batch",
             "generation/training/epochs.py::train_generator",
-            "generation/losses.py::generator_loss",
             "generation/model/mamba.py::MambaMixer.forward",
             "generation/model/generator.py::MotionTokenGenerator.check_stream_budget",
             "generation/model/generator.py::MotionTokenGenerator.stream_token_indices",

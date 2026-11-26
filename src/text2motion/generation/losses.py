@@ -176,42 +176,61 @@ class LossSetup:
     weighter: UncertaintyWeighter | None = None
 
 
+def token_lengths_for(batch: LossBatch, setup: LossSetup) -> torch.Tensor | None:
+    if batch.token_lengths is None and batch.lengths is not None:
+        return (batch.lengths // setup.downsample).clamp(max=batch.target_tokens.size(1))
+    return batch.token_lengths
+
+
+def optional_fk_terms(
+    recon: torch.Tensor, batch: LossBatch, setup: LossSetup
+) -> dict[str, torch.Tensor]:
+    if not (setup.weights.fk_enabled and setup.skeleton is not None):
+        return {}
+    if setup.mean is None or setup.std is None:
+        raise ValueError("the FK losses need mean and std to recover joint positions")
+    return fk_consistency_terms(
+        recon,
+        batch.gt_motion,
+        batch.lengths,
+        setup.mean,
+        setup.std,
+        setup.skeleton,
+    )
+
+
+def optional_dynamics_terms(
+    recon: torch.Tensor, batch: LossBatch, setup: LossSetup
+) -> dict[str, torch.Tensor]:
+    if not setup.weights.dynamics_enabled:
+        return {}
+    if setup.mean is None or setup.std is None:
+        raise ValueError("foot_skate/accel losses need mean and std to recover joint positions")
+    weight_map = setup.weights.as_dict()
+    dynamics = dynamics_terms(recon, batch.gt_motion, batch.lengths, setup.mean, setup.std)
+    return {name: value for name, value in dynamics.items() if weight_map[name] > 0}
+
+
+def weighted_total(
+    ce: torch.Tensor, terms: dict[str, torch.Tensor], setup: LossSetup
+) -> torch.Tensor:
+    if setup.weighter is not None:
+        return ce + setup.weighter(terms)
+    weight_map = setup.weights.as_dict()
+    return ce + sum(weight_map[name] * value for name, value in terms.items())
+
+
 def generator_loss(
     batch: LossBatch, setup: LossSetup
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-    token_lengths = batch.token_lengths
-    if token_lengths is None and batch.lengths is not None:
-        token_lengths = (batch.lengths // setup.downsample).clamp(max=batch.target_tokens.size(1))
-
-    ce = token_ce_loss(batch.logits, batch.target_tokens, token_lengths)
+    ce = token_ce_loss(batch.logits, batch.target_tokens, token_lengths_for(batch, setup))
     motion_logits = batch.logits[:, :-1] if setup.has_end else batch.logits
     recon = soft_decode(motion_logits, setup.tokenizer)
 
     terms = geometric_terms(recon, batch.gt_motion, batch.lengths)
-    weight_map = setup.weights.as_dict()
-    if setup.weights.fk_enabled and setup.skeleton is not None:
-        if setup.mean is None or setup.std is None:
-            raise ValueError("the FK losses need mean and std to recover joint positions")
-        terms.update(
-            fk_consistency_terms(
-                recon,
-                batch.gt_motion,
-                batch.lengths,
-                setup.mean,
-                setup.std,
-                setup.skeleton,
-            )
-        )
-    if setup.weights.dynamics_enabled:
-        if setup.mean is None or setup.std is None:
-            raise ValueError("foot_skate/accel losses need mean and std to recover joint positions")
-        dynamics = dynamics_terms(recon, batch.gt_motion, batch.lengths, setup.mean, setup.std)
-        terms.update({name: value for name, value in dynamics.items() if weight_map[name] > 0})
-
-    if setup.weighter is not None:
-        total = ce + setup.weighter(terms)
-    else:
-        total = ce + sum(weight_map[name] * value for name, value in terms.items())
+    terms.update(optional_fk_terms(recon, batch, setup))
+    terms.update(optional_dynamics_terms(recon, batch, setup))
+    total = weighted_total(ce, terms, setup)
 
     parts = {
         "ce": ce.detach(),
