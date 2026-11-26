@@ -6,7 +6,8 @@ import torch
 
 from text2motion.dataset.contracts import MotionDataConfig
 from text2motion.dataset.training.batching import collate_motion_clips
-from text2motion.dataset.training.captioned import CaptionedMotionDataset, clip_frame_counts
+from text2motion.dataset.training.captioned import CaptionedMotionDataset
+from text2motion.dataset.training.clip_index import clip_frame_counts
 from text2motion.dataset.training.windows import MotionWindowDataset
 from text2motion.motion import representation
 from text2motion.motion.contracts import MotionClip, Split

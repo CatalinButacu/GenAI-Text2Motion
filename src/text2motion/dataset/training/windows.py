@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 
 from text2motion.dataset.contracts import MotionDataConfig
 from text2motion.dataset.training.batching import log_dropped_clips, pad_to_window
-from text2motion.dataset.training.captioned import check_no_missing_files
+from text2motion.dataset.training.clip_index import check_no_missing_files
 from text2motion.motion.contracts import (
     MotionClip,
     Split,

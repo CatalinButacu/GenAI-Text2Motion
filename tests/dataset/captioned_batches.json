@@ -1,0 +1,227 @@
+{
+  "train": {
+    "clip_ids": [
+      "Ftr00",
+      "Ftr01",
+      "Ftr02",
+      "Ftr03",
+      "Ftr04",
+      "Ftr05"
+    ],
+    "captions": [
+      "a person kicks with the right leg",
+      "a person walks forward",
+      "a person waves with the left hand"
+    ],
+    "clip_weights": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "epochs": [
+      [
+        {
+          "captions": [
+            "a person waves with the left hand",
+            "a person waves with the left hand"
+          ],
+          "lengths": [
+            48,
+            48
+          ],
+          "shape": [
+            2,
+            48,
+            263
+          ],
+          "sha256": "b0810575a9d0610fade06d65e2420d71f9b1c00a1d66467708afb0354ccc62c4"
+        },
+        {
+          "captions": [
+            "a person kicks with the right leg",
+            "a person waves with the left hand"
+          ],
+          "lengths": [
+            48,
+            48
+          ],
+          "shape": [
+            2,
+            48,
+            263
+          ],
+          "sha256": "4d10c622fd4f53b9b6c806adaf2d02d9ef5346a9791212eed6696486e8da48d7"
+        },
+        {
+          "captions": [
+            "a person walks forward",
+            "a person kicks with the right leg"
+          ],
+          "lengths": [
+            48,
+            48
+          ],
+          "shape": [
+            2,
+            48,
+            263
+          ],
+          "sha256": "aa92290bce1e243466e8f651ce145008d813b3c1393d481fd7dee9cd7dcb6186"
+        }
+      ],
+      [
+        {
+          "captions": [
+            "a person walks forward",
+            "a person walks forward"
+          ],
+          "lengths": [
+            48,
+            48
+          ],
+          "shape": [
+            2,
+            48,
+            263
+          ],
+          "sha256": "7c837139f2d81bd3fc479033ea032f5043f5fd357112e50d06341b8b58ab6ecd"
+        },
+        {
+          "captions": [
+            "a person waves with the left hand",
+            "a person waves with the left hand"
+          ],
+          "lengths": [
+            48,
+            48
+          ],
+          "shape": [
+            2,
+            48,
+            263
+          ],
+          "sha256": "943759f1a194f529ed3a8292c9550b89796db61b9aab8d43329765d039cc63c6"
+        },
+        {
+          "captions": [
+            "a person kicks with the right leg",
+            "a person kicks with the right leg"
+          ],
+          "lengths": [
+            48,
+            48
+          ],
+          "shape": [
+            2,
+            48,
+            263
+          ],
+          "sha256": "0595a506dad65777449950060adc36215ac2a215f1bd7beb34c6b3e2d081b558"
+        }
+      ]
+    ]
+  },
+  "val": {
+    "clip_ids": [
+      "Fva00",
+      "Fva01"
+    ],
+    "captions": [
+      "a person kicks with the right leg",
+      "a person walks forward",
+      "a person waves with the left hand"
+    ],
+    "clip_weights": null,
+    "epochs": [
+      [
+        {
+          "captions": [
+            "a person walks forward",
+            "a person kicks with the right leg"
+          ],
+          "lengths": [
+            48,
+            48
+          ],
+          "shape": [
+            2,
+            48,
+            263
+          ],
+          "sha256": "e80713314a71a651ef9e4bb67aae68b23f7190e0709ac1ebf1ffbd35a9cd4452"
+        }
+      ],
+      [
+        {
+          "captions": [
+            "a person walks forward",
+            "a person kicks with the right leg"
+          ],
+          "lengths": [
+            48,
+            48
+          ],
+          "shape": [
+            2,
+            48,
+            263
+          ],
+          "sha256": "e80713314a71a651ef9e4bb67aae68b23f7190e0709ac1ebf1ffbd35a9cd4452"
+        }
+      ]
+    ]
+  },
+  "test": {
+    "clip_ids": [
+      "Fte00",
+      "Fte01"
+    ],
+    "captions": [
+      "a person kicks with the right leg",
+      "a person walks forward",
+      "a person waves with the left hand"
+    ],
+    "clip_weights": null,
+    "epochs": [
+      [
+        {
+          "captions": [
+            "a person walks forward",
+            "a person kicks with the right leg"
+          ],
+          "lengths": [
+            48,
+            48
+          ],
+          "shape": [
+            2,
+            48,
+            263
+          ],
+          "sha256": "2e28ce6d18f2f5af2c651d2c0d29cd8231301c6ae4452c8ea5d566e75a8dc994"
+        }
+      ],
+      [
+        {
+          "captions": [
+            "a person walks forward",
+            "a person kicks with the right leg"
+          ],
+          "lengths": [
+            48,
+            48
+          ],
+          "shape": [
+            2,
+            48,
+            263
+          ],
+          "sha256": "2e28ce6d18f2f5af2c651d2c0d29cd8231301c6ae4452c8ea5d566e75a8dc994"
+        }
+      ]
+    ]
+  }
+}
