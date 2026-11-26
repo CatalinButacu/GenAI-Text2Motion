@@ -101,25 +101,20 @@ def run_dir_to_continue(
     return resumed_run_dir(resume_path, requested)
 
 
-def start_run(
-    name: str,
-    cfg: Any,
-    logs_dir: Path,
-    extra: dict | None = None,
-    existing_run_dir: Path | None = None,
-) -> Path:
-    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-
+def run_versions() -> dict:
     import torch
 
-    versions = {
+    return {
         "python": sys.version.split()[0],
         "platform": platform.platform(),
         "torch": torch.__version__,
         "cuda": torch.version.cuda or "cpu",
     }
 
-    manifest = {
+
+def build_manifest(name: str, stamp: str, cfg: Any, extra: dict | None) -> dict:
+    versions = run_versions()
+    return {
         "name": name,
         "started_utc": stamp,
         "git_commit": git_commit(),
@@ -128,30 +123,57 @@ def start_run(
         "versions": versions,
     }
 
-    if existing_run_dir is not None:
-        run_dir = Path(existing_run_dir)
-        if not run_dir.is_dir():
-            raise ValueError(f"--resume_run_dir does not exist: {run_dir}")
-        resumes_path = run_dir / "resumes.jsonl"
-        with resumes_path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(manifest) + "\n")
-        ensure_logging_configured()
-        add_run_log_file(run_dir)
-        if getattr(cfg, "mlflow_tracking", False):
-            start_mlflow_run(run_dir, logs_dir, manifest)
-        logger.info(f"run directory {run_dir} (resumed, commit {manifest['git_commit'][:8]})")
-        return run_dir
 
-    run_dir = Path(logs_dir) / "train" / f"{stamp}_{name}"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+def checked_existing_run_dir(existing_run_dir: Path) -> Path:
+    run_dir = Path(existing_run_dir)
+    if not run_dir.is_dir():
+        raise ValueError(f"--resume_run_dir does not exist: {run_dir}")
+    return run_dir
+
+
+def append_resume_manifest(run_dir: Path, manifest: dict) -> None:
+    resumes_path = run_dir / "resumes.jsonl"
+    with resumes_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(manifest) + "\n")
+
+
+def attach_run_outputs(run_dir: Path, cfg: Any, logs_dir: Path, manifest: dict) -> None:
     ensure_logging_configured()
     add_run_log_file(run_dir)
     if getattr(cfg, "mlflow_tracking", False):
         start_mlflow_run(run_dir, logs_dir, manifest)
-    logger.info(f"run directory {run_dir} (commit {manifest['git_commit'][:8]})")
-    logger.info(f"versions {versions}")
+
+
+def continue_run(existing_run_dir: Path, cfg: Any, logs_dir: Path, manifest: dict) -> Path:
+    run_dir = checked_existing_run_dir(existing_run_dir)
+    append_resume_manifest(run_dir, manifest)
+    attach_run_outputs(run_dir, cfg, logs_dir, manifest)
+    logger.info(f"run directory {run_dir} (resumed, commit {manifest['git_commit'][:8]})")
     return run_dir
+
+
+def create_run(name: str, stamp: str, cfg: Any, logs_dir: Path, manifest: dict) -> Path:
+    run_dir = Path(logs_dir) / "train" / f"{stamp}_{name}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    attach_run_outputs(run_dir, cfg, logs_dir, manifest)
+    logger.info(f"run directory {run_dir} (commit {manifest['git_commit'][:8]})")
+    logger.info(f"versions {manifest['versions']}")
+    return run_dir
+
+
+def start_run(
+    name: str,
+    cfg: Any,
+    logs_dir: Path,
+    extra: dict | None = None,
+    existing_run_dir: Path | None = None,
+) -> Path:
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    manifest = build_manifest(name, stamp, cfg, extra)
+    if existing_run_dir is not None:
+        return continue_run(existing_run_dir, cfg, logs_dir, manifest)
+    return create_run(name, stamp, cfg, logs_dir, manifest)
 
 
 def log_metrics(run_dir: Path, record: dict) -> None:
