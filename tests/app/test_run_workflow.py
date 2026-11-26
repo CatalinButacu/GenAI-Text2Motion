@@ -25,10 +25,10 @@ def test_data_then_tokenizer_on_the_fixture_writes_one_entry_per_step(tmp_path, 
     build_fixture_dataset(dataset)
     calls = []
     monkeypatch.setattr(
-        "text2motion.app.training.run_prepare", lambda app, args: calls.append("prepare")
+        "text2motion.app.stages.data.run_prepare", lambda app, args: calls.append("prepare")
     )
     monkeypatch.setattr(
-        "text2motion.app.training.run_train_tokenizer",
+        "text2motion.app.stages.tokenizer.run_train_tokenizer",
         lambda app, args: calls.append(f"train-tokenizer:{args.tokenizer.value}"),
     )
     app = SimpleNamespace(config=SimpleNamespace(paths=SimpleNamespace(hml3d_out_dir=dataset)))
@@ -65,14 +65,14 @@ def test_evaluate_workflow_runs_both_twins_from_one_step_list_and_reruns_skip(
         return handler
 
     for name, target in (
-        ("prepare", "run_prepare"),
-        ("train-tokenizer", "run_train_tokenizer"),
-        ("tokenize", "run_tokenize"),
-        ("sanity-overfit", "run_sanity_overfit"),
-        ("train-generator", "run_train_generator"),
+        ("prepare", "data.run_prepare"),
+        ("train-tokenizer", "tokenizer.run_train_tokenizer"),
+        ("tokenize", "data.run_tokenize"),
+        ("sanity-overfit", "overfit.run_sanity_overfit"),
+        ("train-generator", "generator.run_train_generator"),
     ):
-        monkeypatch.setattr(f"text2motion.app.training.{target}", record(name))
-    monkeypatch.setattr("text2motion.app.serving.run_evaluate", record("evaluate"))
+        monkeypatch.setattr(f"text2motion.app.stages.{target}", record(name))
+    monkeypatch.setattr("text2motion.app.stages.evaluate.run_evaluate", record("evaluate"))
     paths = SimpleNamespace(hml3d_out_dir=dataset, tokenizer_checkpoint=tmp_path / "tok.pt")
     app = SimpleNamespace(config=SimpleNamespace(paths=paths))
     request = RunRequest(

@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from text2motion.app.config import TokenizerConfig
 from text2motion.motion.contracts import MotionClip, MotionTokens
+from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.nn_quantizers import (
     FiniteScalarQuantizer,
     GroupedFiniteScalarQuantizer,

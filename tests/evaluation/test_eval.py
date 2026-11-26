@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from text2motion.app.config import load_config
+from text2motion.app.config.loading import load_config
 from text2motion.evaluation.metrics import diversity, fid, mm_dist, r_precision
 
 

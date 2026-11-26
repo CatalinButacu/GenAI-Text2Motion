@@ -1,0 +1,4 @@
+[
+ {"from": "text2motion.app.runtime.bootstrap", "to": "text2motion.app.runtime.context", "names": ["required_path", "ApplicationBootstrap"], "copy": ["logger"]},
+ {"from": "text2motion.app.runtime.bootstrap", "to": "text2motion.app.runtime.environment", "names": ["seed_everything", "apply_precision", "resolve_device", "logger"]}
+]

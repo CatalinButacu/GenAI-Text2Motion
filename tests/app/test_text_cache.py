@@ -1,7 +1,7 @@
 import hashlib
 
-from text2motion.app import bootstrap
-from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.runtime.context import ApplicationBootstrap
+from text2motion.generation.nn_generator import FrozenTextStates
 
 
 def test_attach_text_cache_builds_once_then_loads_by_caption_set(tmp_path, monkeypatch):
@@ -23,8 +23,8 @@ def test_attach_text_cache_builds_once_then_loads_by_caption_set(tmp_path, monke
         loaded.append(path)
         return object()
 
-    monkeypatch.setattr(bootstrap.FrozenTextStates, "build", fake_build)
-    monkeypatch.setattr(bootstrap.FrozenTextStates, "load", fake_load)
+    monkeypatch.setattr(FrozenTextStates, "build", fake_build)
+    monkeypatch.setattr(FrozenTextStates, "load", fake_load)
 
     captions = ["a person walks", "a man jumps"]
     digest = hashlib.sha256("\n".join(sorted(captions)).encode("utf-8")).hexdigest()[:12]

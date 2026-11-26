@@ -3,11 +3,8 @@ from dataclasses import asdict
 import pytest
 import torch
 
-from text2motion.app.checkpoint import (
-    GeneratorBundle,
-    load_generator_checkpoint,
-)
-from text2motion.app.config import GeneratorConfig
+from text2motion.app.runtime.checkpoint import GeneratorBundle, load_generator_checkpoint
+from text2motion.generation.contracts import GeneratorConfig
 from text2motion.generation.nn_generator import MotionTokenGenerator
 
 

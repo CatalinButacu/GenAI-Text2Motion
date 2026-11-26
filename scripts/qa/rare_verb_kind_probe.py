@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from verb_generation_probe import CONFIG, SEED, chosen_verbs, real_clips
 
-from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.runtime.context import ApplicationBootstrap
 
 RARE_CLIPS = 150
 RARE_SAMPLES = 32

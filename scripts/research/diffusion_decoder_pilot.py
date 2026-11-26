@@ -14,7 +14,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.storage import FEATURES_DIR, base_clip_ids

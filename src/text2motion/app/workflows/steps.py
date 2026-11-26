@@ -4,14 +4,9 @@ from pathlib import Path
 from typing import Any
 
 from text2motion.app.cli import COMMANDS
-from text2motion.app.cli_requests import (
-    EvaluateRequest,
-    PrepareRequest,
-    SanityOverfitRequest,
-    TokenizeRequest,
-    TrainGeneratorRequest,
-    TrainTokenizerRequest,
-)
+from text2motion.app.requests.data import PrepareRequest, TokenizeRequest, TrainTokenizerRequest
+from text2motion.app.requests.evaluate import EvaluateRequest
+from text2motion.app.requests.generator import SanityOverfitRequest, TrainGeneratorRequest
 from text2motion.app.workflows.requests import RunRequest, Workflow
 from text2motion.common.runner import Step
 from text2motion.generation.contracts import Backbone, BackboneChoice

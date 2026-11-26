@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from text2motion.app.config import load_config
+from text2motion.app.config.loading import load_config
 
 EXPERIMENT_CONFIGS = sorted(
     [Path("configs/default.yaml"), Path("configs/aws.yaml")]

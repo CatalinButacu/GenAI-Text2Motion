@@ -7,8 +7,7 @@ import numpy as np
 import pytest
 import torch
 
-from text2motion.app.config import GeneratorTrainingConfig
-from text2motion.generation.contracts import GeneratorPretrainingRequest
+from text2motion.generation.contracts import GeneratorPretrainingRequest, GeneratorTrainingConfig
 from text2motion.generation.nn_generator import GeneratorModelSpec
 from text2motion.generation.pretrain import pretrain_generator
 from text2motion.generation.token_datasets import (

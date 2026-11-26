@@ -3,7 +3,7 @@ from dataclasses import replace
 
 import torch
 
-from text2motion.app.config import load_config
+from text2motion.app.config.loading import load_config
 from text2motion.generation.contracts import Backbone
 from text2motion.generation.generator_trainer import GeneratorTrainer
 from text2motion.generation.nn_generator import GeneratorModelSpec

@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from text2motion.app.run_log import resumed_run_dir, run_dir_to_continue
+from text2motion.app.runtime.run_log import resumed_run_dir, run_dir_to_continue
 
 
 def test_a_resume_continues_the_run_directory_that_the_resume_file_records(tmp_path):

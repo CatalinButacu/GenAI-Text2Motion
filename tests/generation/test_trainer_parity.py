@@ -7,17 +7,22 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, TokenizerConfig
 from text2motion.dataset.contracts import MotionDataConfig
 from text2motion.dataset.fixture import build_fixture_dataset
 from text2motion.dataset.training.batching import collate_motion_clips
 from text2motion.dataset.training.captioned import CaptionedMotionDataset
 from text2motion.generation import pretrain as pretrain_module
-from text2motion.generation.contracts import Backbone, GeneratorPretrainingRequest
+from text2motion.generation.contracts import (
+    Backbone,
+    GeneratorConfig,
+    GeneratorPretrainingRequest,
+    GeneratorTrainingConfig,
+)
 from text2motion.generation.generator_trainer import GeneratorTrainer
 from text2motion.generation.nn_generator import GeneratorModelSpec, MotionTokenGenerator
 from text2motion.generation.pretrain import pretrain_generator
 from text2motion.motion.contracts import Split
+from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.corpus import PACK_FORMAT, PACK_IDENTITY_KEY, PACK_VERSION
 from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
 from text2motion.tokenization.tokenizer_trainer import TokenizerTrainer

@@ -1,0 +1,11 @@
+[
+ {
+  "from": "text2motion.generation.contracts",
+  "to": "text2motion.generation.requests",
+  "names": [
+   "TextToMotionGenerationRequest",
+   "GeneratorTrainingRequest",
+   "GeneratorPretrainingRequest"
+  ]
+ }
+]

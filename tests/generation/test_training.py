@@ -2,8 +2,13 @@ import numpy as np
 import pytest
 import torch
 
-from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, TokenizerConfig
-from text2motion.generation.contracts import Backbone, GeneratorFreeze, LossWeighting
+from text2motion.generation.contracts import (
+    Backbone,
+    GeneratorConfig,
+    GeneratorFreeze,
+    GeneratorTrainingConfig,
+    LossWeighting,
+)
 from text2motion.generation.generator_trainer import (
     GENERATOR_RESUME_FORMAT,
     GeneratorTrainer,
@@ -12,6 +17,7 @@ from text2motion.generation.generator_trainer import (
 from text2motion.generation.losses import LossWeights, soft_decode
 from text2motion.generation.nn_generator import MotionTokenGenerator
 from text2motion.motion.storage import RESUME_VERSION, atomic_torch_save, is_legacy_resume
+from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
 
@@ -294,7 +300,7 @@ def test_ema_rejects_a_bad_checkpoint_state(state):
 def test_decay_groups_exempt_norms_biases_and_the_ssm_memory_params():
     from dataclasses import replace as _replace
 
-    from text2motion.app.config import GeneratorConfig
+    from text2motion.generation.contracts import GeneratorConfig
     from text2motion.generation.generator_trainer import partition_parameters
 
     gen_cfg = GeneratorConfig(num_codebooks=2, codebook_size=64, d_model=64, n_layers=2)

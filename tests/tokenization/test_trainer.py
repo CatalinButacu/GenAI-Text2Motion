@@ -6,13 +6,13 @@ import pytest
 import torch
 from pydantic import ValidationError
 
-from text2motion.app.cli_requests import TrainTokenizerRequest
-from text2motion.app.config import TokenizerConfig
+from text2motion.app.requests.data import TrainTokenizerRequest
 from text2motion.motion.contracts import RunOutputs
 from text2motion.motion.storage import atomic_torch_save
 from text2motion.tokenization.contracts import (
     DROPPED_CODE,
     ResidualVectorQuantizationConfig,
+    TokenizerConfig,
     TokenizerKind,
     TokenizerSchedule,
 )

@@ -9,9 +9,9 @@ from pathlib import Path
 import torch
 import yaml
 
-from text2motion.app.bootstrap import ApplicationBootstrap
-from text2motion.app.checkpoint import GeneratorBundle
-from text2motion.app.config import load_config
+from text2motion.app.config.loading import load_config
+from text2motion.app.runtime.checkpoint import GeneratorBundle
+from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.motion.storage import sha256_file
 from text2motion.tokenization.contracts import TokenizerKind
 from text2motion.tokenization.nn_tokenizer import build_tokenizer_network

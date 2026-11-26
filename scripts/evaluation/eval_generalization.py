@@ -6,7 +6,7 @@ from types import MappingProxyType
 
 import torch
 
-from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.motion.contracts import Split
 from text2motion.tokenization.reconstruction_metrics import (
     ReconstructionSetup,

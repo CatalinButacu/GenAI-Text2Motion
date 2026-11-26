@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import mlflow
 
-from text2motion.app.run_log import MLFLOW_RUN_ID_FILE, log_metrics, start_run
+from text2motion.app.runtime.run_log import MLFLOW_RUN_ID_FILE, log_metrics, start_run
 
 
 def test_run_without_the_flag_makes_no_mlflow_record(tmp_path):

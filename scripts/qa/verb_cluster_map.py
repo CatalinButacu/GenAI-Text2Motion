@@ -18,7 +18,7 @@ from sklearn.preprocessing import StandardScaler
 from verb_clusters import bottom_up, motion_points, picked_step, verb_clip_embeddings
 from verb_generation_probe import CONFIG, SEED
 
-from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.runtime.context import ApplicationBootstrap
 
 MAP_LEVELS = (10, 20, 50, 100)
 TEST_LEVELS = (5, 10, 15, 20, 30, 40, 50, 60, 80, 100)

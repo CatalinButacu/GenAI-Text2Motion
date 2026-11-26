@@ -1,6 +1,6 @@
 import torch
 
-from text2motion.app.config import ResidualVectorQuantizationConfig
+from text2motion.tokenization.contracts import ResidualVectorQuantizationConfig
 from text2motion.tokenization.nn_quantizers import VectorQuantizer, typed_modules
 from text2motion.tokenization.nn_tokenizer import (
     ResidualVectorQuantizationTokenizer,

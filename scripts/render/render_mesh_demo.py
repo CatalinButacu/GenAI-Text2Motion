@@ -12,9 +12,9 @@ import numpy as np
 import torch
 from matplotlib.animation import PillowWriter
 
-from text2motion.app.bootstrap import ApplicationBootstrap
-from text2motion.app.cli_requests import ModelServiceRequest
-from text2motion.app.serving import load_inference_pipeline
+from text2motion.app.requests.serve import ModelServiceRequest
+from text2motion.app.runtime.context import ApplicationBootstrap
+from text2motion.app.stages.serve import load_inference_pipeline
 from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.representation import FPS, StreamingSkeletonRecovery
 from text2motion.studio.fitting import fit_smplx_to_joints

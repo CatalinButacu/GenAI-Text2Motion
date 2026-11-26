@@ -21,8 +21,8 @@ from metric_check import (
     validation_names,
 )
 
-from text2motion.app.bootstrap import ApplicationBootstrap
-from text2motion.app.training import with_tokenizer_kind
+from text2motion.app.runtime.context import ApplicationBootstrap
+from text2motion.app.stages.tokenizer import with_tokenizer_kind
 from text2motion.motion.normalization import MotionScaler
 from text2motion.tokenization.contracts import TokenizerKind
 

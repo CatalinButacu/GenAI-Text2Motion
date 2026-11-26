@@ -5,8 +5,8 @@ import argparse
 import numpy as np
 import torch
 
-from text2motion.app.bootstrap import required_path
-from text2motion.app.config import load_config
+from text2motion.app.config.loading import load_config
+from text2motion.app.runtime.context import required_path
 from text2motion.generation.contracts import Backbone
 from text2motion.generation.generator_trainer import GeneratorTrainer
 from text2motion.generation.nn_generator import CLIPTextEncoder, GeneratorModelSpec

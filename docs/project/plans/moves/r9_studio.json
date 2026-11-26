@@ -1,0 +1,75 @@
+[
+ {
+  "from": "text2motion.studio.session",
+  "to": "text2motion.studio.session.registry",
+  "names": [
+   "StudioModelEntry",
+   "live_step_budget",
+   "resolve_step_budget",
+   "load_model_registry"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.studio.session",
+  "to": "text2motion.studio.session.fit_state",
+  "names": [
+   "SmplxFitState"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.studio.session",
+  "to": "text2motion.studio.session.buffers",
+  "names": [
+   "StudioStreamBuffers"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.studio.session",
+  "to": "text2motion.studio.session.debounce",
+  "names": [
+   "LiveGenerationDebouncer"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.studio.session",
+  "to": "text2motion.studio.session.state",
+  "names": [
+   "StudioSession",
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.studio.generation",
+  "to": "text2motion.studio.live.actions",
+  "names": [
+   "log_action",
+   "log_toggle",
+   "log_result",
+   "upsample_joints",
+   "discard_pending_items"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.studio.generation",
+  "to": "text2motion.studio.live.controller",
+  "names": [
+   "StudioGenerationController",
+   "logger"
+  ]
+ }
+]

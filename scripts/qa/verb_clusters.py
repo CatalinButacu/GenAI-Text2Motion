@@ -12,7 +12,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score, silhouette_score
 from verb_generation_probe import CONFIG, MAX_FRAMES, MIN_FRAMES, SEED
 
-from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.evaluation.embeddings import compute_guo_text_embeddings
 
 VOCABULARY = Path("docs/notes/verb_vocabulary.csv")

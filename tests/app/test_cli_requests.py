@@ -5,9 +5,10 @@ import pytest
 import torch
 
 from text2motion.app import cli
-from text2motion.app.bootstrap import ApplicationBootstrap, resolve_device
 from text2motion.app.cli import COMMANDS, parse_request
-from text2motion.app.cli_requests import BenchmarkRequest
+from text2motion.app.requests.evaluate import BenchmarkRequest
+from text2motion.app.runtime.context import ApplicationBootstrap
+from text2motion.app.runtime.environment import resolve_device
 from text2motion.evaluation.contracts import StreamingBenchmarkProtocol
 
 
@@ -158,7 +159,7 @@ def test_a_failed_command_is_logged_only_when_failure_logs_is_on(
     )
 
     failing = cli.Command(
-        "text2motion.app.cli_requests:BenchmarkRequest",
+        "text2motion.app.requests.evaluate:BenchmarkRequest",
         "tests.app.test_cli_requests:fail",
         "always fails",
     )

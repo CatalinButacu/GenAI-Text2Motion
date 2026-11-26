@@ -21,7 +21,7 @@ def imported_modules(path: Path) -> set[str]:
 
 def test_application_bootstrap_is_used_only_at_entrypoints() -> None:
     allowed = {
-        PACKAGE_ROOT / "app" / "bootstrap.py",
+        PACKAGE_ROOT / "app" / "runtime" / "context.py",
         PACKAGE_ROOT / "app" / "cli.py",
         PACKAGE_ROOT / "app" / "__init__.py",
     }

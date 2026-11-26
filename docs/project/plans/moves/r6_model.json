@@ -1,0 +1,86 @@
+[
+ {
+  "from": "text2motion.generation.nn_generator",
+  "to": "text2motion.generation.model.text_encoder",
+  "names": [
+   "CLIPTextEncoder",
+   "padded_chunk",
+   "FrozenTextStates"
+  ]
+ },
+ {
+  "from": "text2motion.generation.nn_generator",
+  "to": "text2motion.generation.model.sampling",
+  "names": [
+   "seeded_sampling_uniforms",
+   "sample_logits"
+  ]
+ },
+ {
+  "from": "text2motion.generation.nn_generator",
+  "to": "text2motion.generation.model.decode_step",
+  "names": [
+   "EagerDecodeStep",
+   "CapturedDecodeStep"
+  ]
+ },
+ {
+  "from": "text2motion.generation.nn_generator",
+  "to": "text2motion.generation.model.spec",
+  "names": [
+   "GeneratorModelSpec"
+  ]
+ },
+ {
+  "from": "text2motion.generation.nn_generator",
+  "to": "text2motion.generation.model.generator",
+  "names": [
+   "MotionTokenGenerator"
+  ]
+ },
+ {
+  "from": "text2motion.generation.nn_backbones",
+  "to": "text2motion.generation.model.layers",
+  "names": [
+   "RMSNorm",
+   "EMBEDDING_STD",
+   "init_reference_embedding",
+   "zero_linear_bias",
+   "init_residual_output",
+   "SequenceBackbone"
+  ]
+ },
+ {
+  "from": "text2motion.generation.nn_backbones",
+  "to": "text2motion.generation.model.transformer",
+  "names": [
+   "TransformerBlock",
+   "TransformerBackbone"
+  ]
+ },
+ {
+  "from": "text2motion.generation.nn_backbones",
+  "to": "text2motion.generation.model.mamba",
+  "names": [
+   "DT_MIN",
+   "DT_MAX",
+   "DT_FLOOR",
+   "init_reference_dt",
+   "parallel_scan",
+   "MambaMixer",
+   "MambaBlock",
+   "MambaBackbone",
+   "INTERFACE_MODULE",
+   "TRITON_MODULES",
+   "register_package_without_triton"
+  ]
+ },
+ {
+  "from": "text2motion.generation.nn_backbones",
+  "to": "text2motion.generation.model.backbones",
+  "names": [
+   "_BACKBONE_FACTORIES",
+   "instantiate_backbone"
+  ]
+ }
+]

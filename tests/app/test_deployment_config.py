@@ -3,8 +3,9 @@ from pathlib import Path
 import pytest
 
 from text2motion.app.cli import parse_request
-from text2motion.app.cli_requests import ServiceAddressRequest
-from text2motion.app.config import ProjectPathsConfig, load_config, load_service_config
+from text2motion.app.config.loading import load_config, load_service_config
+from text2motion.app.config.schema import ProjectPathsConfig
+from text2motion.app.requests.base import ServiceAddressRequest
 
 
 def test_default_deployment_paths_are_portable_atomic_bundles():

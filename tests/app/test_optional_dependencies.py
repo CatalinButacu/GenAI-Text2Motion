@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from text2motion.app.run_log import start_run
+from text2motion.app.runtime.run_log import start_run
 from text2motion.dataset.sources.humanml3d.official import write_motions
 
 

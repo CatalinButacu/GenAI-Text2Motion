@@ -8,7 +8,7 @@ import pytest
 import torch
 from pydantic import ValidationError
 
-from text2motion.app.cli_requests import TokenizeRequest
+from text2motion.app.requests.data import TokenizeRequest
 from text2motion.dataset.sources.amass import corpus as amass_corpus
 from text2motion.motion.normalization import MotionScaler
 from text2motion.tokenization.contracts import TokenPackPlan

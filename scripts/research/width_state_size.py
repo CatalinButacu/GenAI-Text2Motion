@@ -5,7 +5,7 @@ import argparse
 import csv
 from pathlib import Path
 
-from text2motion.app.config import load_config
+from text2motion.app.config.loading import load_config
 from text2motion.evaluation.benchmark import benchmark_streaming_horizons
 from text2motion.generation.contracts import Backbone
 from text2motion.generation.nn_generator import GeneratorModelSpec

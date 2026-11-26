@@ -6,11 +6,16 @@ from typing import cast
 import pytest
 import torch
 
-from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, TokenizerConfig
-from text2motion.generation.contracts import Backbone, SamplingConfig
+from text2motion.generation.contracts import (
+    Backbone,
+    GeneratorConfig,
+    GeneratorTrainingConfig,
+    SamplingConfig,
+)
 from text2motion.generation.generator_trainer import GeneratorTrainer
 from text2motion.generation.nn_generator import CLIPTextEncoder, MotionTokenGenerator
 from text2motion.generation.pipeline import TextToMotionGenerator
+from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.nn_tokenizer import (
     FiniteScalarQuantizationTokenizer,
     FrozenMotionTokenizer,
@@ -190,12 +195,9 @@ def test_config_rejects_prefix_len_mismatch():
 
     import pytest
 
-    from text2motion.app.config import (
-        ApplicationConfig,
-        GeneratorConfig,
-        TextEncoderConfig,
-        validate_config,
-    )
+    from text2motion.app.config.schema import ApplicationConfig
+    from text2motion.app.config.validation import validate_config
+    from text2motion.generation.contracts import GeneratorConfig, TextEncoderConfig
 
     good = ApplicationConfig(
         text_encoder=TextEncoderConfig(prefix_len=16),
@@ -215,7 +217,9 @@ def test_config_rejects_position_budget_overflow():
 
     import pytest
 
-    from text2motion.app.config import ApplicationConfig, GeneratorConfig, validate_config
+    from text2motion.app.config.schema import ApplicationConfig
+    from text2motion.app.config.validation import validate_config
+    from text2motion.generation.contracts import GeneratorConfig
 
     cfg = ApplicationConfig(generator=GeneratorConfig(text_prefix_len=1, max_seq_len=8))
     with pytest.raises(ValueError, match="max_seq_len"):
@@ -230,7 +234,8 @@ def test_config_rejects_rvq_num_quantizers_mismatch():
 
     import pytest
 
-    from text2motion.app.config import ApplicationConfig, validate_config
+    from text2motion.app.config.schema import ApplicationConfig
+    from text2motion.app.config.validation import validate_config
     from text2motion.tokenization.contracts import (
         ResidualVectorQuantizationConfig,
         TokenizerConfig,

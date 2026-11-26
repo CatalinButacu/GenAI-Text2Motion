@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from text2motion.app.config import load_config
+from text2motion.app.config.loading import load_config
 from text2motion.dataset.sources.amass.extractor import AmassPoseExtractor, resolve_gender
 from text2motion.motion.contracts import Gender
 

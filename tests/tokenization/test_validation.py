@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import torch
 
-from text2motion.app.cli_requests import TokenizeRequest
+from text2motion.app.requests.data import TokenizeRequest
 from text2motion.motion.contracts import MotionBatch, MotionClip, MotionTokens
 from text2motion.motion.normalization import MotionScaler
 from text2motion.tokenization.contracts import (

@@ -11,8 +11,8 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from text2motion.app.bootstrap import ApplicationBootstrap
-from text2motion.app.run_log import log_metrics, start_run
+from text2motion.app.runtime.context import ApplicationBootstrap
+from text2motion.app.runtime.run_log import log_metrics, start_run
 from text2motion.generation.contracts import Backbone, SamplingConfig, StudioSamplingConfig
 from text2motion.generation.nn_backbones import MambaMixer
 from text2motion.generation.nn_generator import MotionTokenGenerator, seeded_sampling_uniforms

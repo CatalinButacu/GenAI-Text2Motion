@@ -4,14 +4,15 @@ from dataclasses import asdict, replace
 import pytest
 import torch
 
-from text2motion.app.checkpoint import OverfitGate, sha256_file
-from text2motion.app.config import ApplicationConfig
+from text2motion.app.config.schema import ApplicationConfig
+from text2motion.app.runtime.overfit_gate import OverfitGate
 from text2motion.generation.contracts import (
     PRETRAINED_OVERFIT_CRITERIA,
     Backbone,
     OverfitCriteria,
 )
 from text2motion.generation.nn_generator import GeneratorModelSpec
+from text2motion.motion.storage import sha256_file
 
 
 def resolve_generator_config(config: ApplicationConfig, backbone: str, codebook_size: int) -> dict:

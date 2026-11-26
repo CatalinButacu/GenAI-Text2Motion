@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from text2motion.app.bootstrap import ApplicationBootstrap
-from text2motion.app.config import load_dataclass
+from text2motion.app.config.loading import load_dataclass
+from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.evaluation.metrics import motion_statistics
 from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.representation import recover_skeleton

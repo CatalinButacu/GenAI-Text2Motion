@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from scipy import stats
 
-from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.evaluation.embeddings import compute_guo_text_embeddings
 from text2motion.generation.contracts import Backbone, SamplingConfig
 

@@ -1,0 +1,82 @@
+[
+ {
+  "from": "text2motion.generation.generator_trainer",
+  "to": "text2motion.generation.training.optimizer",
+  "names": [
+   "_NO_DECAY_SUFFIXES",
+   "_NORM_TYPES",
+   "ParameterPartition",
+   "undecayed_parameter_ids",
+   "partition_parameters",
+   "freeze_generator_blocks",
+   "warmup_cosine_factor",
+   "check_schedule_horizon",
+   "adamw_groups"
+  ]
+ },
+ {
+  "from": "text2motion.generation.generator_trainer",
+  "to": "text2motion.generation.training.selection",
+  "names": [
+   "SelectionState",
+   "save_on_lower_val_ce",
+   "is_eligible_improvement",
+   "save_on_lower_fid",
+   "check_ce_stop_setup",
+   "advance_clean_ce",
+   "early_stop_reason",
+   "clean_ce_record"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.generation.generator_trainer",
+  "to": "text2motion.generation.training.overfit",
+  "names": [
+   "teacher_forced_accuracy",
+   "overfit_single_batch"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.generation.generator_trainer",
+  "to": "text2motion.generation.training.trainer",
+  "names": [
+   "CheckpointSink",
+   "GENERATOR_RESUME_FORMAT",
+   "CleanCrossEntropyLoaders",
+   "GeneratorTrainer"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.generation.generator_trainer",
+  "to": "text2motion.generation.training.epochs",
+  "names": [
+   "finish_epoch",
+   "evaluate_validation",
+   "train_generator",
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.generation.pretrain",
+  "to": "text2motion.generation.training.pretrain",
+  "names": [
+   "logger",
+   "PRETRAIN_RESUME_FORMAT",
+   "pretraining_resume_path",
+   "load_pretraining_resume",
+   "pretraining_state",
+   "PretrainProgress",
+   "validation_ce",
+   "pretrain_generator"
+  ]
+ }
+]

@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.evaluation.metrics import paired_mean_ratio, sharpness_statistics
 from text2motion.evaluation.samples import deterministic_generation_seed
 from text2motion.generation.contracts import Backbone, SamplingConfig

@@ -15,9 +15,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-from text2motion.app.bootstrap import ApplicationBootstrap
-from text2motion.app.cli_requests import ModelServiceRequest
-from text2motion.app.serving import load_inference_pipeline
+from text2motion.app.requests.serve import ModelServiceRequest
+from text2motion.app.runtime.context import ApplicationBootstrap
+from text2motion.app.stages.serve import load_inference_pipeline
 from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.representation import DIM, FPS, kinematic_bones, recover_skeleton
 from text2motion.motion.storage import sha256_file

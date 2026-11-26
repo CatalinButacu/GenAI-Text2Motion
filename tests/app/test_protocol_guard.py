@@ -1,6 +1,6 @@
 import pytest
 
-from text2motion.app.training import (
+from text2motion.app.stages.data import (
     PROTOCOL_SEED,
     freeze_protocol_splits,
     require_protocol_run,

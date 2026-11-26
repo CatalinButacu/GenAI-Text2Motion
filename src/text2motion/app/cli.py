@@ -14,7 +14,7 @@ from jsonargparse import ArgumentParser as RequestParser
 from jsonargparse.typing import register_type
 from pydantic import BaseModel
 
-from text2motion.app.run_log import LOG_LEVELS, configure_logging
+from text2motion.app.runtime.run_log import LOG_LEVELS, configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -45,53 +45,53 @@ class Command:
 COMMANDS = MappingProxyType(
     {
         "prepare": Command(
-            "text2motion.app.cli_requests:PrepareRequest",
-            "text2motion.app.training:run_prepare",
+            "text2motion.app.requests.data:PrepareRequest",
+            "text2motion.app.stages.data:run_prepare",
             "AMASS -> HumanML3D-263 data preparation",
         ),
         "tokenize": Command(
-            "text2motion.app.cli_requests:TokenizeRequest",
-            "text2motion.app.training:run_tokenize",
+            "text2motion.app.requests.data:TokenizeRequest",
+            "text2motion.app.stages.data:run_tokenize",
             "encode a feature corpus into tokens",
         ),
         "train-tokenizer": Command(
-            "text2motion.app.cli_requests:TrainTokenizerRequest",
-            "text2motion.app.training:run_train_tokenizer",
+            "text2motion.app.requests.data:TrainTokenizerRequest",
+            "text2motion.app.stages.tokenizer:run_train_tokenizer",
             "train the motion tokenizer",
         ),
         "sanity-overfit": Command(
-            "text2motion.app.cli_requests:SanityOverfitRequest",
-            "text2motion.app.training:run_sanity_overfit",
+            "text2motion.app.requests.generator:SanityOverfitRequest",
+            "text2motion.app.stages.overfit:run_sanity_overfit",
             "mandatory real-batch overfit gate",
         ),
         "train-generator": Command(
-            "text2motion.app.cli_requests:TrainGeneratorRequest",
-            "text2motion.app.training:run_train_generator",
+            "text2motion.app.requests.generator:TrainGeneratorRequest",
+            "text2motion.app.stages.generator:run_train_generator",
             "train the text-to-motion generator",
         ),
         "pretrain": Command(
-            "text2motion.app.cli_requests:PretrainRequest",
-            "text2motion.app.training:run_pretrain",
+            "text2motion.app.requests.generator:PretrainRequest",
+            "text2motion.app.stages.pretrain:run_pretrain",
             "unconditional token-corpus pretraining",
         ),
         "evaluate": Command(
-            "text2motion.app.cli_requests:EvaluateRequest",
-            "text2motion.app.serving:run_evaluate",
+            "text2motion.app.requests.evaluate:EvaluateRequest",
+            "text2motion.app.stages.evaluate:run_evaluate",
             "citable generation eval (20-rep protocol)",
         ),
         "benchmark": Command(
-            "text2motion.app.cli_requests:BenchmarkRequest",
-            "text2motion.app.serving:run_bench",
+            "text2motion.app.requests.evaluate:BenchmarkRequest",
+            "text2motion.app.stages.evaluate:run_bench",
             "streaming latency/state-size benchmark",
         ),
         "serve": Command(
-            "text2motion.app.cli_requests:ServeRequest",
-            "text2motion.app.serving:run_serve",
+            "text2motion.app.requests.serve:ServeRequest",
+            "text2motion.app.stages.serve:run_serve",
             "local streaming generation service",
         ),
         "studio": Command(
-            "text2motion.app.cli_requests:StudioRequest",
-            "text2motion.app.serving:run_studio",
+            "text2motion.app.requests.serve:StudioRequest",
+            "text2motion.app.stages.serve:run_studio",
             "interactive aitviewer studio",
         ),
         "run": Command(
@@ -100,8 +100,8 @@ COMMANDS = MappingProxyType(
             "run a workflow: data, tokenizer, generator or evaluate",
         ),
         "health": Command(
-            "text2motion.app.cli_requests:HealthRequest",
-            "text2motion.app.serving:run_health",
+            "text2motion.app.requests.base:HealthRequest",
+            "text2motion.app.stages.serve:run_health",
             "check the streaming service readiness",
         ),
     }
@@ -185,7 +185,7 @@ def main(argv: list[str] | None = None) -> None:
     configure_logging(selected.log_level)
     logger.info(f"command: text2motion {' '.join(arguments)}")
     request = parse_request(selected.command, selected.arguments)
-    from text2motion.app.bootstrap import ApplicationBootstrap
+    from text2motion.app.runtime.context import ApplicationBootstrap
 
     app = ApplicationBootstrap.from_config(
         request.config,

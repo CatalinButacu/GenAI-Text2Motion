@@ -7,9 +7,9 @@ from pathlib import Path
 
 import numpy as np
 
-from text2motion.app.bootstrap import required_path
-from text2motion.app.config import load_config
-from text2motion.app.run_log import log_metrics, start_run
+from text2motion.app.config.loading import load_config
+from text2motion.app.runtime.context import required_path
+from text2motion.app.runtime.run_log import log_metrics, start_run
 from text2motion.motion.storage import base_clip_ids
 from text2motion.tokenization.corpus import pack_clip_keys
 

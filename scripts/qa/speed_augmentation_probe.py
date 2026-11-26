@@ -10,7 +10,7 @@ from a15_v3_verdict import paired_interval
 from scipy import interpolate
 from verb_generation_probe import CONFIG, MAX_FRAMES, SEED, chosen_verbs, real_clips, retrieval
 
-from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.evaluation.embeddings import compute_guo_text_embeddings
 from text2motion.motion.representation import SLICES
 

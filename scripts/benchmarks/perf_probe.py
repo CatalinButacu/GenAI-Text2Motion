@@ -17,8 +17,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from text2motion.app.bootstrap import apply_precision, resolve_device, seed_everything
-from text2motion.app.config import Float32Precision, load_config
+from text2motion.app.config.loading import load_config
+from text2motion.app.config.schema import Float32Precision
+from text2motion.app.runtime.environment import apply_precision, resolve_device, seed_everything
 from text2motion.generation.contracts import Backbone, MixedPrecisionMode, SamplingConfig
 from text2motion.generation.generator_trainer import GeneratorTrainer
 from text2motion.generation.nn_generator import GeneratorModelSpec
@@ -421,8 +422,8 @@ def demo_probe(args) -> None:
         raise SystemExit(
             "the demo probe fits SMPL-X bodies: pass --model_dir or set paths.smplx_models"
         )
-    from text2motion.app.bootstrap import ApplicationBootstrap
-    from text2motion.app.config import load_dataclass
+    from text2motion.app.config.loading import load_dataclass
+    from text2motion.app.runtime.context import ApplicationBootstrap
     from text2motion.generation.decoder import StreamingMotionDecoder, measure_decoder_context
     from text2motion.motion.representation import recover_skeleton
     from text2motion.studio.fitting import build_smplx_body_model, fit_smplx_to_joints

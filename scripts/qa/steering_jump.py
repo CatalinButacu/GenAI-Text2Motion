@@ -8,11 +8,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from text2motion.app.config import GeneratorConfig, TokenizerConfig
-from text2motion.generation.contracts import Backbone
+from text2motion.generation.contracts import Backbone, GeneratorConfig
 from text2motion.generation.decoder import SteeringMode, StreamingMotionDecoder, steer_stream
 from text2motion.generation.nn_generator import MotionTokenGenerator
 from text2motion.motion.representation import recover_skeleton
+from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
 
 TOKENIZER = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))

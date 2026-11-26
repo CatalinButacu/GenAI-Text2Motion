@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from text2motion.app.config import from_mapping
+from text2motion.app.config.loading import from_mapping
 from text2motion.dataset.contracts import CaptionWeighting, ClipWeighting, MotionDataConfig
 from text2motion.dataset.training.captioned import CaptionedMotionDataset
 from text2motion.dataset.training.labels import MOTION_CLASS_COLUMN

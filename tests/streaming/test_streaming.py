@@ -4,11 +4,16 @@ import numpy as np
 import pytest
 import torch
 
-from text2motion.app.config import GeneratorConfig, TokenizerConfig
-from text2motion.generation.contracts import Backbone, SamplingConfig, StreamAnchors
+from text2motion.generation.contracts import (
+    Backbone,
+    GeneratorConfig,
+    SamplingConfig,
+    StreamAnchors,
+)
 from text2motion.generation.decoder import StreamingMotionDecoder
 from text2motion.generation.nn_generator import MotionTokenGenerator
 from text2motion.motion.representation import kinematic_bones, recover_skeleton
+from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))

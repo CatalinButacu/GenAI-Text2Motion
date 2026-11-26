@@ -7,8 +7,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from text2motion.app.config import load_config
-from text2motion.app.run_log import log_metrics, start_run
+from text2motion.app.config.loading import load_config
+from text2motion.app.runtime.run_log import log_metrics, start_run
 from text2motion.generation.decoder import StreamingMotionDecoder, measure_decoder_context
 from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler

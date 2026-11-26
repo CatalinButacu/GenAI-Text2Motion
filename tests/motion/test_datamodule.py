@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from text2motion.app.config import load_config
+from text2motion.app.config.loading import load_config
 from text2motion.dataset.contracts import MotionDataConfig
 from text2motion.dataset.training.batching import collate_motion_clips
 from text2motion.dataset.training.captioned import CaptionedMotionDataset

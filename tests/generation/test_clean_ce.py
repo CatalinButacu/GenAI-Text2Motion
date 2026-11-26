@@ -7,8 +7,12 @@ from typing import cast
 import pytest
 import torch
 
-from text2motion.app.config import GeneratorConfig, GeneratorTrainingConfig, TokenizerConfig
-from text2motion.generation.contracts import Backbone, GeneratorTrainingRequest
+from text2motion.generation.contracts import (
+    Backbone,
+    GeneratorConfig,
+    GeneratorTrainingConfig,
+    GeneratorTrainingRequest,
+)
 from text2motion.generation.generator_trainer import (
     GENERATOR_RESUME_FORMAT,
     CleanCrossEntropyLoaders,
@@ -19,6 +23,7 @@ from text2motion.generation.generator_trainer import (
 from text2motion.generation.nn_generator import MotionTokenGenerator
 from text2motion.motion.contracts import RunOutputs
 from text2motion.motion.storage import RESUME_VERSION
+from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))

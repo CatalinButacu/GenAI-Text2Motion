@@ -1,8 +1,7 @@
 import pytest
 import torch
 
-from text2motion.app.config import GeneratorConfig
-from text2motion.generation.contracts import Backbone, StreamAnchors
+from text2motion.generation.contracts import Backbone, GeneratorConfig, StreamAnchors
 from text2motion.generation.nn_generator import MotionTokenGenerator
 
 D_TEXT = 16

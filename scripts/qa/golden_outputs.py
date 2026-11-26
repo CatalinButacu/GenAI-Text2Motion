@@ -9,8 +9,10 @@ from pathlib import Path
 
 import torch
 
-from text2motion.app.bootstrap import ApplicationBootstrap, apply_precision
-from text2motion.app.config import Float32Precision, load_config
+from text2motion.app.config.loading import load_config
+from text2motion.app.config.schema import Float32Precision
+from text2motion.app.runtime.context import ApplicationBootstrap
+from text2motion.app.runtime.environment import apply_precision
 from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.generation.losses import soft_decode
 from text2motion.motion.contracts import Split

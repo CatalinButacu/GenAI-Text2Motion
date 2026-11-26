@@ -6,7 +6,7 @@ import json
 import statistics
 from pathlib import Path
 
-from text2motion.app.config import load_config, load_service_config, service_policy
+from text2motion.app.config.loading import load_config, load_service_config, service_policy
 from text2motion.app.service.client import motion_service_client
 from text2motion.app.service.protocol import Release, ServiceAddress
 

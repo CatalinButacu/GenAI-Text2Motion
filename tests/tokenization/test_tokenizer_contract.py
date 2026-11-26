@@ -3,8 +3,13 @@ from dataclasses import replace
 import pytest
 import torch
 
-from text2motion.app.config import ResidualVectorQuantizationConfig, TokenizerConfig
-from text2motion.tokenization.contracts import DROPPED_CODE, FiniteScalarStackLayout, TokenizerKind
+from text2motion.tokenization.contracts import (
+    DROPPED_CODE,
+    FiniteScalarStackLayout,
+    ResidualVectorQuantizationConfig,
+    TokenizerConfig,
+    TokenizerKind,
+)
 from text2motion.tokenization.nn_quantizers import (
     FiniteScalarQuantizer,
     GroupedFiniteScalarQuantizer,

@@ -11,10 +11,10 @@ from pathlib import Path
 
 import torch
 
-from text2motion.app.bootstrap import ApplicationBootstrap
 from text2motion.app.cli import parse_request
-from text2motion.app.cli_requests import TrainTokenizerRequest
-from text2motion.app.training import create_tokenizer_trainer, with_tokenizer_kind
+from text2motion.app.requests.data import TrainTokenizerRequest
+from text2motion.app.runtime.context import ApplicationBootstrap
+from text2motion.app.stages.tokenizer import create_tokenizer_trainer, with_tokenizer_kind
 from text2motion.motion.contracts import Split
 from text2motion.motion.storage import capture_rng_state, restore_rng_state
 from text2motion.tokenization.tokenizer_trainer import TokenizerTrainer

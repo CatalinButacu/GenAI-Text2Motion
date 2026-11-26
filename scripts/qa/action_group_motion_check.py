@@ -10,7 +10,7 @@ import numpy as np
 from action_vocabulary import ACTION, INVENTORY, LABELS, TYPO, merged_labels, read_labels
 from verb_generation_probe import CONFIG, SEED, real_clips
 
-from text2motion.app.bootstrap import ApplicationBootstrap
+from text2motion.app.runtime.context import ApplicationBootstrap
 
 THRESHOLD = 1.10
 SAMPLES = 32

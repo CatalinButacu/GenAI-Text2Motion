@@ -6,7 +6,7 @@ from types import MappingProxyType
 import pytest
 import torch
 
-from text2motion.app.config import ResidualVectorQuantizationConfig, TokenizerConfig
+from text2motion.tokenization.contracts import ResidualVectorQuantizationConfig, TokenizerConfig
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.nn_tokenizer import (
     FiniteScalarQuantizationTokenizer,
