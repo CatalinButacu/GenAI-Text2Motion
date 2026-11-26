@@ -393,7 +393,7 @@ def z_rotation(degrees: float) -> np.ndarray:
 
 
 def test_pose_upsampling_ends_on_each_source_frame_and_moves_translation_linearly():
-    from text2motion.studio.fitting import upsample_pose_parameters
+    from text2motion.studio.pose_parameters import upsample_pose_parameters
 
     orient = np.stack([z_rotation(0), z_rotation(30), z_rotation(60)])
     pose = np.zeros((3, 63), np.float32)
@@ -410,7 +410,7 @@ def test_pose_upsampling_ends_on_each_source_frame_and_moves_translation_linearl
 
 
 def test_pose_upsampling_takes_the_short_way_across_180_degrees():
-    from text2motion.studio.fitting import upsample_pose_parameters
+    from text2motion.studio.pose_parameters import upsample_pose_parameters
 
     anchor = (z_rotation(170), np.zeros(63, np.float32), np.zeros(3, np.float32))
     orient = z_rotation(-170)[None]

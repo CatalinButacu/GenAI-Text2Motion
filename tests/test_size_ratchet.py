@@ -14,7 +14,6 @@ ALLOWED = MappingProxyType(
     {
         "file": (
             "motion/representation.py",
-            "studio/fitting.py",
             "studio/live/controller.py",
             "studio/scene.py",
             "tokenization/nn_quantizers.py",
@@ -26,8 +25,6 @@ ALLOWED = MappingProxyType(
             "motion/normalization.py::fit_train_stats",
             "motion/normalization.py::normalization_stats",
             "motion/representation.py::encode_joints",
-            "studio/fitting.py::fit_smplx_to_joints",
-            "studio/fitting.py::solve_smplx_pose_from_joints",
             "studio/live/controller.py::StudioGenerationController.accept_chunk",
             "studio/live/controller.py::StudioGenerationController.start_generation",
             "studio/live/controller.py::StudioGenerationController.stream_generation",

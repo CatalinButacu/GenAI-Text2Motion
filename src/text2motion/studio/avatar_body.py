@@ -6,7 +6,8 @@ import numpy as np
 import torch
 
 from text2motion.studio.contracts import SmplxFitResult
-from text2motion.studio.fitting import build_smplx_body_model, upsample_pose_parameters
+from text2motion.studio.fitting import build_smplx_body_model
+from text2motion.studio.pose_parameters import upsample_pose_parameters
 
 
 ############################################################

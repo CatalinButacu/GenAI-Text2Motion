@@ -9,7 +9,7 @@ import torch
 from text2motion.studio.avatar_body import SmplxBodyModels
 from text2motion.studio.avatar_mesh import AvatarMeshRebuilder
 from text2motion.studio.contracts import ViewerHost
-from text2motion.studio.fitting import solve_smplx_pose_from_joints
+from text2motion.studio.pose_parameters import solve_smplx_pose_from_joints
 from text2motion.studio.scene import create_skeleton_sequence_node
 
 
