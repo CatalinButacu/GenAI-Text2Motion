@@ -27,12 +27,12 @@ def make_repo(root: Path) -> None:
     write(package / "app" / "__init__.py", "")
     write(
         package / "app" / "service.py",
-        "import json\n\nLIMIT = 3\n\n\ndef encode(value):\n    return json.dumps(value)[:LIMIT]\n\n\n"
+        "import json\nfrom text2motion.base import Base\n\nLIMIT = 3\n\n\ndef encode(value):\n    return json.dumps(value)[:LIMIT]\n\n\n"
         "# box\n@staticmethod\ndef helper():\n    return 1\n\n\nclass Server:\n    def run(self):\n        return encode(2)\n",
     )
     write(
         root / "tests" / "test_service.py",
-        "from text2motion.app.service import Server, encode as enc\n\n"
+        "from text2motion.app.service import Base, Server, encode as enc\n\n"
         "TARGET = 'text2motion.app.service.encode'\n",
     )
     write(root / "scripts" / "use.py", "from text2motion.app import service\n")
@@ -73,6 +73,7 @@ def test_a_split_moves_code_rewrites_imports_and_deletes_the_empty_file(monkeypa
     test_text = (tmp_path / "tests" / "test_service.py").read_text(encoding="utf-8")
     assert "from text2motion.app.service.codec import encode as enc" in test_text
     assert "from text2motion.app.service.server import Server" in test_text
+    assert "from text2motion.base import Base" in test_text
     assert '"text2motion.app.service.codec.encode"' in test_text
     assert warnings == ["scripts/use.py:1 imports module text2motion.app.service"]
 

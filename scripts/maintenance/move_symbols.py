@@ -351,9 +351,22 @@ def load_moves(plan: Path) -> list[Move]:
     ]
 
 
+def reexported_names(root: Path, module: str) -> dict[str, list[str]]:
+    tree = ast.parse(module_path(root, module).read_text(encoding="utf-8"))
+    origins: dict[str, list[str]] = {}
+
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            names = [alias.name for alias in node.names if alias.asname is None]
+            origins.setdefault(node.module, []).extend(names)
+
+    return origins
+
+
 def apply_moves(root: Path, moves: list[Move]) -> list[str]:
     modules: list[Path] = []
     importers: list[Path] = []
+    reexports = {move.source: reexported_names(root, move.source) for move in moves}
 
     for move in moves:
         move_code(root, move)
@@ -361,6 +374,11 @@ def apply_moves(root: Path, moves: list[Move]) -> list[str]:
         importers += rewrite_importers(root, move)
 
     deleted = {move.source for move in moves if delete_if_empty(root, move.source)}
+
+    for module in sorted(deleted):
+        for origin, names in reexports[module].items():
+            importers += rewrite_importers(root, Move(module, origin, tuple(names)))
+
     check_no_shadowed_module(root, moves)
     tidy(root, modules, "F401,I")
     tidy(root, [path for path in importers if path not in modules], "I")
