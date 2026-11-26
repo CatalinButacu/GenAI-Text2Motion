@@ -12,7 +12,8 @@ from text2motion.generation.contracts import (
 from text2motion.generation.losses import LossWeights, soft_decode
 from text2motion.generation.model.generator import MotionTokenGenerator
 from text2motion.generation.training.optimizer import check_schedule_horizon
-from text2motion.generation.training.trainer import GENERATOR_RESUME_FORMAT, GeneratorTrainer
+from text2motion.generation.training.resume import GENERATOR_RESUME_FORMAT, GeneratorCheckpoint
+from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.storage import RESUME_VERSION, atomic_torch_save, is_legacy_resume
 from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.ema import ExponentialMovingAverage
@@ -195,11 +196,13 @@ def test_a_resumed_run_continues_like_an_uninterrupted_run(tmp_path):
     path = tmp_path / "generator_last.pt"
     uninterrupted = resumable_trainer()
     train_one_epoch(uninterrupted, motion, text)
-    atomic_torch_save(uninterrupted.resume_state(0, 1.0, 0, None), path)
+    atomic_torch_save(GeneratorCheckpoint(uninterrupted).resume_state(0, 1.0, 0, None), path)
     train_one_epoch(uninterrupted, motion, text)
 
     resumed = resumable_trainer()
-    resumed.load_resume_state(torch.load(path, weights_only=True), False, False)
+    GeneratorCheckpoint(resumed).load_resume_state(
+        torch.load(path, weights_only=True), False, False
+    )
     train_one_epoch(resumed, motion, text)
 
     resumed_weights = resumed.token_generator.state_dict()
@@ -243,7 +246,7 @@ def test_a_resume_state_with_pending_gradients_fails():
     trainer.train_step(torch.randn(2, 32, 263), torch.randn(2, GEN.d_text))
 
     with pytest.raises(RuntimeError, match="pending gradients"):
-        trainer.resume_state(0, 1.0, 0, None)
+        GeneratorCheckpoint(trainer).resume_state(0, 1.0, 0, None)
 
 
 def test_an_old_resume_file_needs_the_legacy_flag(tmp_path):

@@ -5,12 +5,17 @@ import math
 from dataclasses import dataclass
 from typing import cast
 
+import torch
 from torch import nn
 
 from text2motion.generation.contracts import (
     GeneratorFreeze,
+    GeneratorTrainingConfig,
+    LossWeighting,
 )
+from text2motion.generation.losses import UncertaintyWeighter
 from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.model.text_encoder import CLIPTextEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -118,3 +123,55 @@ def adamw_groups(
     if not use_decay_groups:
         return [{"params": parameters, "lr": lr}]
     return partition_parameters(module, only=only).optimizer_groups(lr)
+
+
+def build_weighter(
+    token_generator: MotionTokenGenerator, training_config: GeneratorTrainingConfig
+) -> UncertaintyWeighter | None:
+    if training_config.loss_weighting != LossWeighting.UNCERTAINTY:
+        return None
+    device = next(token_generator.parameters()).device
+    return UncertaintyWeighter(training_config.loss_weights.active_terms()).to(device)
+
+
+def build_param_groups(
+    token_generator: MotionTokenGenerator,
+    text_encoder: CLIPTextEncoder | None,
+    training_config: GeneratorTrainingConfig,
+    weighter: UncertaintyWeighter | None,
+) -> tuple[list[dict], list[nn.Parameter]]:
+    groups: list[dict] = []
+    clip_params = list(token_generator.parameters())
+    groups.extend(adamw_groups(token_generator, training_config.lr, training_config.decay_groups))
+    if text_encoder is not None:
+        encoder_trainable = [p for p in text_encoder.parameters() if p.requires_grad]
+        if encoder_trainable:
+            groups.extend(
+                adamw_groups(
+                    text_encoder,
+                    training_config.text_encoder_lr,
+                    training_config.decay_groups,
+                    only=encoder_trainable,
+                )
+            )
+            clip_params += encoder_trainable
+    if weighter is not None:
+        groups.append({"params": list(weighter.parameters()), "weight_decay": 0.0})
+        clip_params += list(weighter.parameters())
+    return groups, clip_params
+
+
+def build_optimizer(
+    token_generator: MotionTokenGenerator,
+    text_encoder: CLIPTextEncoder | None,
+    training_config: GeneratorTrainingConfig,
+    weighter: UncertaintyWeighter | None,
+) -> tuple[torch.optim.AdamW, list[nn.Parameter]]:
+    freeze_generator_blocks(token_generator, training_config.freeze)
+    groups, clip_params = build_param_groups(
+        token_generator, text_encoder, training_config, weighter
+    )
+    optimizer = torch.optim.AdamW(
+        groups, lr=training_config.lr, weight_decay=training_config.weight_decay
+    )
+    return optimizer, clip_params

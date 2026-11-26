@@ -11,9 +11,9 @@ from text2motion.generation.contracts import Backbone, GeneratorConfig, Generato
 from text2motion.generation.model.generator import MotionTokenGenerator
 from text2motion.generation.requests import GeneratorTrainingRequest
 from text2motion.generation.training.epochs import train_generator
+from text2motion.generation.training.resume import GENERATOR_RESUME_FORMAT
 from text2motion.generation.training.selection import check_ce_stop_setup
 from text2motion.generation.training.trainer import (
-    GENERATOR_RESUME_FORMAT,
     CleanCrossEntropyLoaders,
     GeneratorTrainer,
 )
@@ -38,6 +38,27 @@ GEN = GeneratorConfig(
 )
 
 
+class _CurveCheckpoint:
+    def __init__(self, trainer) -> None:
+        self.trainer = trainer
+
+    def resume_state(self, epoch, best_fid, stale, run_dir):
+        return self.trainer.resume_state(epoch, best_fid, stale, run_dir)
+
+    def load_resume_state(self, state, legacy, extend_schedule):
+        return self.trainer.load_resume_state(state, legacy, extend_schedule)
+
+
+@pytest.fixture(autouse=True)
+def curve_checkpoint(monkeypatch):
+    monkeypatch.setattr(
+        "text2motion.generation.training.epochs.GeneratorCheckpoint", _CurveCheckpoint
+    )
+    monkeypatch.setattr(
+        "text2motion.generation.training.resume.GeneratorCheckpoint", _CurveCheckpoint
+    )
+
+
 def noisy_trainer() -> GeneratorTrainer:
     torch.manual_seed(2026)
     trainer = GeneratorTrainer(
@@ -47,7 +68,7 @@ def noisy_trainer() -> GeneratorTrainer:
         downsample=4,
     )
     captions = {"walk": torch.randn(GEN.d_text), "run": torch.randn(GEN.d_text)}
-    trainer.encode = lambda texts: torch.stack([captions[text] for text in texts])
+    trainer.batch.encode = lambda texts: torch.stack([captions[text] for text in texts])
     return trainer
 
 
@@ -341,7 +362,7 @@ def ce_with_text(cfg_dropout: float, text: torch.Tensor) -> float:
         GeneratorTrainingConfig(cfg_dropout=cfg_dropout, pkeep=0.5),
         downsample=4,
     )
-    trainer.encode = lambda texts: text.expand(len(texts), -1)
+    trainer.batch.encode = lambda texts: text.expand(len(texts), -1)
     return trainer.teacher_forced_ce(random_batches(), "cpu")
 
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from text2motion.common.engine import run_epochs
 from text2motion.generation.requests import GeneratorTrainingRequest
 from text2motion.generation.training.resume import (
+    GeneratorCheckpoint,
     free_cuda_memory,
     resume_is_finished,
     start_selection,
@@ -113,7 +114,7 @@ def save_resume_state(
     outputs: RunOutputs,
     resume_path: Path,
 ) -> None:
-    state = trainer.resume_state(
+    state = GeneratorCheckpoint(trainer).resume_state(
         epoch, selection.best_fid, selection.stale_evaluations, outputs.run_dir
     )
     state["clean_ce_progress"] = {
@@ -226,11 +227,11 @@ def epoch_guard(
     return dump_on_failure(
         outputs.failure_dump_path,
         lambda: (
-            trainer.resume_state(
+            GeneratorCheckpoint(trainer).resume_state(
                 epoch, selection.best_fid, selection.stale_evaluations, outputs.run_dir
             ),
             trainer.current_inputs,
             trainer.current_step,
-            trainer.trained_modules(),
+            GeneratorCheckpoint(trainer).trained_modules(),
         ),
     )

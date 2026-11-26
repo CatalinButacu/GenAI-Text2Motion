@@ -87,7 +87,7 @@ def test_end_token_targets_and_masked_stream():
     )
     tokens = torch.randint(0, cfg.codebook_size, (2, 6, cfg.num_codebooks))
     lengths = torch.tensor([12, 24])  # 3 and 6 tokens at downsample 4
-    targets, token_lengths = trainer.append_end_targets(tokens, lengths)
+    targets, token_lengths = trainer.batch.append_end_targets(tokens, lengths)
 
     assert targets.shape == (2, 7, cfg.num_codebooks)
     assert (targets[0, 3] == gen.end_id).all() and (targets[1, 6] == gen.end_id).all()

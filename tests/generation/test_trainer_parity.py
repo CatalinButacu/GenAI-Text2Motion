@@ -17,6 +17,7 @@ from text2motion.generation.model.spec import GeneratorModelSpec
 from text2motion.generation.requests import GeneratorPretrainingRequest
 from text2motion.generation.training import pretrain_epoch as epoch_module
 from text2motion.generation.training.pretrain import pretrain_generator
+from text2motion.generation.training.resume import GeneratorCheckpoint
 from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.contracts import Split
 from text2motion.tokenization.contracts import TokenizerConfig
@@ -83,7 +84,7 @@ def generator_record(batches: list) -> dict:
         float(trainer.train_step(batch.features, text, batch.lengths)["total"])
         for batch in batches[:STEPS]
     ]
-    state = trainer.resume_state(0, float("inf"), 0, None)
+    state = GeneratorCheckpoint(trainer).resume_state(0, float("inf"), 0, None)
     return {
         "losses": losses,
         "checkpoint_keys": sorted(state),

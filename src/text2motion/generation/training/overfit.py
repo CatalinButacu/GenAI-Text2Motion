@@ -84,7 +84,7 @@ def run_gate_steps(
     step = 0
 
     for step in range(steps):
-        text_embedding = trainer.encode(captions)
+        text_embedding = trainer.batch.encode(captions)
         parts = {
             name: float(value)
             for name, value in trainer.train_step(motion, text_embedding, lengths).items()

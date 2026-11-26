@@ -13,7 +13,6 @@ SOURCE_PREFIX = "src/text2motion/"
 ALLOWED = MappingProxyType(
     {
         "file": (
-            "generation/training/trainer.py",
             "motion/representation.py",
             "studio/avatar.py",
             "studio/fitting.py",
@@ -24,8 +23,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "generation/training/trainer.py::GeneratorTrainer.__init__",
-            "generation/training/trainer.py::GeneratorTrainer.batch_loss_parts",
             "motion/kinematics.py::Skeleton.inverse_kinematics_np",
             "motion/normalization.py::fit_train_stats",
             "motion/normalization.py::normalization_stats",
@@ -46,7 +43,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py::train_tokenizer.after_epoch",
         ),
         "class": (
-            "generation/training/trainer.py::GeneratorTrainer",
             "motion/kinematics.py::Skeleton",
             "studio/avatar.py::SmplxAvatarController",
             "studio/live/controller.py::StudioGenerationController",

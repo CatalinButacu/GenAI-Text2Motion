@@ -14,6 +14,7 @@ from text2motion.generation.contracts import (
 from text2motion.generation.model.generator import MotionTokenGenerator
 from text2motion.generation.model.sampling import seeded_sampling_uniforms
 from text2motion.generation.model.spec import GeneratorModelSpec
+from text2motion.generation.training.resume import GeneratorCheckpoint
 from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
@@ -62,7 +63,7 @@ def resume_record(generator: MotionTokenGenerator) -> dict:
         GeneratorTrainingConfig(),
         downsample=TOK.downsample,
     )
-    state = trainer.resume_state(0, float("inf"), 0, None)
+    state = GeneratorCheckpoint(trainer).resume_state(0, float("inf"), 0, None)
     return {
         "keys": sorted(state),
         "generator": shapes(state["generator"]),

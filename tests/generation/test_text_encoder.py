@@ -208,7 +208,7 @@ def test_trainer_includes_encoder_and_grad_flows():
     }
     assert encoder_lrs == {GeneratorTrainingConfig().text_encoder_lr}
 
-    text_emb = trainer.encode(["a person jumps", "a person sits down"])  # keeps grad to CLIP
+    text_emb = trainer.batch.encode(["a person jumps", "a person sits down"])  # keeps grad to CLIP
     trainer.train_step(torch.randn(2, 32, 263), text_emb)
 
     assert any(

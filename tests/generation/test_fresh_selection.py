@@ -7,7 +7,8 @@ import torch
 
 from text2motion.generation.requests import GeneratorTrainingRequest
 from text2motion.generation.training.epochs import train_generator
-from text2motion.generation.training.trainer import GENERATOR_RESUME_FORMAT, GeneratorTrainer
+from text2motion.generation.training.resume import GENERATOR_RESUME_FORMAT
+from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.contracts import RunOutputs
 from text2motion.motion.storage import RESUME_VERSION
 
@@ -30,6 +31,30 @@ class _FakeTrainer:
 
     def resume_state(self, epoch, best_fid, stale, run_dir):
         return {"epoch": epoch, "best_fid": best_fid}
+
+
+@pytest.fixture(autouse=True)
+def delegating_checkpoint(monkeypatch):
+    monkeypatch.setattr(EPOCHS_CHECKPOINT, _FakeCheckpoint)
+    monkeypatch.setattr(RESUME_CHECKPOINT, _FakeCheckpoint)
+
+
+EPOCHS_CHECKPOINT = "text2motion.generation.training.epochs.GeneratorCheckpoint"
+RESUME_CHECKPOINT = "text2motion.generation.training.resume.GeneratorCheckpoint"
+
+
+class _FakeCheckpoint:
+    def __init__(self, trainer) -> None:
+        self.trainer = trainer
+
+    def load_resume_state(self, state, legacy, extend_schedule):
+        return self.trainer.load_resume_state(state, legacy, extend_schedule)
+
+    def resume_state(self, epoch, best_fid, stale, run_dir):
+        return self.trainer.resume_state(epoch, best_fid, stale, run_dir)
+
+    def trained_modules(self):
+        return self.trainer.trained_modules()
 
 
 def run(
