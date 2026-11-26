@@ -27,7 +27,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "dataset/sources/humanml3d/build.py::build_joint_clips",
             "dataset/sources/humanml3d/official.py::write_motions",
             "dataset/training/windows.py::MotionWindowDataset.__init__",
             "dataset/training/windows.py::MotionWindowDataset.load_windowable_clips",

@@ -168,14 +168,27 @@ def write_clock_table(request: PreparationRequest) -> None:
     print("files", len(rows), {status: statuses.count(status) for status in sorted(set(statuses))})
 
 
+def copy_official_splits(official_dir: Path, out_dir: Path) -> None:
+    for split in OFFICIAL_SPLIT_FILES:
+        shutil.copyfile(official_dir / split, out_dir / split)
+
+
+def write_allowed_train_list(official_dir: Path, layout: Hml3dPreparationLayout) -> None:
+    allowed = sorted(SplitPlan.from_official(official_dir).training_names())
+    with_joints = [name for name in allowed if (layout.joints / f"{name}.npy").is_file()]
+    (layout.out_dir / ALLOWED_TRAIN_FILE).write_text(
+        "\n".join(with_joints) + "\n", encoding="utf-8"
+    )
+    print("allowed training clips with joints:", len(with_joints), flush=True)
+
+
 def build_joint_clips(request: PreparationRequest) -> None:
     if request.clock_csv is None or request.index_csv is None:
         raise ValueError("clock_csv and index_csv must be set for stage 'joints'")
     amass_dir, smplx_models = require_amass_inputs(request)
     layout = open_layout(request)
     official_dir = Path(request.index_csv).parent
-    for split in OFFICIAL_SPLIT_FILES:
-        shutil.copyfile(official_dir / split, layout.out_dir / split)
+    copy_official_splits(official_dir, layout.out_dir)
     logger.info(
         extract_poses(
             amass_dir, smplx_models, layout.pose_data, request.fps, request.adopt_pose_folder
@@ -196,12 +209,7 @@ def build_joint_clips(request: PreparationRequest) -> None:
     if request.fill:
         filled = fill_from_official(official_dir, layout, request.fps)
         print("clips filled from official features:", filled, flush=True)
-        allowed = sorted(SplitPlan.from_official(official_dir).training_names())
-        with_joints = [name for name in allowed if (layout.joints / f"{name}.npy").is_file()]
-        (layout.out_dir / ALLOWED_TRAIN_FILE).write_text(
-            "\n".join(with_joints) + "\n", encoding="utf-8"
-        )
-        print("allowed training clips with joints:", len(with_joints), flush=True)
+        write_allowed_train_list(official_dir, layout)
 
 
 def encode_hml3d_features(request: PreparationRequest) -> None:
