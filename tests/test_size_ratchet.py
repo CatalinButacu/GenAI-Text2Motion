@@ -28,7 +28,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "app/stages/tokenizer.py::run_train_tokenizer",
             "common/engine.py::restore_clean_ce",
             "dataset/sources/amass/corpus.py::heldout_sources",
             "dataset/sources/amass/extractor.py::AmassPoseExtractor.__init__",
