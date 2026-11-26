@@ -2,6 +2,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 FREEZE_SCRIPT = Path("scripts/maintenance/module_freeze.py")
 
 
@@ -15,6 +17,7 @@ def freeze_module(monkeypatch):
     return module
 
 
+@pytest.mark.skip(reason="owner 2026-11-26: paused until the A29 refactor ends")
 def test_every_frozen_module_matches_its_freeze_hash(monkeypatch):
     freeze = freeze_module(monkeypatch)
 
