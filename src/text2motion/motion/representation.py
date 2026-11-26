@@ -128,7 +128,7 @@ def target_offsets(reference_joints: np.ndarray) -> torch.Tensor:
     raw_offsets = torch.tensor(RAW_OFFSETS)
     example = torch.from_numpy(reference_joints).float()
     skeleton = Skeleton(raw_offsets, KINEMATIC_CHAINS, "cpu")
-    return skeleton.get_offsets_joints(example[0])
+    return skeleton.offsets.get_offsets_joints(example[0])
 
 
 def feature_params(offsets: torch.Tensor, fps: int = FPS) -> FeatureParams:
@@ -152,7 +152,7 @@ def uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarray
     target_offset = params.target_offsets
 
     src_skel = Skeleton(raw_offsets, params.chains, "cpu")
-    src_offset = src_skel.get_offsets_joints(torch.from_numpy(positions[0]))
+    src_offset = src_skel.offsets.get_offsets_joints(torch.from_numpy(positions[0]))
     src_offset = src_offset.numpy()
     tgt_offset = target_offset.numpy()
 
@@ -170,7 +170,7 @@ def uniform_skeleton(positions: np.ndarray, params: FeatureParams) -> np.ndarray
 
     quat_params = src_skel.inverse_kinematics_np(positions, params.face_joints)
 
-    src_skel.set_offset(target_offset)
+    src_skel.offsets.set_offset(target_offset)
     return src_skel.forward_kinematics_np(quat_params, tgt_root_pos)
 
 

@@ -42,7 +42,7 @@ def test_batched_rotation_recovery_equals_recovery_of_each_sequence(synthetic_jo
     skeleton = Skeleton(
         torch.tensor(representation.RAW_OFFSETS).float(), representation.KINEMATIC_CHAINS, "cpu"
     )
-    skeleton.get_offsets_joints(torch.from_numpy(global_positions[0]).float())
+    skeleton.offsets.get_offsets_joints(torch.from_numpy(global_positions[0]).float())
     single = torch.from_numpy(features).float()
     one = recover_from_rot(single, 22, skeleton)
 

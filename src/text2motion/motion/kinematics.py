@@ -1,6 +1,6 @@
 import numpy as np
-import scipy.ndimage as ndimage
 import torch
+from scipy import ndimage
 
 from text2motion.motion.geometry import (
     cont6d_to_matrix,
@@ -11,23 +11,58 @@ from text2motion.motion.geometry import (
 )
 
 
-############################################################
-#       Skeleton
-############################################################
-class Skeleton:
-    def __init__(
-        self, offset: torch.Tensor, kinematic_tree: tuple[tuple[int, ...], ...], device: str
-    ) -> None:
+def unit_np(vectors: np.ndarray) -> np.ndarray:
+    return vectors / np.sqrt((vectors**2).sum(axis=-1))[..., np.newaxis]
+
+
+def face_across_np(joints: np.ndarray, face_joint_idx: tuple[int, ...]) -> np.ndarray:
+    assert len(face_joint_idx) == 4
+    l_hip, r_hip, sdr_r, sdr_l = face_joint_idx
+    across1 = joints[:, r_hip] - joints[:, l_hip]
+    across2 = joints[:, sdr_r] - joints[:, sdr_l]
+    return unit_np(across1 + across2)
+
+
+def forward_axis_np(across: np.ndarray, smooth_forward: bool) -> np.ndarray:
+    forward = np.cross(np.array([[0, 1, 0]]), across, axis=-1)
+    if smooth_forward:
+        forward = ndimage.gaussian_filter1d(forward, 20, axis=0, mode="nearest")
+    return unit_np(forward)
+
+
+def root_quat_np(
+    joints: np.ndarray, face_joint_idx: tuple[int, ...], smooth_forward: bool
+) -> np.ndarray:
+    forward = forward_axis_np(face_across_np(joints, face_joint_idx), smooth_forward)
+    target = np.array([[0, 0, 1]]).repeat(len(forward), axis=0)
+    return qbetween_np(forward, target)
+
+
+def chain_rotations_np(
+    raw_offset_np: np.ndarray,
+    chain: tuple[int, ...],
+    joints: np.ndarray,
+    root_quat: np.ndarray,
+    quat_params: np.ndarray,
+) -> None:
+    R = root_quat
+    for j in range(len(chain) - 1):
+        u = raw_offset_np[chain[j + 1]][np.newaxis, ...].repeat(len(joints), axis=0)
+        v = unit_np(joints[:, chain[j + 1]] - joints[:, chain[j]])
+        rot_u_v = qbetween_np(u, v)
+
+        R_loc = qmul_np(qinv_np(R), rot_u_v)
+
+        quat_params[:, chain[j + 1], :] = R_loc
+        R = qmul_np(R, R_loc)
+
+
+class SkeletonOffsets:
+    def __init__(self, offset: torch.Tensor, parents: list[int], device: str) -> None:
         self.device = device
-        self._raw_offset_np = offset.detach().cpu().numpy().copy()
         self._raw_offset = offset.clone().detach().to(device).float()
-        self._kinematic_tree = kinematic_tree
         self._offset = None
-        self._parents = [0] * len(self._raw_offset)
-        self._parents[0] = -1
-        for chain in self._kinematic_tree:
-            for j in range(1, len(chain)):
-                self._parents[chain[j]] = chain[j - 1]
+        self._parents = parents
 
     def njoints(self) -> int:
         return len(self._raw_offset)
@@ -37,12 +72,6 @@ class Skeleton:
 
     def set_offset(self, offsets: torch.Tensor) -> None:
         self._offset = offsets.clone().detach().to(self.device).float()
-
-    def kinematic_tree(self) -> tuple[tuple[int, ...], ...]:
-        return self._kinematic_tree
-
-    def parents(self) -> list[int]:
-        return self._parents
 
     def get_offsets_joints_batch(self, joints: torch.Tensor) -> torch.Tensor:
         assert len(joints.shape) == 3
@@ -65,45 +94,6 @@ class Skeleton:
         self._offset = _offsets.detach()
         return _offsets
 
-    def inverse_kinematics_np(
-        self,
-        joints: np.ndarray,
-        face_joint_idx: tuple[int, ...],
-        smooth_forward: bool = False,
-    ) -> np.ndarray:
-        assert len(face_joint_idx) == 4
-        l_hip, r_hip, sdr_r, sdr_l = face_joint_idx
-        across1 = joints[:, r_hip] - joints[:, l_hip]
-        across2 = joints[:, sdr_r] - joints[:, sdr_l]
-        across = across1 + across2
-        across = across / np.sqrt((across**2).sum(axis=-1))[:, np.newaxis]
-
-        forward = np.cross(np.array([[0, 1, 0]]), across, axis=-1)
-        if smooth_forward:
-            forward = ndimage.gaussian_filter1d(forward, 20, axis=0, mode="nearest")
-        forward = forward / np.sqrt((forward**2).sum(axis=-1))[..., np.newaxis]
-
-        target = np.array([[0, 0, 1]]).repeat(len(forward), axis=0)
-        root_quat = qbetween_np(forward, target)
-
-        quat_params = np.zeros(joints.shape[:-1] + (4,))
-        root_quat[0] = np.array([[1.0, 0.0, 0.0, 0.0]])
-        quat_params[:, 0] = root_quat
-        for chain in self._kinematic_tree:
-            R = root_quat
-            for j in range(len(chain) - 1):
-                u = self._raw_offset_np[chain[j + 1]][np.newaxis, ...].repeat(len(joints), axis=0)
-                v = joints[:, chain[j + 1]] - joints[:, chain[j]]
-                v = v / np.sqrt((v**2).sum(axis=-1))[:, np.newaxis]
-                rot_u_v = qbetween_np(u, v)
-
-                R_loc = qmul_np(qinv_np(R), rot_u_v)
-
-                quat_params[:, chain[j + 1], :] = R_loc
-                R = qmul_np(R, R_loc)
-
-        return quat_params
-
     def batch_offsets(self, skel_joints: torch.Tensor | None, batch: int) -> torch.Tensor:
         table = self._offset
         if table is not None and len(table.shape) == 2:
@@ -111,6 +101,45 @@ class Skeleton:
         if skel_joints is None:
             raise ValueError("forward kinematics needs skeleton joints or a 2-D offset table")
         return self.get_offsets_joints_batch(skel_joints)
+
+
+############################################################
+#       Skeleton
+############################################################
+class Skeleton:
+    def __init__(
+        self, offset: torch.Tensor, kinematic_tree: tuple[tuple[int, ...], ...], device: str
+    ) -> None:
+        self.device = device
+        self._raw_offset_np = offset.detach().cpu().numpy().copy()
+        self._kinematic_tree = kinematic_tree
+        self._parents = [0] * len(offset)
+        self._parents[0] = -1
+        for chain in self._kinematic_tree:
+            for j in range(1, len(chain)):
+                self._parents[chain[j]] = chain[j - 1]
+        self.offsets = SkeletonOffsets(offset, self._parents, device)
+
+    def kinematic_tree(self) -> tuple[tuple[int, ...], ...]:
+        return self._kinematic_tree
+
+    def parents(self) -> list[int]:
+        return self._parents
+
+    def inverse_kinematics_np(
+        self,
+        joints: np.ndarray,
+        face_joint_idx: tuple[int, ...],
+        smooth_forward: bool = False,
+    ) -> np.ndarray:
+        root_quat = root_quat_np(joints, face_joint_idx, smooth_forward)
+        quat_params = np.zeros(joints.shape[:-1] + (4,))
+        root_quat[0] = np.array([[1.0, 0.0, 0.0, 0.0]])
+        quat_params[:, 0] = root_quat
+        for chain in self._kinematic_tree:
+            chain_rotations_np(self._raw_offset_np, chain, joints, root_quat, quat_params)
+
+        return quat_params
 
     def forward_kinematics_np(
         self,
@@ -120,7 +149,7 @@ class Skeleton:
         do_root_R: bool = True,
     ) -> np.ndarray:
         joint_tensor = None if skel_joints is None else torch.from_numpy(skel_joints)
-        offsets = self.batch_offsets(joint_tensor, quat_params.shape[0]).numpy()
+        offsets = self.offsets.batch_offsets(joint_tensor, quat_params.shape[0]).numpy()
         joints = np.zeros(quat_params.shape[:-1] + (3,))
         joints[:, 0] = root_pos
         for chain in self._kinematic_tree:
@@ -141,7 +170,7 @@ class Skeleton:
         skel_joints: torch.Tensor | None = None,
         do_root_R: bool = True,
     ) -> torch.Tensor:
-        offsets = self.batch_offsets(skel_joints, cont6d_params.shape[0])
+        offsets = self.offsets.batch_offsets(skel_joints, cont6d_params.shape[0])
         joints = torch.zeros(cont6d_params.shape[:-1] + (3,)).to(cont6d_params.device)
         joints[..., 0, :] = root_pos
         for chain in self._kinematic_tree:

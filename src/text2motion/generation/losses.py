@@ -93,7 +93,7 @@ def fk_consistency_terms(
     gt_raw = gt * std + mean
     pos_ric = recover_from_ric(recon_raw, JOINTS)
     pos_gt = recover_from_ric(gt_raw, JOINTS)
-    skeleton.get_offsets_joints(pos_gt[0, 0].detach())
+    skeleton.offsets.get_offsets_joints(pos_gt[0, 0].detach())
     pos_rot = recover_rot_batched(recon_raw, skeleton)
 
     mask = frame_mask(recon, frame_lengths)

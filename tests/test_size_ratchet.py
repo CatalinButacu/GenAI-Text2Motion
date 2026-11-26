@@ -18,7 +18,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "motion/kinematics.py::Skeleton.inverse_kinematics_np",
             "motion/normalization.py::fit_train_stats",
             "motion/normalization.py::normalization_stats",
             "tokenization/corpus.py::build_token_pack",
@@ -29,7 +28,7 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py::train_tokenizer",
             "tokenization/tokenizer_trainer.py::train_tokenizer.after_epoch",
         ),
-        "class": ("motion/kinematics.py::Skeleton",),
+        "class": (),
     }
 )
 
