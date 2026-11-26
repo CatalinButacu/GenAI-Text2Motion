@@ -13,12 +13,8 @@ import numpy as np
 from studio_human_test import HumanDriver, build_studio_viewer
 
 from text2motion.app.config import load_dataclass, load_service_config, service_policy
-from text2motion.app.service import (
-    MotionStreamProtocol,
-    Release,
-    ServiceAddress,
-    motion_service_client,
-)
+from text2motion.app.service.client import motion_service_client
+from text2motion.app.service.protocol import MotionStreamProtocol, Release, ServiceAddress
 from text2motion.studio.studio_config import StudioConfig
 
 TRACKED_WIDGETS = (

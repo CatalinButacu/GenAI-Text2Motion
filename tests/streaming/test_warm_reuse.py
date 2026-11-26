@@ -4,12 +4,8 @@ from types import MappingProxyType
 
 import pytest
 
-from text2motion.app.service import (
-    MotionStreamProtocol,
-    Release,
-    ServiceAddress,
-    motion_service_client,
-)
+from text2motion.app.service.client import motion_service_client
+from text2motion.app.service.protocol import MotionStreamProtocol, Release, ServiceAddress
 from text2motion.studio.session import StudioSession
 
 POLICY = MappingProxyType(

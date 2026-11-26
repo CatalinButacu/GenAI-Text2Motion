@@ -16,12 +16,9 @@ from text2motion.app.cli_requests import (
 )
 from text2motion.app.config import load_dataclass, service_policy
 from text2motion.app.run_log import log_metrics, start_run
-from text2motion.app.service import (
-    LoadedInferencePipeline,
-    MotionInferenceServer,
-    Release,
-    ServiceAddress,
-)
+from text2motion.app.service.handlers import MotionInferenceServer
+from text2motion.app.service.protocol import Release, ServiceAddress
+from text2motion.app.service.state import LoadedInferencePipeline
 from text2motion.evaluation.benchmark import run_streaming_state_latency_benchmark
 from text2motion.evaluation.contracts import (
     GenerationEvaluationProtocol,
@@ -129,7 +126,7 @@ def select_model(args: StudioRequest, model: str, registry: Path) -> None:
 
 
 def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
-    from text2motion.app.service import motion_service_client
+    from text2motion.app.service.client import motion_service_client
     from text2motion.studio.studio_config import StudioConfig
     from text2motion.studio.viewer import StreamingStudioViewer
 
@@ -181,7 +178,7 @@ def run_studio(app: ApplicationContext, args: StudioRequest) -> None:
 
 
 def run_health(app: ApplicationContext, request: HealthRequest) -> None:
-    from text2motion.app.service import MotionInferenceClient
+    from text2motion.app.service.client import MotionInferenceClient
 
     app = app.with_service_file(request.service_config)
     address = ServiceAddress(
