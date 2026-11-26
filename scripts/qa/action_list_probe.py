@@ -77,8 +77,8 @@ def main() -> None:
         )
 
     app = ApplicationBootstrap.from_config(args.config)
-    tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
-    pipeline = app.load_text_to_motion_generator(
+    tokenizer = app.models.load_tokenizer(args.tokenizer_ckpt)
+    pipeline = app.models.load_text_to_motion_generator(
         args.backbone, args.ckpt, tokenizer, tokenizer_checkpoint=args.tokenizer_ckpt
     ).eval()
     evaluator = app.create_humanml3d_generation_evaluator()

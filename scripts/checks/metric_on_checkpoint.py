@@ -36,7 +36,7 @@ DOWNSAMPLE = 4
 def load_module(checkpoint: Path):
     app = ApplicationBootstrap.from_config(CONFIG, device="cpu", seed=2026)
     app = with_tokenizer_kind(app, TokenizerKind.FINITE_SCALAR)
-    module = app.create_tokenizer_network()
+    module = app.models.create_tokenizer_network()
     module.load_state_dict(torch.load(checkpoint, map_location="cpu", weights_only=True))
     module.eval()
     return module

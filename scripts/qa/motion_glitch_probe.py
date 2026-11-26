@@ -84,8 +84,8 @@ def main() -> None:
     args = parser.parse_args()
 
     app = ApplicationBootstrap.from_config(args.config)
-    tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
-    pipeline = app.load_text_to_motion_generator(
+    tokenizer = app.models.load_tokenizer(args.tokenizer_ckpt)
+    pipeline = app.models.load_text_to_motion_generator(
         args.backbone, args.ckpt, tokenizer, tokenizer_checkpoint=args.tokenizer_ckpt
     ).eval()
     scaler = app.create_motion_repository().load_scaler()

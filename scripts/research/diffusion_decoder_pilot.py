@@ -333,7 +333,7 @@ def main() -> None:
     arguments = parse_arguments()
     app = ApplicationBootstrap.from_config(TOKENIZER_CONFIG, seed=SEED)
     device = app.device
-    tokenizer = app.create_tokenizer_network()
+    tokenizer = app.models.create_tokenizer_network()
     checkpoint = Path(app.config.paths.checkpoints_dir) / "tokenizer" / "fsq_g8_v1024.pt"
     tokenizer.load_state_dict(torch.load(checkpoint, map_location="cpu", weights_only=True))
     tokenizer.to(device).eval().requires_grad_(False)

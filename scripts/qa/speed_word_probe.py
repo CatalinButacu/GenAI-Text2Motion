@@ -88,11 +88,11 @@ def main() -> None:
     arguments = parser.parse_args()
 
     app = ApplicationBootstrap.from_config(CONFIG, seed=SEED)
-    tokenizer = app.load_tokenizer(TOKENIZER)
+    tokenizer = app.models.load_tokenizer(TOKENIZER)
     resources = app.create_humanml3d_generation_evaluator().resources
     rows: list[dict] = []
     for backbone, checkpoint in GENERATORS:
-        pipeline = app.load_text_to_motion_generator(
+        pipeline = app.models.load_text_to_motion_generator(
             backbone, checkpoint, tokenizer, tokenizer_checkpoint=TOKENIZER
         ).eval()
         for verb, group in VERBS:

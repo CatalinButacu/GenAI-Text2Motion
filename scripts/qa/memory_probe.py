@@ -106,7 +106,7 @@ def main() -> None:
     args = parser.parse_args()
 
     app = ApplicationBootstrap.from_config(args.config)
-    tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
+    tokenizer = app.models.load_tokenizer(args.tokenizer_ckpt)
     resources = app.create_humanml3d_generation_evaluator().resources
     run_dir = start_run("memory_probe", app.config, app.config.paths.logs_dir, vars(args))
     captions = test_captions(resources, args.captions)
@@ -117,7 +117,7 @@ def main() -> None:
         checkpoint = app.checkpoint_directory("generator") / args.checkpoint_pattern.format(
             backbone=backbone.value
         )
-        pipeline = app.load_text_to_motion_generator(
+        pipeline = app.models.load_text_to_motion_generator(
             backbone, checkpoint, tokenizer, tokenizer_checkpoint=args.tokenizer_ckpt
         ).eval()
         generator = pipeline.token_generator

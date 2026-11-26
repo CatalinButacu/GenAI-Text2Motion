@@ -61,7 +61,7 @@ def reconstruction_embeddings(
     stem: str, split: Split, evaluator
 ) -> tuple[np.ndarray, np.ndarray, float]:
     app = ApplicationBootstrap.from_config(CONFIGS[stem.split(CHALLENGER_TAG)[0]], seed=SEED)
-    module = app.create_tokenizer_network()
+    module = app.models.create_tokenizer_network()
     checkpoint = Path(app.config.paths.checkpoints_dir) / "tokenizer" / f"{stem}.pt"
     module.load_state_dict(torch.load(checkpoint, map_location="cpu", weights_only=True))
     module.to(app.device).eval()

@@ -59,8 +59,8 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
         required_path(app.config.paths.hml3d_out_dir, "hml3d_out_dir"), args.exploratory
     )
     tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
-    tokenizer = app.load_tokenizer(tokenizer_ckpt)
-    architecture = app.resolve_generator_spec(args.backbone, tokenizer.codebook_size)
+    tokenizer = app.models.load_tokenizer(tokenizer_ckpt)
+    architecture = app.models.resolve_generator_spec(args.backbone, tokenizer.codebook_size)
     OverfitGate.load(args.overfit_gate).verify_setup(
         config_path=args.config,
         tokenizer_ckpt=tokenizer_ckpt,
@@ -74,13 +74,13 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
     compiled = args.compile and compile_generator(module, app.device)
     logger.info(f"torch.compile: {'on' if compiled else 'off'}")
 
-    text_encoder = app.load_text_encoder()
+    text_encoder = app.models.load_text_encoder()
     repository = app.create_motion_repository()
     loader = repository.captioned_batch_loader(
         Split.TRAIN, args.batch_size, num_workers=args.num_workers
     )
     cache = (
-        app.attach_text_cache(
+        app.models.attach_text_cache(
             text_encoder, cast(CaptionedMotionDataset, loader.dataset).captions(), args.batch_size
         )
         if args.text_cache

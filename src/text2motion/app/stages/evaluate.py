@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 def run_evaluate(app: ApplicationContext, args: EvaluateRequest) -> None:
     args.tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
-    tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
+    tokenizer = app.models.load_tokenizer(args.tokenizer_ckpt)
     evaluator = app.create_humanml3d_generation_evaluator()
     backbones = (
         [Backbone.TRANSFORMER, Backbone.MAMBA]
@@ -60,7 +60,7 @@ def run_evaluate(app: ApplicationContext, args: EvaluateRequest) -> None:
         if not Path(checkpoint).is_file():
             logger.info(f"{backbone.value:12s} SKIP (no checkpoint yet)")
             continue
-        generator = app.load_text_to_motion_generator(
+        generator = app.models.load_text_to_motion_generator(
             backbone,
             checkpoint,
             tokenizer,

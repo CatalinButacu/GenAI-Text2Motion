@@ -117,7 +117,7 @@ def main() -> None:
     args = parser.parse_args()
 
     app = ApplicationBootstrap.from_config(args.config, seed=SEED)
-    tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
+    tokenizer = app.models.load_tokenizer(args.tokenizer_ckpt)
     evaluator = app.create_humanml3d_generation_evaluator()
     resources = evaluator.resources
     run_dir = start_run("paired_twin_analysis", app.config, app.config.paths.logs_dir, vars(args))
@@ -128,7 +128,7 @@ def main() -> None:
         checkpoint = app.checkpoint_directory("generator") / args.checkpoint_pattern.format(
             backbone=backbone.value
         )
-        generator = app.load_text_to_motion_generator(
+        generator = app.models.load_text_to_motion_generator(
             backbone, checkpoint, tokenizer, tokenizer_checkpoint=args.tokenizer_ckpt
         )
         sets[backbone] = evaluator.generate_evaluation_set(

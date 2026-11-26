@@ -135,11 +135,11 @@ def save_tokenizer_golden() -> None:
 def generator_metrics() -> dict[str, dict[str, float]]:
     app = ApplicationBootstrap.from_config(GENERATOR_CONFIG, device="cuda")
     apply_precision(Float32Precision.HIGHEST)
-    tokenizer = app.load_tokenizer(FSQ_CHECKPOINT)
+    tokenizer = app.models.load_tokenizer(FSQ_CHECKPOINT)
     evaluator = app.create_humanml3d_generation_evaluator()
     metrics: dict[str, dict[str, float]] = {}
     for backbone, checkpoint in GENERATOR_CASES:
-        generator = app.load_text_to_motion_generator(
+        generator = app.models.load_text_to_motion_generator(
             backbone, checkpoint, tokenizer, tokenizer_checkpoint=FSQ_CHECKPOINT
         )
         metrics[backbone.value] = evaluator.evaluate_checkpoint_selection_metrics(

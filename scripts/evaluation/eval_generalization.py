@@ -54,7 +54,7 @@ def run(args: argparse.Namespace) -> None:
             print(f"{stem:14} (no checkpoint, skipped)")
             continue
         app = ApplicationBootstrap.from_config(_CHECKPOINT_CONFIGS[stem], device=device)
-        module = app.create_tokenizer_network()
+        module = app.models.create_tokenizer_network()
         module.load_state_dict(torch.load(path, map_location=device))
         module.to(device).eval()
         repository = app.create_motion_repository()

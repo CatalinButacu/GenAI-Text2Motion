@@ -128,7 +128,7 @@ def main() -> None:
     arguments = parser.parse_args()
 
     app = ApplicationBootstrap.from_config(CONFIG, seed=SEED)
-    tokenizer = app.load_tokenizer(TOKENIZER)
+    tokenizer = app.models.load_tokenizer(TOKENIZER)
     resources = app.create_humanml3d_generation_evaluator().resources
     downsample = app.config.tokenizer.downsample
     clips = validation_clips(resources, downsample, arguments.clips)
@@ -137,7 +137,7 @@ def main() -> None:
         "tokenizer_roundtrip": roundtrip_rows(tokenizer, resources, clips, app.device),
     }
     for backbone, checkpoint in GENERATORS:
-        pipeline = app.load_text_to_motion_generator(
+        pipeline = app.models.load_text_to_motion_generator(
             backbone, checkpoint, tokenizer, tokenizer_checkpoint=TOKENIZER
         ).eval()
         stages[f"generated_{backbone.value}"] = generated_rows(

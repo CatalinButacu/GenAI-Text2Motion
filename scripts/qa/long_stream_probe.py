@@ -1065,7 +1065,7 @@ def history_screen(
         raise FileExistsError("history screen requires new output paths")
     sources = switch_sources(paths)
     app = ApplicationBootstrap.from_config(sources[0]["config"], seed=2026)
-    tokenizer = app.load_tokenizer(sources[0]["tokenizer_checkpoint"])
+    tokenizer = app.models.load_tokenizer(sources[0]["tokenizer_checkpoint"])
     evaluator = app.create_humanml3d_generation_evaluator()
     selection = family_prompts(
         evaluator.resources,
@@ -1090,7 +1090,7 @@ def history_screen(
     cases, rows = {}, []
     for source in sources:
         backbone = source["backbone"]
-        pipeline = app.load_text_to_motion_generator(
+        pipeline = app.models.load_text_to_motion_generator(
             Backbone(backbone),
             source["checkpoint"],
             tokenizer,
@@ -1505,8 +1505,8 @@ def main() -> None:
     validate_args(args)
 
     app = ApplicationBootstrap.from_config(args.config, seed=2026)
-    tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
-    pipeline = app.load_text_to_motion_generator(
+    tokenizer = app.models.load_tokenizer(args.tokenizer_ckpt)
+    pipeline = app.models.load_text_to_motion_generator(
         args.backbone, args.ckpt, tokenizer, tokenizer_checkpoint=args.tokenizer_ckpt
     ).eval()
     evaluator = app.create_humanml3d_generation_evaluator()

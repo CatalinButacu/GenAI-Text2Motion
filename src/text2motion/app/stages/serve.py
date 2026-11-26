@@ -23,8 +23,8 @@ def load_inference_pipeline(
 ) -> LoadedInferencePipeline:
     args.ckpt = args.ckpt or app.config.paths.generator_checkpoint(args.backbone)
     args.tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
-    tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
-    generator = app.load_text_to_motion_generator(
+    tokenizer = app.models.load_tokenizer(args.tokenizer_ckpt)
+    generator = app.models.load_text_to_motion_generator(
         args.backbone,
         args.ckpt,
         tokenizer,

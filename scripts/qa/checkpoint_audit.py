@@ -120,7 +120,7 @@ def spec_difference(bundle: GeneratorBundle, config_path: Path, tokenizer_path: 
         return [f"tokenizer {tokenizer_path.name} is not the recorded tokenizer"]
     try:
         bundle.verify_generator_config(
-            app.resolve_generator_spec(backbone, codebook_size).as_dict()
+            app.models.resolve_generator_spec(backbone, codebook_size).as_dict()
         )
     except ValueError as error:
         return [str(error)]

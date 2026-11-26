@@ -153,11 +153,11 @@ def main() -> None:
     arguments = parser.parse_args()
 
     app = ApplicationBootstrap.from_config(CONFIG, seed=SEED)
-    tokenizer = app.load_tokenizer(TOKENIZER)
+    tokenizer = app.models.load_tokenizer(TOKENIZER)
     evaluator = app.create_humanml3d_generation_evaluator()
     rows: list[dict[str, float | str]] = []
     for backbone, checkpoint in GENERATORS:
-        pipeline = app.load_text_to_motion_generator(
+        pipeline = app.models.load_text_to_motion_generator(
             backbone, checkpoint, tokenizer, tokenizer_checkpoint=TOKENIZER
         ).eval()
         twin = twin_rows(evaluator, pipeline, backbone)

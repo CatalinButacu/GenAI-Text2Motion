@@ -84,7 +84,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py::train_tokenizer.after_epoch",
         ),
         "class": (
-            "app/runtime/context.py::ApplicationContext",
             "generation/training/trainer.py::GeneratorTrainer",
             "generation/model/generator.py::MotionTokenGenerator",
             "motion/kinematics.py::Skeleton",

@@ -37,7 +37,7 @@ def create_tokenizer_trainer(
     app: ApplicationContext, args: TrainTokenizerRequest
 ) -> TokenizerTrainer:
     config = app.config
-    module = app.create_tokenizer_network().to(app.device)
+    module = app.models.create_tokenizer_network().to(app.device)
     commitment = (
         config.rvq_baseline.commitment_beta
         if args.tokenizer is TokenizerKind.RESIDUAL_VECTOR

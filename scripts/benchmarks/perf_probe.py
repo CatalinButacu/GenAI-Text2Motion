@@ -430,8 +430,8 @@ def demo_probe(args) -> None:
     from text2motion.studio.studio_config import StudioConfig
 
     app = ApplicationBootstrap.from_config(args.config, device=args.device)
-    tokenizer = app.load_tokenizer(args.tokenizer_ckpt)
-    generator = app.load_text_to_motion_generator(
+    tokenizer = app.models.load_tokenizer(args.tokenizer_ckpt)
+    generator = app.models.load_text_to_motion_generator(
         args.backbone,
         args.ckpt,
         tokenizer,

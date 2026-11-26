@@ -11,7 +11,7 @@ def test_attach_text_cache_builds_once_then_loads_by_caption_set(tmp_path, monke
         f"device: cpu\npaths:\n  cache_dir: {cache_dir.as_posix()}\n", encoding="utf-8"
     )
     app = ApplicationBootstrap.from_config(config)
-    encoder = app.load_text_encoder()
+    encoder = app.models.load_text_encoder()
     built, loaded = [], []
 
     def fake_build(enc, captions, batch_size, path):
@@ -33,17 +33,17 @@ def test_attach_text_cache_builds_once_then_loads_by_caption_set(tmp_path, monke
         f"_keep{encoder.frozen_layer_count}_b8_{digest}.npy"
     )
 
-    first = app.attach_text_cache(encoder, captions, 8)
+    first = app.models.attach_text_cache(encoder, captions, 8)
     assert built == [(captions, 8, expected)]
     assert loaded == []
     assert encoder.frozen_cache is first
 
-    second = app.attach_text_cache(encoder, list(reversed(captions)), 8)
+    second = app.models.attach_text_cache(encoder, list(reversed(captions)), 8)
     assert built == [(captions, 8, expected)]
     assert loaded == [expected]
     assert encoder.frozen_cache is second
 
-    app.attach_text_cache(encoder, [*captions, "a child hops"], 8)
+    app.models.attach_text_cache(encoder, [*captions, "a child hops"], 8)
     assert len(built) == 2
     assert built[1][2] != expected
     assert built[1][2].parent == cache_dir

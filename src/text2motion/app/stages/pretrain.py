@@ -43,7 +43,7 @@ def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
         for level in app.config.tokenizer.fsq_levels:
             vocab *= level
 
-    architecture = app.resolve_generator_spec(args.backbone, vocab)
+    architecture = app.models.resolve_generator_spec(args.backbone, vocab)
     module = architecture.create_model(app.device)
     logger.info(
         f"pretrain {args.backbone.value}: {sum(p.numel() for p in module.parameters()):,} params, "

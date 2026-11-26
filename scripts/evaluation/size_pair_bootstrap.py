@@ -26,11 +26,11 @@ def generated_embeddings(
     width: int, backbone: Backbone, pattern: str, evaluator
 ) -> tuple[list, np.ndarray, np.ndarray]:
     app = ApplicationBootstrap.from_config(width_config(width), seed=SEED)
-    tokenizer = app.load_tokenizer(TOKENIZER)
+    tokenizer = app.models.load_tokenizer(TOKENIZER)
     checkpoint = app.checkpoint_directory("generator") / pattern.format(
         backbone=backbone.value, width=width
     )
-    generator = app.load_text_to_motion_generator(
+    generator = app.models.load_text_to_motion_generator(
         backbone, checkpoint, tokenizer, tokenizer_checkpoint=TOKENIZER
     )
     evaluation = evaluator.generate_evaluation_set(

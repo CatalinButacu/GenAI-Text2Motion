@@ -72,10 +72,10 @@ def main() -> None:
     evaluator = app.create_humanml3d_generation_evaluator()
     generator = None
     if not arguments.reference:
-        generator = app.load_text_to_motion_generator(
+        generator = app.models.load_text_to_motion_generator(
             arguments.backbone,
             arguments.ckpt,
-            app.load_tokenizer(TOKENIZER),
+            app.models.load_tokenizer(TOKENIZER),
             tokenizer_checkpoint=TOKENIZER,
         ).eval()
     classes = verb_classes(CLASS_MAP, CLASS_COLUMN)

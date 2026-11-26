@@ -84,8 +84,8 @@ def run(args: argparse.Namespace) -> None:
         raise ValueError(
             f"{args.token_pack} was built with another tokenizer than {args.tokenizer_ckpt}"
         )
-    tokenizer = app.load_tokenizer(args.tokenizer_ckpt).network
-    spec = app.resolve_generator_spec(Backbone(args.backbone), tokenizer.codebook_size)
+    tokenizer = app.models.load_tokenizer(args.tokenizer_ckpt).network
+    spec = app.models.resolve_generator_spec(Backbone(args.backbone), tokenizer.codebook_size)
     gen_cfg = spec.config
     generator = spec.create_model(device)
     generator.load_state_dict(torch.load(args.ckpt, map_location=device, weights_only=True))

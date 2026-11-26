@@ -152,7 +152,7 @@ def main() -> None:
     arguments = parser.parse_args()
 
     app = ApplicationBootstrap.from_config(CONFIG, seed=SEED)
-    tokenizer = app.load_tokenizer(TOKENIZER)
+    tokenizer = app.models.load_tokenizer(TOKENIZER)
     evaluator = app.create_humanml3d_generation_evaluator()
     resources = evaluator.resources
     verbs = chosen_verbs(arguments.verbs)
@@ -179,7 +179,7 @@ def main() -> None:
         Backbone.MAMBA: arguments.mamba_ckpt,
     }
     for backbone, checkpoint in checkpoints.items():
-        pipeline = app.load_text_to_motion_generator(
+        pipeline = app.models.load_text_to_motion_generator(
             backbone, checkpoint, tokenizer, tokenizer_checkpoint=TOKENIZER
         ).eval()
         for own, verb in enumerate(names):

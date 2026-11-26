@@ -98,7 +98,7 @@ def run_tokenize(app: ApplicationContext, request: TokenizeRequest) -> None:
     index_csv = required_path(paths.hml3d_index_csv, "hml3d_index_csv")
     dataset_dir = required_path(paths.hml3d_out_dir, "hml3d_out_dir")
     checkpoint = request.tokenizer_ckpt or paths.tokenizer_checkpoint
-    tokenizer = app.load_tokenizer(checkpoint)
+    tokenizer = app.models.load_tokenizer(checkpoint)
     excluded = heldout_feature_names(index_csv, dataset_dir, Path(request.regen_dir) / "pose_data")
     identity: dict[str, object] = {
         "tokenizer_sha256": sha256_file(checkpoint),

@@ -45,10 +45,10 @@ def main() -> None:
     run_dir = start_run("kernel_probe", app.config, app.config.paths.logs_dir, vars(args))
     codebooks = app.config.tokenizer.num_quantizers
     vocabulary = 1024
-    plain = app.resolve_generator_spec(Backbone.MAMBA, vocabulary, use_kernel=False).create_model(
+    plain = app.models.resolve_generator_spec(Backbone.MAMBA, vocabulary, use_kernel=False).create_model(
         app.device
     )
-    kernel = app.resolve_generator_spec(Backbone.MAMBA, vocabulary, use_kernel=True).create_model(
+    kernel = app.models.resolve_generator_spec(Backbone.MAMBA, vocabulary, use_kernel=True).create_model(
         app.device
     )
     kernel.load_state_dict(plain.state_dict())
