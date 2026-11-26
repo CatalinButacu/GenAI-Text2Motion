@@ -1,0 +1,7 @@
+[
+  {"from": "text2motion.app.service", "to": "text2motion.app.service.protocol", "names": ["MotionStreamProtocol", "Release", "ServiceAddress"], "copy": ["logger"]},
+  {"from": "text2motion.app.service", "to": "text2motion.app.service.state", "names": ["STEER_JUMP_FRAMES", "CM_PER_M", "PendingSteer", "StreamSteering", "LoadedInferencePipeline", "InferencePipelineLoader"], "copy": ["logger"]},
+  {"from": "text2motion.app.service", "to": "text2motion.app.service.stats", "names": ["process_memory_gb", "record_inference", "format_stats"], "copy": ["logger"]},
+  {"from": "text2motion.app.service", "to": "text2motion.app.service.client", "names": ["MotionInferenceClient", "start_motion_server", "await_motion_server", "changed_identity_fields", "motion_service_client"], "copy": ["logger"]},
+  {"from": "text2motion.app.service", "to": "text2motion.app.service.handlers", "names": ["MotionInferenceServer", "pending_request", "logger"]}
+]

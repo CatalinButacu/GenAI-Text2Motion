@@ -1,0 +1,84 @@
+[
+ {
+  "from": "text2motion.app.training",
+  "to": "text2motion.app.stages.data",
+  "names": [
+   "PROTOCOL_SEED",
+   "PROTOCOL_SPLIT_RECORD",
+   "require_protocol_run",
+   "freeze_protocol_splits",
+   "verify_protocol_splits",
+   "run_prepare",
+   "run_tokenize"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.app.training",
+  "to": "text2motion.app.stages.tokenizer",
+  "names": [
+   "with_tokenizer_kind",
+   "create_tokenizer_trainer",
+   "run_train_tokenizer"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.app.training",
+  "to": "text2motion.app.stages.overfit",
+  "names": [
+   "overfit_criteria",
+   "run_sanity_overfit"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.app.training",
+  "to": "text2motion.app.stages.pretrain",
+  "names": [
+   "run_pretrain"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.app.training",
+  "to": "text2motion.app.stages.generator",
+  "names": [
+   "initial_generator",
+   "compile_generator",
+   "run_train_generator",
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.app.serving",
+  "to": "text2motion.app.stages.evaluate",
+  "names": [
+   "run_evaluate",
+   "run_bench"
+  ],
+  "copy": [
+   "logger"
+  ]
+ },
+ {
+  "from": "text2motion.app.serving",
+  "to": "text2motion.app.stages.serve",
+  "names": [
+   "load_inference_pipeline",
+   "run_serve",
+   "select_model",
+   "run_studio",
+   "run_health",
+   "logger"
+  ]
+ }
+]

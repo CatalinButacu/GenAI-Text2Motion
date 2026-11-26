@@ -1,0 +1,41 @@
+[
+ {
+  "from": "text2motion.app.config",
+  "to": "text2motion.app.config.schema",
+  "names": [
+   "ComputeDevice",
+   "Float32Precision",
+   "SmplxAvatarConfig",
+   "ProjectPathsConfig",
+   "MotionServiceConfig",
+   "ApplicationConfig"
+  ]
+ },
+ {
+  "from": "text2motion.app.config",
+  "to": "text2motion.app.config.validation",
+  "names": [
+   "_LEGACY_ROOT_KEYS",
+   "_LOSS_WEIGHT_KEYS",
+   "check_representation_block",
+   "training_values",
+   "check_root_keys",
+   "validate_config"
+  ]
+ },
+ {
+  "from": "text2motion.app.config",
+  "to": "text2motion.app.config.loading",
+  "names": [
+   "_T",
+   "_STRICT_KEYS",
+   "from_mapping",
+   "load_service_config",
+   "service_policy",
+   "load_dataclass",
+   "_ENVIRONMENT_OVERRIDES",
+   "with_environment",
+   "load_config"
+  ]
+ }
+]

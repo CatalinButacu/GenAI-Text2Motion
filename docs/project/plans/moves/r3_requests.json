@@ -1,0 +1,50 @@
+[
+ {
+  "from": "text2motion.app.cli_requests",
+  "to": "text2motion.app.requests.base",
+  "names": [
+   "DEFAULT_SERVICE_CONFIG",
+   "DEFAULT_CONFIG",
+   "CONFIG_HELP",
+   "CommandRequest",
+   "DefaultConfigRequest",
+   "ServiceAddressRequest",
+   "HealthRequest"
+  ]
+ },
+ {
+  "from": "text2motion.app.cli_requests",
+  "to": "text2motion.app.requests.serve",
+  "names": [
+   "ModelServiceRequest",
+   "ServeRequest",
+   "StudioRequest"
+  ]
+ },
+ {
+  "from": "text2motion.app.cli_requests",
+  "to": "text2motion.app.requests.data",
+  "names": [
+   "PrepareRequest",
+   "TokenizeRequest",
+   "TrainTokenizerRequest"
+  ]
+ },
+ {
+  "from": "text2motion.app.cli_requests",
+  "to": "text2motion.app.requests.generator",
+  "names": [
+   "SanityOverfitRequest",
+   "TrainGeneratorRequest",
+   "PretrainRequest"
+  ]
+ },
+ {
+  "from": "text2motion.app.cli_requests",
+  "to": "text2motion.app.requests.evaluate",
+  "names": [
+   "BenchmarkRequest",
+   "EvaluateRequest"
+  ]
+ }
+]
