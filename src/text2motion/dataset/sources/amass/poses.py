@@ -102,14 +102,14 @@ def write_clocked_poses(
     return counts
 
 
-def extract_poses(
-    amass_root: Path, smplx_models: Path, pose_root: Path, fps: int, adopt: bool = False
-) -> dict[str, int]:
-    extractor = AmassSource(smplx_models, fps=fps)
-    recipe = {"format": POSE_FORMAT, "version": POSE_VERSION, **extractor.recipe()}
-    npz_files = sorted(
-        Path(r) / f for r, _, fs in os.walk(amass_root) for f in fs if f.endswith(".npz")
-    )
+def open_pose_manifest(
+    extractor: AmassSource,
+    amass_root: Path,
+    pose_root: Path,
+    npz_files: list[Path],
+    recipe: dict[str, object],
+    adopt: bool,
+) -> dict[str, object]:
     if adopt:
         adopt_pose_folder(extractor, amass_root, pose_root, npz_files, recipe)
     manifest_path = pose_root / POSE_MANIFEST
@@ -119,7 +119,15 @@ def extract_poses(
         previous = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest = {key: value for key, value in previous.items() if key == "adopted_sample"}
     write_manifest(manifest_path, recipe, {**manifest, "complete": False})
+    return manifest
 
+
+def write_missing_poses(
+    extractor: AmassSource,
+    amass_root: Path,
+    pose_root: Path,
+    npz_files: list[Path],
+) -> dict[str, int]:
     counts = {"written": 0, "reused": 0, "no_motion": 0}
     for src in tqdm(npz_files, desc="AMASS->pose"):
         save_path = pose_path_for(src, amass_root, pose_root)
@@ -133,6 +141,18 @@ def extract_poses(
         save_path.parent.mkdir(parents=True, exist_ok=True)
         atomic_numpy_save(joints, save_path)
         counts["written"] += 1
+    return counts
 
-    write_manifest(manifest_path, recipe, {**manifest, **counts, "complete": True})
+
+def extract_poses(
+    amass_root: Path, smplx_models: Path, pose_root: Path, fps: int, adopt: bool = False
+) -> dict[str, int]:
+    extractor = AmassSource(smplx_models, fps=fps)
+    recipe = {"format": POSE_FORMAT, "version": POSE_VERSION, **extractor.recipe()}
+    npz_files = sorted(
+        Path(r) / f for r, _, fs in os.walk(amass_root) for f in fs if f.endswith(".npz")
+    )
+    manifest = open_pose_manifest(extractor, amass_root, pose_root, npz_files, recipe, adopt)
+    counts = write_missing_poses(extractor, amass_root, pose_root, npz_files)
+    write_manifest(pose_root / POSE_MANIFEST, recipe, {**manifest, **counts, "complete": True})
     return counts
