@@ -41,7 +41,7 @@ Finish criterion: {finish_criterion}
 Rules:
 - Follow AGENTS.md and CLAUDE.md. Work on this task only.
 - Write short sentences. Report your work as numbered steps: step, reason, result.
-- Before you search code, run `graphify query "<topic>" --budget 1500`. The runner refreshed the graph just before this session.
+- Read the code graph section at the end first. For more, run `graphify query "<topic>" --budget 1500` before you search code.
 - Do not start GPU jobs, training, downloads or any public action.
 - Tests that already fail before your change are not yours: do not edit, skip or revert anything to make them pass, and do not touch tests/golden or the module ledger. Name them in evidence.
 - In epic_tasks.csv, edit only the status, evidence and updated fields of row {id}. Do not edit epics.csv.
@@ -55,7 +55,7 @@ Finish criterion: {finish_criterion}
 Reason in its evidence: {evidence}
 
 - Write short sentences. Report your work as numbered steps: step, reason, result.
-- Before you search code, run `graphify query "<topic>" --budget 1500`. The runner refreshed the graph just before this session.
+- Read the code graph section at the end first. For more, run `graphify query "<topic>" --budget 1500` before you search code.
 Decide which case applies, do only that, then stop. Do not do the task itself.
 A) The blocker needs the owner: a decision, a login, the supervisor, a GPU job, money, a public action,
    or a change to a thesis claim (AGENTS.md step 7 stop points). Leave status blocked.
@@ -64,6 +64,11 @@ B) Another approach can remove the blocker. Add new task rows to epic {epic}: ne
    a measurable finish_criterion, depends_on as a ';' list. In row {id} you may change task, finish_criterion,
    depends_on, evidence and updated, and set status to open. Prefer the simplest approach that reuses existing code.
 Do not change any other row. Do not edit epics.csv. Do not commit."""
+GRAPH_SECTION = """
+
+Code graph (`graphify query` on the task text, refreshed before this session):
+{graph}"""
+GRAPH_ANSWER_CODES = frozenset({0, 4})
 PLAN_PROMPT = """Read the owner's direction in {direction}.
 Read AGENTS.md, the newest 3 entries of docs/project/STATUS.md, docs/project/epics.csv and docs/project/epic_tasks.csv.
 Run `graphify query "<topic>" --budget 1500` for the code areas the direction touches.
@@ -419,7 +424,6 @@ def build_command(
 def run_session(
     command: list[str], label: str, timeout_s: float, session_env: Mapping[str, str]
 ) -> None:
-    refresh_graph()
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = LOG_DIR / f"{label}_{stamp}.json"
@@ -516,6 +520,27 @@ def refresh_graph() -> None:
     subprocess.run([graphify, "update", "."], cwd=REPO, capture_output=True, check=True)
 
 
+def graph_context(question: str) -> str:
+    graphify = shutil.which("graphify")
+
+    if graphify is None:
+        raise RunnerError("'graphify' is not on PATH; the sessions need a fresh code graph")
+
+    result = subprocess.run(
+        [graphify, "query", question, "--budget", "1500"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    if result.returncode not in GRAPH_ANSWER_CODES:
+        raise RunnerError(f"graphify query failed ({result.returncode}): {result.stderr.strip()}")
+
+    return GRAPH_SECTION.format(graph=result.stdout.strip())
+
+
 def find_claude(name: str) -> str:
     claude = shutil.which(name)
 
@@ -539,6 +564,7 @@ def plan_main(args: argparse.Namespace, tables: Tables) -> int:
         return 0
 
     claude = find_claude(args.claude)
+    refresh_graph()
     command = build_command(claude, prompt, args.permission_mode, args.budget_usd, args.model)
     new_tasks = guard_plan_session(
         tables,
@@ -569,20 +595,20 @@ def epic_main(args: argparse.Namespace, tables: Tables) -> int:
     timeout_s = args.timeout_min * 60
 
     def work(task: Task) -> None:
+        refresh_graph()
+        prompt = build_task_prompt(task) + graph_context(task.task)
         run_session(
-            build_command(
-                claude, build_task_prompt(task), args.permission_mode, args.budget_usd, args.model
-            ),
+            build_command(claude, prompt, args.permission_mode, args.budget_usd, args.model),
             task.id,
             timeout_s,
             TASK_ENV,
         )
 
     def replan(task: Task) -> None:
+        refresh_graph()
+        prompt = build_replan_prompt(task) + graph_context(task.task)
         run_csv_only_session(
-            build_command(
-                claude, build_replan_prompt(task), args.permission_mode, args.budget_usd, args.model
-            ),
+            build_command(claude, prompt, args.permission_mode, args.budget_usd, args.model),
             f"replan_{task.id}",
             timeout_s,
         )

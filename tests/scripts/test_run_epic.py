@@ -1,5 +1,6 @@
 import csv
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -399,3 +400,20 @@ def test_a_missing_graphify_fails_loud(monkeypatch):
 
     with pytest.raises(runner.RunnerError, match="graphify"):
         runner.refresh_graph()
+
+
+def test_the_graph_section_carries_the_query_answer_and_fails_on_an_error(monkeypatch):
+    runner = runner_module(monkeypatch)
+    monkeypatch.setattr(runner.shutil, "which", lambda name: "graphify")
+
+    def answer(returncode):
+        return lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, returncode, "NODE x", "bad"
+        )
+
+    monkeypatch.setattr(runner.subprocess, "run", answer(4))
+    assert "NODE x" in runner.graph_context("split the evaluator")
+
+    monkeypatch.setattr(runner.subprocess, "run", answer(2))
+    with pytest.raises(runner.RunnerError, match="graphify query failed"):
+        runner.graph_context("split the evaluator")
