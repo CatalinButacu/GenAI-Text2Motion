@@ -21,7 +21,7 @@ from text2motion.studio.generation import (
     log_result,
     log_toggle,
 )
-from text2motion.studio.panels import GuiPanels
+from text2motion.studio.gui.panels import GuiPanels
 from text2motion.studio.scene import StreamSceneUpdater
 from text2motion.studio.session import StudioSession
 from text2motion.studio.studio_config import StudioConfig

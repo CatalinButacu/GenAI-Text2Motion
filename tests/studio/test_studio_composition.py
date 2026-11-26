@@ -1,11 +1,14 @@
+from types import SimpleNamespace
 from typing import cast
+from unittest.mock import MagicMock
 
 import pytest
 
 from text2motion.studio.avatar import SmplxAvatarController
 from text2motion.studio.contracts import ViewerHost
 from text2motion.studio.generation import StudioGenerationController
-from text2motion.studio.panels import GuiPanels
+from text2motion.studio.gui import sampling
+from text2motion.studio.gui.panels import GuiPanels
 from text2motion.studio.scene import StreamSceneUpdater, StudioSceneNodes
 from text2motion.studio.session import (
     LiveGenerationDebouncer,
@@ -93,6 +96,39 @@ def test_panels_install_registers_the_three_docked_panels(wired):
     host, _, _, _, _, panels = wired
     panels.install()
     assert sorted(host.gui_controls) == ["environment", "params", "prompt"]
+
+
+def test_each_panel_is_composed_on_the_stub_host_with_one_shared_layout(wired):
+    host, state, _, avatar, generation, panels = wired
+    params = panels.params
+    hosted = (panels.scene, panels.environment, params, params.sampling, panels.playback)
+    drawn = (*hosted, params.avatar_section, panels.prompt)
+    assert all(panel.host is host for panel in hosted)
+    assert all(panel.layout is panels.scene.layout for panel in drawn)
+    assert panels.scene.layout.state is state
+    assert params.avatar_section.avatar is avatar
+    assert params.generation is generation
+    assert panels.prompt.generation is generation
+
+
+def test_install_binds_each_docked_key_to_its_panel(wired):
+    host, _, _, _, _, panels = wired
+    panels.install()
+    assert host.gui_controls == {
+        "environment": panels.environment.gui_environment,
+        "params": panels.params.gui_params,
+        "prompt": panels.prompt.gui_prompt,
+    }
+
+
+def test_run_forever_toggle_draws_against_a_stub_host(wired, monkeypatch):
+    imgui = MagicMock()
+    imgui.checkbox.return_value = (True, False)
+    monkeypatch.setattr(sampling, "imgui", imgui)
+    section = wired[5].params.sampling
+    section.state = SimpleNamespace(steps=0, default_steps=50)
+    section.forever_toggle()
+    assert section.state.steps == 50
 
 
 def test_display_consume_runs_against_a_stub_host(wired):
