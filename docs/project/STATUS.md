@@ -2,6 +2,13 @@
 
 Master record for the final paper: docs/paper/FINAL_PAPER.md. Use it for every result, contribution and open decision. This file is a diary only.
 
+## Update (2026-11-26, A29-T3 size limits)
+
+- Owner chose the stricter ratchet limits 250/30/10 (file lines, function lines, methods per class).
+- A29-T2 table (docs/notes/size_audit_limits.csv): 27 files, 70 functions and 12 classes are over these limits today.
+- Targets for A29: at most 9 files, 18 functions and 4 classes left in the allow list.
+- Five sweep tasks A29-T26 to A29-T30 (app, dataset, evaluation, generation, studio) remove the offenders that the split tasks do not name.
+
 ## Update (2026-11-26, A28-T14 final gate of epic A28; blocked on pyright)
 
 - make check: exit 0. ruff passes. pytest: 851 passed, 3 skipped, 15 deselected, 0 failed, 221 s.
