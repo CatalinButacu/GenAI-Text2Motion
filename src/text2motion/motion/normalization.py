@@ -102,9 +102,7 @@ def require_clip_files(vec_dir: Path, unique: list[str]) -> None:
         )
 
 
-def normalization_stats(
-    clips: Iterable[np.ndarray], joint_count: int
-) -> tuple[np.ndarray, np.ndarray]:
+def accumulate_clip_moments(clips: Iterable[np.ndarray]) -> tuple[int, np.ndarray, np.ndarray]:
     count = 0
     mean = np.zeros(0)
     squares = np.zeros(0)
@@ -121,64 +119,104 @@ def normalization_stats(
         mean = mean + delta * frames / total
         squares = squares + clip_squares + delta**2 * count * frames / total
         count = total
-    if count == 0:
-        raise ValueError("normalization_stats received no clips")
+    return count, mean, squares
 
-    mean = mean.astype(np.float32)
-    std = np.sqrt(squares / count).astype(np.float32)
 
-    expected_dim = 8 + (joint_count - 1) * 9 + joint_count * 3
+def expected_feature_dim(joint_count: int) -> int:
+    return 8 + (joint_count - 1) * 9 + joint_count * 3
+
+
+def check_feature_dim(std: np.ndarray, joint_count: int) -> None:
+    expected_dim = expected_feature_dim(joint_count)
     if std.shape[-1] != expected_dim:
         raise ValueError(
             f"feature dim {std.shape[-1]} != expected {expected_dim} for {joint_count=}"
         )
 
+
+def feature_groups(joint_count: int) -> tuple[tuple[int, int], ...]:
     ric_end = 4 + (joint_count - 1) * 3
     rot_end = 4 + (joint_count - 1) * 9
     vel_end = rot_end + joint_count * 3
-    groups = (
+    return (
         (0, 1),
         (1, 3),
         (3, 4),
         (4, ric_end),
         (ric_end, rot_end),
         (rot_end, vel_end),
-        (vel_end, expected_dim),
+        (vel_end, expected_feature_dim(joint_count)),
     )
+
+
+def average_within_groups(std: np.ndarray, groups: tuple[tuple[int, int], ...]) -> None:
     for start, stop in groups:
         std[start:stop] = std[start:stop].mean()
 
+
+def normalization_stats(
+    clips: Iterable[np.ndarray], joint_count: int
+) -> tuple[np.ndarray, np.ndarray]:
+    count, mean, squares = accumulate_clip_moments(clips)
+    if count == 0:
+        raise ValueError("normalization_stats received no clips")
+
+    mean = mean.astype(np.float32)
+    std = np.sqrt(squares / count).astype(np.float32)
+
+    check_feature_dim(std, joint_count)
+    average_within_groups(std, feature_groups(joint_count))
     return mean, std
 
 
-def fit_train_stats(
-    vec_dir: Path, train_names: list[str], out_dir: Path, joint_count: int
-) -> tuple[np.ndarray, np.ndarray]:
-    def streamed_clips(vec_dir: Path, unique: list[str]) -> Iterator[np.ndarray]:
-        def checked_clip(vec_dir: Path, name: str) -> np.ndarray:
-            clip = np.load(vec_dir / f"{name}.npy")
-            if clip.ndim != 2 or clip.shape[0] == 0 or not np.isfinite(clip).all():
-                raise ValueError(f"train clip {name} is empty, not 2-D, or holds NaN or Inf")
-            return clip
+def streamed_clips(vec_dir: Path, unique: list[str]) -> Iterator[np.ndarray]:
+    return (checked_clip(vec_dir, name) for name in unique)
 
-        return (checked_clip(vec_dir, name) for name in unique)
 
-    unique = sorted(set(train_names))
-    require_clip_files(vec_dir, unique)
-    mean, std = normalization_stats(streamed_clips(vec_dir, unique), joint_count)
+def checked_clip(vec_dir: Path, name: str) -> np.ndarray:
+    clip = np.load(vec_dir / f"{name}.npy")
+    if clip.ndim != 2 or clip.shape[0] == 0 or not np.isfinite(clip).all():
+        raise ValueError(f"train clip {name} is empty, not 2-D, or holds NaN or Inf")
+    return clip
+
+
+def count_frames(vec_dir: Path, unique: list[str]) -> int:
     frame_counts = [np.load(vec_dir / f"{name}.npy", mmap_mode="r").shape[0] for name in unique]
+    return int(sum(frame_counts))
 
-    mean_path = out_dir / MEAN_FILE
-    provenance = {
+
+def fit_provenance(
+    vec_dir: Path,
+    train_names: list[str],
+    unique: list[str],
+    joint_count: int,
+    frames: int,
+    overwrote_existing: bool,
+) -> dict[str, object]:
+    return {
         "fitted_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "source_dir": str(vec_dir),
         "split": Split.TRAIN.value,
         "requested_clips": len(set(train_names)),
         "used_clips": len(unique),
-        "frames": int(sum(frame_counts)),
+        "frames": frames,
         "joints_num": joint_count,
-        "overwrote_existing": mean_path.is_file(),
+        "overwrote_existing": overwrote_existing,
     }
+
+
+def fit_train_stats(
+    vec_dir: Path, train_names: list[str], out_dir: Path, joint_count: int
+) -> tuple[np.ndarray, np.ndarray]:
+    unique = sorted(set(train_names))
+    require_clip_files(vec_dir, unique)
+    mean, std = normalization_stats(streamed_clips(vec_dir, unique), joint_count)
+    frames = count_frames(vec_dir, unique)
+
+    mean_path = out_dir / MEAN_FILE
+    provenance = fit_provenance(
+        vec_dir, train_names, unique, joint_count, frames, mean_path.is_file()
+    )
 
     check_scaler_values(mean, std, vec_dir)
     atomic_numpy_save(mean, mean_path)

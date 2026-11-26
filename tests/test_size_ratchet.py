@@ -18,8 +18,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "motion/normalization.py::fit_train_stats",
-            "motion/normalization.py::normalization_stats",
             "tokenization/corpus.py::build_token_pack",
             "tokenization/nn_quantizers.py::FiniteScalarQuantizer.__init__",
             "tokenization/nn_tokenizer.py::FiniteScalarQuantizationTokenizer.__init__",
