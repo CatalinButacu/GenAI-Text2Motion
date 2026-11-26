@@ -144,7 +144,7 @@ class StudioGenerationController:
         self.state.generating = False
         if params["fit_body"] and self.state.smplx_fit.after_gen and self.state.smplx_fit.orient:
             self.state.smplx_fit.after_gen = False
-            self.avatar.schedule_remesh()
+            self.avatar.mesh.schedule_remesh()
 
     def fit_motion_chunks(self, fit_queue: queue.Queue, take: int) -> None:
         buffers = self.state.stream_buffers

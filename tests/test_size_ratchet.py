@@ -14,7 +14,6 @@ ALLOWED = MappingProxyType(
     {
         "file": (
             "motion/representation.py",
-            "studio/avatar.py",
             "studio/fitting.py",
             "studio/live/controller.py",
             "studio/scene.py",
@@ -44,7 +43,6 @@ ALLOWED = MappingProxyType(
         ),
         "class": (
             "motion/kinematics.py::Skeleton",
-            "studio/avatar.py::SmplxAvatarController",
             "studio/live/controller.py::StudioGenerationController",
             "studio/scene.py::StreamSceneUpdater",
             "studio/scene.py::StudioSceneNodes",
