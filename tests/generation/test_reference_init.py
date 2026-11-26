@@ -6,7 +6,8 @@ import torch.nn.functional as F
 
 from text2motion.generation.contracts import Backbone, GeneratorConfig
 from text2motion.generation.model.generator import MotionTokenGenerator
-from text2motion.generation.model.mamba import DT_FLOOR, DT_MAX, MambaBlock, MambaMixer
+from text2motion.generation.model.layers import DT_FLOOR, DT_MAX
+from text2motion.generation.model.mamba import MambaBlock, MambaMixer
 from text2motion.generation.model.transformer import TransformerBlock
 
 

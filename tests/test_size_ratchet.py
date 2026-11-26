@@ -29,7 +29,6 @@ ALLOWED = MappingProxyType(
             "generation/training/epochs.py::finish_epoch",
             "generation/training/overfit.py::overfit_single_batch",
             "generation/training/epochs.py::train_generator",
-            "generation/model/mamba.py::MambaMixer.forward",
             "generation/training/pretrain.py::pretrain_generator",
             "motion/kinematics.py::Skeleton.inverse_kinematics_np",
             "motion/normalization.py::fit_train_stats",

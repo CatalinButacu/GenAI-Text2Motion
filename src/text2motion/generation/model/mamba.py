@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-import math
 import sys
 import types
 from collections.abc import Callable
@@ -20,39 +19,10 @@ from text2motion.generation.contracts import (
 from text2motion.generation.model.layers import (
     RMSNorm,
     SequenceBackbone,
+    init_reference_dt,
     init_residual_output,
+    parallel_scan,
 )
-
-DT_MIN = 1e-3
-
-
-DT_MAX = 1e-1
-
-
-DT_FLOOR = 1e-4
-
-
-def init_reference_dt(dt_proj: nn.Linear, dt_rank: int) -> None:
-    bound = dt_rank**-0.5
-    span = math.log(DT_MAX) - math.log(DT_MIN)
-    with torch.no_grad():
-        nn.init.uniform_(dt_proj.weight, -bound, bound)
-        dt = torch.exp(torch.rand(dt_proj.out_features) * span + math.log(DT_MIN))
-        dt = dt.clamp(min=DT_FLOOR)
-        dt_proj.bias.copy_(dt + torch.log(-torch.expm1(-dt)))
-
-
-def parallel_scan(a: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
-    length = a.size(1)
-    shift = 1
-    while shift < length:
-        pad = (0, 0, 0, 0, shift, 0)
-        a_prev = F.pad(a[:, :-shift], pad, value=1.0)
-        x_prev = F.pad(x[:, :-shift], pad, value=0.0)
-        x = x + a * x_prev
-        a = a * a_prev
-        shift *= 2
-    return x
 
 
 ############################################################
@@ -123,16 +93,51 @@ class MambaMixer(nn.Module):
         out = self.out_proj(y * F.silu(z))
         return out, new_ssm, new_conv
 
-    def forward(self, seq: torch.Tensor) -> torch.Tensor:
+    def convolve(self, x: torch.Tensor) -> torch.Tensor:
+        x_pad = F.pad(x.transpose(1, 2), (self.d_conv - 1, 0))
+        return F.silu(self.conv1d(x_pad).transpose(1, 2))
+
+    def kernel_scan(
+        self,
+        x_c: torch.Tensor,
+        dt_raw: torch.Tensor,
+        a: torch.Tensor,
+        b: torch.Tensor,
+        c: torch.Tensor,
+    ) -> torch.Tensor:
         def selective_scan_function() -> Callable:
             if INTERFACE_MODULE not in sys.modules and importlib.util.find_spec("triton") is None:
                 register_package_without_triton()
             return importlib.import_module(INTERFACE_MODULE).selective_scan_fn
 
-        x, z = self.in_proj(seq).chunk(2, dim=-1)
+        return selective_scan_function()(
+            x_c.transpose(1, 2).contiguous(),
+            self.dt_proj(dt_raw).transpose(1, 2).contiguous(),
+            a,
+            b.transpose(1, 2).contiguous(),
+            c.transpose(1, 2).contiguous(),
+            self.d_skip,
+            delta_softplus=True,
+        ).transpose(1, 2)
 
-        x_pad = F.pad(x.transpose(1, 2), (self.d_conv - 1, 0))
-        x_c = F.silu(self.conv1d(x_pad).transpose(1, 2))
+    def reference_scan(
+        self,
+        x_c: torch.Tensor,
+        dt_raw: torch.Tensor,
+        a: torch.Tensor,
+        b: torch.Tensor,
+        c: torch.Tensor,
+    ) -> torch.Tensor:
+        dt = F.softplus(self.dt_proj(dt_raw))
+        da = torch.exp(dt.unsqueeze(-1) * a)
+        dbx = (dt * x_c).unsqueeze(-1) * b.unsqueeze(2)
+
+        ssm = parallel_scan(da, dbx)
+        return (ssm * c.unsqueeze(2)).sum(-1) + self.d_skip * x_c
+
+    def forward(self, seq: torch.Tensor) -> torch.Tensor:
+        x, z = self.in_proj(seq).chunk(2, dim=-1)
+        x_c = self.convolve(x)
 
         a = -torch.exp(self.a_log)
         dt_raw, b, c = torch.split(
@@ -140,23 +145,9 @@ class MambaMixer(nn.Module):
         )
 
         if self.use_kernel:
-            y = selective_scan_function()(
-                x_c.transpose(1, 2).contiguous(),
-                self.dt_proj(dt_raw).transpose(1, 2).contiguous(),
-                a,
-                b.transpose(1, 2).contiguous(),
-                c.transpose(1, 2).contiguous(),
-                self.d_skip,
-                delta_softplus=True,
-            ).transpose(1, 2)
-            return self.out_proj(y * F.silu(z))
-
-        dt = F.softplus(self.dt_proj(dt_raw))
-        da = torch.exp(dt.unsqueeze(-1) * a)
-        dbx = (dt * x_c).unsqueeze(-1) * b.unsqueeze(2)
-
-        ssm = parallel_scan(da, dbx)
-        y = (ssm * c.unsqueeze(2)).sum(-1) + self.d_skip * x_c
+            y = self.kernel_scan(x_c, dt_raw, a, b, c)
+        else:
+            y = self.reference_scan(x_c, dt_raw, a, b, c)
         return self.out_proj(y * F.silu(z))
 
 
