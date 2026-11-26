@@ -2,50 +2,10 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from types import MappingProxyType
+
+from tests.test_package_layers import ALLOWED
 
 PACKAGE_ROOT = Path("src/text2motion")
-ALLOWED_DEPENDENCIES = MappingProxyType(
-    {
-        "common": frozenset({"common"}),
-        "motion": frozenset({"motion"}),
-        "dataset": frozenset({"common", "motion", "dataset"}),
-        "tokenization": frozenset({"common", "motion", "dataset", "tokenization"}),
-        "generation": frozenset({"common", "motion", "dataset", "tokenization", "generation"}),
-        "evaluation": frozenset(
-            {"common", "motion", "dataset", "tokenization", "generation", "evaluation"}
-        ),
-        "studio": frozenset({"common", "motion", "studio"}),
-        "app": frozenset(
-            {
-                "common",
-                "motion",
-                "dataset",
-                "tokenization",
-                "generation",
-                "evaluation",
-                "studio",
-                "app",
-            }
-        ),
-    }
-)
-
-
-def imported_stages(path: Path) -> set[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    stages: set[str] = set()
-    for node in ast.walk(tree):
-        modules: list[str] = []
-        if isinstance(node, ast.ImportFrom) and node.module:
-            modules.append(node.module)
-        elif isinstance(node, ast.Import):
-            modules.extend(alias.name for alias in node.names)
-        for module in modules:
-            parts = module.split(".")
-            if len(parts) >= 2 and parts[0] == "text2motion":
-                stages.add(parts[1])
-    return stages
 
 
 def imported_modules(path: Path) -> set[str]:
@@ -57,16 +17,6 @@ def imported_modules(path: Path) -> set[str]:
         elif isinstance(node, ast.Import):
             modules.update(alias.name for alias in node.names)
     return modules
-
-
-def test_pipeline_dependencies_point_inward() -> None:
-    violations: list[str] = []
-    for stage, allowed in ALLOWED_DEPENDENCIES.items():
-        for path in (PACKAGE_ROOT / stage).rglob("*.py"):
-            forbidden = imported_stages(path) - allowed
-            if forbidden:
-                violations.append(f"{path}: imports {sorted(forbidden)}; allowed {sorted(allowed)}")
-    assert not violations, "upward or cross-stage imports:\n" + "\n".join(violations)
 
 
 def test_application_bootstrap_is_used_only_at_entrypoints() -> None:
@@ -97,7 +47,7 @@ def stage_packages_on_disk() -> set[str]:
 
 
 def test_stage_map_matches_the_packages_on_disk() -> None:
-    declared = set(ALLOWED_DEPENDENCIES)
+    declared = set(ALLOWED)
     actual = stage_packages_on_disk()
     drift: list[str] = []
     for stage in sorted(declared - actual):
@@ -114,7 +64,7 @@ def stage_module_names(stage: str) -> set[str]:
 
 def test_every_stage_with_contracts_still_has_its_declaration_module() -> None:
     missing: list[str] = []
-    for stage in ALLOWED_DEPENDENCIES:
+    for stage in ALLOWED:
         if not (PACKAGE_ROOT / stage / "contracts.py").exists():
             continue
         if "contracts" not in stage_module_names(stage):
@@ -124,7 +74,7 @@ def test_every_stage_with_contracts_still_has_its_declaration_module() -> None:
 
 def test_contract_modules_import_only_declarations() -> None:
     violations: list[str] = []
-    for stage in ALLOWED_DEPENDENCIES:
+    for stage in ALLOWED:
         path = PACKAGE_ROOT / stage / "contracts.py"
         if not path.exists():
             continue
@@ -134,7 +84,7 @@ def test_contract_modules_import_only_declarations() -> None:
                 continue
             imported_stage = parts[1]
             role = parts[2]
-            if imported_stage not in ALLOWED_DEPENDENCIES:
+            if imported_stage not in ALLOWED:
                 continue
             if role not in stage_module_names(imported_stage):
                 violations.append(f"{path}: imports missing module {module}")

@@ -72,9 +72,7 @@ def test_each_package_imports_only_the_packages_below_it():
 
 def test_each_package_has_at_most_ten_files():
     crowded = []
-    for folder in SOURCE.iterdir():
-        if not folder.is_dir():
-            continue
+    for folder in sorted(path for path in SOURCE.rglob("*") if path.is_dir()):
         count = len(list(folder.glob("*.py")))
         if count > MAX_FILES:
             crowded.append(f"{relative(folder)} has {count} .py files, max is {MAX_FILES}")

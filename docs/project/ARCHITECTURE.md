@@ -1,7 +1,7 @@
 # Architecture -- top-down, measured
 
-Enforced by `tests/test_package_layers.py` (source of truth) and
-`tests/app/test_import_boundaries.py` (a wider envelope for `evaluation`).
+Enforced by `tests/test_package_layers.py` (the only layer map; at most 10 files per package and
+sub-package). `tests/app/test_import_boundaries.py` reuses that map for entrypoint and contract rules.
 The source is split into eight packages under `src/text2motion/`.
 
 ## The layering
