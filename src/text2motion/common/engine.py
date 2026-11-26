@@ -58,24 +58,40 @@ def restore_clean_ce(
     if saved is not None:
         progress = CleanCrossEntropyProgress(best=float(saved["best"]), stale=saved["stale"])
     else:
-        recorded_dir = state.get("run_dir")
-        if recorded_dir is None:
-            raise ValueError(
-                "resume lacks validation-CE patience and a recorded run directory; "
-                "use --fresh_selection only if intentionally resetting selection"
-            )
-        metrics_path = Path(recorded_dir) / "metrics.jsonl"
-        history = read_clean_ce_history(metrics_path, completed_epochs)
-        expected = set(range(1, completed_epochs + 1))
-        if set(history) != expected:
-            raise ValueError(
-                f"cannot restore validation-CE patience: {metrics_path} lacks completed epochs "
-                f"{sorted(expected - set(history))}; use --fresh_selection only for an intentional reset"
-            )
-        progress = CleanCrossEntropyProgress(best=float("inf"), stale=0)
-        for epoch in range(1, completed_epochs + 1):
-            progress = progress.observe(history[epoch])
-        logger.info(f"restored validation-CE patience from completed epochs in {metrics_path}")
+        progress = replay_clean_ce_progress(recorded_metrics_path(state), completed_epochs)
+    check_restored_progress(progress, completed_epochs)
+    logger.info(f"validation-CE resume: best {progress.best:.6f}, stale {progress.stale} epochs")
+    return progress
+
+
+def recorded_metrics_path(state: dict) -> Path:
+    recorded_dir = state.get("run_dir")
+    if recorded_dir is None:
+        raise ValueError(
+            "resume lacks validation-CE patience and a recorded run directory; "
+            "use --fresh_selection only if intentionally resetting selection"
+        )
+    return Path(recorded_dir) / "metrics.jsonl"
+
+
+def replay_clean_ce_progress(
+    metrics_path: Path, completed_epochs: int
+) -> CleanCrossEntropyProgress:
+    history = read_clean_ce_history(metrics_path, completed_epochs)
+    expected = set(range(1, completed_epochs + 1))
+    if set(history) != expected:
+        raise ValueError(
+            f"cannot restore validation-CE patience: {metrics_path} lacks completed epochs "
+            f"{sorted(expected - set(history))}; use --fresh_selection only for an intentional reset"
+        )
+    progress = CleanCrossEntropyProgress(best=float("inf"), stale=0)
+    for epoch in range(1, completed_epochs + 1):
+        progress = progress.observe(history[epoch])
+    logger.info(f"restored validation-CE patience from completed epochs in {metrics_path}")
+    return progress
+
+
+def check_restored_progress(progress: CleanCrossEntropyProgress, completed_epochs: int) -> None:
     if (
         not math.isfinite(progress.best)
         or progress.best < 0
@@ -83,8 +99,6 @@ def restore_clean_ce(
         or not 0 <= progress.stale < completed_epochs
     ):
         raise ValueError("invalid saved validation-CE patience state")
-    logger.info(f"validation-CE resume: best {progress.best:.6f}, stale {progress.stale} epochs")
-    return progress
 
 
 def run_epochs(
