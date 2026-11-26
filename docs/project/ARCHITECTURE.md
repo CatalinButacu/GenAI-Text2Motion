@@ -34,12 +34,29 @@ Allowed dependencies (each package may also import itself):
 
 Each package holds at most 10 Python files. A subpackage takes the overflow.
 
-`app/` has exactly ten Python modules:
-`__init__.py`, `bootstrap.py`, `checkpoint.py`, `cli.py`, `cli_requests.py`,
-`config.py`, `run_log.py`, `service.py`, `training.py`, and `serving.py`.
-The `app/workflows/` subpackage holds the `run` command.
-`service.py` owns the wire protocol, client, server startup, and inference server.
-`training.py` owns preparation and training commands; `serving.py` owns serving and evaluation.
+## Layout after the A29 redesign (2026-11-26)
+
+Each file has one role. Limits: 250 lines per file, 30 lines per function, 10 methods per class.
+`tests/test_size_ratchet.py` enforces them. Its `ALLOWED` list holds only the frozen
+`motion` and `tokenization` files; they change only with an owner-approved ledger row.
+
+| sub-package | role |
+|---|---|
+| `app/cli.py` | the command table and argument parsing |
+| `app/config/` | `schema`, `loading`, `validation`: the only place configuration is resolved |
+| `app/requests/` | one typed request model per command group |
+| `app/stages/` | one handler module per CLI stage (`data`, `tokenizer`, `overfit`, `pretrain`, `generator`, `evaluate`, `serve`) |
+| `app/runtime/` | `ApplicationContext` and `ApplicationBootstrap` (`context`), `ModelLoader`, checkpoints, the overfit gate, run logs |
+| `app/service/` | wire protocol, client, process spawn, server state, handlers, stream |
+| `app/workflows/` | the `run` command |
+| `generation/model/` | the twins, layers, text encoder, sampling, decode step; `streaming/` holds the bounded decode loop |
+| `generation/training/` | `GeneratorTrainer`, its batch, optimizer and resume helpers, epochs, overfit, pretraining |
+| `evaluation/guo/`, `evaluation/transition/` | the frozen Guo matcher; transition statistics |
+| `studio/session/`, `studio/live/`, `studio/gui/`, `studio/scene_support/` | shared state, live generation, imgui panels, camera and scene clearing |
+
+Module names follow their role. The `nn_*` prefix remains only in frozen or untouched files
+(`evaluation/nn_matcher.py`, `tokenization/nn_quantizers.py`, `tokenization/nn_tokenizer.py`).
+Moves are made with `scripts/maintenance/move_symbols.py`; renames with `rename_everywhere.py`.
 
 ## Role responsibilities (one sentence each)
 
@@ -60,16 +77,16 @@ The `app/workflows/` subpackage holds the `run` command.
   `app/workflows/steps.py` builds each as a list of `Step` objects over the CLI handlers.
   One step list serves both twins. `run_steps` skips a finished step by recipe hash (ADR 0006).
 - `common/engine.py` `run_epochs` is the one epoch loop of `tokenizer_trainer`,
-  `generator_trainer` and `pretrain`. It holds the clean validation cross-entropy history.
+  `generation/training/trainer.py` and `generation/training/pretrain.py`. It holds the clean validation cross-entropy history.
   Parity values: `tests/generation/trainer_parity.json`.
-- `generation/decoder.py` `steer_stream` changes the prompt inside a stream: `REANCHOR` or
+- `generation/steering.py` `steer_stream` changes the prompt inside a stream: `REANCHOR` or
   `CROSSFADE`. The service command `steer` uses re-anchor and reports the joint jump in cm.
   Studio live mode sends `steer` on a prompt change. The choice is provisional: it was measured
   on a tiny random model only (`docs/notes/steering_joint_jump.csv`).
 
 ## The ">5 collaborators" rule
 
-Only three classes exceed a fan-out of 5 project classes:
+Measured before the A29 redesign. Only three classes exceeded a fan-out of 5 project classes:
 
 | class | fan-out | verdict |
 |---|---:|---|
