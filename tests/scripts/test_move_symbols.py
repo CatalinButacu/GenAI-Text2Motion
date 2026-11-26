@@ -33,7 +33,7 @@ def make_repo(root: Path) -> None:
     write(
         root / "tests" / "test_service.py",
         "from text2motion.app.service import Base, Server, encode as enc\n\n"
-        "TARGET = 'text2motion.app.service.encode'\n",
+        "TARGET = 'text2motion.app.service.encode'\nCOMMAND = 'text2motion.app.service:Server'\n",
     )
     write(root / "scripts" / "use.py", "from text2motion.app import service\n")
 
@@ -75,6 +75,7 @@ def test_a_split_moves_code_rewrites_imports_and_deletes_the_empty_file(monkeypa
     assert "from text2motion.app.service.server import Server" in test_text
     assert "from text2motion.base import Base" in test_text
     assert '"text2motion.app.service.codec.encode"' in test_text
+    assert '"text2motion.app.service.server:Server"' in test_text
     assert warnings == ["scripts/use.py:1 imports module text2motion.app.service"]
 
 
@@ -89,3 +90,23 @@ def test_an_unknown_name_fails_loud(monkeypatch, tmp_path):
         assert "missing" in str(error)
     else:
         raise AssertionError("expected MoveError")
+
+
+def test_a_target_that_imported_the_moved_names_does_not_import_itself(monkeypatch, tmp_path):
+    module = mover(monkeypatch)
+    package = tmp_path / "src" / "text2motion"
+    write(package / "__init__.py", "")
+    write(package / "a.py", "from text2motion.b import B\n\n\ndef make():\n    return B()\n")
+    write(
+        package / "b.py",
+        "from text2motion.a import make\n\n\nclass B:\n    def again(self):\n        return make()\n",
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "scripts").mkdir()
+
+    module.apply_moves(tmp_path, [module.Move("text2motion.a", "text2motion.b", ("make",))])
+
+    target = (package / "b.py").read_text(encoding="utf-8")
+    assert "from text2motion.b import" not in target
+    assert "def make" in target
+    assert not (package / "a.py").exists()

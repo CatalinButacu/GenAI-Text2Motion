@@ -86,8 +86,13 @@ def used_names(nodes: list[ast.stmt]) -> set[str]:
     return {item.id for node in nodes for item in ast.walk(node) if isinstance(item, ast.Name)}
 
 
-def import_lines(tree: ast.Module, lines: list[str]) -> list[str]:
-    imports = [node for node in tree.body if isinstance(node, ast.Import | ast.ImportFrom)]
+def import_lines(tree: ast.Module, lines: list[str], target: str) -> list[str]:
+    imports = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.Import)
+        or (isinstance(node, ast.ImportFrom) and node.module != target)
+    ]
     return [line for node in imports for line in lines[node.lineno - 1 : node.end_lineno]]
 
 
@@ -133,7 +138,7 @@ def move_code(root: Path, move: Move) -> None:
     moved_names = {name for node in moved for name in defined_names(node)}
     left_behind = set(definitions) - moved_names - set(move.copies)
     needed_from_source = sorted(used_names(moved) & left_behind)
-    imports = import_lines(tree, source.lines)
+    imports = import_lines(tree, source.lines, move.target)
     code = copied_code(root, move, definitions, source.lines) + cut_code(source, moved)
     still_used = sorted(used_names(ast.parse(source.text()).body) & moved_names)
     add_imports(source, [from_import(move.target, still_used)] if still_used else [])
@@ -181,7 +186,7 @@ def python_files(root: Path) -> list[Path]:
     return [path for folder in SEARCH_DIRS for path in (root / folder).rglob("*.py")]
 
 
-def rewrite_import(node: ast.ImportFrom, line: str, move: Move) -> list[str]:
+def rewrite_import(node: ast.ImportFrom, line: str, move: Move, in_target: bool) -> list[str]:
     indent = line[: len(line) - len(line.lstrip())]
     kept = [alias for alias in node.names if alias.name not in move.names]
     moved = [alias for alias in node.names if alias.name in move.names]
@@ -196,13 +201,13 @@ def rewrite_import(node: ast.ImportFrom, line: str, move: Move) -> list[str]:
     return [
         statement(module, aliases)
         for module, aliases in ((move.source, kept), (move.target, moved))
-        if aliases
+        if aliases and not (in_target and module == move.target)
     ]
 
 
 def rewrite_importers(root: Path, move: Move) -> list[Path]:
     touched = []
-    patch_target = re.compile(rf"([\"']){re.escape(move.source)}\.({'|'.join(move.names)})\b")
+    patch_target = re.compile(rf"([\"']){re.escape(move.source)}([.:])({'|'.join(move.names)})\b")
 
     for path in python_files(root):
         file = SourceFile.read(path)
@@ -217,9 +222,11 @@ def rewrite_importers(root: Path, move: Move) -> list[Path]:
 
         for node in sorted(nodes, key=lambda item: item.lineno, reverse=True):
             start, end = node.lineno - 1, node.end_lineno or node.lineno
-            file.lines[start:end] = rewrite_import(node, file.lines[start], move)
+            file.lines[start:end] = rewrite_import(
+                node, file.lines[start], move, path == module_path(root, move.target)
+            )
 
-        text = patch_target.sub(rf"\g<1>{move.target}.\g<2>", file.text())
+        text = patch_target.sub(rf"\g<1>{move.target}\g<2>\g<3>", file.text())
 
         if nodes or text != file.text():
             file.lines = text.split("\n")
