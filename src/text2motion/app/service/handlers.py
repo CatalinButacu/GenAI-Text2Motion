@@ -3,7 +3,6 @@ from __future__ import annotations
 import gc
 import json
 import logging
-import select
 import socket
 import time
 import traceback
@@ -18,17 +17,18 @@ from text2motion.app.service.state import (
     StreamSteering,
 )
 from text2motion.app.service.stats import format_stats, process_memory_gb, record_inference
-from text2motion.generation.contracts import SamplingConfig, StreamAnchors
-from text2motion.motion.representation import FPS, StreamingSkeletonRecovery
+from text2motion.app.service.stream import (
+    StreamRun,
+    inference_record,
+    pending_request,
+    send_failure,
+    send_no_model_error,
+    start_stream,
+    timed_tokens,
+)
+from text2motion.motion.representation import FPS
 
 logger = logging.getLogger(__name__)
-
-
-def pending_request(sock: socket.socket, io) -> dict | None:
-    readable, _, _ = select.select([sock], [], [], 0)
-    if not readable:
-        return None
-    return MotionStreamProtocol.recv_json(io)
 
 
 ############################################################
@@ -64,123 +64,70 @@ class MotionInferenceServer:
 
     def handle_generate(self, sock: socket.socket, io, request: dict) -> None:
         if self.pipeline is None:
-            MotionStreamProtocol.send_json(
-                io,
-                {
-                    "type": "error",
-                    "message": "no model loaded -- the last load failed and freed the previous "
-                    "one; pick a model and press Load model again",
-                },
-            )
+            send_no_model_error(io)
             return
-        frames = 0
-        cancelled = False
-        started = time.perf_counter()
-
-        recovery = StreamingSkeletonRecovery()
-        on_cuda = self.pipeline.device == "cuda"
-        if on_cuda:
+        pipeline = self.pipeline
+        run = StreamRun(pipeline, pipeline.device == "cuda", time.perf_counter())
+        if run.on_cuda:
             torch.cuda.reset_peak_memory_stats()
-        timing = {"generate": 0.0, "send": 0.0, "tokens": 0}
-
-        def synchronize() -> None:
-            if on_cuda:
-                torch.cuda.synchronize()
-
-        def timed_tokens(token_source):
-            while True:
-                token_started = time.perf_counter()
-                tokens = next(token_source, None)
-                synchronize()
-                timing["generate"] += time.perf_counter() - token_started
-                if tokens is None:
-                    return
-                timing["tokens"] += 1
-                yield tokens
-
-        encode_started = time.perf_counter()
         with torch.no_grad():
-            text_emb = self.pipeline.generator.text_encoder([request["prompt"]]).to(
-                self.pipeline.device
-            )
-            synchronize()
-            encode_seconds = time.perf_counter() - encode_started
-            steering = StreamSteering(
-                self.pipeline.anchor_every, self.pipeline.downsample, text_emb
-            )
-            token_source = self.pipeline.generator.token_generator.stream_token_indices(
-                text_emb,
-                int(request["steps"]),
-                sampling=SamplingConfig(
-                    temperature=float(request["temperature"]),
-                    top_p=float(request["top_p"]),
-                    cfg_scale=float(request["cfg_scale"]),
-                    stop_at_end=False,
-                ),
-                anchors=StreamAnchors(
-                    every=self.pipeline.anchor_every,
-                    context=self.pipeline.anchor_context,
-                    text_at=steering.text_at if self.pipeline.anchor_every else None,
-                ),
-            )
-            for chunk in self.pipeline.decoder.stream_tokens(timed_tokens(token_source)):
-                features = chunk.squeeze(0).cpu().numpy()
-                carried_yaw = recovery.yaw
-                joints = recovery(features)
-                frames += len(joints)
-                send_started = time.perf_counter()
-                MotionStreamProtocol.send_array(io, "chunk", joints)
-                MotionStreamProtocol.send_json(io, {"type": "placement", "yaw": carried_yaw})
-                MotionStreamProtocol.send_array(io, "features", features)
-                timing.setdefault("first_chunk", time.perf_counter() - started)
-                for report in steering.observe(joints):
-                    MotionStreamProtocol.send_json(io, report)
-                interrupting = self.apply_steer(
-                    io, pending_request(sock, io), steering, timing["tokens"]
-                )
-                timing["send"] += time.perf_counter() - send_started
-                cancelled = interrupting is not None
-                if interrupting is not None and interrupting.get("cmd") != "cancel":
-                    logger.info(
-                        f"[service] {interrupting.get('cmd')!r} arrived mid-stream -> stream cancelled, request deferred"
-                    )
-                    self.deferred_request = interrupting
-                if cancelled:
-                    break
-
+            steering, token_source = start_stream(pipeline, run, request)
+            self.stream_chunks(sock, io, run, steering, token_source)
         for report in steering.flush():
             MotionStreamProtocol.send_json(io, report)
-        elapsed = time.perf_counter() - started
+        self.finish_stream(io, run, request)
+
+    def stream_chunks(
+        self, sock: socket.socket, io, run: StreamRun, steering, token_source
+    ) -> None:
+        tokens = timed_tokens(token_source, run.timing, run.on_cuda)
+        for chunk in run.pipeline.decoder.stream_tokens(tokens):
+            features = chunk.squeeze(0).cpu().numpy()
+            carried_yaw = run.recovery.yaw
+            joints = run.recovery(features)
+            run.frames += len(joints)
+            send_started = time.perf_counter()
+            MotionStreamProtocol.send_array(io, "chunk", joints)
+            MotionStreamProtocol.send_json(io, {"type": "placement", "yaw": carried_yaw})
+            MotionStreamProtocol.send_array(io, "features", features)
+            run.timing.setdefault("first_chunk", time.perf_counter() - run.started)
+            for report in steering.observe(joints):
+                MotionStreamProtocol.send_json(io, report)
+            interrupting = self.apply_steer(
+                io, pending_request(sock, io), steering, run.timing["tokens"]
+            )
+            run.timing["send"] += time.perf_counter() - send_started
+            run.cancelled = interrupting is not None
+            if interrupting is not None and interrupting.get("cmd") != "cancel":
+                logger.info(
+                    f"[service] {interrupting.get('cmd')!r} arrived mid-stream -> stream cancelled, request deferred"
+                )
+                self.deferred_request = interrupting
+            if run.cancelled:
+                break
+
+    def finish_stream(self, io, run: StreamRun, request: dict) -> None:
+        elapsed = time.perf_counter() - run.started
         logger.info(
-            f"[service] {'cancelled' if cancelled else 'done'} {frames} frames in {elapsed:.2f}s "
+            f"[service] {'cancelled' if run.cancelled else 'done'} {run.frames} frames in {elapsed:.2f}s "
             f"({request['prompt']!r})"
         )
-        stats = self.inference_stats(elapsed, encode_seconds, timing, frames, on_cuda)
+        stats = self.inference_stats(
+            elapsed, run.encode_seconds, run.timing, run.frames, run.on_cuda
+        )
         logger.info(f"[perf] {format_stats(stats)}")
         if self.inference_log is not None:
             record_inference(
-                {
-                    "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "prompt": request["prompt"],
-                    "backbone": self.pipeline.backbone,
-                    "checkpoint": self.pipeline.checkpoint,
-                    "identity": self.pipeline.identity,
-                    "policy": self.policy,
-                    "device": self.pipeline.device,
-                    "cancelled": cancelled,
-                    "requested_steps": int(request["steps"]),
-                    "cfg_scale": float(request["cfg_scale"]),
-                    **stats,
-                },
+                inference_record(run.pipeline, self.policy, request, run, stats),
                 self.inference_log,
             )
-        if on_cuda:
+        if run.on_cuda:
             torch.cuda.empty_cache()
         MotionStreamProtocol.send_json(
             io,
             {
-                "type": "cancelled" if cancelled else "done",
-                "frames": frames,
+                "type": "cancelled" if run.cancelled else "done",
+                "frames": run.frames,
                 "stats": stats,
             },
         )
@@ -240,40 +187,38 @@ class MotionInferenceServer:
         while True:
             request = self.deferred_request or MotionStreamProtocol.recv_json(io)
             self.deferred_request = None
-            command = request.get("cmd")
-
-            if command == "generate":
-                try:
-                    self.handle_generate(conn, io, request)
-                except (ConnectionError, BrokenPipeError):
-                    raise
-                except Exception as exc:
-                    traceback.print_exc()
-                    MotionStreamProtocol.send_json(
-                        io, {"type": "error", "message": f"{type(exc).__name__}: {exc}"}
-                    )
-            elif command == "load":
-                try:
-                    self.handle_load(io, request)
-                except Exception as exc:
-                    traceback.print_exc()
-                    MotionStreamProtocol.send_json(
-                        io, {"type": "error", "message": f"{type(exc).__name__}: {exc}"}
-                    )
-            elif command == "shutdown":
-                MotionStreamProtocol.send_json(io, {"type": "bye"})
-                logger.info("[service] shutdown requested")
+            if not self.dispatch_request(conn, io, request):
                 return False
-            elif command == "cancel":
-                continue
-            elif command == "steer":
-                MotionStreamProtocol.send_json(
-                    io, {"type": "steer_rejected", "reason": "no stream is running"}
-                )
-            else:
-                MotionStreamProtocol.send_json(
-                    io, {"type": "error", "message": f"unknown cmd {command!r}"}
-                )
+
+    def dispatch_request(self, conn: socket.socket, io, request: dict) -> bool:
+        command = request.get("cmd")
+        if command == "generate":
+            try:
+                self.handle_generate(conn, io, request)
+            except (ConnectionError, BrokenPipeError):
+                raise
+            except Exception as exc:
+                traceback.print_exc()
+                send_failure(io, exc)
+        elif command == "load":
+            try:
+                self.handle_load(io, request)
+            except Exception as exc:
+                traceback.print_exc()
+                send_failure(io, exc)
+        elif command == "shutdown":
+            MotionStreamProtocol.send_json(io, {"type": "bye"})
+            logger.info("[service] shutdown requested")
+            return False
+        elif command == "steer":
+            MotionStreamProtocol.send_json(
+                io, {"type": "steer_rejected", "reason": "no stream is running"}
+            )
+        elif command != "cancel":
+            MotionStreamProtocol.send_json(
+                io, {"type": "error", "message": f"unknown cmd {command!r}"}
+            )
+        return True
 
     def serve(
         self,

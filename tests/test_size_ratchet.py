@@ -13,7 +13,6 @@ SOURCE_PREFIX = "src/text2motion/"
 ALLOWED = MappingProxyType(
     {
         "file": (
-            "app/service/handlers.py",
             "dataset/sources/amass/corpus.py",
             "evaluation/metrics.py",
             "evaluation/nn_matcher.py",
@@ -29,8 +28,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "app/service/handlers.py::MotionInferenceServer.handle_generate",
-            "app/service/handlers.py::MotionInferenceServer.serve_client",
             "app/stages/serve.py::load_inference_pipeline",
             "app/stages/evaluate.py::run_evaluate",
             "app/stages/serve.py::run_studio",
