@@ -4,13 +4,40 @@ import contextlib
 import queue as queue_mod
 from collections import deque
 from collections.abc import Iterable, Iterator
-from enum import Enum
 
 import torch
 
-from text2motion.generation.contracts import DEFAULT_SAMPLING, SamplingConfig, StreamAnchors
+from text2motion.generation.contracts import DEFAULT_SAMPLING, SamplingConfig
 from text2motion.generation.model.generator import MotionTokenGenerator
 from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
+
+
+def random_probe_indices(
+    num_quantizers: int, codebook_size: int, probe_len: int, device: torch.device, trial: int
+) -> torch.Tensor:
+    generator = torch.Generator().manual_seed(trial)
+    indices = torch.randint(0, codebook_size, (1, probe_len, num_quantizers), generator=generator)
+    return indices.to(device)
+
+
+def changed_frame_span(
+    tokenizer: TokenizerNetwork, indices: torch.Tensor, centre: int, codebook_size: int
+) -> tuple[int, int] | None:
+    perturbed = indices.clone()
+    perturbed[0, centre] = (perturbed[0, centre] + 1) % codebook_size
+    delta = (tokenizer.decode(indices) - tokenizer.decode(perturbed)).abs().sum(-1)[0]
+    changed = torch.nonzero(delta > 0).flatten()
+    if changed.numel() == 0:
+        return None
+    return int(changed.min()), int(changed.max())
+
+
+def trial_token_context(
+    first_frame: int, last_frame: int, centre: int, downsample: int
+) -> tuple[int, int]:
+    left_frames = centre * downsample - first_frame
+    right_frames = last_frame - ((centre + 1) * downsample - 1)
+    return -(-left_frames // downsample), -(-right_frames // downsample)
 
 
 @torch.no_grad()
@@ -25,22 +52,13 @@ def measure_decoder_context(
     right_tokens = 0
 
     for trial in range(trials):
-        generator = torch.Generator().manual_seed(trial)
-        indices = torch.randint(
-            0, codebook_size, (1, probe_len, num_quantizers), generator=generator
-        ).to(device)
-        perturbed = indices.clone()
-        perturbed[0, centre] = (perturbed[0, centre] + 1) % codebook_size
-        delta = (tokenizer.decode(indices) - tokenizer.decode(perturbed)).abs().sum(-1)[0]
-        changed = torch.nonzero(delta > 0).flatten()
-        if changed.numel() == 0:
+        indices = random_probe_indices(num_quantizers, codebook_size, probe_len, device, trial)
+        span = changed_frame_span(tokenizer, indices, centre, codebook_size)
+        if span is None:
             continue
-        first_frame = int(changed.min())
-        last_frame = int(changed.max())
-        left_frames = centre * downsample - first_frame
-        right_frames = last_frame - ((centre + 1) * downsample - 1)
-        left_tokens = max(left_tokens, -(-left_frames // downsample))
-        right_tokens = max(right_tokens, -(-right_frames // downsample))
+        trial_left, trial_right = trial_token_context(span[0], span[1], centre, downsample)
+        left_tokens = max(left_tokens, trial_left)
+        right_tokens = max(right_tokens, trial_right)
 
     if left_tokens == 0 and right_tokens == 0:
         raise RuntimeError(
@@ -51,7 +69,7 @@ def measure_decoder_context(
     return max(left_tokens, 0), max(right_tokens, 0)
 
 
-def put_drop_oldest(out_queue: "queue_mod.Queue", item: object) -> None:
+def put_drop_oldest(out_queue: queue_mod.Queue, item: object) -> None:
     try:
         out_queue.put_nowait(item)
 
@@ -140,60 +158,3 @@ class StreamingMotionDecoder:
         yield from self.stream_tokens(
             generator.stream_token_indices(text_emb, num_steps, sampling=sampling)
         )
-
-
-############################################################
-#       Caption steering
-############################################################
-class SteeringMode(Enum):
-    REANCHOR = "reanchor"
-    CROSSFADE = "crossfade"
-
-
-@torch.no_grad()
-def steer_stream(
-    generator: MotionTokenGenerator,
-    decoder: StreamingMotionDecoder,
-    old_text: torch.Tensor,
-    new_text: torch.Tensor,
-    num_steps: int,
-    switch_token: int,
-    mode: SteeringMode,
-    sampling: SamplingConfig = DEFAULT_SAMPLING,
-    anchor_every: int = 4,
-    anchor_context: int = 8,
-    blend_frames: int = 16,
-) -> Iterator[tuple[int, torch.Tensor]]:
-    if not 0 < switch_token < num_steps:
-        raise ValueError("switch_token must lie inside the stream")
-    frame_index = 0
-    if mode is SteeringMode.REANCHOR:
-        if switch_token % anchor_every:
-            raise ValueError("switch_token must be a multiple of anchor_every")
-        anchors = StreamAnchors(
-            every=anchor_every,
-            context=anchor_context,
-            text_at=lambda index: old_text if index < switch_token else new_text,
-        )
-        for chunk in decoder.stream_tokens(
-            generator.stream_token_indices(old_text, num_steps, sampling, anchors=anchors)
-        ):
-            yield frame_index, chunk
-            frame_index += chunk.shape[1]
-        return
-    if blend_frames < 1:
-        raise ValueError("blend_frames must be positive")
-    start = switch_token * decoder.downsample
-    old_chunks = decoder.stream_tokens(
-        generator.stream_token_indices(old_text, num_steps, sampling)
-    )
-    new_chunks = decoder.stream_tokens(
-        generator.stream_token_indices(new_text, num_steps, sampling)
-    )
-    for old_chunk, new_chunk in zip(old_chunks, new_chunks, strict=True):
-        frames = torch.arange(
-            frame_index, frame_index + old_chunk.shape[1], device=old_chunk.device
-        )
-        weight = ((frames - start + 1) / blend_frames).clamp(0.0, 1.0)[None, :, None]
-        yield frame_index, old_chunk * (1.0 - weight) + new_chunk * weight
-        frame_index += old_chunk.shape[1]

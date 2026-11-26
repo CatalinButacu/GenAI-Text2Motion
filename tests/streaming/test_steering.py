@@ -2,8 +2,9 @@ import pytest
 import torch
 
 from text2motion.generation.contracts import Backbone, GeneratorConfig
-from text2motion.generation.decoder import SteeringMode, StreamingMotionDecoder, steer_stream
+from text2motion.generation.decoder import StreamingMotionDecoder
 from text2motion.generation.model.generator import MotionTokenGenerator
+from text2motion.generation.steering import SteeringMode, steer_stream
 from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
 

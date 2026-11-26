@@ -25,8 +25,6 @@ ALLOWED = MappingProxyType(
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
-            "generation/decoder.py::measure_decoder_context",
-            "generation/decoder.py::steer_stream",
             "generation/training/trainer.py::GeneratorTrainer.__init__",
             "generation/training/trainer.py::GeneratorTrainer.batch_loss_parts",
             "generation/training/epochs.py::finish_epoch",
