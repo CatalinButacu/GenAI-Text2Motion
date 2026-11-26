@@ -54,6 +54,33 @@ def read_betas(data: Mapping[str, Any], beta_count: int, src_path: str | Path) -
     return np.asarray(data["betas"][:beta_count], dtype=np.float32)
 
 
+def load_gender_models(
+    model_root: Path, beta_count: int, device: torch.device
+) -> tuple[dict[str, Any], dict[str, Path]]:
+    import smplx
+
+    models: dict[str, Any] = {}
+    model_files: dict[str, Path] = {}
+    for gender in Gender:
+        model_file = model_root / "smplx" / f"SMPLX_{gender.value.upper()}.npz"
+        if not model_file.is_file():
+            raise FileNotFoundError(f"SMPL-X model not found: {model_file}")
+        model_files[gender.value] = model_file
+        models[gender.value] = (
+            smplx.create(
+                model_path=str(model_root),
+                model_type=SMPLX_MODEL_TYPE,
+                gender=gender.value,
+                use_pca=False,
+                flat_hand_mean=True,
+                num_betas=beta_count,
+            )
+            .to(device)
+            .eval()
+        )
+    return models, model_files
+
+
 ############################################################
 #       AmassPoseExtractor
 ############################################################
@@ -67,35 +94,13 @@ class AmassPoseExtractor:
         fps: int = FPS,
         chunk_size: int = _CHUNK_SIZE,
     ) -> None:
-        import smplx
-
         self.device = torch.device(device)
         self._beta_count = beta_count
         self._joint_count = joint_count
         self._fps = fps
         self._chunk_size = chunk_size
         model_root = resolve_model_root(Path(smplx_dir))
-        self._models: dict[str, Any] = {}
-        self._model_files: dict[str, Path] = {}
-
-        for gender in Gender:
-            model_file = model_root / "smplx" / f"SMPLX_{gender.value.upper()}.npz"
-            if not model_file.is_file():
-                raise FileNotFoundError(f"SMPL-X model not found: {model_file}")
-            self._model_files[gender.value] = model_file
-            self._models[gender.value] = (
-                smplx.create(
-                    model_path=str(model_root),
-                    model_type=SMPLX_MODEL_TYPE,
-                    gender=gender.value,
-                    use_pca=False,
-                    flat_hand_mean=True,
-                    num_betas=beta_count,
-                )
-                .to(self.device)
-                .eval()
-            )
-
+        self._models, self._model_files = load_gender_models(model_root, beta_count, self.device)
         self._expression_count = int(self._models[Gender.NEUTRAL.value].num_expression_coeffs)
 
     def recipe(self) -> dict[str, object]:
