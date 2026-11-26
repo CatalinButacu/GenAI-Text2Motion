@@ -26,9 +26,7 @@ ALLOWED = MappingProxyType(
         "function": (
             "generation/training/trainer.py::GeneratorTrainer.__init__",
             "generation/training/trainer.py::GeneratorTrainer.batch_loss_parts",
-            "generation/training/epochs.py::finish_epoch",
             "generation/training/overfit.py::overfit_single_batch",
-            "generation/training/epochs.py::train_generator",
             "generation/training/pretrain.py::pretrain_generator",
             "motion/kinematics.py::Skeleton.inverse_kinematics_np",
             "motion/normalization.py::fit_train_stats",
