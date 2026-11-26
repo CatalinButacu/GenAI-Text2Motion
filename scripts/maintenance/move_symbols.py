@@ -5,7 +5,7 @@ import json
 import re
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -14,6 +14,7 @@ DEFINITIONS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 KEPT_STATEMENTS = (ast.Import, ast.ImportFrom, ast.Expr)
 RATCHET = Path("tests") / "test_size_ratchet.py"
 RATCHET_FILE_LIMIT = 250
+SAME_ALIAS = re.compile(r"\b(\w+) as \1\b")
 
 
 class MoveError(RuntimeError):
@@ -93,7 +94,11 @@ def import_lines(tree: ast.Module, lines: list[str], target: str) -> list[str]:
         if isinstance(node, ast.Import)
         or (isinstance(node, ast.ImportFrom) and node.module != target)
     ]
-    return [line for node in imports for line in lines[node.lineno - 1 : node.end_lineno]]
+    return [
+        SAME_ALIAS.sub(r"\1", line)
+        for node in imports
+        for line in lines[node.lineno - 1 : node.end_lineno]
+    ]
 
 
 def import_end(tree: ast.Module) -> int:
@@ -136,6 +141,10 @@ def move_code(root: Path, move: Move) -> None:
 
     moved = list({id(definitions[name]): definitions[name] for name in move.names}.values())
     moved_names = {name for node in moved for name in defined_names(node)}
+    loggers = {
+        name for name in used_names(moved) & set(definitions) if is_logger(definitions[name])
+    }
+    move = replace(move, copies=tuple(sorted({*move.copies, *(loggers - moved_names)})))
     left_behind = set(definitions) - moved_names - set(move.copies)
     needed_from_source = sorted(used_names(moved) & left_behind)
     imports = import_lines(tree, source.lines, move.target)
@@ -144,6 +153,15 @@ def move_code(root: Path, move: Move) -> None:
     add_imports(source, [from_import(move.target, still_used)] if still_used else [])
     source.write()
     write_target(root, move, imports, needed_from_source, code)
+
+
+def is_logger(node: ast.stmt) -> bool:
+    value = getattr(node, "value", None)
+    return (
+        isinstance(value, ast.Call)
+        and isinstance(value.func, ast.Attribute)
+        and value.func.attr == "getLogger"
+    )
 
 
 def copied_code(

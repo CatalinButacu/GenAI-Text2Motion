@@ -110,3 +110,22 @@ def test_a_target_that_imported_the_moved_names_does_not_import_itself(monkeypat
     assert "from text2motion.b import" not in target
     assert "def make" in target
     assert not (package / "a.py").exists()
+
+
+def test_a_module_logger_is_copied_without_being_named(monkeypatch, tmp_path):
+    module = mover(monkeypatch)
+    package = tmp_path / "src" / "text2motion"
+    write(package / "__init__.py", "")
+    source = (
+        "import logging\n\nlogger = logging.getLogger(__name__)\n\n\n"
+        "def a():\n    logger.info('a')\n\n\ndef b():\n    logger.info('b')\n"
+    )
+    write(package / "a.py", source)
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "scripts").mkdir()
+
+    module.apply_moves(tmp_path, [module.Move("text2motion.a", "text2motion.b", ("b",))])
+
+    target = (package / "b.py").read_text(encoding="utf-8")
+    assert "logger = logging.getLogger(__name__)" in target
+    assert "from text2motion.a import" not in target
