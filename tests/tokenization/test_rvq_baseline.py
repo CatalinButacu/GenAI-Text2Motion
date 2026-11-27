@@ -1,11 +1,12 @@
 import torch
 
 from text2motion.tokenization.contracts import ResidualVectorQuantizationConfig
-from text2motion.tokenization.nn_quantizers import VectorQuantizer, typed_modules
 from text2motion.tokenization.nn_tokenizer import (
     ResidualVectorQuantizationTokenizer,
     feature_velocity_reconstruction_loss,
 )
+from text2motion.tokenization.quantizer_base import typed_modules
+from text2motion.tokenization.vector_quantizer import VectorQuantizer
 
 CFG = ResidualVectorQuantizationConfig(
     in_dim=263,

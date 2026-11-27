@@ -13,13 +13,11 @@ SOURCE_PREFIX = "src/text2motion/"
 ALLOWED = MappingProxyType(
     {
         "file": (
-            "tokenization/nn_quantizers.py",
             "tokenization/nn_tokenizer.py",
             "tokenization/tokenizer_trainer.py",
         ),
         "function": (
             "tokenization/corpus.py::build_token_pack",
-            "tokenization/nn_quantizers.py::FiniteScalarQuantizer.__init__",
             "tokenization/nn_tokenizer.py::FiniteScalarQuantizationTokenizer.__init__",
             "tokenization/reconstruction_metrics.py::reconstruction_metrics",
             "tokenization/tokenizer_trainer.py::TokenizerTrainer.train_step",

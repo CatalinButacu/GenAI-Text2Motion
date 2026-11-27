@@ -3,16 +3,16 @@ import torch
 
 from text2motion.motion.contracts import MotionClip, MotionTokens
 from text2motion.tokenization.contracts import TokenizerConfig
-from text2motion.tokenization.nn_quantizers import (
+from text2motion.tokenization.fsq_quantizer import (
     FiniteScalarQuantizer,
     GroupedFiniteScalarQuantizer,
-    typed_modules,
 )
 from text2motion.tokenization.nn_tokenizer import (
     FiniteScalarQuantizationTokenizer,
     FrozenMotionTokenizer,
     feature_velocity_reconstruction_loss,
 )
+from text2motion.tokenization.quantizer_base import typed_modules
 
 CFG = TokenizerConfig(
     in_dim=263, width=128, downsample=4, num_quantizers=4, fsq_levels=(8, 5, 5, 5)

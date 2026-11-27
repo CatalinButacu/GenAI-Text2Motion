@@ -10,12 +10,10 @@ from text2motion.tokenization.contracts import (
     TokenizerConfig,
     TokenizerKind,
 )
-from text2motion.tokenization.nn_quantizers import (
+from text2motion.tokenization.fsq_quantizer import (
     FiniteScalarQuantizer,
     GroupedFiniteScalarQuantizer,
-    QuantizerStack,
     ResidualFiniteScalarQuantizer,
-    ResidualVectorQuantizer,
 )
 from text2motion.tokenization.nn_tokenizer import (
     FiniteScalarQuantizationTokenizer,
@@ -24,6 +22,8 @@ from text2motion.tokenization.nn_tokenizer import (
     build_tokenizer_network,
     downsample_stage_count,
 )
+from text2motion.tokenization.quantizer_base import QuantizerStack
+from text2motion.tokenization.vector_quantizer import ResidualVectorQuantizer
 
 FSQ_CFG = TokenizerConfig(
     in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(8, 8, 4, 4), n_resblocks=1

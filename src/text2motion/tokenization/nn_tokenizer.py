@@ -14,13 +14,12 @@ from text2motion.tokenization.contracts import (
     TokenizerKind,
     TokenizerReconstruction,
 )
-from text2motion.tokenization.nn_quantizers import (
+from text2motion.tokenization.fsq_quantizer import (
     GroupedFiniteScalarQuantizer,
-    QuantizerStack,
     ResidualFiniteScalarQuantizer,
-    ResidualVectorQuantizer,
-    reject_dropped_codes,
 )
+from text2motion.tokenization.quantizer_base import QuantizerStack, reject_dropped_codes
+from text2motion.tokenization.vector_quantizer import ResidualVectorQuantizer
 
 
 ############################################################
