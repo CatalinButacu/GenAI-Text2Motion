@@ -10,13 +10,10 @@ from pathlib import Path
 
 import torch
 
+from text2motion.app.service.pipeline import InferencePipelineLoader, LoadedInferencePipeline
 from text2motion.app.service.protocol import MotionStreamProtocol
-from text2motion.app.service.state import (
-    InferencePipelineLoader,
-    LoadedInferencePipeline,
-    StreamSteering,
-)
 from text2motion.app.service.stats import format_stats, process_memory_gb, record_inference
+from text2motion.app.service.steering import StreamSteering
 from text2motion.app.service.stream import (
     StreamRun,
     inference_record,

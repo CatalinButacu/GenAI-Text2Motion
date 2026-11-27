@@ -22,7 +22,7 @@ from metric_check import (
 )
 
 from text2motion.app.runtime.context import ApplicationBootstrap
-from text2motion.app.stages.tokenizer import with_tokenizer_kind
+from text2motion.app.stages.train_tokenizer import with_tokenizer_kind
 from text2motion.motion.normalization import MotionScaler
 from text2motion.tokenization.contracts import TokenizerKind
 

@@ -123,7 +123,7 @@ def with_folder_rates(rows: list[ClockRow]) -> list[ClockRow]:
     return updated
 
 
-def stored_fps_table(official_dir: Path, pose_root: Path, pose_stride: int) -> list[ClockRow]:
+def estimated_fps_table(official_dir: Path, pose_root: Path, pose_stride: int) -> list[ClockRow]:
     index = pd.read_csv(official_dir / "index.csv")
     scores: dict[str, list[tuple[float, ...]]] = defaultdict(list)
     longest: dict[str, int] = defaultdict(int)

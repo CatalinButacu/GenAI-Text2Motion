@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from text2motion.studio.session.registry import live_step_budget
+from text2motion.studio.session.model_registry import live_step_budget
 
 
 def reset_stream_progress(state) -> None:

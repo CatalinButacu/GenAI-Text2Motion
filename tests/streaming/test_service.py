@@ -228,7 +228,7 @@ def test_a_client_that_stops_reading_early_leaves_the_connection_usable():
 
 def test_inference_stats_report_the_time_to_the_first_chunk():
     from text2motion.app.service.handlers import MotionInferenceServer
-    from text2motion.app.service.state import LoadedInferencePipeline
+    from text2motion.app.service.pipeline import LoadedInferencePipeline
 
     pipeline = cast(LoadedInferencePipeline, _HelloOnlyPipeline())
     server = MotionInferenceServer(pipeline, policy={})

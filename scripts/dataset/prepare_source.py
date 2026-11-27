@@ -94,7 +94,7 @@ def amass_clips(fps: int) -> Iterator[RawClip]:
     reader = AmassReader(PATHS.smplx_models, fps)
     files = amass_files_outside_hml3d(PATHS.amass_raw, PATHS.hml3d_official)
     for path in tqdm(files, desc="amass"):
-        joints = reader.clip_joints(path, PATHS.amass_raw)
+        joints = reader.load_trimmed_joints(path, PATHS.amass_raw)
         if joints is None:
             continue
         parts = path.relative_to(PATHS.amass_raw).with_suffix("").parts

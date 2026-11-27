@@ -60,7 +60,7 @@ def load_annotated_motion(
     return motion, parse_text_file(text_path)
 
 
-def piece_sample(
+def piece_evaluation_sample(
     sample_id: str,
     piece: np.ndarray,
     annotations: list[TextAnnotation],
@@ -98,7 +98,9 @@ def read_evaluation_samples(
         if loaded is None:
             continue
         for sample_id, piece, piece_annotations in guo_pieces(clip_id, *loaded):
-            sample = piece_sample(sample_id, piece, piece_annotations, downsample, dropped)
+            sample = piece_evaluation_sample(
+                sample_id, piece, piece_annotations, downsample, dropped
+            )
             if sample is not None:
                 samples.append(sample)
     return samples, dropped

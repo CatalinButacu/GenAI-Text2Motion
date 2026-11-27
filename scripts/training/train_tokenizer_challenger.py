@@ -7,7 +7,7 @@ from pathlib import Path
 from text2motion.app.cli import parse_request
 from text2motion.app.requests.data import TrainTokenizerRequest
 from text2motion.app.runtime.context import ApplicationBootstrap
-from text2motion.app.stages.tokenizer import run_train_tokenizer
+from text2motion.app.stages.train_tokenizer import run_train_tokenizer
 from text2motion.motion.contracts import Split
 
 CHALLENGER_SUFFIX = "_c1b.pt"

@@ -17,7 +17,7 @@ from text2motion.evaluation.contracts import GenerationEvaluationSet
 from text2motion.evaluation.embeddings import compute_guo_text_embeddings
 from text2motion.evaluation.metrics import (
     fid,
-    motion_statistics,
+    motion_quality_metrics,
     own_caption_ranks,
     paired_fid_delta,
 )
@@ -98,7 +98,7 @@ def write_paper_table(path: Path, report: dict) -> None:
 
 
 def plausibility_table(features: list[np.ndarray]) -> dict[str, np.ndarray]:
-    rows = [motion_statistics(recover_skeleton(feature)) for feature in features]
+    rows = [motion_quality_metrics(recover_skeleton(feature)) for feature in features]
     return {key: np.array([row[key] for row in rows]) for key in PLAUSIBILITY_KEYS}
 
 

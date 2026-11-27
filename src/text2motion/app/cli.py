@@ -56,7 +56,7 @@ COMMANDS = MappingProxyType(
         ),
         "train-tokenizer": Command(
             "text2motion.app.requests.data:TrainTokenizerRequest",
-            "text2motion.app.stages.tokenizer:run_train_tokenizer",
+            "text2motion.app.stages.train_tokenizer:run_train_tokenizer",
             "train the motion tokenizer",
         ),
         "sanity-overfit": Command(
@@ -66,7 +66,7 @@ COMMANDS = MappingProxyType(
         ),
         "train-generator": Command(
             "text2motion.app.requests.generator:TrainGeneratorRequest",
-            "text2motion.app.stages.generator:run_train_generator",
+            "text2motion.app.stages.train_generator:run_train_generator",
             "train the text-to-motion generator",
         ),
         "pretrain": Command(

@@ -4,7 +4,7 @@ import threading
 import traceback
 
 from text2motion.studio.live.actions import log_result
-from text2motion.studio.session.registry import StudioModelEntry
+from text2motion.studio.session.model_registry import StudioModelEntry
 
 
 class ModelLoader:

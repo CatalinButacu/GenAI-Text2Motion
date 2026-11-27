@@ -12,7 +12,7 @@ from tqdm import tqdm
 from text2motion.common.manifest import write_manifest
 from text2motion.dataset.contracts import AMASS_LABEL_FPS
 from text2motion.dataset.core.operations import DATA_CLIP_ERRORS, NPY_FILES
-from text2motion.dataset.sources.amass.clock import USABLE_STATUS, stored_fps_table
+from text2motion.dataset.sources.amass.clock import USABLE_STATUS, estimated_fps_table
 from text2motion.dataset.sources.amass.poses import (
     CLOCKED_POSES,
     extract_poses,
@@ -159,7 +159,9 @@ def write_clock_table(request: PreparationRequest) -> None:
     )
     rows = [
         row.as_record()
-        for row in stored_fps_table(official_dir, layout.pose_data, AMASS_LABEL_FPS // request.fps)
+        for row in estimated_fps_table(
+            official_dir, layout.pose_data, AMASS_LABEL_FPS // request.fps
+        )
     ]
     Path(request.clock_csv).parent.mkdir(parents=True, exist_ok=True)
     with open(request.clock_csv, "w", newline="", encoding="utf-8") as handle:

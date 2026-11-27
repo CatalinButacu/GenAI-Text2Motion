@@ -12,7 +12,7 @@ from text2motion.studio.live.controller import StudioGenerationController
 from text2motion.studio.scene import StreamSceneUpdater, StudioSceneNodes
 from text2motion.studio.session.buffers import StudioStreamBuffers
 from text2motion.studio.session.fit_state import SmplxFitState
-from text2motion.studio.session.registry import live_step_budget
+from text2motion.studio.session.model_registry import live_step_budget
 
 
 class FakeScene:

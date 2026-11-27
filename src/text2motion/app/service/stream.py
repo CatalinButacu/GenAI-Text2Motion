@@ -7,8 +7,9 @@ from dataclasses import dataclass, field
 
 import torch
 
+from text2motion.app.service.pipeline import LoadedInferencePipeline
 from text2motion.app.service.protocol import MotionStreamProtocol
-from text2motion.app.service.state import LoadedInferencePipeline, StreamSteering
+from text2motion.app.service.steering import StreamSteering
 from text2motion.generation.contracts import SamplingConfig, StreamAnchors
 from text2motion.motion.recovery import StreamingSkeletonRecovery
 

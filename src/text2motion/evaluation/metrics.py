@@ -165,7 +165,7 @@ ACCELERATION_LIMIT_M_PER_FRAME2 = 0.08
 TELEPORT_M_PER_FRAME = 0.25
 
 
-def motion_statistics(joints: np.ndarray) -> dict[str, float]:
+def motion_quality_metrics(joints: np.ndarray) -> dict[str, float]:
     velocity = np.diff(joints, axis=0)
     acceleration = np.diff(velocity, axis=0)
     jerk = np.diff(acceleration, axis=0)
@@ -211,7 +211,7 @@ def sharpness_statistics(joints: np.ndarray) -> dict[str, float]:
         "peak_speed_m_per_s": float(np.percentile(speed, 99)),
         "peak_acceleration_m_per_s2": float(np.percentile(acceleration, 99)),
         "mean_jerk_m_per_s3": float(jerk.mean()),
-        "foot_skate_m_per_s": motion_statistics(joints)["foot_skate_m_per_s"],
+        "foot_skate_m_per_s": motion_quality_metrics(joints)["foot_skate_m_per_s"],
     }
 
 

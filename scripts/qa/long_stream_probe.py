@@ -20,7 +20,7 @@ from text2motion.evaluation.contracts import R_PRECISION_POOL
 from text2motion.evaluation.embeddings import compute_guo_text_embeddings
 from text2motion.evaluation.metrics import (
     jerk_profile,
-    motion_statistics,
+    motion_quality_metrics,
     own_caption_ranks,
     r_precision,
 )
@@ -1247,7 +1247,7 @@ def score(
     order = np.arange(len(features))
     for segment in range(segments):
         clips = [clip[segment * frames : (segment + 1) * frames] for clip in features]
-        statistics = [motion_statistics(recover_skeleton(clip)) for clip in clips]
+        statistics = [motion_quality_metrics(recover_skeleton(clip)) for clip in clips]
         motion_embeddings = evaluator.compute_motion_embeddings(clips)
         distance = np.linalg.norm(motion_embeddings - text_embeddings, axis=-1)
         ranks = own_caption_ranks(text_embeddings, motion_embeddings, order)

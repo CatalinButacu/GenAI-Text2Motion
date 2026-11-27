@@ -15,7 +15,7 @@ from text2motion.app.runtime.checkpoint import GeneratorBundle, load_generator_c
 from text2motion.app.runtime.context import ApplicationContext, required_path
 from text2motion.app.runtime.overfit_gate import OverfitGate
 from text2motion.app.stages.data import require_protocol_run, verify_protocol_splits
-from text2motion.app.stages.generator_training import (
+from text2motion.app.stages.train_generator_setup import (
     GeneratorSetup,
     build_ce_loaders,
     build_training_request,
@@ -67,7 +67,7 @@ def run_train_generator(app: ApplicationContext, args: TrainGeneratorRequest) ->
 
 
 def prepare_generator(app: ApplicationContext, args: TrainGeneratorRequest) -> GeneratorSetup:
-    verify_generator_inputs(app, args)
+    check_protocol_inputs(app, args)
     tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
     tokenizer = app.models.load_tokenizer(tokenizer_ckpt)
     architecture = app.models.resolve_generator_spec(args.backbone, tokenizer.codebook_size)
@@ -94,7 +94,7 @@ def prepare_generator(app: ApplicationContext, args: TrainGeneratorRequest) -> G
     )
 
 
-def verify_generator_inputs(app: ApplicationContext, args: TrainGeneratorRequest) -> None:
+def check_protocol_inputs(app: ApplicationContext, args: TrainGeneratorRequest) -> None:
     require_protocol_run(app.seed, args.exploratory, "train-generator")
     verify_protocol_splits(
         required_path(app.config.paths.hml3d_out_dir, "hml3d_out_dir"), args.exploratory

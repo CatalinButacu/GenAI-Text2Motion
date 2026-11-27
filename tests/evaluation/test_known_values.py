@@ -6,7 +6,7 @@ from text2motion.evaluation.metrics import (
     diversity,
     frechet_gaussian_distance,
     mm_dist,
-    motion_statistics,
+    motion_quality_metrics,
     r_precision,
 )
 from text2motion.evaluation.transition.statistics import transition_statistics
@@ -117,7 +117,7 @@ def test_constant_velocity_has_no_acceleration_and_a_known_foot_slide():
     step = 0.01
     joints = np.zeros((30, JOINTS, 3))
     joints[:, :, 0] = (np.arange(30) * step)[:, None]
-    statistics = motion_statistics(joints)
+    statistics = motion_quality_metrics(joints)
     assert statistics["mean_acceleration_cm_per_frame2"] == pytest.approx(0.0, abs=1e-9)
     assert statistics["mean_jerk_cm_per_frame3"] == pytest.approx(0.0, abs=1e-9)
     assert statistics["root_teleports"] == 0.0
@@ -128,7 +128,7 @@ def test_constant_acceleration_and_one_root_jump_are_measured():
     acceleration = 0.02
     joints = np.zeros((30, JOINTS, 3))
     joints[:, :, 0] = (0.5 * acceleration * np.arange(30) ** 2)[:, None]
-    assert motion_statistics(joints)["mean_acceleration_cm_per_frame2"] == pytest.approx(2.0)
+    assert motion_quality_metrics(joints)["mean_acceleration_cm_per_frame2"] == pytest.approx(2.0)
     jump = np.zeros((30, JOINTS, 3))
     jump[15:, 0, 0] = 1.0
-    assert motion_statistics(jump)["root_teleports"] == 1.0
+    assert motion_quality_metrics(jump)["root_teleports"] == 1.0

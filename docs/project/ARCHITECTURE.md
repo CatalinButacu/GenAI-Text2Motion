@@ -45,7 +45,7 @@ Each file has one role. Limits: 250 lines per file, 30 lines per function, 10 me
 | `app/cli.py` | the command table and argument parsing |
 | `app/config/` | `schema`, `loading`, `validation`: the only place configuration is resolved |
 | `app/requests/` | one typed request model per command group |
-| `app/stages/` | one handler module per CLI stage (`data`, `tokenizer`, `overfit`, `pretrain`, `generator`, `evaluate`, `serve`) |
+| `app/stages/` | one handler module per CLI stage (`data`, `train_tokenizer`, `overfit`, `pretrain`, `train_generator`, `evaluate`, `serve`) |
 | `app/runtime/` | `ApplicationContext` and `ApplicationBootstrap` (`context`), `ModelLoader`, checkpoints, the overfit gate, run logs |
 | `app/service/` | wire protocol, client, process spawn, server state, handlers, stream |
 | `app/workflows/` | the `run` command |

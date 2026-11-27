@@ -114,7 +114,7 @@ class AmassReader:
             return None
         return cubic_resample(joints, stored_fps, self._target_fps)
 
-    def clip_joints(self, path: Path, raw_root: Path) -> np.ndarray | None:
+    def load_trimmed_joints(self, path: Path, raw_root: Path) -> np.ndarray | None:
         joints = self.raw_joints(path)
         if joints is None:
             return None

@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from matplotlib.animation import PillowWriter
 
-from text2motion.evaluation.metrics import motion_statistics
+from text2motion.evaluation.metrics import motion_quality_metrics
 from text2motion.motion.recovery import recover_from_ric
 from text2motion.motion.representation import FPS, KINEMATIC_CHAINS
 
@@ -49,7 +49,7 @@ def reference_medians(val_rows: list[dict[str, str]]) -> dict[str, float]:
     values: dict[str, list[float]] = {"locomotion": [], "other": []}
     for row in val_rows:
         joints = load_joints(HML3D / f"{row['name']}.npy")
-        values[motion_group(joints)].append(motion_statistics(joints)["foot_skate_m_per_s"])
+        values[motion_group(joints)].append(motion_quality_metrics(joints)["foot_skate_m_per_s"])
     return {group: float(np.median(skates)) for group, skates in values.items()}
 
 

@@ -199,7 +199,7 @@ def test_live_regen_starts_disabled_with_no_signature():
 def test_model_registry_uses_name_and_version(tmp_path):
     import yaml
 
-    from text2motion.studio.session.registry import load_model_registry
+    from text2motion.studio.session.model_registry import load_model_registry
 
     registry = tmp_path / "models.yaml"
     registry.write_text(

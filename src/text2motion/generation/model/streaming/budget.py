@@ -14,7 +14,7 @@ def check_budget_values(steps: int, uniforms, anchor_every: int, anchor_context:
         )
 
 
-def check_anchor_reach(
+def check_anchor_position_limit(
     name: str, limit: int, prefix_len: int, anchor_every: int, anchor_context: int
 ) -> None:
     available = limit - prefix_len

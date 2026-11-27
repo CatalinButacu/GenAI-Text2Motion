@@ -16,7 +16,7 @@ from text2motion.generation.contracts import (
 from text2motion.generation.model.backbones import instantiate_backbone
 from text2motion.generation.model.layers import init_reference_embedding, zero_linear_bias
 from text2motion.generation.model.streaming.budget import (
-    check_anchor_reach,
+    check_anchor_position_limit,
     check_budget_values,
     check_step_reach,
 )
@@ -103,7 +103,7 @@ class MotionTokenGenerator(nn.Module):
             return
         name = type(self.backbone).__name__
         if anchor_every:
-            check_anchor_reach(name, limit, prefix_len, anchor_every, anchor_context)
+            check_anchor_position_limit(name, limit, prefix_len, anchor_every, anchor_context)
             return
         check_step_reach(name, limit, prefix_len, steps)
 

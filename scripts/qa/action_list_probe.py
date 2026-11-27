@@ -15,7 +15,7 @@ from text2motion.app.runtime.context import ApplicationBootstrap
 from text2motion.app.runtime.run_log import log_metrics, start_run
 from text2motion.evaluation.embeddings import compute_guo_text_embeddings
 from text2motion.evaluation.metrics import (
-    motion_statistics,
+    motion_quality_metrics,
     own_caption_ranks,
     r_precision,
 )
@@ -52,7 +52,7 @@ def captioned_test_clips(resources, count: int) -> list[tuple[str, str, list[str
 
 
 def mean_statistic(joint_windows: list[np.ndarray], key: str) -> float:
-    return float(np.mean([motion_statistics(window)[key] for window in joint_windows]))
+    return float(np.mean([motion_quality_metrics(window)[key] for window in joint_windows]))
 
 
 def main() -> None:

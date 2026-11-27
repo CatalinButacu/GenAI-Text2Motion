@@ -2,7 +2,7 @@ from typing import cast
 
 import torch
 
-from text2motion.app.stages import generator
+from text2motion.app.stages import train_generator as generator
 
 
 def test_compile_stays_off_without_cuda():

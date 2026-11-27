@@ -6,8 +6,8 @@ import torch
 
 from text2motion.app.requests.serve import ModelServiceRequest
 from text2motion.app.runtime.context import ApplicationContext
+from text2motion.app.service.pipeline import LoadedInferencePipeline
 from text2motion.app.service.protocol import Release
-from text2motion.app.service.state import LoadedInferencePipeline
 from text2motion.generation.contracts import Backbone
 from text2motion.generation.decoder import StreamingMotionDecoder
 from text2motion.generation.pipeline import TextToMotionGenerator

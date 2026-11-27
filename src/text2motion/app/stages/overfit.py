@@ -10,7 +10,7 @@ from text2motion.app.requests.generator import (
 from text2motion.app.runtime.context import ApplicationContext, required_path
 from text2motion.app.runtime.overfit_gate import OverfitGate
 from text2motion.app.stages.data import require_protocol_run, verify_protocol_splits
-from text2motion.app.stages.generator import initial_generator, overfit_criteria
+from text2motion.app.stages.train_generator import initial_generator, overfit_criteria
 from text2motion.dataset.training.module import MotionDataModule
 from text2motion.generation.contracts import (
     MixedPrecisionMode,

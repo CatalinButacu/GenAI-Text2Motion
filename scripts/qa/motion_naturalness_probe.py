@@ -11,7 +11,7 @@ import torch
 
 from text2motion.app.config.loading import load_dataclass
 from text2motion.app.runtime.context import ApplicationBootstrap
-from text2motion.evaluation.metrics import motion_statistics
+from text2motion.evaluation.metrics import motion_quality_metrics
 from text2motion.generation.contracts import Backbone, SamplingConfig
 from text2motion.motion.recovery import recover_skeleton
 from text2motion.studio.fitting import build_smplx_body_model
@@ -72,13 +72,13 @@ def main() -> None:
                 continue
             raw = raw[:frames]
             caption = text_path.read_text(encoding="utf-8").splitlines()[0].split("#")[0].strip()
-            stages["ground_truth"].append(motion_statistics(recover_skeleton(raw)))
+            stages["ground_truth"].append(motion_quality_metrics(recover_skeleton(raw)))
             normalized = torch.from_numpy(resources.normalize(raw)).unsqueeze(0).to(app.device)
             network = tokenizer.network
             indices = network.encode(normalized)
             roundtrip = network.decode(indices)[0].cpu().numpy()
             stages["tokenizer_roundtrip"].append(
-                motion_statistics(recover_skeleton(resources.denormalize(roundtrip)))
+                motion_quality_metrics(recover_skeleton(resources.denormalize(roundtrip)))
             )
             generated_batch = pipeline.generate_batch([caption], frames // downsample, sampling)
             if generated_batch is None:
@@ -87,7 +87,7 @@ def main() -> None:
             joints = recover_skeleton(
                 resources.denormalize(generated.motion.features.cpu().numpy())
             )
-            stages["generated"].append(motion_statistics(joints))
+            stages["generated"].append(motion_quality_metrics(joints))
             if used < args.mesh_clips:
                 model = build_smplx_body_model(fit_config, len(joints), "cpu")
                 result = solve_smplx_pose_from_joints(model, joints.astype(np.float32), "cpu")
@@ -101,7 +101,7 @@ def main() -> None:
                     .joints[:, :22]
                     .numpy()
                 )
-                stages["generated_mesh"].append(motion_statistics(mesh))
+                stages["generated_mesh"].append(motion_quality_metrics(mesh))
             used += 1
     report = {stage: summarize(rows) for stage, rows in stages.items() if rows}
     keys = list(report["ground_truth"])

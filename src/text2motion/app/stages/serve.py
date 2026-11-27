@@ -11,8 +11,8 @@ from text2motion.app.requests.serve import ModelServiceRequest, ServeRequest, St
 from text2motion.app.runtime.context import ApplicationContext
 from text2motion.app.service.client import MotionInferenceClient
 from text2motion.app.service.handlers import MotionInferenceServer
+from text2motion.app.service.pipeline import LoadedInferencePipeline
 from text2motion.app.service.protocol import Release, ServiceAddress
-from text2motion.app.service.state import LoadedInferencePipeline
 from text2motion.app.stages.inference_pipeline import (
     build_decoder,
     build_generator,
@@ -65,7 +65,7 @@ def run_serve(app: ApplicationContext, args: ServeRequest) -> None:
 
 
 def select_model(args: StudioRequest, model: str, registry: Path) -> None:
-    from text2motion.studio.session.registry import load_model_registry
+    from text2motion.studio.session.model_registry import load_model_registry
 
     entries, _ = load_model_registry(None, registry)
     chosen = next((entry for entry in entries if entry.key == model), None)

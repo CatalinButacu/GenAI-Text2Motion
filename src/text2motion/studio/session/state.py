@@ -13,7 +13,7 @@ from text2motion.studio.scene import StudioSceneNodes
 from text2motion.studio.session.buffers import StudioStreamBuffers
 from text2motion.studio.session.debounce import LiveGenerationDebouncer
 from text2motion.studio.session.fit_state import SmplxFitState
-from text2motion.studio.session.registry import (
+from text2motion.studio.session.model_registry import (
     StudioModelEntry,
     load_model_registry,
     resolve_step_budget,
@@ -47,7 +47,7 @@ class StudioSession:
         self.apply_fit_defaults(model_dir, config)
         self.load_launch_models(args, config)
         self.start_prompt_state()
-        self.build_runtime_parts(scene)
+        self.init_runtime_parts(scene)
         self.follow_cam = True
         self.styled = False
 
@@ -94,7 +94,7 @@ class StudioSession:
         self.generating = False
         self.history: list[str] = []
 
-    def build_runtime_parts(self, scene) -> None:
+    def init_runtime_parts(self, scene) -> None:
         self.live = LiveGenerationDebouncer()
         self.live.signature = (self.temperature, self.top_p, self.steps)
         self.stream_buffers = StudioStreamBuffers()
