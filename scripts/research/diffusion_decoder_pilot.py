@@ -19,7 +19,7 @@ from text2motion.motion.contracts import Split
 from text2motion.motion.normalization import MotionScaler
 from text2motion.motion.storage import FEATURES_DIR, base_clip_ids
 from text2motion.tokenization.contracts import TokenizerReconstruction
-from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
+from text2motion.tokenization.network.base import TokenizerNetwork
 from text2motion.tokenization.reconstruction_metrics import (
     ReconstructionSetup,
     evaluate_tokenizer_reconstruction,

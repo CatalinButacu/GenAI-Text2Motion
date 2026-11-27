@@ -36,7 +36,7 @@ from text2motion.generation.model.text_encoder import CLIPTextEncoder, FrozenTex
 from text2motion.generation.training.epochs import CheckpointSink, train_generator
 from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.contracts import Split
-from text2motion.tokenization.nn_tokenizer import FrozenMotionTokenizer
+from text2motion.tokenization.network.frozen import FrozenMotionTokenizer
 
 logger = logging.getLogger(__name__)
 

@@ -19,7 +19,8 @@ from text2motion.generation.contracts import Backbone
 from text2motion.generation.model.spec import GeneratorModelSpec
 from text2motion.generation.model.text_encoder import CLIPTextEncoder, FrozenTextStates
 from text2motion.generation.pipeline import TextToMotionGenerator
-from text2motion.tokenization.nn_tokenizer import FrozenMotionTokenizer, build_tokenizer_network
+from text2motion.tokenization.network.builder import build_tokenizer_network
+from text2motion.tokenization.network.frozen import FrozenMotionTokenizer
 
 logger = logging.getLogger(__name__)
 

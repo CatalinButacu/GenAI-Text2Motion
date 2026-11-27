@@ -20,7 +20,7 @@ from text2motion.generation.requests import GeneratorTrainingRequest
 from text2motion.generation.training.epochs import Evaluator
 from text2motion.generation.training.trainer import CleanCrossEntropyLoaders, GeneratorTrainer
 from text2motion.motion.contracts import RunOutputs, Split
-from text2motion.tokenization.nn_tokenizer import FrozenMotionTokenizer
+from text2motion.tokenization.network.frozen import FrozenMotionTokenizer
 
 logger = logging.getLogger(__name__)
 

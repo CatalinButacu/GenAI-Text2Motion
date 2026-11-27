@@ -13,7 +13,7 @@ from text2motion.generation.contracts import Backbone
 from text2motion.generation.losses import token_ce_loss
 from text2motion.motion.storage import sha256_file
 from text2motion.tokenization.corpus import pack_clip_keys, read_pack_identity
-from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
+from text2motion.tokenization.network.base import TokenizerNetwork
 
 
 def seen_clip_stems(token_pack: str) -> set[str]:

@@ -18,7 +18,8 @@ from text2motion.generation.losses import soft_decode
 from text2motion.motion.contracts import Split
 from text2motion.motion.storage import sha256_file
 from text2motion.tokenization.contracts import TokenizerKind
-from text2motion.tokenization.nn_tokenizer import TokenizerNetwork, build_tokenizer_network
+from text2motion.tokenization.network.base import TokenizerNetwork
+from text2motion.tokenization.network.builder import build_tokenizer_network
 
 TOKENIZER_GOLDEN_PATH = Path("tests/golden/tokenizer_golden.json")
 FSQ_CONFIG = Path("configs/tokenizer/fsq_g8_v1024.yaml")

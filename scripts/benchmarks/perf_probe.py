@@ -25,7 +25,7 @@ from text2motion.generation.model.spec import GeneratorModelSpec
 from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.representation import DIM, FPS
 from text2motion.motion.storage import atomic_numpy_save, sha256_file
-from text2motion.tokenization.nn_tokenizer import build_tokenizer_network
+from text2motion.tokenization.network.builder import build_tokenizer_network
 
 
 def build_trainer(config, device: str, backbone: Backbone, tokenizer_ckpt: str):
