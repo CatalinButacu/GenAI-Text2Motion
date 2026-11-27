@@ -9,7 +9,7 @@ from text2motion.app.requests.generator import (
 )
 from text2motion.app.runtime.context import ApplicationContext, required_path
 from text2motion.app.runtime.overfit_gate import OverfitGate
-from text2motion.app.stages.data import require_protocol_run, verify_protocol_splits
+from text2motion.app.stages.data import require_protocol_seed, verify_protocol_splits
 from text2motion.app.stages.train_generator import initial_generator, overfit_criteria
 from text2motion.dataset.training.module import MotionDataModule
 from text2motion.generation.contracts import (
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def check_overfit_protocol(app: ApplicationContext, args: SanityOverfitRequest) -> None:
-    require_protocol_run(app.seed, args.exploratory, "sanity-overfit")
+    require_protocol_seed(app.seed, args.exploratory, "sanity-overfit")
     verify_protocol_splits(
         required_path(app.config.paths.hml3d_out_dir, "hml3d_out_dir"), args.exploratory
     )

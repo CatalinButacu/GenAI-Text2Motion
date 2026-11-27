@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from text2motion.app.requests.data import TrainTokenizerRequest
 from text2motion.app.runtime.context import ApplicationContext, required_path
 from text2motion.app.runtime.run_log import log_metrics, resumed_run_dir, start_run
-from text2motion.app.stages.data import require_protocol_run, verify_protocol_splits
+from text2motion.app.stages.data import require_protocol_seed, verify_protocol_splits
 from text2motion.dataset.training.batching import dataset_size
 from text2motion.dataset.training.module import MotionDataModule
 from text2motion.evaluation.evaluator import HumanMl3dGenerationEvaluator
@@ -57,7 +57,7 @@ def create_tokenizer_trainer(
 
 
 def require_tokenizer_protocol(app: ApplicationContext, args: TrainTokenizerRequest) -> None:
-    require_protocol_run(app.seed, args.exploratory, "train-tokenizer")
+    require_protocol_seed(app.seed, args.exploratory, "train-tokenizer")
     verify_protocol_splits(
         required_path(app.config.paths.hml3d_out_dir, "hml3d_out_dir"), args.exploratory
     )

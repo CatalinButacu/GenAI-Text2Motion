@@ -14,7 +14,7 @@ from text2motion.app.requests.generator import (
 from text2motion.app.runtime.checkpoint import GeneratorBundle, load_generator_checkpoint
 from text2motion.app.runtime.context import ApplicationContext, required_path
 from text2motion.app.runtime.overfit_gate import OverfitGate
-from text2motion.app.stages.data import require_protocol_run, verify_protocol_splits
+from text2motion.app.stages.data import require_protocol_seed, verify_protocol_splits
 from text2motion.app.stages.train_generator_setup import (
     GeneratorSetup,
     build_ce_loaders,
@@ -95,7 +95,7 @@ def prepare_generator(app: ApplicationContext, args: TrainGeneratorRequest) -> G
 
 
 def check_protocol_inputs(app: ApplicationContext, args: TrainGeneratorRequest) -> None:
-    require_protocol_run(app.seed, args.exploratory, "train-generator")
+    require_protocol_seed(app.seed, args.exploratory, "train-generator")
     verify_protocol_splits(
         required_path(app.config.paths.hml3d_out_dir, "hml3d_out_dir"), args.exploratory
     )

@@ -23,7 +23,7 @@ def face_across_np(joints: np.ndarray, face_joint_idx: tuple[int, ...]) -> np.nd
     return unit_np(across1 + across2)
 
 
-def forward_axis_np(across: np.ndarray, smooth_forward: bool) -> np.ndarray:
+def facing_direction_np(across: np.ndarray, smooth_forward: bool) -> np.ndarray:
     forward = np.cross(np.array([[0, 1, 0]]), across, axis=-1)
     if smooth_forward:
         forward = ndimage.gaussian_filter1d(forward, 20, axis=0, mode="nearest")
@@ -33,7 +33,7 @@ def forward_axis_np(across: np.ndarray, smooth_forward: bool) -> np.ndarray:
 def root_quat_np(
     joints: np.ndarray, face_joint_idx: tuple[int, ...], smooth_forward: bool
 ) -> np.ndarray:
-    forward = forward_axis_np(face_across_np(joints, face_joint_idx), smooth_forward)
+    forward = facing_direction_np(face_across_np(joints, face_joint_idx), smooth_forward)
     target = np.array([[0, 0, 1]]).repeat(len(forward), axis=0)
     return qbetween_np(forward, target)
 

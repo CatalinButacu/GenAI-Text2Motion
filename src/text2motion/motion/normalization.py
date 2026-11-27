@@ -170,10 +170,10 @@ def normalization_stats(
 
 
 def streamed_clips(vec_dir: Path, unique: list[str]) -> Iterator[np.ndarray]:
-    return (checked_clip(vec_dir, name) for name in unique)
+    return (load_checked_features(vec_dir, name) for name in unique)
 
 
-def checked_clip(vec_dir: Path, name: str) -> np.ndarray:
+def load_checked_features(vec_dir: Path, name: str) -> np.ndarray:
     clip = np.load(vec_dir / f"{name}.npy")
     if clip.ndim != 2 or clip.shape[0] == 0 or not np.isfinite(clip).all():
         raise ValueError(f"train clip {name} is empty, not 2-D, or holds NaN or Inf")

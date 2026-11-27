@@ -2,7 +2,11 @@ from contextlib import contextmanager
 
 import pytest
 
-from text2motion.common.engine import CleanCrossEntropyProgress, restore_clean_ce, run_epochs
+from text2motion.common.engine import (
+    CleanCrossEntropyProgress,
+    restore_early_stop_state,
+    run_epochs,
+)
 
 
 def test_run_epochs_stops_on_the_first_reason():
@@ -26,8 +30,8 @@ def test_run_epochs_stops_on_the_first_reason():
 def test_restore_keeps_the_saved_counter_and_fresh_selection_resets_it():
     state = {"clean_ce_progress": {"best": 1.5, "stale": 3}}
 
-    kept = restore_clean_ce(state, 8, False, 10)
-    reset = restore_clean_ce(state, 8, True, 10)
+    kept = restore_early_stop_state(state, 8, False, 10)
+    reset = restore_early_stop_state(state, 8, True, 10)
 
     assert kept == CleanCrossEntropyProgress(best=1.5, stale=3)
     assert reset == CleanCrossEntropyProgress(best=float("inf"), stale=0)

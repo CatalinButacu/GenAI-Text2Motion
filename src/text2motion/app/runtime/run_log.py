@@ -11,7 +11,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def git_commit() -> str:
+def git_head_hash() -> str:
     try:
         out = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True, timeout=10
@@ -117,7 +117,7 @@ def build_manifest(name: str, stamp: str, cfg: Any, extra: dict | None) -> dict:
     return {
         "name": name,
         "started_utc": stamp,
-        "git_commit": git_commit(),
+        "git_commit": git_head_hash(),
         "config": jsonable(cfg),
         "extra": jsonable(extra or {}),
         "versions": versions,

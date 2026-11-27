@@ -114,7 +114,7 @@ def test_install_binds_each_docked_key_to_its_panel(wired):
     panels.install()
     assert host.gui_controls == {
         "environment": panels.environment.gui_environment,
-        "params": panels.params.gui_params,
+        "params": panels.params.draw_generation_window,
         "prompt": panels.prompt.gui_prompt,
     }
 

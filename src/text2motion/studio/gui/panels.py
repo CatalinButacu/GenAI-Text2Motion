@@ -43,7 +43,7 @@ class GuiPanels:
 
     def install(self) -> None:
         self.host.gui_controls["environment"] = self.environment.gui_environment
-        self.host.gui_controls["params"] = self.params.gui_params
+        self.host.gui_controls["params"] = self.params.draw_generation_window
         self.host.gui_controls["prompt"] = self.prompt.gui_prompt
 
     def gui_scene(self) -> None:

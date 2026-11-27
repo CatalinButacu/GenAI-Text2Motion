@@ -29,7 +29,7 @@ def crop_to_max_frames(
     return feat[start : start + max_len]
 
 
-def clip_verbs(index: ClipIndex) -> list[frozenset[str]]:
+def verbs_per_clip(index: ClipIndex) -> list[frozenset[str]]:
     found = []
     for clip_id in index.ids:
         annotations = index.annotations[clip_id]
@@ -39,7 +39,7 @@ def clip_verbs(index: ClipIndex) -> list[frozenset[str]]:
 
 def clip_classes(index: ClipIndex, classes: dict[str, int]) -> list[frozenset[int]]:
     found = []
-    for verbs in clip_verbs(index):
+    for verbs in verbs_per_clip(index):
         labels = frozenset(classes[verb] for verb in verbs if verb in classes)
         found.append(labels or frozenset({NO_MOTION_CLASS}))
     return found

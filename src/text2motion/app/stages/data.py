@@ -32,7 +32,7 @@ PROTOCOL_SEED = 2026
 PROTOCOL_SPLIT_RECORD = "protocol_splits.json"
 
 
-def require_protocol_run(seed: int, exploratory: bool, command: str) -> None:
+def require_protocol_seed(seed: int, exploratory: bool, command: str) -> None:
     if exploratory:
         logger.warning(f"{command}: exploratory run with seed {seed}; the result is not citable")
         return

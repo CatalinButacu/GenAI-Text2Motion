@@ -43,7 +43,7 @@ def check_clip(path: Path, min_frames: int) -> dict[str, object]:
     }
 
 
-def scan_folder(folder: Path, log: Path, min_frames: int) -> dict[str, int]:
+def check_clip_folder(folder: Path, log: Path, min_frames: int) -> dict[str, int]:
     rows: list[dict[str, Any]] = [
         check_clip(path, min_frames) for path in sorted(folder.glob("*.npy"))
     ]

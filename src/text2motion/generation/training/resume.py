@@ -6,7 +6,7 @@ from pathlib import Path
 import torch
 from torch import nn
 
-from text2motion.common.engine import CleanCrossEntropyProgress, restore_clean_ce
+from text2motion.common.engine import CleanCrossEntropyProgress, restore_early_stop_state
 from text2motion.generation.requests import GeneratorTrainingRequest
 from text2motion.generation.training.optimizer import check_schedule_horizon
 from text2motion.generation.training.selection import (
@@ -143,7 +143,7 @@ def read_resume_selection(
     start_epoch, best_fid, stale_evaluations = GeneratorCheckpoint(trainer).load_resume_state(
         state, legacy, request.extend_schedule
     )
-    ce_progress = restore_clean_ce(
+    ce_progress = restore_early_stop_state(
         state, start_epoch, request.fresh_selection, request.val_ce_patience
     )
     del state

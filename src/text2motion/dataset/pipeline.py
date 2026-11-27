@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from text2motion.common.runner import Step, run_steps
+from text2motion.common.runner import Step, run_cached_steps
 from text2motion.dataset.contracts import DatasetPaths
 from text2motion.dataset.core.operations import sha256_file
 from text2motion.dataset.sources.humanml3d.build import (
@@ -69,4 +69,4 @@ def run_pipeline(
         steps = all_steps(request)
     else:
         steps = [stage_step(request, stage)]
-    return run_steps(steps, Path(request.out_dir), {"recipe": recipe_for(request)})
+    return run_cached_steps(steps, Path(request.out_dir), {"recipe": recipe_for(request)})

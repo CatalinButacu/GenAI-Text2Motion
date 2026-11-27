@@ -49,7 +49,7 @@ def read_clean_ce_history(metrics_path: Path, completed_epochs: int) -> dict[int
     return history
 
 
-def restore_clean_ce(
+def restore_early_stop_state(
     state: dict, completed_epochs: int, fresh_selection: bool, val_ce_patience: int
 ) -> CleanCrossEntropyProgress:
     if fresh_selection or not val_ce_patience:

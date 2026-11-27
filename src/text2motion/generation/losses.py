@@ -69,7 +69,7 @@ def masked_l1(a: torch.Tensor, b: torch.Tensor, mask: torch.Tensor | None) -> to
     return (torch.abs(a - b) * mask).sum() / (mask.sum().clamp(min=1.0) * a.size(-1))
 
 
-def geometric_terms(
+def reconstruction_terms(
     recon: torch.Tensor, gt: torch.Tensor, frame_lengths: torch.Tensor | None = None
 ) -> dict[str, torch.Tensor]:
     mask = frame_mask(recon, frame_lengths)
@@ -229,7 +229,7 @@ def generator_loss(
     motion_logits = batch.logits[:, :-1] if setup.has_end else batch.logits
     recon = soft_decode(motion_logits, setup.tokenizer)
 
-    terms = geometric_terms(recon, batch.gt_motion, batch.lengths)
+    terms = reconstruction_terms(recon, batch.gt_motion, batch.lengths)
     terms.update(optional_fk_terms(recon, batch, setup))
     terms.update(optional_dynamics_terms(recon, batch, setup))
     total = weighted_total(ce, terms, setup)

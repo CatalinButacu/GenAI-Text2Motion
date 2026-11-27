@@ -25,7 +25,7 @@ class SmplxBodyModels:
             self.state.smplx_fit.model_cache[(frames, gender)] = model
         return model
 
-    def display_rate_result(self, res: SmplxFitResult, factor: int, gender: str) -> SmplxFitResult:
+    def upsample_fit(self, res: SmplxFitResult, factor: int, gender: str) -> SmplxFitResult:
         if factor == 1:
             return res
         buffers = self.state.stream_buffers

@@ -17,7 +17,9 @@ class Step:
     run: Run
 
 
-def run_steps(steps: Sequence[Step], root: Path, context: Mapping[str, object]) -> dict[str, Path]:
+def run_cached_steps(
+    steps: Sequence[Step], root: Path, context: Mapping[str, object]
+) -> dict[str, Path]:
     recipe = context["recipe"]
     if not isinstance(recipe, Mapping):
         raise TypeError("context['recipe'] must be a mapping")

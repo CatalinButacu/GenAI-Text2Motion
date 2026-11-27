@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 OFFICIAL_SPLIT_FILES = ("train.txt", "val.txt", "test.txt")
 
 
-def parquet_module():
+def import_parquet():
     try:
         import pyarrow.parquet as pq
     except ImportError as exc:
@@ -50,7 +50,7 @@ def index_frame_scale(fps: int) -> int:
     return fps // HML3D_FPS
 
 
-def split_parquet_files(src: Path, split: str) -> list[Path]:
+def parquet_files_of_split(src: Path, split: str) -> list[Path]:
     matches = sorted(src.glob(f"**/{split}-*.parquet"))
     if not matches:
         matches = sorted(p for p in src.glob("**/*.parquet") if split in p.name)
@@ -86,7 +86,7 @@ def write_parquet_file(
 def write_split_motions(
     pq, src: Path, split: str, vec_dir: Path, seen: dict[str, str]
 ) -> list[str]:
-    files = split_parquet_files(src, split)
+    files = parquet_files_of_split(src, split)
     if not files:
         raise FileNotFoundError(f"no parquet files for split {split!r} under {src}")
     names = []
@@ -96,7 +96,7 @@ def write_split_motions(
 
 
 def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
-    pq = parquet_module()
+    pq = import_parquet()
 
     vec_dir = out_dir / FEATURES_DIR
     vec_dir.mkdir(parents=True, exist_ok=True)

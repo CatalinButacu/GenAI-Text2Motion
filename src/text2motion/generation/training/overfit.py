@@ -45,7 +45,7 @@ def gate_text_encoder(trainer: GeneratorTrainer) -> CLIPTextEncoder:
     return trainer.text_encoder
 
 
-def measure_gate(
+def measure_overfit_gate(
     trainer: GeneratorTrainer,
     text_encoder: CLIPTextEncoder,
     motion: torch.Tensor,
@@ -92,7 +92,7 @@ def run_gate_steps(
         first_total = parts["total"] if first_total is None else first_total
         if step % 25 and step + 1 != steps:
             continue
-        accuracy, ce = measure_gate(trainer, text_encoder, motion, captions, lengths)
+        accuracy, ce = measure_overfit_gate(trainer, text_encoder, motion, captions, lengths)
         restore_gate_training(trainer, text_encoder)
         logger.info(
             f"step {step + 1:4d} total {parts['total']:.5f} ce {ce:.5f} token_accuracy {accuracy:.4f}"
@@ -119,7 +119,7 @@ def overfit_single_batch(
     first_total, parts, step = run_gate_steps(
         trainer, text_encoder, motion, captions, lengths, steps, criteria
     )
-    accuracy, ce = measure_gate(trainer, text_encoder, motion, captions, lengths)
+    accuracy, ce = measure_overfit_gate(trainer, text_encoder, motion, captions, lengths)
     check_tokenizer_frozen(trainer)
     if first_total is None:
         raise RuntimeError("the overfit gate ran no step")

@@ -83,7 +83,7 @@ def advance_clean_ce(
 ) -> CleanCrossEntropyProgress:
     if ce_loaders is None:
         return progress
-    record = clean_ce_record(trainer, ce_loaders, device, max_batches)
+    record = measure_clean_ce(trainer, ce_loaders, device, max_batches)
     on_metrics({"epoch": epoch + 1, **record})
     logger.info(
         f"  [clean-ce] train {record['train_ce_clean']:.4f}  "
@@ -114,7 +114,7 @@ def early_stop_reason(
     return ""
 
 
-def clean_ce_record(
+def measure_clean_ce(
     trainer: GeneratorTrainer, ce_loaders: CleanCrossEntropyLoaders, device: str, max_batches: int
 ) -> dict[str, float]:
     train_ce = trainer.teacher_forced_ce(ce_loaders.train, device, max_batches)

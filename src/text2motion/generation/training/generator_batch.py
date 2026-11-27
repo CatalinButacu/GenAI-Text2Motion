@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from text2motion.generation.training.trainer import GeneratorTrainer
 
 
-def build_position_context(
+def build_kinematic_context(
     token_generator: MotionTokenGenerator,
     training_config: GeneratorTrainingConfig,
     mean: np.ndarray | None,
@@ -42,7 +42,7 @@ class GeneratorBatch:
         self, trainer: GeneratorTrainer, mean: np.ndarray | None, std: np.ndarray | None
     ) -> None:
         self.trainer = trainer
-        self._mean, self._std, self._skeleton = build_position_context(
+        self._mean, self._std, self._skeleton = build_kinematic_context(
             trainer.token_generator, trainer.training_config, mean, std
         )
 

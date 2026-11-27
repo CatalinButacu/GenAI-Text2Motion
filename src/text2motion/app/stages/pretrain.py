@@ -8,7 +8,7 @@ from text2motion.app.requests.generator import (
 )
 from text2motion.app.runtime.context import ApplicationContext, required_path
 from text2motion.app.runtime.run_log import log_metrics, resumed_run_dir, start_run
-from text2motion.app.stages.data import require_protocol_run, verify_protocol_splits
+from text2motion.app.stages.data import require_protocol_seed, verify_protocol_splits
 from text2motion.generation.requests import GeneratorPretrainingRequest
 from text2motion.generation.training.pretrain import pretrain_generator, pretraining_resume_path
 from text2motion.motion.contracts import RunOutputs
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def check_pretrain_inputs(app: ApplicationContext, args: PretrainRequest) -> None:
-    require_protocol_run(app.seed, args.exploratory, "pretrain")
+    require_protocol_seed(app.seed, args.exploratory, "pretrain")
     verify_protocol_splits(
         required_path(app.config.paths.hml3d_out_dir, "hml3d_out_dir"), args.exploratory
     )

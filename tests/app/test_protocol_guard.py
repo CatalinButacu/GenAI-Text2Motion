@@ -3,7 +3,7 @@ import pytest
 from text2motion.app.stages.data import (
     PROTOCOL_SEED,
     freeze_protocol_splits,
-    require_protocol_run,
+    require_protocol_seed,
     verify_protocol_splits,
 )
 
@@ -15,13 +15,13 @@ def write_splits(root):
 
 
 def test_a_protocol_run_uses_the_protocol_seed():
-    require_protocol_run(PROTOCOL_SEED, False, "train-tokenizer")
+    require_protocol_seed(PROTOCOL_SEED, False, "train-tokenizer")
 
 
 def test_a_run_with_another_seed_is_refused_unless_exploratory():
     with pytest.raises(ValueError, match="would use seed 2027"):
-        require_protocol_run(2027, False, "train-tokenizer")
-    require_protocol_run(2027, True, "train-tokenizer")
+        require_protocol_seed(2027, False, "train-tokenizer")
+    require_protocol_seed(2027, True, "train-tokenizer")
 
 
 def test_the_split_hashes_pass_when_the_files_are_unchanged(tmp_path):

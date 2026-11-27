@@ -32,7 +32,7 @@ class GenerationPanel:
         self.sampling = sampling
         self.avatar_section = avatar_section
 
-    def gui_params(self) -> None:
+    def draw_generation_window(self) -> None:
         *_, params, _, _ = self.layout.rects()
         self.layout.dock(params)
         imgui.begin("Generation", False, WINDOW_FLAGS)

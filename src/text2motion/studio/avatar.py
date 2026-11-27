@@ -47,7 +47,7 @@ class SmplxAvatarController:
             return
         res = solve_smplx_pose_from_joints(model, joints, self.state.device)
         self.state.stream_buffers.fit_progress = 1.0
-        display = self.body.display_rate_result(res, factor, gender)
+        display = self.body.upsample_fit(res, factor, gender)
         display_frames = len(display.global_orient)
         display_verts = self.body.shaped_vertices(
             self.body.body_model(display_frames, gender), display, display_frames

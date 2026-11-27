@@ -21,9 +21,9 @@ from text2motion.evaluation.nn_matcher import GuoEvaluationResources
 from text2motion.evaluation.reports import (
     build_protocol_report,
     calculate_run_metrics,
-    checkpoint_selection_record,
+    checkpoint_metrics_record,
 )
-from text2motion.evaluation.samples import chosen_caption_index, read_evaluation_samples
+from text2motion.evaluation.samples import chosen_caption_index, read_ground_truth_samples
 from text2motion.generation.contracts import SamplingConfig
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.motion.contracts import Split
@@ -55,7 +55,7 @@ class HumanMl3dGenerationEvaluator:
     def evaluation_samples(
         self, split: Split | str, max_clips: int | None, clip_list: tuple[str, ...] | None = None
     ) -> tuple[list[EvaluationSample], dict[str, int]]:
-        return read_evaluation_samples(self.resources, split, max_clips, clip_list)
+        return read_ground_truth_samples(self.resources, split, max_clips, clip_list)
 
     @torch.no_grad()
     def generate_evaluation_set(
@@ -200,7 +200,7 @@ class HumanMl3dGenerationEvaluator:
             self.resources.device,
         )
 
-        return checkpoint_selection_record(generated, reference_emb, generated_emb, text_emb)
+        return checkpoint_metrics_record(generated, reference_emb, generated_emb, text_emb)
 
 
 def warn_about_dropped_clips(split: GenerationEvaluationSet) -> None:

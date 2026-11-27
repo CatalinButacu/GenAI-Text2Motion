@@ -89,7 +89,7 @@ def whole_feet(touching: np.ndarray) -> np.ndarray:
     return support
 
 
-def unbalanced_frames(
+def frames_off_support(
     joints: np.ndarray,
     com: np.ndarray,
     acceleration: np.ndarray,
@@ -123,7 +123,7 @@ def newton_violations(joints: np.ndarray, fps: int, limits: NewtonLimits) -> New
     com = centre_of_mass(joints)
     acceleration = np.gradient(np.gradient(com, axis=0), axis=0) * fps * fps
     hover = hover_frames(acceleration, touching.any(axis=1), fps, limits)
-    unbalanced = unbalanced_frames(joints, com, acceleration, touching, fps, limits)
+    unbalanced = frames_off_support(joints, com, acceleration, touching, fps, limits)
     return NewtonResult(float(hover.mean()), float(unbalanced.mean()))
 
 

@@ -34,14 +34,14 @@ def split_counts(split: str) -> tuple[Counter, Counter]:
         path = ROOT / "texts" / f"{clip_id}.txt"
         if not path.exists():
             continue
-        clip_verbs: set[str] = set()
+        verbs_per_clip: set[str] = set()
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             verbs = caption_verbs(line)
             captions.update(verbs)
-            clip_verbs |= verbs
-        clips.update(clip_verbs)
+            verbs_per_clip |= verbs
+        clips.update(verbs_per_clip)
     return clips, captions
 
 

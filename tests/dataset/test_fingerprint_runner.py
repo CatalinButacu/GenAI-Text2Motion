@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from text2motion.common.fingerprint import output_folder, recipe_hash
-from text2motion.common.runner import Step, run_steps
+from text2motion.common.runner import Step, run_cached_steps
 
 
 def test_hash_is_the_same_for_the_same_recipe_in_any_key_order() -> None:
@@ -35,7 +35,7 @@ def test_runner_runs_steps_in_dependency_order(tmp_path: Path) -> None:
         Step("features", ("joints",), "features.txt", make("features")),
         Step("joints", (), "joints.txt", make("joints")),
     ]
-    run_steps(steps, tmp_path, {"recipe": {"fps": 60}})
+    run_cached_steps(steps, tmp_path, {"recipe": {"fps": 60}})
     assert order == ["joints", "features"]
 
 
@@ -47,14 +47,14 @@ def test_runner_skips_finished_steps_and_reruns_on_recipe_change(tmp_path: Path)
         out.write_text("x", encoding="utf-8")
 
     steps = [Step("joints", (), "joints.txt", run)]
-    run_steps(steps, tmp_path, {"recipe": {"fps": 60}})
-    run_steps(steps, tmp_path, {"recipe": {"fps": 60}})
+    run_cached_steps(steps, tmp_path, {"recipe": {"fps": 60}})
+    run_cached_steps(steps, tmp_path, {"recipe": {"fps": 60}})
     assert calls == ["x"]
-    run_steps(steps, tmp_path, {"recipe": {"fps": 20}})
+    run_cached_steps(steps, tmp_path, {"recipe": {"fps": 20}})
     assert calls == ["x", "x"]
 
 
 def test_runner_refuses_a_missing_input(tmp_path: Path) -> None:
     steps = [Step("features", ("joints",), "features.txt", lambda i, o: None)]
     with pytest.raises(KeyError, match="joints"):
-        run_steps(steps, tmp_path, {"recipe": {"fps": 60}})
+        run_cached_steps(steps, tmp_path, {"recipe": {"fps": 60}})

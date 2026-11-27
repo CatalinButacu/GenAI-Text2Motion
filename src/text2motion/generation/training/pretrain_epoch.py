@@ -182,7 +182,7 @@ def after_pretrain_epoch(ctx: PretrainEpochContext, epoch: int, means: dict[str,
     return ""
 
 
-def pretrain_guard(ctx: PretrainEpochContext, epoch: int):
+def dump_state_on_failure(ctx: PretrainEpochContext, epoch: int):
     return dump_on_failure(
         ctx.outputs.failure_dump_path,
         lambda: (

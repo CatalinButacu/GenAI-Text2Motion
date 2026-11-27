@@ -68,7 +68,7 @@ def build_protocol_report(
     )
 
 
-def checkpoint_selection_record(
+def checkpoint_metrics_record(
     generated: GenerationEvaluationSet,
     reference_emb: np.ndarray,
     generated_emb: np.ndarray,

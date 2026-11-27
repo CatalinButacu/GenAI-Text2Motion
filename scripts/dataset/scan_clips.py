@@ -2,7 +2,7 @@
 import argparse
 import pathlib
 
-from text2motion.dataset.core.scan import scan_folder
+from text2motion.dataset.core.scan import check_clip_folder
 
 
 def main() -> None:
@@ -11,7 +11,9 @@ def main() -> None:
     parser.add_argument("log", type=pathlib.Path)
     parser.add_argument("--min-frames", type=int, default=40)
     arguments = parser.parse_args()
-    print("clips by action", scan_folder(arguments.folder, arguments.log, arguments.min_frames))
+    print(
+        "clips by action", check_clip_folder(arguments.folder, arguments.log, arguments.min_frames)
+    )
 
 
 if __name__ == "__main__":

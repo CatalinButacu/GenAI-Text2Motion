@@ -18,7 +18,7 @@ from text2motion.generation.training.pretrain_epoch import (
     PretrainEpochContext,
     PretrainProgress,
     after_pretrain_epoch,
-    pretrain_guard,
+    dump_state_on_failure,
     train_pretrain_epoch,
 )
 from text2motion.motion.contracts import NO_RUN_OUTPUTS, RunOutputs
@@ -132,7 +132,7 @@ def run_pretrain_epochs(ctx: PretrainEpochContext) -> None:
         ctx.request.epochs,
         partial(train_pretrain_epoch, ctx),
         partial(after_pretrain_epoch, ctx),
-        partial(pretrain_guard, ctx),
+        partial(dump_state_on_failure, ctx),
     )
 
 

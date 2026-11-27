@@ -84,7 +84,7 @@ def piece_evaluation_sample(
     )
 
 
-def read_evaluation_samples(
+def read_ground_truth_samples(
     resources: GuoEvaluationResources,
     split: Split | str,
     max_clips: int | None,
