@@ -12,10 +12,8 @@ from text2motion.tokenization.contracts import (
     ResidualVectorQuantizationConfig,
     TokenizerConfig,
 )
-from text2motion.tokenization.nn_tokenizer import (
-    FiniteScalarQuantizationTokenizer,
-    ResidualVectorQuantizationTokenizer,
-)
+from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.network.residual import ResidualVectorQuantizationTokenizer
 
 GUARD_FILE = Path(__file__).with_name("refactor_guard.json")
 SEED = 2026

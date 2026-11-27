@@ -54,8 +54,8 @@ Each file has one role. Limits: 250 lines per file, 30 lines per function, 10 me
 | `evaluation/guo/`, `evaluation/transition/` | the frozen Guo matcher; transition statistics |
 | `studio/session/`, `studio/live/`, `studio/gui/`, `studio/scene_support/` | shared state, live generation, imgui panels, camera and scene clearing |
 
-Module names follow their role. The `nn_*` prefix remains only in frozen or untouched files
-(`evaluation/nn_matcher.py`, `tokenization/nn_tokenizer.py`).
+Module names follow their role. The `nn_*` prefix remains only in `evaluation/nn_matcher.py`. The tokenizer networks are in
+`tokenization/network/`, the tokenizer training in `tokenization/training/`.
 Moves are made with `scripts/maintenance/move_symbols.py`; renames with `rename_everywhere.py`.
 
 ## Role responsibilities (one sentence each)
