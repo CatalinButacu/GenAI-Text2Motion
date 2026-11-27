@@ -13,7 +13,7 @@ SOURCE_PREFIX = "src/text2motion/"
 ALLOWED = MappingProxyType(
     {
         "file": (),
-        "function": ("tokenization/reconstruction_metrics.py::reconstruction_metrics",),
+        "function": (),
         "class": (),
     }
 )

@@ -66,16 +66,20 @@ def evaluate_tokenizer_reconstruction(
         module.train(was_training)
 
 
-def reconstruction_metrics(
-    module: TokenizerNetwork,
-    setup: ReconstructionSetup,
-) -> dict[str, float]:
+def reconstruction_feature_paths(setup: ReconstructionSetup) -> list[Path]:
     ids = select_reconstruction_evaluation_clip_ids(
         setup.root, setup.split, max_clips=setup.max_clips, shuffle_seed=setup.shuffle_seed
     )
     feature_paths = [setup.root / FEATURES_DIR / f"{clip_id}.npy" for clip_id in ids]
     check_no_missing_files("feature", [str(path) for path in feature_paths if not path.is_file()])
+    return feature_paths
 
+
+def group_clips_by_length(
+    feature_paths: list[Path],
+    downsample: int,
+    max_frames: int,
+) -> dict[int, list[np.ndarray]]:
     clips_by_length: dict[int, list[np.ndarray]] = {}
     non_finite: list[str] = []
     for path in feature_paths:
@@ -83,57 +87,77 @@ def reconstruction_metrics(
         if not np.isfinite(features).all():
             non_finite.append(path.stem)
             continue
-        length = (min(features.shape[0], setup.max_frames) // module.downsample) * module.downsample
-        if length < 2 * module.downsample:
+        length = (min(features.shape[0], max_frames) // downsample) * downsample
+        if length < 2 * downsample:
             continue
         clips_by_length.setdefault(length, []).append(features[:length])
     if non_finite:
         raise ValueError(f"{len(non_finite)} clips hold NaN or Inf values: {non_finite[:20]}")
+    return clips_by_length
+
+
+def require_usable_clips(
+    clips_by_length: dict[int, list[np.ndarray]],
+    setup: ReconstructionSetup,
+    downsample: int,
+    clip_count: int,
+) -> None:
     if not clips_by_length:
         raise ValueError(
-            f"no clip of split {setup.split} has {2 * module.downsample} usable frames "
-            f"(clips listed: {len(ids)}, max_frames: {setup.max_frames}); the metrics would be NaN"
+            f"no clip of split {setup.split} has {2 * downsample} usable frames "
+            f"(clips listed: {clip_count}, max_frames: {setup.max_frames}); the metrics would be NaN"
         )
 
-    batches = [
+
+def split_into_batches(clips_by_length: dict[int, list[np.ndarray]]) -> list[list[np.ndarray]]:
+    return [
         clips[start : start + EVALUATION_BATCH_CLIPS]
         for clips in clips_by_length.values()
         for start in range(0, len(clips), EVALUATION_BATCH_CLIPS)
     ]
-    reference_features: list[np.ndarray] = []
-    reconstructed_features: list[np.ndarray] = []
-    joint_errors: list[float] = []
-    feature_distances: list[float] = []
 
-    for batch in batches:
-        reference = np.stack(batch)
-        normalized = torch.from_numpy(setup.scaler.normalize(reference)).to(setup.device)
-        reconstruction_normalized = module(normalized)[0].cpu().numpy()
-        if reconstruction_normalized.shape != normalized.shape:
-            raise ValueError(
-                f"the reconstruction has shape {reconstruction_normalized.shape}, the input "
-                f"{tuple(normalized.shape)}"
-            )
-        if not np.isfinite(reconstruction_normalized).all():
-            raise ValueError("the reconstruction holds NaN or Inf values")
-        reconstruction = np.asarray(setup.scaler.denormalize(reconstruction_normalized), np.float32)
 
-        reference_features.extend(reference)
-        reconstructed_features.extend(reconstruction)
-        feature_error = np.sqrt(((reference - reconstruction) ** 2).sum(-1)).mean(-1)
-        feature_distances.extend(feature_error.tolist())
+def reconstruct_batch(
+    module: TokenizerNetwork,
+    setup: ReconstructionSetup,
+    batch: list[np.ndarray],
+) -> tuple[np.ndarray, np.ndarray]:
+    reference = np.stack(batch)
+    normalized = torch.from_numpy(setup.scaler.normalize(reference)).to(setup.device)
+    reconstruction_normalized = module(normalized)[0].cpu().numpy()
+    if reconstruction_normalized.shape != normalized.shape:
+        raise ValueError(
+            f"the reconstruction has shape {reconstruction_normalized.shape}, the input "
+            f"{tuple(normalized.shape)}"
+        )
+    if not np.isfinite(reconstruction_normalized).all():
+        raise ValueError("the reconstruction holds NaN or Inf values")
+    reconstruction = np.asarray(setup.scaler.denormalize(reconstruction_normalized), np.float32)
+    return reference, reconstruction
 
-        reference_joints = recover_from_ric(torch.from_numpy(reference), setup.joint_count)
-        reconstructed_joints = recover_from_ric(torch.from_numpy(reconstruction), setup.joint_count)
-        joint_offsets = (reference_joints - reconstructed_joints).numpy()
-        joint_errors.extend(np.sqrt((joint_offsets**2).sum(-1)).mean((-2, -1)).tolist())
 
-    metrics = {
-        "clips": len(reference_features),
-        "mpjpe_mm": float(np.mean(joint_errors) * 1000.0),
-        "feature_l2": float(np.mean(feature_distances)),
-    }
+def feature_distance_per_clip(reference: np.ndarray, reconstruction: np.ndarray) -> list[float]:
+    feature_error = np.sqrt(((reference - reconstruction) ** 2).sum(-1)).mean(-1)
+    return feature_error.tolist()
 
+
+def joint_error_per_clip(
+    reference: np.ndarray,
+    reconstruction: np.ndarray,
+    joint_count: int,
+) -> list[float]:
+    reference_joints = recover_from_ric(torch.from_numpy(reference), joint_count)
+    reconstructed_joints = recover_from_ric(torch.from_numpy(reconstruction), joint_count)
+    joint_offsets = (reference_joints - reconstructed_joints).numpy()
+    return np.sqrt((joint_offsets**2).sum(-1)).mean((-2, -1)).tolist()
+
+
+def add_reconstruction_fid(
+    metrics: dict[str, float],
+    setup: ReconstructionSetup,
+    reference_features: list[np.ndarray],
+    reconstructed_features: list[np.ndarray],
+) -> None:
     if setup.reconstruction_fid_scorer is not None:
         metrics["recon_fid"] = setup.reconstruction_fid_scorer(
             reference_features, reconstructed_features
@@ -141,4 +165,30 @@ def reconstruction_metrics(
         if not np.isfinite(metrics["recon_fid"]):
             raise ValueError(f"the reconstruction FID is not finite: {metrics['recon_fid']}")
 
+
+def reconstruction_metrics(
+    module: TokenizerNetwork,
+    setup: ReconstructionSetup,
+) -> dict[str, float]:
+    feature_paths = reconstruction_feature_paths(setup)
+    clips_by_length = group_clips_by_length(feature_paths, module.downsample, setup.max_frames)
+    require_usable_clips(clips_by_length, setup, module.downsample, len(feature_paths))
+
+    reference_features: list[np.ndarray] = []
+    reconstructed_features: list[np.ndarray] = []
+    joint_errors: list[float] = []
+    feature_distances: list[float] = []
+    for batch in split_into_batches(clips_by_length):
+        reference, reconstruction = reconstruct_batch(module, setup, batch)
+        reference_features.extend(reference)
+        reconstructed_features.extend(reconstruction)
+        feature_distances.extend(feature_distance_per_clip(reference, reconstruction))
+        joint_errors.extend(joint_error_per_clip(reference, reconstruction, setup.joint_count))
+
+    metrics = {
+        "clips": len(reference_features),
+        "mpjpe_mm": float(np.mean(joint_errors) * 1000.0),
+        "feature_l2": float(np.mean(feature_distances)),
+    }
+    add_reconstruction_fid(metrics, setup, reference_features, reconstructed_features)
     return metrics
