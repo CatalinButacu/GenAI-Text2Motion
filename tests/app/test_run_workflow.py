@@ -9,6 +9,7 @@ from text2motion.app.workflows.requests import RunRequest, Workflow
 from text2motion.app.workflows.run import MANIFEST_NAME, run_workflow
 from text2motion.common.fingerprint import recipe_hash
 from text2motion.dataset.fixture import build_fixture_dataset
+from text2motion.motion.contracts import Split
 from text2motion.tokenization.contracts import TokenizerKind
 
 
@@ -55,11 +56,14 @@ def test_evaluate_workflow_runs_both_twins_from_one_step_list_and_reruns_skip(
     dataset = tmp_path / "fixture"
     build_fixture_dataset(dataset)
     calls = []
+    splits = []
 
     def record(name):
         def handler(app, args):
             backbone = getattr(args, "backbone", None)
             calls.append(f"{name}:{getattr(backbone, 'value', backbone)}")
+            if name == "evaluate":
+                splits.append(args.split)
             if name == "sanity-overfit":
                 args.overfit_gate.write_text("{}", encoding="utf-8")
 
@@ -95,6 +99,7 @@ def test_evaluate_workflow_runs_both_twins_from_one_step_list_and_reruns_skip(
         "train-generator:transformer",
     ]
     assert first[-1] == "evaluate:both"
+    assert splits == [Split.VALIDATION]
     manifest = json.loads((request.root / MANIFEST_NAME).read_text(encoding="utf-8"))
     assert len(manifest["steps"]) == 8
 

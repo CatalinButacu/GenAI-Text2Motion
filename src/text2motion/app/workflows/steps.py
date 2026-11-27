@@ -15,6 +15,7 @@ from text2motion.app.requests.generator import (
 from text2motion.app.workflows.requests import RunRequest, Workflow
 from text2motion.common.runner import Step
 from text2motion.generation.contracts import Backbone, BackboneChoice
+from text2motion.motion.contracts import Split
 
 DATA_STEP = "data"
 TOKENIZER_STEP = "tokenizer"
@@ -176,6 +177,7 @@ def evaluate_step(app: Any, request: RunRequest) -> Step:
     arguments = EvaluateRequest(
         config=request.config,
         backbone=BackboneChoice.BOTH,
+        split=Split.VALIDATION,
         tokenizer_ckpt=tokenizer_checkpoint(app, request),
         run_name=request.run_name,
     )
