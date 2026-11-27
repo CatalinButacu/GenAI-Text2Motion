@@ -13,12 +13,12 @@ from text2motion.motion.storage import (
     capture_rng_state,
     restore_rng_state,
 )
-from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.network.base import TokenizerNetwork
 from text2motion.tokenization.network.losses import (
     feature_velocity_reconstruction_loss,
     heading_reconstruction_loss,
 )
+from text2motion.tokenization.parameter_ema import ExponentialMovingAverage
 
 logger = logging.getLogger(__name__)
 

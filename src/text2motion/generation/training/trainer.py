@@ -18,8 +18,8 @@ from text2motion.generation.training.optimizer import (
     build_weighter,
     warmup_cosine_factor,
 )
-from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.network.base import TokenizerNetwork
+from text2motion.tokenization.parameter_ema import ExponentialMovingAverage
 
 type CheckpointSink = Callable[[int, float], None]
 

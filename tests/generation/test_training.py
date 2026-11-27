@@ -16,8 +16,8 @@ from text2motion.generation.training.resume import GENERATOR_RESUME_FORMAT, Gene
 from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.storage import RESUME_VERSION, atomic_torch_save, is_legacy_resume
 from text2motion.tokenization.contracts import TokenizerConfig
-from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.parameter_ema import ExponentialMovingAverage
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorConfig(

@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch import nn
 
-from text2motion.tokenization.ema import ExponentialMovingAverage
+from text2motion.tokenization.parameter_ema import ExponentialMovingAverage
 
 
 def small_model() -> tuple[nn.Module, nn.Linear]:
