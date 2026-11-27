@@ -62,7 +62,7 @@ Moves are made with `scripts/maintenance/move_symbols.py`; renames with `rename_
 
 | package | owns | must NOT |
 |---|---|---|
-| `common` | `Step` and `run_steps`, recipe hash, manifest, the shared training engine | import another package |
+| `common` | `Step` and `run_cached_steps`, recipe hash, manifest, the shared training engine | import another package |
 | `motion` | 263 representation and joint recovery | know about tokenizers, generators, metrics, or rendering |
 | `dataset` | preparation, splits, loaders, the CPU test fixture | know about tokenizers or generators |
 | `tokenization` | tokenizer architectures, corpus encoding, reconstruction training/eval | know about generators or application wiring |
@@ -75,7 +75,7 @@ Moves are made with `scripts/maintenance/move_symbols.py`; renames with `rename_
 
 - `text2motion run` runs one workflow: `data`, `tokenizer`, `generator` or `evaluate`.
   `app/workflows/steps.py` builds each as a list of `Step` objects over the CLI handlers.
-  One step list serves both twins. `run_steps` skips a finished step by recipe hash (ADR 0006).
+  One step list serves both twins. `run_cached_steps` skips a finished step by recipe hash (ADR 0006).
 - `common/engine.py` `run_epochs` is the one epoch loop of `tokenizer_trainer`,
   `generation/training/trainer.py` and `generation/training/pretrain.py`. It holds the clean validation cross-entropy history.
   Parity values: `tests/generation/trainer_parity.json`.
