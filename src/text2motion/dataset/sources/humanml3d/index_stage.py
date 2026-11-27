@@ -37,9 +37,11 @@ def cut_index_row(
         return None
     data = np.load(load_path)
 
-    whole = "humanact12" in source_path
-    trim = 0 if whole else head_trim_frames(source_path, fps)
-    return cut_mirrored_window(data, start_frame, end_frame, trim, whole=whole)
+    source_is_prepared = "humanact12" in source_path
+    trim = 0 if source_is_prepared else head_trim_frames(source_path, fps)
+    return cut_mirrored_window(
+        data, start_frame, end_frame, trim, source_is_prepared=source_is_prepared
+    )
 
 
 def write_index_clips(

@@ -32,6 +32,6 @@ def test_too_few_frames_are_refused() -> None:
 
 
 def test_humanact12_is_kept_whole_and_not_flipped() -> None:
-    clip = cut_mirrored_window(frames(10), start=0, end=0, trim=0, whole=True)
+    clip = cut_mirrored_window(frames(10), start=0, end=0, trim=0, source_is_prepared=True)
     assert clip.shape == (10, 22, 3)
     assert clip[1, 0, 0] == 1.0

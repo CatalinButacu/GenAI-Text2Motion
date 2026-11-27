@@ -8,9 +8,9 @@ class CropError(ValueError):
 
 
 def cut_mirrored_window(
-    data: np.ndarray, start: int, end: int, trim: int, whole: bool = False
+    data: np.ndarray, start: int, end: int, trim: int, source_is_prepared: bool = False
 ) -> np.ndarray:
-    if whole:
+    if source_is_prepared:
         return data
     data = data[trim:]
     if start < 0 or end <= start:
