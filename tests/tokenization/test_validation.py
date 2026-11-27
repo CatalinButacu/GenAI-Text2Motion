@@ -18,12 +18,10 @@ from text2motion.tokenization.contracts import (
 )
 from text2motion.tokenization.corpus import build_token_pack
 from text2motion.tokenization.fsq_quantizer import FiniteScalarQuantizer
-from text2motion.tokenization.nn_tokenizer import (
-    FiniteScalarQuantizationTokenizer,
-    FrozenMotionTokenizer,
-    ResidualVectorQuantizationTokenizer,
-    feature_velocity_reconstruction_loss,
-)
+from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.network.frozen import FrozenMotionTokenizer
+from text2motion.tokenization.network.losses import feature_velocity_reconstruction_loss
+from text2motion.tokenization.network.residual import ResidualVectorQuantizationTokenizer
 from text2motion.tokenization.tokenizer_trainer import TokenizerTrainer
 from text2motion.tokenization.vector_quantizer import VectorQuantizer
 

@@ -1,10 +1,8 @@
 import torch
 
 from text2motion.tokenization.contracts import TokenizerConfig
-from text2motion.tokenization.nn_tokenizer import (
-    FiniteScalarQuantizationTokenizer,
-    heading_reconstruction_loss,
-)
+from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.network.losses import heading_reconstruction_loss
 
 FRAMES = 32
 SPLIT = 16

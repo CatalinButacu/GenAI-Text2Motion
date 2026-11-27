@@ -1,7 +1,7 @@
 import torch
 
 from text2motion.tokenization.contracts import TokenizerConfig
-from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizationTokenizer
 
 FRAMES = 32
 SPLIT = 16

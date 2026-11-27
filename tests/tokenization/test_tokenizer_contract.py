@@ -15,13 +15,11 @@ from text2motion.tokenization.fsq_quantizer import (
     GroupedFiniteScalarQuantizer,
     ResidualFiniteScalarQuantizer,
 )
-from text2motion.tokenization.nn_tokenizer import (
-    FiniteScalarQuantizationTokenizer,
-    ResidualVectorQuantizationTokenizer,
-    TokenizerNetwork,
-    build_tokenizer_network,
-    downsample_stage_count,
-)
+from text2motion.tokenization.network.base import TokenizerNetwork
+from text2motion.tokenization.network.builder import build_tokenizer_network
+from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.network.motion_convolution import downsample_stage_count
+from text2motion.tokenization.network.residual import ResidualVectorQuantizationTokenizer
 from text2motion.tokenization.quantizer_base import QuantizerStack
 from text2motion.tokenization.vector_quantizer import ResidualVectorQuantizer
 

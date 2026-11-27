@@ -16,10 +16,8 @@ from text2motion.tokenization.contracts import (
     TokenizerKind,
     TokenizerSchedule,
 )
-from text2motion.tokenization.nn_tokenizer import (
-    FiniteScalarQuantizationTokenizer,
-    build_tokenizer_network,
-)
+from text2motion.tokenization.network.builder import build_tokenizer_network
+from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizationTokenizer
 from text2motion.tokenization.tokenizer_trainer import TokenizerTrainer, train_tokenizer
 
 CFG = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
