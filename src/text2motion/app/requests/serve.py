@@ -21,6 +21,10 @@ class ModelServiceRequest(ServiceAddressRequest):
     ckpt: Path | None = Field(
         default=None, description="generator checkpoint; default from the config"
     )
+    run_name: str | None = Field(
+        default=None,
+        description="twin run name; picks runs/checkpoints/generator/generator_<backbone>_<run_name>.pt",
+    )
     tokenizer_ckpt: Path | None = Field(
         default=None,
         description="frozen tokenizer checkpoint; it must be the one the generator was trained on",

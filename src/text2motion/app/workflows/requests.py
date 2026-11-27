@@ -46,6 +46,16 @@ class RunRequest(DefaultConfigRequest):
         default=None,
         description="frozen tokenizer checkpoint for the generator steps; default from the config",
     )
+    run_name: str = Field(
+        default="twins",
+        pattern=r"^[A-Za-z0-9_]+$",
+        description="twin run name; checkpoints are generator_<backbone>_<run_name>.pt",
+    )
+    pretrain_epochs: int | None = Field(
+        default=None,
+        gt=0,
+        description="unconditional pretraining epochs before each overfit gate; none skips it",
+    )
     overfit_steps: int = Field(
         default=1000, gt=0, description="maximum optimizer steps of each overfit gate"
     )

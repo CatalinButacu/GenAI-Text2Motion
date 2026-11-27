@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from text2motion.app import cli
+from text2motion.app.config.schema import ProjectPathsConfig, twin_checkpoint_name
 from text2motion.app.workflows.requests import RunRequest, Workflow
 from text2motion.app.workflows.run import MANIFEST_NAME, run_workflow
 from text2motion.common.fingerprint import recipe_hash
@@ -73,7 +74,9 @@ def test_evaluate_workflow_runs_both_twins_from_one_step_list_and_reruns_skip(
     ):
         monkeypatch.setattr(f"text2motion.app.stages.{target}", record(name))
     monkeypatch.setattr("text2motion.app.stages.evaluate.run_evaluate", record("evaluate"))
-    paths = SimpleNamespace(hml3d_out_dir=dataset, tokenizer_checkpoint=tmp_path / "tok.pt")
+    paths = SimpleNamespace(
+        hml3d_out_dir=dataset, tokenizer_checkpoint=tmp_path / "tok.pt", checkpoints_dir=tmp_path
+    )
     app = SimpleNamespace(config=SimpleNamespace(paths=paths))
     request = RunRequest(
         workflow=Workflow.EVALUATE, root=tmp_path / "run", tokenizer=TokenizerKind.FINITE_SCALAR
@@ -94,3 +97,70 @@ def test_evaluate_workflow_runs_both_twins_from_one_step_list_and_reruns_skip(
     assert first[-1] == "evaluate:both"
     manifest = json.loads((request.root / MANIFEST_NAME).read_text(encoding="utf-8"))
     assert len(manifest["steps"]) == 8
+
+
+def test_pretrain_feeds_each_twin_and_the_run_name_names_every_checkpoint(tmp_path, monkeypatch):
+    dataset = tmp_path / "fixture"
+    build_fixture_dataset(dataset)
+    seen = {}
+
+    def record(name):
+        def handler(app, args):
+            seen[f"{name}:{args.backbone.value}"] = args
+            if name == "sanity-overfit":
+                args.overfit_gate.write_text("{}", encoding="utf-8")
+
+        return handler
+
+    def tokenize(app, args):
+        seen["tokenize"] = args
+
+    for name, target in (
+        ("pretrain", "pretrain.run_pretrain"),
+        ("sanity-overfit", "overfit.run_sanity_overfit"),
+        ("train-generator", "train_generator.run_train_generator"),
+    ):
+        monkeypatch.setattr(f"text2motion.app.stages.{target}", record(name))
+    monkeypatch.setattr("text2motion.app.stages.data.run_prepare", lambda app, args: None)
+    monkeypatch.setattr(
+        "text2motion.app.stages.train_tokenizer.run_train_tokenizer", lambda app, args: None
+    )
+    monkeypatch.setattr("text2motion.app.stages.data.run_tokenize", tokenize)
+    paths = SimpleNamespace(
+        hml3d_out_dir=dataset, tokenizer_checkpoint=tmp_path / "tok.pt", checkpoints_dir=tmp_path
+    )
+    app = SimpleNamespace(config=SimpleNamespace(paths=paths))
+    request = RunRequest(
+        workflow=Workflow.GENERATOR,
+        root=tmp_path / "run",
+        tokenizer=TokenizerKind.FINITE_SCALAR,
+        run_name="causal",
+        pretrain_epochs=3,
+    )
+
+    run_workflow(app, request)
+
+    for backbone in ("transformer", "mamba"):
+        pretrained = tmp_path / "generator" / f"generator_{backbone}_causal_pretrained.pt"
+        assert seen[f"pretrain:{backbone}"].ckpt == pretrained
+        assert seen[f"pretrain:{backbone}"].token_pack == seen["tokenize"].token_pack
+        assert seen[f"pretrain:{backbone}"].epochs == 3
+        assert seen[f"sanity-overfit:{backbone}"].init_ckpt == pretrained
+        generator = seen[f"train-generator:{backbone}"]
+        assert generator.init_ckpt == pretrained
+        assert generator.ckpt_name == f"generator_{backbone}_causal.pt"
+        assert generator.resume is False
+
+
+def test_a_run_name_picks_the_twin_checkpoint_instead_of_the_configured_one(tmp_path):
+    paths = ProjectPathsConfig(
+        checkpoints_dir=tmp_path, generator_checkpoint_paths={"mamba": tmp_path / "old.pt"}
+    )
+
+    assert paths.generator_checkpoint("mamba") == tmp_path / "old.pt"
+    assert paths.generator_checkpoint("mamba", "causal") == (
+        tmp_path / "generator" / "generator_mamba_causal.pt"
+    )
+    assert paths.generator_checkpoint("transformer", "causal").name == (
+        twin_checkpoint_name("transformer", "causal")
+    )

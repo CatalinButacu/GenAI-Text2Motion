@@ -102,6 +102,10 @@ class EvaluateRequest(DefaultConfigRequest):
         default=None,
         description="generator checkpoint path; used only when one backbone is selected",
     )
+    run_name: str | None = Field(
+        default=None,
+        description="twin run name; picks runs/checkpoints/generator/generator_<backbone>_<run_name>.pt",
+    )
     clip_list: Path | None = Field(
         default=None,
         description="file with one clip id per line; only these clips of the split are scored",

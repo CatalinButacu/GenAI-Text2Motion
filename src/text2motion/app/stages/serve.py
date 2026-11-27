@@ -113,7 +113,7 @@ def prepare_studio_request(
         select_model(args, args.model, studio_config.model_registry)
         app = app.with_config(args.config)
     app = app.with_service_file(args.service_config)
-    args.ckpt = args.ckpt or app.config.paths.generator_checkpoint(args.backbone)
+    args.ckpt = args.ckpt or app.config.paths.generator_checkpoint(args.backbone, args.run_name)
     args.tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
     return app
 

@@ -4,9 +4,14 @@ from pathlib import Path
 from typing import Any
 
 from text2motion.app.cli import COMMANDS
+from text2motion.app.config.schema import twin_checkpoint_name
 from text2motion.app.requests.data import PrepareRequest, TokenizeRequest, TrainTokenizerRequest
 from text2motion.app.requests.evaluate import EvaluateRequest
-from text2motion.app.requests.generator import SanityOverfitRequest, TrainGeneratorRequest
+from text2motion.app.requests.generator import (
+    PretrainRequest,
+    SanityOverfitRequest,
+    TrainGeneratorRequest,
+)
 from text2motion.app.workflows.requests import RunRequest, Workflow
 from text2motion.common.runner import Step
 from text2motion.generation.contracts import Backbone, BackboneChoice
@@ -16,6 +21,7 @@ TOKENIZER_STEP = "tokenizer"
 TOKENIZE_STEP = "tokenize"
 EVALUATE_STEP = "evaluate"
 BACKBONES = (Backbone.TRANSFORMER, Backbone.MAMBA)
+PRETRAINED_SUFFIX = "_pretrained"
 
 
 def data_step(app: Any, request: RunRequest) -> Step:
@@ -61,6 +67,50 @@ def tokenize_step(app: Any, request: RunRequest) -> Step:
     return Step(TOKENIZE_STEP, (TOKENIZER_STEP,), TOKENIZE_STEP, run)
 
 
+def twin_checkpoint(app: Any, request: RunRequest, backbone: Backbone, suffix: str = "") -> Path:
+    name = twin_checkpoint_name(backbone, request.run_name + suffix)
+    return Path(app.config.paths.checkpoints_dir) / "generator" / name
+
+
+def resume_exists(checkpoint: Path) -> bool:
+    return checkpoint.with_name(f"{checkpoint.stem}_last.pt").exists()
+
+
+def pretrained_weights(app: Any, request: RunRequest, backbone: Backbone) -> Path | None:
+    if request.pretrain_epochs is None:
+        return None
+    return twin_checkpoint(app, request, backbone, PRETRAINED_SUFFIX)
+
+
+def pretrain_step(app: Any, request: RunRequest, backbone: Backbone) -> Step:
+    if request.pretrain_epochs is None:
+        raise ValueError("the pretrain step needs --pretrain_epochs")
+    epochs = request.pretrain_epochs
+    name = f"pretrain-{backbone.value}"
+    checkpoint = twin_checkpoint(app, request, backbone, PRETRAINED_SUFFIX)
+
+    def run(inputs: dict[str, Path], output: Path) -> None:
+        arguments = PretrainRequest(
+            config=request.config,
+            exploratory=request.exploratory,
+            backbone=backbone,
+            token_pack=Path(inputs[TOKENIZE_STEP].read_text(encoding="utf-8")),
+            epochs=epochs,
+            ckpt=checkpoint,
+            resume=resume_exists(checkpoint),
+        )
+        COMMANDS["pretrain"].handler(app, arguments)
+        output.write_text(str(checkpoint), encoding="utf-8")
+
+    return Step(name, (TOKENIZE_STEP,), name, run)
+
+
+def gate_needs(request: RunRequest, backbone: Backbone) -> tuple[str, ...]:
+    if request.pretrain_epochs is None:
+        return (TOKENIZE_STEP,)
+    return (f"pretrain-{backbone.value}",)
+
+
 def sanity_step(app: Any, request: RunRequest, backbone: Backbone) -> Step:
     name = f"sanity-overfit-{backbone.value}"
 
@@ -72,15 +122,17 @@ def sanity_step(app: Any, request: RunRequest, backbone: Backbone) -> Step:
             tokenizer_ckpt=tokenizer_checkpoint(app, request),
             overfit_gate=output,
             steps=request.overfit_steps,
+            init_ckpt=pretrained_weights(app, request, backbone),
         )
         COMMANDS["sanity-overfit"].handler(app, arguments)
 
-    return Step(name, (TOKENIZE_STEP,), f"{name}.json", run)
+    return Step(name, gate_needs(request, backbone), f"{name}.json", run)
 
 
 def generator_step(app: Any, request: RunRequest, backbone: Backbone) -> Step:
     gate = f"sanity-overfit-{backbone.value}"
     name = f"train-generator-{backbone.value}"
+    checkpoint = twin_checkpoint(app, request, backbone)
 
     def run(inputs: dict[str, Path], output: Path) -> None:
         arguments = TrainGeneratorRequest(
@@ -90,6 +142,9 @@ def generator_step(app: Any, request: RunRequest, backbone: Backbone) -> Step:
             tokenizer_ckpt=tokenizer_checkpoint(app, request),
             overfit_gate=inputs[gate],
             epochs=request.generator_epochs,
+            ckpt_name=checkpoint.name,
+            resume=resume_exists(checkpoint),
+            init_ckpt=pretrained_weights(app, request, backbone),
         )
         COMMANDS["train-generator"].handler(app, arguments)
         output.write_text(backbone.value, encoding="utf-8")
@@ -100,6 +155,8 @@ def generator_step(app: Any, request: RunRequest, backbone: Backbone) -> Step:
 def generator_steps(app: Any, request: RunRequest) -> list[Step]:
     steps = [data_step(app, request), tokenizer_step(app, request), tokenize_step(app, request)]
     for backbone in BACKBONES:
+        if request.pretrain_epochs is not None:
+            steps.append(pretrain_step(app, request, backbone))
         steps.append(sanity_step(app, request, backbone))
         steps.append(generator_step(app, request, backbone))
     return steps
@@ -110,6 +167,7 @@ def evaluate_step(app: Any, request: RunRequest) -> Step:
         config=request.config,
         backbone=BackboneChoice.BOTH,
         tokenizer_ckpt=tokenizer_checkpoint(app, request),
+        run_name=request.run_name,
     )
 
     def run(inputs: dict[str, Path], output: Path) -> None:

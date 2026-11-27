@@ -15,7 +15,7 @@ from text2motion.tokenization.network.frozen import FrozenMotionTokenizer
 
 
 def resolve_model_paths(app: ApplicationContext, args: ModelServiceRequest) -> tuple[Path, Path]:
-    args.ckpt = args.ckpt or app.config.paths.generator_checkpoint(args.backbone)
+    args.ckpt = args.ckpt or app.config.paths.generator_checkpoint(args.backbone, args.run_name)
     args.tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
     return args.ckpt, args.tokenizer_ckpt
 

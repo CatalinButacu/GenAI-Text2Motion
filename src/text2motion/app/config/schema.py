@@ -18,6 +18,10 @@ from text2motion.tokenization.contracts import (
 )
 
 
+def twin_checkpoint_name(backbone: Backbone | str, run_name: str) -> str:
+    return f"generator_{Backbone(backbone).value}_{run_name}.pt"
+
+
 ############################################################
 #       ComputeDevice
 ############################################################
@@ -107,7 +111,9 @@ class ProjectPathsConfig:
             )
         return self.tokenizer_checkpoint_path
 
-    def generator_checkpoint(self, backbone: Backbone | str) -> Path:
+    def generator_checkpoint(self, backbone: Backbone | str, run_name: str | None = None) -> Path:
+        if run_name is not None:
+            return self.checkpoints_dir / "generator" / twin_checkpoint_name(backbone, run_name)
         key = Backbone(backbone).value
         if key not in self.generator_checkpoint_paths:
             raise ValueError(

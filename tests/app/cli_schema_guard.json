@@ -862,6 +862,19 @@
         "description": "generator checkpoint path; used only when one backbone is selected",
         "title": "Ckpt"
       },
+      "run_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "twin run name; picks runs/checkpoints/generator/generator_<backbone>_<run_name>.pt",
+        "title": "Run Name"
+      },
       "clip_list": {
         "anyOf": [
           {
@@ -1076,6 +1089,19 @@
         "description": "generator checkpoint; default from the config",
         "title": "Ckpt"
       },
+      "run_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "twin run name; picks runs/checkpoints/generator/generator_<backbone>_<run_name>.pt",
+        "title": "Run Name"
+      },
       "tokenizer_ckpt": {
         "anyOf": [
           {
@@ -1177,6 +1203,19 @@
         "default": null,
         "description": "generator checkpoint; default from the config",
         "title": "Ckpt"
+      },
+      "run_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "twin run name; picks runs/checkpoints/generator/generator_<backbone>_<run_name>.pt",
+        "title": "Run Name"
       },
       "tokenizer_ckpt": {
         "anyOf": [
@@ -1362,6 +1401,27 @@
         "default": null,
         "description": "frozen tokenizer checkpoint for the generator steps; default from the config",
         "title": "Tokenizer Ckpt"
+      },
+      "run_name": {
+        "default": "twins",
+        "description": "twin run name; checkpoints are generator_<backbone>_<run_name>.pt",
+        "pattern": "^[A-Za-z0-9_]+$",
+        "title": "Run Name",
+        "type": "string"
+      },
+      "pretrain_epochs": {
+        "anyOf": [
+          {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "unconditional pretraining epochs before each overfit gate; none skips it",
+        "title": "Pretrain Epochs"
       },
       "overfit_steps": {
         "default": 1000,

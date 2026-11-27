@@ -80,7 +80,7 @@ def resolve_checkpoint(
     app: ApplicationContext, args: EvaluateRequest, backbone: Backbone, backbone_count: int
 ) -> Path:
     checkpoint = args.ckpt if backbone_count == 1 else None
-    return checkpoint or app.config.paths.generator_checkpoint(backbone)
+    return checkpoint or app.config.paths.generator_checkpoint(backbone, args.run_name)
 
 
 def log_evaluate_header(
