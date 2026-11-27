@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from text2motion.dataset.splits.plan import SplitPlan
-from text2motion.dataset.splits.view import TrainView
+from text2motion.dataset.splits.train_access import TrainView
 
 
 def make_plan(folder: Path) -> SplitPlan:
@@ -55,7 +55,7 @@ def test_view_cannot_be_widened(tmp_path: Path) -> None:
 
 
 def test_training_ids_come_from_the_allowed_list(tmp_path: Path) -> None:
-    from text2motion.dataset.splits.view import split_clip_ids
+    from text2motion.dataset.splits.train_access import split_clip_ids
     from text2motion.motion.contracts import Split
 
     (tmp_path / "train.txt").write_text("000001\n000004\n000005\n", encoding="utf-8")
@@ -68,7 +68,7 @@ def test_training_ids_come_from_the_allowed_list(tmp_path: Path) -> None:
 def test_training_without_the_allowed_list_fails_loud(tmp_path: Path) -> None:
     import pytest as _pytest
 
-    from text2motion.dataset.splits.view import split_clip_ids
+    from text2motion.dataset.splits.train_access import split_clip_ids
     from text2motion.motion.contracts import Split
 
     (tmp_path / "train.txt").write_text("000001\n", encoding="utf-8")

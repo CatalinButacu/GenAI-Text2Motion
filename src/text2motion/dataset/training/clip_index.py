@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from text2motion.dataset.contracts import MotionDataConfig
-from text2motion.dataset.splits.view import split_clip_ids
+from text2motion.dataset.splits.train_access import split_clip_ids
 from text2motion.dataset.training.batching import log_dropped_clips
 from text2motion.dataset.training.captions import usable_annotations
 from text2motion.motion.contracts import Split

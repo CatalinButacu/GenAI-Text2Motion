@@ -6,7 +6,7 @@ from types import MappingProxyType
 
 import numpy as np
 
-from text2motion.dataset.splits.view import ALLOWED_TRAIN_FILE
+from text2motion.dataset.splits.train_access import ALLOWED_TRAIN_FILE
 from text2motion.motion.contracts import Split
 from text2motion.motion.representation import DIM
 from text2motion.motion.storage import (

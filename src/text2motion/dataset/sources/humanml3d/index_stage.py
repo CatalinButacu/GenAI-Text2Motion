@@ -10,7 +10,7 @@ import numpy as np
 from tqdm import tqdm
 
 from text2motion.common.manifest import write_manifest
-from text2motion.dataset.core.windows import CropError, cut_window
+from text2motion.dataset.core.windows import CropError, cut_mirrored_window
 from text2motion.dataset.sources.amass.reader import resolve_pose_path
 from text2motion.dataset.sources.amass.trim import head_trim_frames
 from text2motion.dataset.sources.base import INDEX_MANIFEST
@@ -39,7 +39,7 @@ def cut_index_row(
 
     whole = "humanact12" in source_path
     trim = 0 if whole else head_trim_frames(source_path, fps)
-    return cut_window(data, start_frame, end_frame, trim, whole=whole)
+    return cut_mirrored_window(data, start_frame, end_frame, trim, whole=whole)
 
 
 def write_index_clips(

@@ -14,13 +14,13 @@ MANIFEST_NAME = "manifest.json"
 logger = logging.getLogger(__name__)
 
 
-def workflow_recipe(request: RunRequest) -> dict[str, object]:
+def request_recipe(request: RunRequest) -> dict[str, object]:
     return request.model_dump(mode="json", exclude={"root"})
 
 
 def run_workflow(app: Any, request: RunRequest) -> None:
     steps = workflow_steps(app, request)
-    recipe = workflow_recipe(request)
+    recipe = request_recipe(request)
     done = run_steps(steps, request.root, {"recipe": recipe})
     stamp = recipe_hash(recipe)
     entries = {name: {"recipe_hash": stamp, "output": path.name} for name, path in done.items()}

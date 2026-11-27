@@ -7,7 +7,7 @@ class CropError(ValueError):
     pass
 
 
-def cut_window(
+def cut_mirrored_window(
     data: np.ndarray, start: int, end: int, trim: int, whole: bool = False
 ) -> np.ndarray:
     if whole:

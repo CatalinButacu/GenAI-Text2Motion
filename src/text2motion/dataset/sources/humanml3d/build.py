@@ -27,7 +27,7 @@ from text2motion.dataset.sources.humanml3d.source import (
     reference_joints_path,
 )
 from text2motion.dataset.splits.plan import SplitPlan
-from text2motion.dataset.splits.view import ALLOWED_TRAIN_FILE
+from text2motion.dataset.splits.train_access import ALLOWED_TRAIN_FILE
 from text2motion.motion.contracts import PreparationRequest, Split
 from text2motion.motion.normalization import fit_train_stats
 from text2motion.motion.recovery import (
