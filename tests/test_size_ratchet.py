@@ -17,7 +17,6 @@ ALLOWED = MappingProxyType(
         ),
         "function": (
             "tokenization/corpus.py::build_token_pack",
-            "tokenization/nn_tokenizer.py::FiniteScalarQuantizationTokenizer.__init__",
             "tokenization/reconstruction_metrics.py::reconstruction_metrics",
             "tokenization/tokenizer_trainer.py::TokenizerTrainer.train_step",
             "tokenization/tokenizer_trainer.py::train_tokenizer",
