@@ -10,7 +10,8 @@ Everything that needs a GPU should be launched behind `training/local_guard.ps1`
 | file | what it is |
 |---|---|
 | `local_guard.ps1` | the watchdog. Stall-kills on a stale `metrics.jsonl` heartbeat plus a max-hours budget, and writes the reason to `runs/outputs/GUARD_KILL.txt`. Wrap every long local job in it. |
-| `run_3day_local.ps1` | the local generator chain: overfit gate -> pretrain -> finetune, for both twins. Written for the 4 GB laptop, so its `--epochs`/`--batch_size` are laptop compromises, not the intended recipe. |
+| `run_twins.ps1` | the twin run: one guarded `text2motion run --workflow EVALUATE` that gates, trains and validates both twins with one run name. Use `make twins`. See `docs/project/ARCHITECTURE.md`, section Twin flow. |
+| `historical/` | the per-experiment twin scripts from before 2026-11-27, kept unchanged so each finished run can be traced. |
 
 ### `training/tokenizer_sweep/` — Contribution A, and it is FINISHED
 

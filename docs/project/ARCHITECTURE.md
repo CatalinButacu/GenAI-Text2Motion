@@ -84,6 +84,27 @@ Moves are made with `scripts/maintenance/move_symbols.py`; renames with `rename_
   Studio live mode sends `steer` on a prompt change. The choice is provisional: it was measured
   on a tiny random model only (`docs/notes/steering_joint_jump.csv`).
 
+## Twin flow (2026-11-27)
+
+One command trains and scores both twins:
+`make twins CFG=<config> NAME=<run> TOK=<tokenizer.pt> E=60 P=0`.
+
+1. `scripts/training/run_twins.ps1` runs `text2motion run --workflow EVALUATE` under the
+   `Invoke-TrainingStep` guard (72 h budget, 90 min without a heartbeat). Logs and step markers are in
+   `runs/outputs/twins/<run>/`. `DONE.txt` appears only when every step passed.
+2. The step order is: data, tokenize, then for each twin an optional pretrain step (`P` epochs),
+   the overfit gate and training, then one validation evaluation of both twins. A given
+   `--tokenizer_ckpt` skips tokenizer training.
+3. Each twin writes `runs/checkpoints/generator/generator_<backbone>_<run>.pt`
+   (`twin_checkpoint_name`). `--run_name` on `evaluate`, `serve` and `studio` picks the same files.
+4. Starting the command again skips the finished steps and resumes a twin from its `_last.pt`.
+5. The overfit, pretrain and train-generator stages stop when the twin parameter counts differ by more
+   than 2% (`check_twin_parameter_match`, built on the meta device, about 0.1 s).
+6. The workflow uses the protocol settings: batch 8, evaluation every 5 epochs, patience 10,
+   CFG 6. The test split stays out of the workflow; score it once with `make eval`.
+
+The old per-experiment scripts are in `scripts/training/historical/`. Their recipes are unchanged.
+
 ## The ">5 collaborators" rule
 
 Measured before the A29 redesign. Only three classes exceeded a fan-out of 5 project classes:
