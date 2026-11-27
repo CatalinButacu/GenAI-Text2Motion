@@ -1,14 +1,14 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_a15_v5_kill_test_local.ps1
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/run_a15_v9_kill_test_local.ps1
 param([double]$BudgetHoursPerRun = 1.5)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $tokenizer = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"
 $backbones = @("transformer", "mamba")
 $arms = [ordered]@{
-    "a15_motionclass" = "configs/generator/a15/width_320_step50_motionclass.yaml"
+    "a15_replacement" = "configs/generator/a15/width_320_step50_replacement.yaml"
 }
-Write-Host "=== A15 V5 kill test start $(Get-Date -Format u) ==="
+Write-Host "=== A15 V9 kill test start $(Get-Date -Format u) ==="
 
 $codes = @()
 foreach ($arm in $arms.Keys) {
@@ -39,6 +39,6 @@ foreach ($arm in $arms.Keys) {
     }
 }
 
-if (-not (Write-DoneMarker -Path "runs/outputs/A15_V5_DONE.txt" -ExitCodes $codes)) {
+if (-not (Write-DoneMarker -Path "runs/outputs/A15_V9_DONE.txt" -ExitCodes $codes)) {
     exit 1
 }

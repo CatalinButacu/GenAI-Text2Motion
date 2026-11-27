@@ -1,7 +1,7 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_a7_g9_step50_100ep_local.ps1
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/run_a7_g9_step50_100ep_local.ps1
 param([double]$BudgetHoursPerRun = 12)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $tokenizer = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"
 Write-Host "=== A7 G9 step50 transformer 100 epochs start $(Get-Date -Format u) ==="

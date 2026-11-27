@@ -1,7 +1,7 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_a8_kill_tests_local.ps1
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/run_a8_kill_tests_local.ps1
 param([int]$WaitForPid = 0, [string]$WaitForMarker = "", [switch]$SkipPrior, [string[]]$Skip = @())
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $tokenizer = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"
 $backbones = @("transformer", "mamba")

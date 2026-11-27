@@ -1430,6 +1430,34 @@
         "title": "Overfit Steps",
         "type": "integer"
       },
+      "batch_size": {
+        "default": 8,
+        "description": "generator batch size; the same for both backbones",
+        "exclusiveMinimum": 0,
+        "title": "Batch Size",
+        "type": "integer"
+      },
+      "eval_every": {
+        "default": 5,
+        "description": "epochs between validation runs; the protocol uses 5",
+        "exclusiveMinimum": 0,
+        "title": "Eval Every",
+        "type": "integer"
+      },
+      "val_ce_patience": {
+        "default": 10,
+        "description": "stop after this many evaluations without a lower validation CE; protocol 10",
+        "exclusiveMinimum": 0,
+        "title": "Val Ce Patience",
+        "type": "integer"
+      },
+      "cfg_scale": {
+        "default": 6.0,
+        "description": "classifier-free guidance scale for validation sampling",
+        "exclusiveMinimum": 0,
+        "title": "Cfg Scale",
+        "type": "number"
+      },
       "generator_epochs": {
         "default": 60,
         "description": "target epoch of each generator; the same for both backbones",

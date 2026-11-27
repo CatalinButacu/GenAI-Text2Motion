@@ -1,7 +1,7 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_3day_local.ps1 -BudgetHours 70
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/run_3day_local.ps1 -BudgetHours 70
 param([double]$BudgetHours = 70, [int]$StaleMinutes = 45)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $start = Get-Date
 $fsqConfig = "configs/generator/gen_pilot_fsq8x1024.yaml"

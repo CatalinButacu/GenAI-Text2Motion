@@ -55,7 +55,7 @@ def tokenizer_checkpoint(app: Any, request: RunRequest) -> Path:
     return request.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
 
 
-def tokenize_step(app: Any, request: RunRequest) -> Step:
+def tokenize_step(app: Any, request: RunRequest, needs: str) -> Step:
     arguments = TokenizeRequest(
         config=request.config, tokenizer_ckpt=tokenizer_checkpoint(app, request)
     )
@@ -64,7 +64,13 @@ def tokenize_step(app: Any, request: RunRequest) -> Step:
         COMMANDS["tokenize"].handler(app, arguments)
         output.write_text(str(arguments.token_pack), encoding="utf-8")
 
-    return Step(TOKENIZE_STEP, (TOKENIZER_STEP,), TOKENIZE_STEP, run)
+    return Step(TOKENIZE_STEP, (needs,), TOKENIZE_STEP, run)
+
+
+def tokenizer_chain(app: Any, request: RunRequest) -> list[Step]:
+    if request.tokenizer_ckpt is not None:
+        return [tokenize_step(app, request, DATA_STEP)]
+    return [tokenizer_step(app, request), tokenize_step(app, request, TOKENIZER_STEP)]
 
 
 def twin_checkpoint(app: Any, request: RunRequest, backbone: Backbone, suffix: str = "") -> Path:
@@ -143,6 +149,10 @@ def generator_step(app: Any, request: RunRequest, backbone: Backbone) -> Step:
             overfit_gate=inputs[gate],
             epochs=request.generator_epochs,
             ckpt_name=checkpoint.name,
+            batch_size=request.batch_size,
+            eval_every=request.eval_every,
+            val_ce_patience=request.val_ce_patience,
+            cfg_scale=request.cfg_scale,
             resume=resume_exists(checkpoint),
             init_ckpt=pretrained_weights(app, request, backbone),
         )
@@ -153,7 +163,7 @@ def generator_step(app: Any, request: RunRequest, backbone: Backbone) -> Step:
 
 
 def generator_steps(app: Any, request: RunRequest) -> list[Step]:
-    steps = [data_step(app, request), tokenizer_step(app, request), tokenize_step(app, request)]
+    steps = [data_step(app, request), *tokenizer_chain(app, request)]
     for backbone in BACKBONES:
         if request.pretrain_epochs is not None:
             steps.append(pretrain_step(app, request, backbone))

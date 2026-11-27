@@ -13,7 +13,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 MODULE = Path("scripts/training/TrainingRun.psm1").resolve()
-DRIVER = MODULE.with_name("run_size_sweep_local.ps1")
+DRIVER = MODULE.parent / "historical" / "run_size_sweep_local.ps1"
 
 
 def powershell(script: str, cwd: Path) -> str:
@@ -172,7 +172,8 @@ def pilot(
 ):
     (workdir / "runs" / "checkpoints" / "generator").mkdir(parents=True, exist_ok=True)
     (workdir / "runs" / "outputs" / "gates").mkdir(exist_ok=True)
-    driver = workdir / DRIVER.name
+    driver = workdir / "historical" / DRIVER.name
+    driver.parent.mkdir(exist_ok=True)
     driver.write_text(DRIVER.read_text(encoding="utf-8"), encoding="utf-8")
     module = f"""
 function Enter-RepoRoot {{ return (Get-Location).Path }}

@@ -1,4 +1,4 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/finetune_dynamics_twins_local.ps1 -Epochs 72 -SeedFrom e60
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/finetune_dynamics_twins_local.ps1 -Epochs 72 -SeedFrom e60
 param(
     [double]$BudgetHoursPerRun = 48,
     [int]$StaleMinutes = 90,
@@ -7,7 +7,7 @@ param(
     [switch]$ContinueSelection
 )
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $config = "configs/generator/gen_pilot_fsq8x1024_dynamics.yaml"
 $tokenizer = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"

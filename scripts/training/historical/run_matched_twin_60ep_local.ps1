@@ -1,7 +1,7 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_matched_twin_60ep_local.ps1
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/run_matched_twin_60ep_local.ps1
 param([double]$BudgetHoursPerRun = 72, [int]$StaleMinutes = 90)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 Write-Host "=== matched 60-epoch twins start $(Get-Date -Format u) ==="
 

@@ -1,7 +1,7 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/extend_twin_to_100ep_local.ps1
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/extend_twin_to_100ep_local.ps1
 param([double]$BudgetHoursPerRun = 72, [int]$StaleMinutes = 90)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 Write-Host "=== extend twin 60ep -> 100ep start $(Get-Date -Format u) ==="
 

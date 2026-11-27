@@ -1,7 +1,7 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_rvq_ablation_local.ps1 -BudgetHours 8
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/run_rvq_ablation_local.ps1 -BudgetHours 8
 param([double]$BudgetHours = 8, [int]$StaleMinutes = 45)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $start = Get-Date
 $config = "configs/generator/gen_pilot_rvq8x1024.yaml"

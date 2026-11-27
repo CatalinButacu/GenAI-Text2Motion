@@ -59,6 +59,20 @@ class RunRequest(DefaultConfigRequest):
     overfit_steps: int = Field(
         default=1000, gt=0, description="maximum optimizer steps of each overfit gate"
     )
+    batch_size: int = Field(
+        default=8, gt=0, description="generator batch size; the same for both backbones"
+    )
+    eval_every: int = Field(
+        default=5, gt=0, description="epochs between validation runs; the protocol uses 5"
+    )
+    val_ce_patience: int = Field(
+        default=10,
+        gt=0,
+        description="stop after this many evaluations without a lower validation CE; protocol 10",
+    )
+    cfg_scale: float = Field(
+        default=6.0, gt=0, description="classifier-free guidance scale for validation sampling"
+    )
     generator_epochs: int = Field(
         default=GeneratorTrainingRequest().epochs,
         gt=0,

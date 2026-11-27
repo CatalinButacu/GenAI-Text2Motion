@@ -1,7 +1,7 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_a15_full_motionclass_local.ps1
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/run_a15_full_motionclass_local.ps1
 param([double]$BudgetHoursPerRun = 11)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $tokenizer = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"
 $config = "configs/generator/a15/width_320_step50_motionclass.yaml"

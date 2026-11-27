@@ -1,7 +1,7 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_a7_factor_split_local.ps1
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/run_a7_factor_split_local.ps1
 param([double]$BudgetHoursPerRun = 3.5)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $tokenizer = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"
 Write-Host "=== A7 G7 factor split start $(Get-Date -Format u) ==="

@@ -150,6 +150,8 @@ def test_pretrain_feeds_each_twin_and_the_run_name_names_every_checkpoint(tmp_pa
         assert generator.init_ckpt == pretrained
         assert generator.ckpt_name == f"generator_{backbone}_causal.pt"
         assert generator.resume is False
+        assert (generator.batch_size, generator.eval_every) == (8, 5)
+        assert (generator.val_ce_patience, generator.cfg_scale) == (10, 6.0)
 
 
 def test_a_run_name_picks_the_twin_checkpoint_instead_of_the_configured_one(tmp_path):
@@ -164,3 +166,36 @@ def test_a_run_name_picks_the_twin_checkpoint_instead_of_the_configured_one(tmp_
     assert paths.generator_checkpoint("transformer", "causal").name == (
         twin_checkpoint_name("transformer", "causal")
     )
+
+
+def test_a_given_tokenizer_checkpoint_skips_tokenizer_training(tmp_path, monkeypatch):
+    dataset = tmp_path / "fixture"
+    build_fixture_dataset(dataset)
+    calls = []
+
+    def record(name):
+        def handler(app, args):
+            calls.append(name)
+            if name == "sanity-overfit":
+                args.overfit_gate.write_text("{}", encoding="utf-8")
+
+        return handler
+
+    for name, target in (
+        ("prepare", "data.run_prepare"),
+        ("train-tokenizer", "train_tokenizer.run_train_tokenizer"),
+        ("tokenize", "data.run_tokenize"),
+        ("sanity-overfit", "overfit.run_sanity_overfit"),
+        ("train-generator", "train_generator.run_train_generator"),
+    ):
+        monkeypatch.setattr(f"text2motion.app.stages.{target}", record(name))
+    paths = SimpleNamespace(hml3d_out_dir=dataset, checkpoints_dir=tmp_path)
+    app = SimpleNamespace(config=SimpleNamespace(paths=paths))
+    request = RunRequest(
+        workflow=Workflow.GENERATOR, root=tmp_path / "run", tokenizer_ckpt=tmp_path / "tok.pt"
+    )
+
+    run_workflow(app, request)
+
+    assert "train-tokenizer" not in calls
+    assert calls[:2] == ["prepare", "tokenize"]

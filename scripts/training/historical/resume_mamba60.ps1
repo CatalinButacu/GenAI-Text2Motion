@@ -1,7 +1,7 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/resume_mamba60.ps1
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/resume_mamba60.ps1
 param([double]$BudgetHoursPerRun = 72, [int]$StaleMinutes = 90)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $runDir = "runs/logs/train/20260921T161630Z_generator_mamba"
 if (-not (Test-Path $runDir)) {

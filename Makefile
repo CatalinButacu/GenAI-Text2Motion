@@ -11,6 +11,7 @@ PS := powershell -NoProfile -ExecutionPolicy Bypass -File
 B ?= mamba
 E ?= 60
 NAME ?= dev
+P ?= 0
 CFG ?= configs/generator/gen_pilot_fsq8x1024.yaml
 TOK ?= runs/checkpoints/tokenizer/fsq_g8_v1024.pt
 GATE ?= runs/outputs/gates/$(B)_34m_overfit.json
@@ -24,7 +25,7 @@ LEVEL ?= INFO
         pdf figs runs runs-apply lic graph last
 
 help:
-	@echo "Variables: B=mamba|transformer  E=epochs  NAME=run name  CFG=config  CKPT=checkpoint  LEVEL=DEBUG|INFO"
+	@echo "Variables: B=mamba|transformer  E=epochs  P=pretrain epochs  NAME=run name  CFG=config  CKPT=checkpoint  LEVEL=DEBUG|INFO"
 	@echo ""
 	@echo "SETUP     install    sync the environment from uv.lock"
 	@echo "          kernel-restore  put back the saved Mamba CUDA kernel (third_party/mamba_kernel)"
@@ -37,11 +38,7 @@ help:
 	@echo "TRAIN     gate       overfit one batch (required before train)       make gate B=mamba"
 	@echo "          pre        unconditional pretraining, one backbone         make pre B=mamba"
 	@echo "          train      one short unguarded run                         make train B=mamba E=6 NAME=try1"
-	@echo "          twins      guarded 60-epoch run of the two twins (days)"
-	@echo "          ext100     guarded extension of the two twins to 100 epochs"
-	@echo "          dyn        guarded dynamics fine-tune of the two twins     make dyn E=72"
-	@echo "          rvq        guarded RVQ-token ablation"
-	@echo "          resume     resume the 60-epoch mamba run"
+	@echo "          twins      guarded twin run: gates, training, val scores   make twins CFG=... NAME=causal E=60 P=0"
 	@echo "EVALUATE  val        validation metrics for one checkpoint           make val B=mamba CKPT=..."
 	@echo "          eval       CITABLE test evaluation of the two twins (run one time)"
 	@echo "          eval-dyn   test evaluation and naturalness of the dynamics checkpoints"
@@ -55,6 +52,7 @@ help:
 	@echo "          lic        regenerate THIRD_PARTY_LICENSES.md"
 	@echo "          last       last 5 metric rows of the newest run"
 	@echo "          graph      update the code graph"
+	@echo "HISTORY   ext100 dyn rvq resume   old twin scripts in scripts/training/historical"
 
 install:
 	uv sync --inexact --extra dev --extra prep --extra tracking
@@ -105,19 +103,19 @@ train:
 	$(CLI) --log_level $(LEVEL) train-generator --config $(CFG) --backbone $(B) --tokenizer_ckpt $(TOK) --overfit_gate $(GATE) --epochs $(E) --batch_size 8 --cfg_scale 6.0 --eval_every 6 --ckpt_name generator_$(B)_$(NAME).pt
 
 twins:
-	$(PS) scripts/training/run_matched_twin_60ep_local.ps1
+	$(PS) scripts/training/run_twins.ps1 -Config $(CFG) -RunName $(NAME) -TokenizerCkpt $(TOK) -Epochs $(E) -PretrainEpochs $(P)
 
 ext100:
-	$(PS) scripts/training/extend_twin_to_100ep_local.ps1
+	$(PS) scripts/training/historical/extend_twin_to_100ep_local.ps1
 
 dyn:
-	$(PS) scripts/training/finetune_dynamics_twins_local.ps1 -Epochs $(E)
+	$(PS) scripts/training/historical/finetune_dynamics_twins_local.ps1 -Epochs $(E)
 
 rvq:
-	$(PS) scripts/training/run_rvq_ablation_local.ps1
+	$(PS) scripts/training/historical/run_rvq_ablation_local.ps1
 
 resume:
-	$(PS) scripts/training/resume_mamba60.ps1
+	$(PS) scripts/training/historical/resume_mamba60.ps1
 
 val:
 	$(CLI) --log_level $(LEVEL) evaluate --config $(CFG) --backbone $(B) --split val --ckpt $(CKPT) --tokenizer_ckpt $(TOK) --cfg_scale 6.0 --max_clips 600

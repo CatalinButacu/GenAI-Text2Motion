@@ -1,7 +1,7 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_a18_equal_depth_local.ps1
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/run_a18_equal_depth_local.ps1
 param([double]$BudgetHours = 1.5)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $tokenizer = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"
 $config = "configs/generator/a18/width_320_mamba8_expand4.yaml"

@@ -1,7 +1,7 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_c1b_local.ps1
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/run_c1b_local.ps1
 param([double]$BudgetHoursPerRun = 5)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 Write-Host "=== C1b fresh matched pair start $(Get-Date -Format u) ==="
 

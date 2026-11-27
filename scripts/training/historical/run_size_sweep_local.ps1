@@ -1,8 +1,8 @@
-# powershell -ExecutionPolicy Bypass -File scripts/training/run_size_sweep_local.ps1 -Widths 320 -Epochs 60 -ValCePatience 6 -Tag sweep
+# powershell -ExecutionPolicy Bypass -File scripts/training/historical/run_size_sweep_local.ps1 -Widths 320 -Epochs 60 -ValCePatience 6 -Tag sweep
 param([double]$BudgetHoursPerRun = 6, [int]$StaleMinutes = 45, [int]$Epochs = 20, [int]$ValCePatience = 6,
     [string[]]$Widths = @("320"), [string]$Tag = "sweep", [switch]$Pilot, [switch]$ResumePilot)
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "TrainingRun.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../TrainingRun.psm1") -Force
 $null = Enter-RepoRoot -StartDirectory $PSScriptRoot
 $tokenizer = "runs/checkpoints/tokenizer/fsq_g8_v1024.pt"
 Write-Host "=== size sweep start $(Get-Date -Format u) ==="
