@@ -8,10 +8,8 @@ import torch
 
 from text2motion.tokenization.contracts import ResidualVectorQuantizationConfig, TokenizerConfig
 from text2motion.tokenization.ema import ExponentialMovingAverage
-from text2motion.tokenization.nn_tokenizer import (
-    FiniteScalarQuantizationTokenizer,
-    ResidualVectorQuantizationTokenizer,
-)
+from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.network.residual import ResidualVectorQuantizationTokenizer
 from text2motion.tokenization.tokenizer_trainer import TokenizerTrainer
 
 FSQ = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))

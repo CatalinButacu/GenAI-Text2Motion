@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from text2motion.tokenization.contracts import TokenizerConfig
-from text2motion.tokenization.nn_tokenizer import build_tokenizer_network
+from text2motion.tokenization.network.builder import build_tokenizer_network
 
 AUDIT_SCRIPT = Path("scripts/qa/checkpoint_audit.py")
 TOKENIZER_BLOCK = "tokenizer:\n  width: 64\n  num_quantizers: 2\n  fsq_levels: {levels}\n"

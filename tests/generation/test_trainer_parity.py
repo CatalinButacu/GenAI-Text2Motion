@@ -22,7 +22,7 @@ from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.contracts import Split
 from text2motion.tokenization.contracts import TokenizerConfig
 from text2motion.tokenization.corpus import PACK_FORMAT, PACK_IDENTITY_KEY, PACK_VERSION
-from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizationTokenizer
 from text2motion.tokenization.tokenizer_trainer import TokenizerTrainer
 
 PARITY_FILE = Path(__file__).with_name("trainer_parity.json")

@@ -6,7 +6,7 @@ import torch
 from text2motion.generation.contracts import LossWeights
 from text2motion.generation.losses import dynamics_terms
 from text2motion.motion.representation import DIM, SLICES
-from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
+from text2motion.tokenization.network.base import TokenizerNetwork
 
 
 def standing_motion(frames: int = 12) -> torch.Tensor:

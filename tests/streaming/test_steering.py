@@ -6,7 +6,7 @@ from text2motion.generation.decoder import StreamingMotionDecoder
 from text2motion.generation.model.generator import MotionTokenGenerator
 from text2motion.generation.steering import SteeringMode, steer_stream
 from text2motion.tokenization.contracts import TokenizerConfig
-from text2motion.tokenization.nn_tokenizer import FiniteScalarQuantizationTokenizer
+from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizationTokenizer
 
 TOK = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 GEN = GeneratorConfig(
