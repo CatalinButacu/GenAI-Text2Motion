@@ -21,7 +21,7 @@ from text2motion.tokenization.contracts import (
     TokenizerKind,
     TokenizerSchedule,
 )
-from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
+from text2motion.tokenization.network.base import TokenizerNetwork
 from text2motion.tokenization.reconstruction_metrics import (
     ReconstructionSetup,
     evaluate_tokenizer_reconstruction,

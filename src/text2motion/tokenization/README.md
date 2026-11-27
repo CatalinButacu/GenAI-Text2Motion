@@ -36,4 +36,4 @@ The last step encodes the AMASS pretraining corpus once (`data/AMASS_263/new_joi
 
 To read a pack later, `read_pack_identity(path)` returns the identity record as a dict, so you can check that the pack matches the tokenizer you load. It raises a `ValueError` for a file without a record. The tokenize command writes the float32 `precision` of its config into the record, because TF32 and highest give different tokens (0.17% of the validation tokens for `fsq_g8_v1024`). `check_pack_precision(identity, precision)` raises a `ValueError` when the pack has another precision or no precision, and generator pretraining calls it with the precision of its config. `pack_clip_keys(pack)` takes the open `np.load` result and returns the window keys without the record entry.
 
-Every other name in the package is internal. Use the names above, and import each one from its file, for example `from text2motion.tokenization.nn_tokenizer import FrozenMotionTokenizer`.
+Every other name in the package is internal. Use the names above, and import each one from its file, for example `from text2motion.tokenization.network.frozen import FrozenMotionTokenizer`.

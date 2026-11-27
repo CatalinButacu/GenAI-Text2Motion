@@ -14,7 +14,7 @@ from text2motion.motion.contracts import (
     MotionClip,
     MotionTokens,
 )
-from text2motion.tokenization.nn_tokenizer import FrozenMotionTokenizer
+from text2motion.tokenization.network.frozen import FrozenMotionTokenizer
 
 
 ############################################################

@@ -11,7 +11,7 @@ from text2motion.app.service.state import LoadedInferencePipeline
 from text2motion.generation.contracts import Backbone
 from text2motion.generation.decoder import StreamingMotionDecoder
 from text2motion.generation.pipeline import TextToMotionGenerator
-from text2motion.tokenization.nn_tokenizer import FrozenMotionTokenizer
+from text2motion.tokenization.network.frozen import FrozenMotionTokenizer
 
 
 def resolve_model_paths(app: ApplicationContext, args: ModelServiceRequest) -> tuple[Path, Path]:

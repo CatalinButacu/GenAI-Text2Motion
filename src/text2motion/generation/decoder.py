@@ -9,7 +9,7 @@ import torch
 
 from text2motion.generation.contracts import DEFAULT_SAMPLING, SamplingConfig
 from text2motion.generation.model.generator import MotionTokenGenerator
-from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
+from text2motion.tokenization.network.base import TokenizerNetwork
 
 
 def random_probe_indices(

@@ -20,7 +20,7 @@ from text2motion.generation.training.overfit import overfit_single_batch
 from text2motion.generation.training.trainer import GeneratorTrainer
 from text2motion.motion.contracts import Split
 from text2motion.motion.storage import sha256_file
-from text2motion.tokenization.nn_tokenizer import FrozenMotionTokenizer
+from text2motion.tokenization.network.frozen import FrozenMotionTokenizer
 
 logger = logging.getLogger(__name__)
 

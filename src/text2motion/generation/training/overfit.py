@@ -12,7 +12,7 @@ from text2motion.generation.contracts import (
 from text2motion.generation.model.generator import MotionTokenGenerator
 from text2motion.generation.model.text_encoder import CLIPTextEncoder
 from text2motion.generation.training.trainer import GeneratorTrainer
-from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
+from text2motion.tokenization.network.base import TokenizerNetwork
 
 logger = logging.getLogger(__name__)
 

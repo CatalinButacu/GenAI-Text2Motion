@@ -17,7 +17,7 @@ from text2motion.motion.representation import (
     JOINTS,
     SLICES,
 )
-from text2motion.tokenization.nn_tokenizer import TokenizerNetwork
+from text2motion.tokenization.network.base import TokenizerNetwork
 
 
 def token_ce_loss(
