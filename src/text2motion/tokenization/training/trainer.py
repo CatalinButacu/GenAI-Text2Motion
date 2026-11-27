@@ -1,30 +1,18 @@
 from __future__ import annotations
 
 import logging
-import math
 from contextlib import contextmanager
 from pathlib import Path
 
 import torch
 from torch import nn
 
-from text2motion.common.engine import run_epochs
-from text2motion.motion.contracts import (
-    NO_RUN_OUTPUTS,
-    Evaluator,
-    MotionBatch,
-    RunOutputs,
-    Split,
-)
+from text2motion.motion.contracts import MotionBatch
 from text2motion.motion.storage import (
     RESUME_VERSION,
-    atomic_torch_save,
     capture_rng_state,
-    dump_on_failure,
-    is_legacy_resume,
     restore_rng_state,
 )
-from text2motion.tokenization.contracts import TokenizerSchedule
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.network.base import TokenizerNetwork
 from text2motion.tokenization.network.losses import (
@@ -90,11 +78,13 @@ class TokenizerTrainer:
         usage_fraction = (used_fraction * active).sum() / active_count
         return perplexity, usage_fraction
 
-    def train_step(
-        self, motion: torch.Tensor, lengths: torch.Tensor | None = None
-    ) -> dict[str, torch.Tensor]:
-        reconstruction, indices, commitment_loss = self.tokenizer_network(motion)
-
+    def objective(
+        self,
+        reconstruction: torch.Tensor,
+        motion: torch.Tensor,
+        lengths: torch.Tensor | None,
+        commitment_loss: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         reconstruction_loss = feature_velocity_reconstruction_loss(reconstruction, motion, lengths)
         heading_loss = heading_reconstruction_loss(reconstruction, motion, lengths)
         total = (
@@ -102,7 +92,9 @@ class TokenizerTrainer:
             + self.commitment_beta * commitment_loss
             + self.tokenizer_network.heading_weight * heading_loss
         )
+        return reconstruction_loss, total
 
+    def apply_update(self, total: torch.Tensor) -> None:
         self.optimizer.zero_grad()
         total.backward()
         gradient_norm = nn.utils.clip_grad_norm_(
@@ -113,6 +105,14 @@ class TokenizerTrainer:
         self.optimizer.step()
         self.parameter_ema.update(self.tokenizer_network)
 
+    def train_step(
+        self, motion: torch.Tensor, lengths: torch.Tensor | None = None
+    ) -> dict[str, torch.Tensor]:
+        reconstruction, indices, commitment_loss = self.tokenizer_network(motion)
+        reconstruction_loss, total = self.objective(
+            reconstruction, motion, lengths, commitment_loss
+        )
+        self.apply_update(total)
         perplexity, usage_fraction = self.code_statistics(indices)
 
         return {
@@ -190,91 +190,3 @@ class TokenizerTrainer:
 
         restore_rng_state(state["rng"])
         return state["epoch"] + 1, state["best_fid"]
-
-
-def train_tokenizer(
-    trainer: TokenizerTrainer,
-    loader,
-    schedule: TokenizerSchedule,
-    device: str,
-    evaluate: Evaluator,
-    checkpoint_path: Path,
-    resume_path: Path,
-    outputs: RunOutputs = NO_RUN_OUTPUTS,
-) -> float:
-    best_fid = float("inf")
-    start_epoch = 0
-
-    if schedule.resume and not resume_path.is_file():
-        raise FileNotFoundError(
-            f"--resume continues from {resume_path}, which does not exist; start without --resume"
-        )
-    if schedule.resume:
-        state = torch.load(resume_path, map_location=device, weights_only=True)
-        legacy = is_legacy_resume(
-            state, resume_path, TOKENIZER_RESUME_FORMAT, schedule.accept_legacy_resume
-        )
-        start_epoch, best_fid = trainer.load_resume_state(state, legacy)
-        logger.info(
-            f"resumed from {resume_path} at epoch {start_epoch} (best recon-FID {best_fid:.4f})"
-        )
-
-    def guard(epoch: int):
-        return dump_on_failure(
-            outputs.failure_dump_path,
-            lambda best_fid=best_fid: (
-                trainer.resume_state(epoch, best_fid, outputs.run_dir),
-                trainer.current_inputs,
-                trainer.current_step,
-                trainer.tokenizer_network,
-            ),
-        )
-
-    def train_epoch(epoch: int) -> dict[str, float]:
-        loader.dataset.set_epoch(epoch)
-        return trainer.train_epoch(loader, device, schedule.max_steps)
-
-    def after_epoch(epoch: int, means: dict[str, float]) -> str:
-        nonlocal best_fid
-        outputs.on_metrics({"epoch": epoch + 1, **means})
-        logger.info(
-            f"epoch {epoch + 1:3d}  [common] recon {means['recon']:.4f} total {means['total']:.4f}  "
-            f"[health] perplexity {means['perplexity']:.1f} usage {means['usage_frac']:.1%} "
-            f"commit {means['commit']:.4f}"
-        )
-        step_budget_done = (
-            schedule.max_steps is not None and trainer.steps_taken >= schedule.max_steps
-        )
-
-        if (
-            (epoch + 1) % schedule.eval_every
-            and epoch + 1 != schedule.epochs
-            and not step_budget_done
-        ):
-            return ""
-
-        with trainer.ema_weights():
-            metrics = evaluate(Split.VALIDATION)
-        outputs.on_metrics({"epoch": epoch + 1, "split": Split.VALIDATION.value, **metrics})
-        logger.info(
-            f"  [val] clips {metrics['clips']}  MPJPE {metrics['mpjpe_mm']:.1f}mm  "
-            f"feat-L2 {metrics['feature_l2']:.4f}  recon-FID {metrics['recon_fid']:.4f}"
-        )
-
-        not_finite = sorted(name for name, value in metrics.items() if not math.isfinite(value))
-        if not_finite:
-            raise RuntimeError(f"epoch {epoch + 1}: evaluation metrics not finite: {not_finite}")
-        if metrics["recon_fid"] < best_fid:
-            best_fid = metrics["recon_fid"]
-            with trainer.ema_weights() as module:
-                atomic_torch_save(module.state_dict(), checkpoint_path)
-            logger.info(f"  saved best (val) -> {checkpoint_path} (val recon-FID {best_fid:.4f})")
-
-        atomic_torch_save(trainer.resume_state(epoch, best_fid, outputs.run_dir), resume_path)
-        if step_budget_done:
-            return f"  step budget of {schedule.max_steps} steps reached; the run stops"
-        return ""
-
-    run_epochs(start_epoch, schedule.epochs, train_epoch, after_epoch, guard)
-
-    return best_fid

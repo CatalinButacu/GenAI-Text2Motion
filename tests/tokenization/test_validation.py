@@ -22,7 +22,7 @@ from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizat
 from text2motion.tokenization.network.frozen import FrozenMotionTokenizer
 from text2motion.tokenization.network.losses import feature_velocity_reconstruction_loss
 from text2motion.tokenization.network.residual import ResidualVectorQuantizationTokenizer
-from text2motion.tokenization.tokenizer_trainer import TokenizerTrainer
+from text2motion.tokenization.training.trainer import TokenizerTrainer
 from text2motion.tokenization.vector_quantizer import VectorQuantizer
 
 FSQ = TokenizerConfig(width=32, num_quantizers=2, fsq_levels=(4, 4), n_resblocks=1)

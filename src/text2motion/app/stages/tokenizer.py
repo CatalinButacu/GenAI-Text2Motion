@@ -26,10 +26,8 @@ from text2motion.tokenization.reconstruction_metrics import (
     ReconstructionSetup,
     evaluate_tokenizer_reconstruction,
 )
-from text2motion.tokenization.tokenizer_trainer import (
-    TokenizerTrainer,
-    train_tokenizer,
-)
+from text2motion.tokenization.training.loop import train_tokenizer
+from text2motion.tokenization.training.trainer import TokenizerTrainer
 
 logger = logging.getLogger(__name__)
 

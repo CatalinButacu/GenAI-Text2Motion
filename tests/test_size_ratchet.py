@@ -12,15 +12,10 @@ LIMITS = AUDIT.Limits(250, 30, 10)
 SOURCE_PREFIX = "src/text2motion/"
 ALLOWED = MappingProxyType(
     {
-        "file": (
-            "tokenization/tokenizer_trainer.py",
-        ),
+        "file": (),
         "function": (
             "tokenization/corpus.py::build_token_pack",
             "tokenization/reconstruction_metrics.py::reconstruction_metrics",
-            "tokenization/tokenizer_trainer.py::TokenizerTrainer.train_step",
-            "tokenization/tokenizer_trainer.py::train_tokenizer",
-            "tokenization/tokenizer_trainer.py::train_tokenizer.after_epoch",
         ),
         "class": (),
     }

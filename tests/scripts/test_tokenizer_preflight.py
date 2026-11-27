@@ -10,7 +10,7 @@ from text2motion.tokenization.contracts import ResidualVectorQuantizationConfig,
 from text2motion.tokenization.ema import ExponentialMovingAverage
 from text2motion.tokenization.network.finite_scalar import FiniteScalarQuantizationTokenizer
 from text2motion.tokenization.network.residual import ResidualVectorQuantizationTokenizer
-from text2motion.tokenization.tokenizer_trainer import TokenizerTrainer
+from text2motion.tokenization.training.trainer import TokenizerTrainer
 
 FSQ = TokenizerConfig(in_dim=263, width=64, downsample=4, num_quantizers=2, fsq_levels=(4, 4))
 RVQ = ResidualVectorQuantizationConfig(
