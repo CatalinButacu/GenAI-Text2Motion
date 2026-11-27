@@ -11,6 +11,8 @@ from text2motion.generation.contracts import (
 )
 from text2motion.generation.model.generator import MotionTokenGenerator
 
+TWIN_PARAMETER_TOLERANCE = 0.02
+
 
 ############################################################
 #       GeneratorModelSpec
@@ -60,3 +62,32 @@ class GeneratorModelSpec:
         if max_seq_len is not None:
             overrides["max_seq_len"] = max_seq_len
         return cls(replace(generator, **overrides))
+
+
+def twin_parameter_counts(
+    generator: GeneratorConfig, codebook_size: int, num_codebooks: int
+) -> dict[Backbone, int]:
+    counts = {}
+    for backbone in Backbone:
+        spec = GeneratorModelSpec.resolve(
+            generator, backbone, codebook_size, num_codebooks, use_kernel=False
+        )
+        with torch.device("meta"):
+            model = spec.create_model("meta")
+        counts[backbone] = sum(parameter.numel() for parameter in model.parameters())
+    return counts
+
+
+def check_twin_parameter_match(
+    generator: GeneratorConfig, codebook_size: int, num_codebooks: int
+) -> dict[Backbone, int]:
+    counts = twin_parameter_counts(generator, codebook_size, num_codebooks)
+    smallest, largest = min(counts.values()), max(counts.values())
+    gap = (largest - smallest) / smallest
+    if gap > TWIN_PARAMETER_TOLERANCE:
+        readable = {backbone.value: f"{count:,}" for backbone, count in counts.items()}
+        raise ValueError(
+            f"twin parameter counts differ by {gap:.2%} (limit {TWIN_PARAMETER_TOLERANCE:.0%}): "
+            f"{readable}; change n_layers or mamba_n_layers so the twins match"
+        )
+    return counts

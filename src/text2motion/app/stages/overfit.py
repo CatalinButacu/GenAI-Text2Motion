@@ -87,7 +87,7 @@ def run_sanity_overfit(app: ApplicationContext, args: SanityOverfitRequest) -> N
     repository = app.create_motion_repository()
     batch = next(iter(repository.captioned_batch_loader(Split.TRAIN, args.batch_size)))
     tokenizer = app.models.load_tokenizer(args.tokenizer_ckpt)
-    architecture = app.models.resolve_generator_spec(
+    architecture = app.models.resolve_training_spec(
         args.backbone, tokenizer.codebook_size, dropout=0.0
     )
     tokenizer.network.requires_grad_(False)

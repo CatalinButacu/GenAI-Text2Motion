@@ -89,7 +89,7 @@ def run_pretrain(app: ApplicationContext, args: PretrainRequest) -> None:
     check_token_pack(app, args)
     vocab = pretrain_vocab_size(app)
 
-    architecture = app.models.resolve_generator_spec(args.backbone, vocab)
+    architecture = app.models.resolve_training_spec(args.backbone, vocab)
     module = architecture.create_model(app.device)
     logger.info(
         f"pretrain {args.backbone.value}: {sum(p.numel() for p in module.parameters()):,} params, "

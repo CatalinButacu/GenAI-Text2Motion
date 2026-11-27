@@ -70,7 +70,7 @@ def prepare_generator(app: ApplicationContext, args: TrainGeneratorRequest) -> G
     check_protocol_inputs(app, args)
     tokenizer_ckpt = args.tokenizer_ckpt or app.config.paths.tokenizer_checkpoint
     tokenizer = app.models.load_tokenizer(tokenizer_ckpt)
-    architecture = app.models.resolve_generator_spec(args.backbone, tokenizer.codebook_size)
+    architecture = app.models.resolve_training_spec(args.backbone, tokenizer.codebook_size)
     verify_overfit_gate(args, tokenizer_ckpt, architecture)
     module = build_generator_module(app, args, architecture)
     text_encoder = app.models.load_text_encoder()

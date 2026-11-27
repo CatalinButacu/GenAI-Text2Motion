@@ -16,7 +16,7 @@ from text2motion.app.runtime.generator_loading import (
     verify_generator_bundle,
 )
 from text2motion.generation.contracts import Backbone
-from text2motion.generation.model.spec import GeneratorModelSpec
+from text2motion.generation.model.spec import GeneratorModelSpec, check_twin_parameter_match
 from text2motion.generation.model.text_encoder import CLIPTextEncoder, FrozenTextStates
 from text2motion.generation.pipeline import TextToMotionGenerator
 from text2motion.tokenization.network.builder import build_tokenizer_network
@@ -86,6 +86,18 @@ class ModelLoader:
             self.config.tokenizer.num_quantizers,
             **overrides,
         )
+
+    def resolve_training_spec(
+        self,
+        backbone: Backbone | str,
+        codebook_size: int,
+        **overrides,
+    ) -> GeneratorModelSpec:
+        counts = check_twin_parameter_match(
+            self.config.generator, codebook_size, self.config.tokenizer.num_quantizers
+        )
+        logger.info(f"twin parameters { ({key.value: count for key, count in counts.items()}) }")
+        return self.resolve_generator_spec(backbone, codebook_size, **overrides)
 
     def load_text_to_motion_generator(
         self,
