@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 OFFICIAL_SPLIT_FILES = ("train.txt", "val.txt", "test.txt")
 
 
-def import_parquet():
+def import_pyarrow_parquet():
     try:
         import pyarrow.parquet as pq
     except ImportError as exc:
@@ -96,7 +96,7 @@ def write_split_motions(
 
 
 def write_motions(src: Path, out_dir: Path) -> dict[str, list[str]]:
-    pq = import_parquet()
+    pq = import_pyarrow_parquet()
 
     vec_dir = out_dir / FEATURES_DIR
     vec_dir.mkdir(parents=True, exist_ok=True)
